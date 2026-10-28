@@ -52,6 +52,8 @@ type QuizQuestion = {
 type QuizContent = { quizId: string; title: string; questions: QuizQuestion[] };
 type QuizFeedback = {
   questionId: string;
+  /** false: no solution to grade against (free text without an expected answer) */
+  graded?: boolean;
   correct: boolean;
   correctOptionId?: string | null;
   selectedOptionId?: string | null;
@@ -69,7 +71,13 @@ type GatedQuizInfo = {
   completed?: boolean;
   /** The best attempt reached the passing score, otherwise it can be repeated */
   passed?: boolean;
+  /** false: the quiz has no gradable question, it is stored but not graded */
+  autoGraded?: boolean;
 };
+
+// The score of the route: null when nothing of the quiz could be graded
+const scoreOfResponse = (raw: unknown): number | null =>
+  raw === null || raw === undefined ? null : Number(raw);
 
 export default function TraineeEnablerPage() {
   const { profile, subscriptionPlan } = useAuth();
@@ -184,10 +192,14 @@ export default function TraineeEnablerPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [result, setResult] = useState<{
-    score: number;
+    score: number | null;
     feedback: QuizFeedback[];
   } | null>(null);
   const [reviewMode, setReviewMode] = useState(false);
+  // Questions that stayed out of the percentage (no solution to grade against)
+  const ungradedCount = result
+    ? result.feedback.filter(f => f.graded === false).length
+    : 0;
 
   const currentQuestion = useMemo(
     () => (quizContent ? quizContent.questions[currentIndex] : null),
@@ -241,7 +253,8 @@ export default function TraineeEnablerPage() {
         `/api/trainee/enablers/${enablerId}/quizzes/${difficulty}?traineeId=${profile.id}`,
         { cache: 'no-store' }
       );
-      if (!r.ok) throw new Error(await failureText(r, 'enablerPage.quizLoadError'));
+      if (!r.ok)
+        throw new Error(await failureText(r, 'enablerPage.quizLoadError'));
       const j = await r.json();
       const qc: QuizContent = {
         quizId: String(j.quiz?.id || j.quizId),
@@ -291,7 +304,7 @@ export default function TraineeEnablerPage() {
             setAnswers(ans);
           }
           setResult({
-            score: Number(vj.score || 0),
+            score: scoreOfResponse(vj.score),
             feedback: (vj.feedback || []) as QuizFeedback[],
           });
         }
@@ -352,7 +365,7 @@ export default function TraineeEnablerPage() {
       }
 
       setResult({
-        score: Number(data.score || 0),
+        score: scoreOfResponse(data.score),
         feedback: (data.feedback || []) as QuizFeedback[],
       });
       // Refresh gated list to reflect unlocking next level, and the state of
@@ -653,14 +666,11 @@ export default function TraineeEnablerPage() {
             aria-hidden="true"
           />
           <div>
-            <div className="font-semibold">
-              {t('progression.bannerTitle')}
-            </div>
+            <div className="font-semibold">{t('progression.bannerTitle')}</div>
             <div className="text-sm">
               {progression?.reason === 'MANUAL'
                 ? t('progression.bannerManual')
-                : progression?.lockedBy?.title ||
-                    quizzesData?.lockedBy?.title
+                : progression?.lockedBy?.title || quizzesData?.lockedBy?.title
                   ? t('progression.bannerAfter', {
                       title: String(
                         progression?.lockedBy?.title ??
@@ -990,6 +1000,10 @@ export default function TraineeEnablerPage() {
                           </span>
                         )}
                       </span>
+                    ) : g.autoGraded === false ? (
+                      <span className="text-foreground border-accent/40 bg-muted/30 rounded border px-2 py-0.5">
+                        {t('quizGrading.listBadge')}
+                      </span>
                     ) : g.completed ? (
                       <span className="text-foreground rounded border border-amber-600/60 bg-amber-500/15 px-2 py-0.5">
                         {t('progression.quizRetry')}
@@ -1140,22 +1154,52 @@ export default function TraineeEnablerPage() {
                     {t('enablerPage.quizAlreadySubmitted')}
                   </div>
                 )}
-                <div className="font-medium">
-                  {t('enablerPage.score')} {result?.score ?? 0}%
-                </div>
-                {!reviewMode && !quizLocked && (
+                {result?.score === null ? (
                   <div
                     role="status"
-                    className={`text-foreground rounded-lg border p-2 text-sm ${
-                      (result?.score ?? 0) >= PASS_THRESHOLD
-                        ? 'border-green-600/60 bg-green-500/15'
-                        : 'border-amber-600/60 bg-amber-500/15'
-                    }`}
+                    data-testid="quiz-not-graded"
+                    className="text-foreground border-accent/40 bg-muted/30 rounded-lg border p-3 text-sm"
                   >
-                    {(result?.score ?? 0) >= PASS_THRESHOLD
-                      ? t('progression.resultPassed')
-                      : t('progression.resultFailed')}
+                    <div className="font-medium">
+                      {t('quizGrading.onlyUngradedTitle')}
+                    </div>
+                    <div className="mt-1">
+                      {t('quizGrading.onlyUngradedText')}
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    <div className="font-medium">
+                      {t('enablerPage.score')} {result?.score ?? 0}%
+                    </div>
+                    {ungradedCount > 0 && (
+                      <div
+                        data-testid="quiz-ungraded-note"
+                        className="text-muted-foreground text-sm"
+                      >
+                        {t(
+                          ungradedCount === 1
+                            ? 'quizGrading.resultNoteOne'
+                            : 'quizGrading.resultNoteMany',
+                          { count: ungradedCount }
+                        )}
+                      </div>
+                    )}
+                    {!reviewMode && !quizLocked && (
+                      <div
+                        role="status"
+                        className={`text-foreground rounded-lg border p-2 text-sm ${
+                          (result?.score ?? 0) >= PASS_THRESHOLD
+                            ? 'border-green-600/60 bg-green-500/15'
+                            : 'border-amber-600/60 bg-amber-500/15'
+                        }`}
+                      >
+                        {(result?.score ?? 0) >= PASS_THRESHOLD
+                          ? t('progression.resultPassed')
+                          : t('progression.resultFailed')}
+                      </div>
+                    )}
+                  </>
                 )}
                 <ul className="space-y-2">
                   {quizContent.questions.map(q => {
@@ -1167,16 +1211,29 @@ export default function TraineeEnablerPage() {
                       o => String(o.id) === String(fb?.correctOptionId || '')
                     );
                     const explanation = fb?.explanation;
+                    // No solution to grade against: neither right nor wrong
+                    const notGraded = fb?.graded === false;
                     return (
                       <li
                         key={q.id}
-                        className={`rounded-xl border p-3 ${fb?.correct ? 'border-green-600/50 bg-green-500/10' : 'border-red-600/50 bg-red-500/10'}`}
+                        className={`rounded-xl border p-3 ${notGraded ? 'border-accent/40 bg-muted/30' : fb?.correct ? 'border-green-600/50 bg-green-500/10' : 'border-red-600/50 bg-red-500/10'}`}
                       >
                         <MarkdownText className="font-medium">
                           {q.questionText}
                         </MarkdownText>
+                        {notGraded && (
+                          <div
+                            data-testid="question-not-graded"
+                            className="text-foreground mt-1 text-sm"
+                          >
+                            <span className="border-accent/40 bg-muted/40 mr-2 inline-block rounded border px-2 py-0.5 text-xs font-medium">
+                              {t('quizGrading.notGradedBadge')}
+                            </span>
+                            {t('quizGrading.questionNote')}
+                          </div>
+                        )}
                         <div
-                          className={`mt-1 text-sm ${fb?.correct ? 'text-green-400' : 'text-red-400'}`}
+                          className={`mt-1 text-sm ${notGraded ? 'text-foreground' : fb?.correct ? 'text-green-400' : 'text-red-400'}`}
                         >
                           {t('enablerPage.yourAnswer')}{' '}
                           {q.questionType === 'TEXT' || q.options.length === 0
@@ -1202,6 +1259,7 @@ export default function TraineeEnablerPage() {
                 </ul>
                 {!reviewMode &&
                   !quizLocked &&
+                  result?.score !== null &&
                   (result?.score ?? 0) < PASS_THRESHOLD &&
                   selectedDifficulty && (
                     <button

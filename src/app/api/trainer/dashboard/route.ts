@@ -25,6 +25,7 @@ import {
   type CatalogScope,
 } from '@/lib/catalog/scope';
 import { bestScoresOf, isEnablerCompleted } from '@/lib/catalog/progression';
+import { loadGradableQuizIds } from '@/lib/catalog/progression-db';
 
 async function fetchTrainerDashboardData(
   trainerId: string,
@@ -269,10 +270,16 @@ async function fetchTrainerDashboardData(
     const quizActive = new Map(
       linkedQuizRows.map(q => [String(q.id), !!q.isActive])
     );
+    // A quiz without a gradable question is no prerequisite (same distinction
+    // as the order of work and the grading of a submission)
+    const gradableQuizIds = await loadGradableQuizIds(
+      quizLinks.map(l => String(l.quizId))
+    );
     const progressionLinks = quizLinks.map(l => ({
       enablerId: String(l.enablerId),
       quizId: String(l.quizId),
       quizIsActive: quizActive.get(String(l.quizId)) ?? false,
+      gradable: gradableQuizIds.has(String(l.quizId)),
     }));
 
     // ── Compute progress per trainee (pure computation, no DB) ──

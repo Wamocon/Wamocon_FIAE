@@ -319,3 +319,79 @@ describe('Quiz (global quiz of a trainee)', () => {
     expect(screen.getByPlaceholderText('Deine Antwort')).toBeInTheDocument();
   });
 });
+
+describe('Quiz: questions without a solution are not graded', () => {
+  const notGradedFeedback = {
+    questionId: 'q-2',
+    graded: false,
+    correct: false,
+    correctOptionId: null,
+    explanation: null,
+    selectedOptionId: null,
+    selectedText: 'Structured Query Language',
+    correctAnswerText: null,
+  };
+
+  it('names the ungraded question "Nicht bewertet", counts it neither right nor wrong and explains it', async () => {
+    fetchMock().mockResolvedValue(
+      reply({
+        submissionId: 's1',
+        score: 100,
+        locked: false,
+        autoGraded: true,
+        ungradedCount: 1,
+        feedback: [
+          {
+            ...perfectResult.feedback[0],
+            graded: true,
+            selectedOptionId: 'o-1a',
+          },
+          notGradedFeedback,
+        ],
+      })
+    );
+    renderWithProviders(<Quiz quiz={quiz} />);
+    await sitTheQuiz('Eindeutiger Bezeichner');
+
+    expect(await screen.findByText('100%')).toBeInTheDocument();
+    // the free text question is out of the count: 1 of 1
+    expect(screen.getByText('1 von 1 Fragen richtig')).toBeInTheDocument();
+    expect(screen.getByTestId('quiz-ungraded-note')).toHaveTextContent(
+      'Eine Frage wurde nicht bewertet'
+    );
+    const text = screen
+      .getByText('Wofür steht SQL?')
+      .closest('[data-testid="quiz-result-item"]') as HTMLElement;
+    expect(text).toHaveTextContent('Nicht bewertet');
+    expect(text).toHaveTextContent('keine hinterlegte Lösung');
+    expect(text).not.toHaveTextContent('Falsch');
+    expect(text).not.toHaveTextContent('Richtig');
+    // the answer as typed stays visible
+    expect(text).toHaveTextContent('Deine Antwort: Structured Query Language');
+  });
+
+  it('a quiz with nothing to grade shows no percentage and says why', async () => {
+    fetchMock().mockResolvedValue(
+      reply({
+        submissionId: 's1',
+        score: null,
+        locked: false,
+        autoGraded: false,
+        ungradedCount: 2,
+        feedback: [
+          { ...notGradedFeedback, questionId: 'q-1', selectedText: 'x' },
+          notGradedFeedback,
+        ],
+      })
+    );
+    renderWithProviders(<Quiz quiz={quiz} />);
+    await sitTheQuiz('Eindeutiger Bezeichner');
+
+    const note = await screen.findByTestId('quiz-not-graded');
+    expect(note).toHaveAttribute('role', 'status');
+    expect(note).toHaveTextContent('Dieses Quiz wird nicht automatisch bewertet');
+    expect(document.body.textContent).not.toMatch(/\d+%/);
+    expect(screen.queryByText('Perfekt!')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Nicht bewertet')).toHaveLength(2);
+  });
+});

@@ -56,7 +56,23 @@ const DIFFICULTY =
 const QUIZ_LIST = '@/app/api/trainee/enablers/[enablerId]/quizzes/route';
 const ENABLER_DETAIL = '@/app/api/trainee/enablers/[enablerId]/route';
 
-const solved = [{ questionId: 'qq1', selectedOptionId: 'oo1' }];
+// the mock answers a read of the questions with the question of every quiz of
+// the world, so an attempt answers all of them
+const solved = [
+  { questionId: 'qq1', selectedOptionId: 'oo1' },
+  { questionId: 'qq2', selectedOptionId: 'oo2' },
+  { questionId: 'qq3', selectedOptionId: 'oo3' },
+];
+
+// A locked enabler reads no question and no option for the trainee. The one
+// read of the questions table that remains is the order of work asking which
+// quizzes have a gradable question (ids only, see loadGradableQuizIds).
+const expectNoQuestionsDelivered = (mock: ReturnType<typeof createTableDb>) => {
+  const reads = (table: string) =>
+    mock.calls.filter(c => c.op === 'select' && c.table === table).length;
+  expect(reads('options')).toBe(0);
+  expect(reads('questions')).toBeLessThanOrEqual(1);
+};
 
 const inserted = (mock: ReturnType<typeof createTableDb>, table: string) =>
   mock.writes('insert', table);
@@ -102,6 +118,26 @@ describe('enabler submission (scenario)', () => {
     });
     expect(res.status).toBe(200);
     expect(inserted(mock, 'enablerSubmissions')).toHaveLength(1);
+  });
+
+  it('does not wait for a quiz without a gradable question (free text without an expected answer)', async () => {
+    // q1 cannot be graded: no attempt, no pass is needed, e2 is open
+    const { res, mock } = await submitScenario({
+      target: 'e2',
+      ungradable: ['q1'],
+    });
+    expect(res.status).toBe(200);
+    expect(inserted(mock, 'enablerSubmissions')).toHaveLength(1);
+  });
+
+  it('still waits for a gradable quiz of the enabler before it', async () => {
+    // e1 has the gradable q1 (not passed): locked, although q2 and q3 of e2 are free text
+    const { res, body } = await submitScenario({
+      target: 'e2',
+      ungradable: ['q2', 'q3'],
+    });
+    expect(res.status).toBe(403);
+    expect(body.code).toBe('ENABLER_LOCKED');
   });
 
   it('is open for the first enabler of the course', async () => {
@@ -286,9 +322,8 @@ describe('legacy single quiz of an enabler', () => {
     const body = await res.json();
     expect(res.status).toBe(403);
     expect(body.code).toBe('ENABLER_LOCKED');
-    expect(
-      mock.calls.some(c => c.op === 'select' && c.table === 'questions')
-    ).toBe(false);
+    expect(body.quiz).toBeUndefined();
+    expectNoQuestionsDelivered(mock);
   });
 
   it('takes no submission for a locked enabler', async () => {
@@ -330,13 +365,7 @@ describe('questions of a lesson quiz per difficulty', () => {
     expect(res.status).toBe(403);
     expect(body.code).toBe('ENABLER_LOCKED');
     expect(body.quiz).toBeUndefined();
-    expect(
-      mock.calls.some(
-        c =>
-          c.op === 'select' &&
-          (c.table === 'questions' || c.table === 'options')
-      )
-    ).toBe(false);
+    expectNoQuestionsDelivered(mock);
   });
 
   it('delivers the questions of an open enabler, without a solution', async () => {
@@ -346,7 +375,7 @@ describe('questions of a lesson quiz per difficulty', () => {
       scores: { q1: 70 },
     });
     expect(res.status).toBe(200);
-    expect(body.quiz.questions).toHaveLength(1);
+    expect(body.quiz.questions).toHaveLength(3);
     expect(findSolutionKeys(body)).toEqual([]);
   });
 

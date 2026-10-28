@@ -20,6 +20,11 @@ export type WorldOptions = {
   overrides?: Array<{ enablerId: string; isActive: boolean | null }>;
   /** Use enablers e1 and e2 as inactive? */
   inactive?: Array<'e1' | 'e2'>;
+  /**
+   * Quizzes whose only question is a free text question without an expected
+   * answer (no gradable question: no prerequisite of the order of work).
+   */
+  ungradable?: Array<'q1' | 'q2' | 'q3'>;
 };
 
 const E = {
@@ -42,6 +47,7 @@ export function progressionWorld(options: WorldOptions = {}) {
   const targetQuiz = options.targetQuiz ?? 'q2';
   const enforced = options.enforced ?? true;
   const inactive = new Set(options.inactive ?? []);
+  const ungradable = new Set<string>(options.ungradable ?? []);
   const first = <T>(all: T[], pick: (x: T) => boolean) => [
     ...all.filter(pick),
     ...all.filter(x => !pick(x)),
@@ -104,12 +110,36 @@ export function progressionWorld(options: WorldOptions = {}) {
     })),
     enablerSubmissions: [],
     useCaseSubmissions: [],
-    questions: [
-      { id: 'qq1', quizId: targetQuiz, questionText: 'Q?', orderIndex: 1 },
-    ],
-    options: [
-      { id: 'oo1', questionId: 'qq1', optionText: 'A', isCorrect: true },
-      { id: 'oo2', questionId: 'qq1', optionText: 'B', isCorrect: false },
-    ],
+    // The mock answers every read of a table alike, so the loader of the order
+    // of work (which asks which quizzes have a gradable question) and the route
+    // see the same rows: one question per quiz. The question of the target quiz
+    // comes first (a route reads "its" question as the first row).
+    questions: first(
+      quizIds.map(id => ({
+        id: `qq${id.slice(1)}`,
+        quizId: id,
+        questionText: 'Q?',
+        questionType: ungradable.has(id) ? 'TEXT' : 'MCQ',
+        expectedAnswer: null,
+        orderIndex: 1,
+      })),
+      q => q.quizId === targetQuiz
+    ),
+    options: quizIds
+      .filter(id => !ungradable.has(id))
+      .flatMap(id => [
+        {
+          id: `oo${id.slice(1)}`,
+          questionId: `qq${id.slice(1)}`,
+          optionText: 'A',
+          isCorrect: true,
+        },
+        {
+          id: `oo${id.slice(1)}b`,
+          questionId: `qq${id.slice(1)}`,
+          optionText: 'B',
+          isCorrect: false,
+        },
+      ]),
   };
 }

@@ -61,6 +61,7 @@ describe('API: Trainee Dashboard', () => {
       courses: [{ id: 'c1', title: 'Course 1', year: 2024 }],
       enablerQuizLinks: [{ enablerId: 'e2', quizId: 'q1', difficulty: 'LOW' }],
       quizzes: [{ id: 'q1', isActive: true }],
+      questions: [{ id: 'qq1', quizId: 'q1', questionType: 'MCQ' }],
       quizSubmissions: [],
       enablerCompletions: [{ enablerId: 'e1', completedAt: new Date() }],
       courseSkills: [{ skillId: 's1', name: 'Skill 1' }],

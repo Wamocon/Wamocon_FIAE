@@ -4,8 +4,9 @@ import {
   byCourseOrder,
   computeCourseProgression,
   computeQuizChain,
-  hasActiveQuiz,
+  hasRequiredQuiz,
   isEnablerCompleted,
+  isQuizRequired,
   isQuizPassed,
   isSequenceEnforced,
   readSequenceSince,
@@ -31,8 +32,15 @@ const link = (
   enablerId: string,
   quizId: string,
   difficulty: ProgressionQuizLink['difficulty'] = 'LOW',
-  quizIsActive = true
-): ProgressionQuizLink => ({ enablerId, quizId, difficulty, quizIsActive });
+  quizIsActive = true,
+  gradable = true
+): ProgressionQuizLink => ({
+  enablerId,
+  quizId,
+  difficulty,
+  quizIsActive,
+  gradable,
+});
 
 const run = (input: Partial<CourseProgressionInput>) =>
   computeCourseProgression({
@@ -69,7 +77,7 @@ describe('quiz passing and the definition of a completed enabler', () => {
 
   it('is completed without a quiz (content only)', () => {
     expect(isEnablerCompleted([], new Map())).toBe(true);
-    expect(hasActiveQuiz([])).toBe(false);
+    expect(hasRequiredQuiz([])).toBe(false);
   });
 
   it('needs every active quiz passed', () => {
@@ -98,7 +106,90 @@ describe('quiz passing and the definition of a completed enabler', () => {
   it('ignores an inactive quiz, it does not exist for the trainee', () => {
     const links = [link('e1', 'q1', 'LOW', false)];
     expect(isEnablerCompleted(links, new Map())).toBe(true);
-    expect(hasActiveQuiz(links)).toBe(false);
+    expect(hasRequiredQuiz(links)).toBe(false);
+  });
+
+  describe('a quiz without a gradable question is no prerequisite', () => {
+    it('is not required, whatever the attempts are', () => {
+      expect(isQuizRequired(link('e1', 'q1'))).toBe(true);
+      expect(isQuizRequired(link('e1', 'q1', 'LOW', true, false))).toBe(false);
+      expect(isQuizRequired(link('e1', 'q1', 'LOW', false, true))).toBe(false);
+      // an old row without the flag counts as gradable (the safe side)
+      expect(
+        isQuizRequired({
+          enablerId: 'e1',
+          quizId: 'q1',
+          difficulty: 'LOW',
+          quizIsActive: true,
+        })
+      ).toBe(true);
+    });
+
+    it('an enabler with only such quizzes is completed without any attempt', () => {
+      const links = [
+        link('e1', 'q1', 'LOW', true, false),
+        link('e1', 'q2', 'MEDIUM', true, false),
+      ];
+      expect(isEnablerCompleted(links, new Map())).toBe(true);
+      expect(hasRequiredQuiz(links)).toBe(false);
+    });
+
+    it('is completed when every gradable quiz is passed, the other one is ignored', () => {
+      const links = [
+        link('e1', 'q1', 'LOW', true, true),
+        link('e1', 'q2', 'MEDIUM', true, false),
+      ];
+      expect(isEnablerCompleted(links, new Map())).toBe(false);
+      expect(isEnablerCompleted(links, new Map([['q1', 49]]))).toBe(false);
+      expect(isEnablerCompleted(links, new Map([['q1', 50]]))).toBe(true);
+      expect(hasRequiredQuiz(links)).toBe(true);
+    });
+
+    it('does not block the next enabler of the order', () => {
+      const p = run({
+        enablers: [enabler('e1', 1), enabler('e2', 2)],
+        quizLinks: [
+          link('e1', 'q1', 'LOW', true, false),
+          link('e2', 'q2', 'LOW'),
+        ],
+      });
+      expect(states(p)).toEqual(['e1:completed', 'e2:open']);
+      expect(p.completedCount).toBe(1);
+    });
+
+    it('a gradable quiz still blocks, the ungradable one beside it does not', () => {
+      const p = run({
+        enablers: [enabler('e1', 1), enabler('e2', 2)],
+        quizLinks: [
+          link('e1', 'q1', 'LOW'),
+          link('e1', 'q1b', 'MEDIUM', true, false),
+          link('e2', 'q2', 'LOW'),
+        ],
+      });
+      expect(states(p)).toEqual(['e1:open', 'e2:locked']);
+      const done = run({
+        enablers: [enabler('e1', 1), enabler('e2', 2)],
+        quizLinks: [
+          link('e1', 'q1', 'LOW'),
+          link('e1', 'q1b', 'MEDIUM', true, false),
+          link('e2', 'q2', 'LOW'),
+        ],
+        bestScores: new Map([['q1', 50]]),
+      });
+      expect(states(done)).toEqual(['e1:completed', 'e2:open']);
+    });
+
+    it('such an enabler counts as content only, so an earlier open enabler still locks it', () => {
+      // it was never "really" completed (nothing to pass), like a content only enabler
+      const p = run({
+        enablers: [enabler('e1', 1), enabler('e2', 2)],
+        quizLinks: [
+          link('e1', 'q1', 'LOW'),
+          link('e2', 'q2', 'LOW', true, false),
+        ],
+      });
+      expect(states(p)).toEqual(['e1:open', 'e2:locked']);
+    });
   });
 
   it('does not look at scenarios or use cases: only quizzes are input', () => {
@@ -453,6 +544,43 @@ describe('lock chain of the lesson quizzes', () => {
     expect(chain.map(c => [c.difficulty, c.unlocked, c.after])).toEqual([
       ['MEDIUM', true, null],
       ['HIGH', false, 'MEDIUM'],
+    ]);
+  });
+
+  it('a quiz without a gradable question is always open and gates nobody', () => {
+    // LOW cannot be graded: MEDIUM does not wait for an attempt at LOW, and LOW
+    // itself can be handed in at any time (it only gets stored)
+    const chain = computeCourseChain(
+      [
+        link('e1', 'qL', 'LOW', true, false),
+        link('e1', 'qM', 'MEDIUM'),
+        link('e1', 'qH', 'HIGH'),
+      ],
+      new Map(),
+      new Set()
+    );
+    expect(chain.map(c => [c.difficulty, c.unlocked, c.after])).toEqual([
+      ['LOW', true, null],
+      ['MEDIUM', true, null],
+      ['HIGH', false, 'MEDIUM'],
+    ]);
+  });
+
+  it('skips an ungradable quiz in the middle for the quiz behind it', () => {
+    const chain = computeCourseChain(
+      [
+        link('e1', 'qL', 'LOW'),
+        link('e1', 'qM', 'MEDIUM', true, false),
+        link('e1', 'qH', 'HIGH'),
+      ],
+      new Map(),
+      new Set()
+    );
+    // HIGH waits for LOW, not for the quiz that cannot be graded
+    expect(chain.map(c => [c.difficulty, c.unlocked, c.after])).toEqual([
+      ['LOW', true, null],
+      ['MEDIUM', true, null],
+      ['HIGH', false, 'LOW'],
     ]);
   });
 

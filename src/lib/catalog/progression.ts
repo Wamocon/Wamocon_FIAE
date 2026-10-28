@@ -15,17 +15,21 @@
  * src/lib/catalog/progression-db.ts.
  *
  * Rules (decisions of the owner):
- *  - An enabler is completed when every ACTIVE lesson quiz linked to it was
+ *  - An enabler is completed when every REQUIRED lesson quiz linked to it was
  *    passed with at least PASS_THRESHOLD percent (best attempt). A quiz that is
  *    not passed is "not done", it can be repeated. Scenario and use case
- *    submissions do not count. An enabler without an active quiz has nothing to
- *    pass and counts as completed (content only, as before).
+ *    submissions do not count. A quiz is required when it is active and has at
+ *    least one gradable question (isQuizRequired, quiz-grading.ts): a quiz made
+ *    only of free text questions without an expected answer cannot be graded
+ *    automatically, so it is no prerequisite. An enabler without a required
+ *    quiz has nothing to pass and counts as completed (content only, as
+ *    before).
  *  - Inside a course the enablers follow order_index (ties by id). Inactive
  *    enablers do not exist for the trainee and are skipped. The first active
  *    enabler is open, every further one is open when all active enablers before
  *    it are completed. The reason of a lock names the first enabler that is
  *    not completed yet.
- *  - An enabler that was really completed (it has active quizzes and all are
+ *  - An enabler that was really completed (it has required quizzes and all are
  *    passed) is never locked again, so content that is added later does not
  *    take away what the trainee already did.
  *  - A trainer exception per trainee (trainee_enabler_overrides) beats the
@@ -84,29 +88,49 @@ export interface ProgressionQuizLink {
   difficulty: QuizDifficulty | null;
   /** Whether the quiz itself is active. An inactive quiz does not exist. */
   quizIsActive: boolean;
+  /**
+   * Whether the quiz has at least one gradable question (see
+   * src/lib/catalog/quiz-grading.ts). A quiz without one cannot be passed, so
+   * it is no prerequisite. Missing means gradable: an old row or a caller that
+   * does not know keeps the quiz required (the safe side).
+   */
+  gradable?: boolean;
 }
 
 /**
- * THE definition of "enabler completed": every active lesson quiz of the
- * enabler is passed (best attempt at or above PASS_THRESHOLD percent). Without
- * an active quiz there is nothing to pass and the enabler counts as completed.
+ * True when the quiz is a prerequisite of its enabler: it exists (active) and
+ * it can be passed (at least one gradable question).
+ */
+export function isQuizRequired(
+  link: Pick<ProgressionQuizLink, 'quizIsActive' | 'gradable'>
+): boolean {
+  return link.quizIsActive && link.gradable !== false;
+}
+
+/**
+ * THE definition of "enabler completed": every required lesson quiz of the
+ * enabler (active, with a gradable question) is passed (best attempt at or
+ * above PASS_THRESHOLD percent). Without a required quiz there is nothing to
+ * pass and the enabler counts as completed.
  */
 export function isEnablerCompleted(
-  links: ReadonlyArray<Pick<ProgressionQuizLink, 'quizId' | 'quizIsActive'>>,
+  links: ReadonlyArray<
+    Pick<ProgressionQuizLink, 'quizId' | 'quizIsActive' | 'gradable'>
+  >,
   bestScores: ReadonlyMap<string, number>
 ): boolean {
   for (const link of links) {
-    if (!link.quizIsActive) continue;
+    if (!isQuizRequired(link)) continue;
     if (!isQuizPassed(bestScores.get(String(link.quizId)))) return false;
   }
   return true;
 }
 
-/** True when the enabler has at least one active quiz that can be passed. */
-export function hasActiveQuiz(
-  links: ReadonlyArray<Pick<ProgressionQuizLink, 'quizIsActive'>>
+/** True when the enabler has at least one required quiz that can be passed. */
+export function hasRequiredQuiz(
+  links: ReadonlyArray<Pick<ProgressionQuizLink, 'quizIsActive' | 'gradable'>>
 ): boolean {
-  return links.some(link => link.quizIsActive);
+  return links.some(isQuizRequired);
 }
 
 export interface ProgressionEnabler {
@@ -190,7 +214,7 @@ export function computeCourseProgression(
   for (const enabler of active) {
     const links = linksOf.get(String(enabler.id)) ?? [];
     const completed = isEnablerCompleted(links, input.bestScores);
-    const reallyCompleted = completed && hasActiveQuiz(links);
+    const reallyCompleted = completed && hasRequiredQuiz(links);
     if (completed) completedCount += 1;
 
     const override = input.enforced
@@ -286,11 +310,17 @@ export interface QuizChainEntry {
  * at the quiz before it ("submitted", as the list always showed it; passing
  * counts for the completion of the enabler, not for the chain). The first
  * existing quiz is open. A quiz that does not exist or is inactive is skipped,
- * so the chain never ends in a quiz nobody can open.
+ * so the chain never ends in a quiz nobody can open. A quiz without a gradable
+ * question is no prerequisite: it stays in the chain (it can be handed in,
+ * the answers are stored) but it is always open and the quiz behind it does
+ * not wait for it.
  */
 export function computeQuizChain(
   links: ReadonlyArray<
-    Pick<ProgressionQuizLink, 'quizId' | 'difficulty' | 'quizIsActive'>
+    Pick<
+      ProgressionQuizLink,
+      'quizId' | 'difficulty' | 'quizIsActive' | 'gradable'
+    >
   >,
   bestScores: ReadonlyMap<string, number>,
   submittedQuizIds: ReadonlySet<string>
@@ -306,11 +336,19 @@ export function computeQuizChain(
       quizId,
       submitted: submittedQuizIds.has(quizId),
       passed: isQuizPassed(bestScores.get(quizId)),
-      unlocked: previous === null ? true : previous.submitted,
-      after: previous === null ? null : previous.difficulty,
+      // A quiz that cannot be graded is open at any time and gates nobody: it
+      // is no prerequisite, so it must not hold up the quiz behind it either
+      unlocked:
+        previous === null || link.gradable === false
+          ? true
+          : previous.submitted,
+      after:
+        previous === null || link.gradable === false
+          ? null
+          : previous.difficulty,
     };
     chain.push(entry);
-    previous = entry;
+    if (link.gradable !== false) previous = entry;
   }
   return chain;
 }
