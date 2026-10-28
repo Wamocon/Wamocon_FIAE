@@ -323,11 +323,58 @@ describe('ChunkPlan (dry run count)', () => {
         sourceType: 'course',
         catalog: '(no catalog)',
         visibility: 'all',
+        unit: 'chunks',
         chunks: 1,
+        chars: 0,
+        pages: 0,
       },
-      { sourceType: 'quiz', catalog: 'KFBM', visibility: 'all', chunks: 6 },
-      { sourceType: 'quiz', catalog: 'KFBM', visibility: 'trainer', chunks: 3 },
+      {
+        sourceType: 'quiz',
+        catalog: 'KFBM',
+        visibility: 'all',
+        unit: 'chunks',
+        chunks: 6,
+        chars: 0,
+        pages: 0,
+      },
+      {
+        sourceType: 'quiz',
+        catalog: 'KFBM',
+        visibility: 'trainer',
+        unit: 'chunks',
+        chunks: 3,
+        chars: 0,
+        pages: 0,
+      },
     ]);
     expect(plan.total()).toBe(10);
+  });
+
+  it('adds up the characters and pages that a dry run measured', () => {
+    const plan = new ChunkPlan();
+    plan.add('enabler', 'KFBM', 'all', 2, { chars: 900 });
+    plan.add('enabler', 'KFBM', 'all', 1, { chars: 450 });
+    plan.add('document (PDF files, not chunks)', 'KFBM', 'all', 3, {
+      unit: 'files',
+      pages: 12,
+    });
+    const [pdf, enabler] = plan.rows();
+    expect(plan.total()).toBe(3);
+    expect(plan.totalFiles()).toBe(3);
+    expect(pdf).toMatchObject({ unit: 'files', chunks: 3, pages: 12 });
+    expect(enabler).toMatchObject({ unit: 'chunks', chunks: 3, chars: 1350 });
+  });
+
+  it('keeps chunks and files apart for the same type, catalog and visibility', () => {
+    const plan = new ChunkPlan();
+    plan.add('document', 'KFBM', 'all', 4, { chars: 1000 });
+    plan.add('document', 'KFBM', 'all', 2, { unit: 'files', pages: 5 });
+    expect(plan.rows()).toHaveLength(2);
+  });
+
+  it('ignores negative or non finite measures', () => {
+    const plan = new ChunkPlan();
+    plan.add('quiz', 'KFBM', 'all', 1, { chars: -5, pages: Number.NaN });
+    expect(plan.rows()[0]).toMatchObject({ chars: 0, pages: 0 });
   });
 });
