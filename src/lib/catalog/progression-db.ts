@@ -36,7 +36,10 @@ import {
   type QuizChainEntry,
   type QuizDifficulty,
 } from '@/lib/catalog/progression';
-import { quizIdsWithGradableQuestion } from '@/lib/catalog/quiz-grading';
+import {
+  NON_BLANK_SQL_PATTERN,
+  quizIdsWithGradableQuestion,
+} from '@/lib/catalog/quiz-grading';
 
 /** A course of one trainee with the data its progression was computed from. */
 export interface LoadedCourseProgression {
@@ -74,7 +77,7 @@ export async function loadGradableQuizIds(
     .select({
       quizId: questions.quizId,
       questionType: questions.questionType,
-      hasExpectedAnswer: sql<boolean>`coalesce(${questions.expectedAnswer} ~ '[^[:space:]]', false)`,
+      hasExpectedAnswer: sql<boolean>`coalesce(${questions.expectedAnswer} ~ ${NON_BLANK_SQL_PATTERN}, false)`,
     })
     .from(questions)
     .where(inArray(questions.quizId, ids));

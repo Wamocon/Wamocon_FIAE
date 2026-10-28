@@ -171,6 +171,8 @@ if (!url) {
     // Q1: nothing to grade (a blank and a whitespace expected answer count as none)
     await question(Q1, 1, 'TEXT', null);
     await question(Q1, 2, 'TEXT', ' \n\t ');
+    // the whitespace that String.trim removes too: NBSP, byte order mark, ideographic space
+    await question(Q1, 3, 'TEXT', '\u00a0\ufeff\u3000');
     // Q2: one choice, one free text without, one free text with an expected answer
     await question(Q2, 1, 'MCQ', null);
     await question(Q2, 2, 'TEXT', null);
@@ -260,22 +262,23 @@ if (!url) {
     });
 
     it('any text for the questions without an expected answer gives no score and is stored', async () => {
-      const [a, b] = await questionsOf(Q1);
+      const [a, b, c] = await questionsOf(Q1);
       const r = await submit(Q1, [
         { questionId: a.id, textAnswer: 'asdf' },
         { questionId: b.id, textAnswer: 'qwer' },
+        { questionId: c.id, textAnswer: 'yxcv' },
       ]);
       expect(r.status).toBe(200);
       expect(r.body.score).toBeNull();
       expect(r.body.autoGraded).toBe(false);
-      expect(r.body.ungradedCount).toBe(2);
+      expect(r.body.ungradedCount).toBe(3);
       expect(r.body.feedback.every((f: any) => f.graded === false)).toBe(true);
       expect(await scoresOf(Q1)).toEqual([null]);
       const stored = await sql`
         select a.text_answer from quiz_submission_answers a
         join quiz_submissions s on s.id = a.submission_id
         where s.trainee_id = ${TRAINEE} and s.quiz_id = ${Q1} order by a.text_answer`;
-      expect(stored.map(r => r.text_answer)).toEqual(['asdf', 'qwer']);
+      expect(stored.map(r => r.text_answer)).toEqual(['asdf', 'qwer', 'yxcv']);
       // the state of the order does not change by handing in text
       expect(await states()).toEqual({
         [E1]: 'completed',

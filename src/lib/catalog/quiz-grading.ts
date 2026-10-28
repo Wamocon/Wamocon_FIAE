@@ -29,6 +29,17 @@ export interface GradingQuestion {
   hasExpectedAnswer?: boolean;
 }
 
+/**
+ * The same "not blank" test for a database that cannot run JavaScript: a
+ * Postgres (ARE) pattern that matches a text with at least one character that
+ * String.prototype.trim does not remove. progression-db.ts uses it so that the
+ * order of work and the grading of a submission never disagree on whether an
+ * expected answer exists (a text of only NBSP or a byte order mark is blank
+ * for both).
+ */
+export const NON_BLANK_SQL_PATTERN =
+  '[^\\t\\n\\v\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]';
+
 /** True for a free text question. Everything else is a choice question. */
 export function isTextQuestion(question: GradingQuestion): boolean {
   return question.questionType === 'TEXT';

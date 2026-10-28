@@ -38,6 +38,15 @@ describe('isQuestionGradable', () => {
     ).toBe(false);
   });
 
+  it('treats NBSP, byte order mark and ideographic space as blank (same as the SQL pattern)', () => {
+    expect(
+      isQuestionGradable({
+        questionType: 'TEXT',
+        expectedAnswer: ' ﻿　',
+      })
+    ).toBe(false);
+  });
+
   it('takes the fact of an expected answer where the text is not loaded', () => {
     expect(
       isQuestionGradable({ questionType: 'TEXT', hasExpectedAnswer: true })

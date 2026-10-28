@@ -21,6 +21,7 @@ import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import { requireQuizOpen } from '@/lib/catalog/progression-db';
 import { isQuizPassed } from '@/lib/catalog/progression';
 import {
+  type GradingQuestion,
   gradableCountOf,
   isQuestionGradable,
   quizScore,
@@ -77,12 +78,8 @@ function withholdKey<
  * stored), ungradedCount is the number of questions that stayed out of the
  * percentage (free text without an expected answer).
  */
-function gradingSummary(
-  qs: Array<{ questionType?: unknown; expectedAnswer?: unknown }>
-) {
-  const gradable = gradableCountOf(
-    qs as Array<{ questionType?: string | null; expectedAnswer?: string | null }>
-  );
+function gradingSummary(qs: ReadonlyArray<GradingQuestion>) {
+  const gradable = gradableCountOf(qs);
   return { autoGraded: gradable > 0, ungradedCount: qs.length - gradable };
 }
 
@@ -334,13 +331,12 @@ export async function POST(
     for (const a of normalized) {
       const q = qs.find(qq => String(qq.id) === String(a.questionId));
       if (!q || !isQuestionGradable(q)) continue;
-      const qType = (q as any).questionType || 'MCQ';
-      if (qType === 'TEXT') {
+      if (q.questionType === 'TEXT') {
         const given = (a as any).textAnswer
           ? String((a as any).textAnswer)
           : '';
-        const expected = ((q as any).expectedAnswer || '') as string;
-        if (textAnswerMatches(given, expected)) correctCount++;
+        if (textAnswerMatches(given, q.expectedAnswer ?? ''))
+          correctCount++;
       } else {
         const opt = a.selectedOptionId
           ? optMap.get(String(a.selectedOptionId))

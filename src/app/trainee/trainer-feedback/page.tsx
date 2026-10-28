@@ -450,7 +450,10 @@ export default function TraineeFeedbackPage() {
                     ) : null}
                   </div>
                   <div className="inline-flex items-center gap-2 text-sm">
-                    <Award className="h-4 w-4" /> {q.score ?? 0}%
+                    <Award className="h-4 w-4" />{' '}
+                    {q.score === null
+                      ? t('quizGrading.notGradedBadge')
+                      : `${q.score}%`}
                   </div>
                 </div>
                 <div className="text-muted-foreground mt-1 text-xs">
@@ -509,7 +512,10 @@ export default function TraineeFeedbackPage() {
                     ) : null}
                   </div>
                   <div className="inline-flex items-center gap-2 text-sm">
-                    <Award className="h-4 w-4" /> {q.score ?? 0}%
+                    <Award className="h-4 w-4" />{' '}
+                    {q.score === null
+                      ? t('quizGrading.notGradedBadge')
+                      : `${q.score}%`}
                   </div>
                 </div>
                 <div className="text-muted-foreground mt-1 text-xs">
