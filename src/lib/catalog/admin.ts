@@ -1077,13 +1077,18 @@ export async function removeTraineeEnrollment(
     // own dates, otherwise it would be counted with the dates of the training
     // that is gone. Without a start date of its own the profile stays.
     const ordered = sortEnrollments(
-      current.map(e => ({ ...e, trainingCatalogId: String(e.trainingCatalogId) }))
+      current.map(e => ({
+        ...e,
+        trainingCatalogId: String(e.trainingCatalogId),
+      }))
     );
     if (ordered[0].id === target.id && ordered[1].startDate) {
       await tx
         .update(profiles)
         .set({
-          startOfTrainingDate: new Date(`${ordered[1].startDate}T00:00:00.000Z`),
+          startOfTrainingDate: new Date(
+            `${ordered[1].startDate}T00:00:00.000Z`
+          ),
           ausbildungDurationYears: ordered[1].durationYears,
         })
         .where(eq(profiles.id, traineeId));

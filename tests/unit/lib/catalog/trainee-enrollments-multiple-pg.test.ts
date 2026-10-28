@@ -214,11 +214,12 @@ if (!url) {
 
     // KfBM-like content: two compulsory components (phase 1, phase 2) and one
     // elective component, a course and a global quiz each
-    const comps: [keyof typeof COMP, string, string, number | null, number][] = [
-      ['p1', 'pflicht', 'K1', 1, 1],
-      ['p2', 'pflicht', 'K2', 2, 13],
-      ['w1', 'wahl', 'K3', null, 30],
-    ];
+    const comps: [keyof typeof COMP, string, string, number | null, number][] =
+      [
+        ['p1', 'pflicht', 'K1', 1, 1],
+        ['p2', 'pflicht', 'K2', 2, 13],
+        ['w1', 'wahl', 'K3', null, 30],
+      ];
     for (const [key, kind, code, phase, order] of comps) {
       await sql`insert into training_components (id, training_catalog_id, code, title, total_weeks, total_hours, phase, kind, order_index)
                 values (${COMP[key]}, ${CAT_K}, ${code}, ${'Komponente ' + code}, 1, 40, ${phase}, ${kind}, ${order})`;
@@ -374,7 +375,10 @@ if (!url) {
         });
         expect(f.body.courses.map((c: any) => c.id)).toEqual([COURSE.f]);
         // the query parameter works like the header
-        const q = await call(route.courses, '/api/trainee/courses?catalog=me1k');
+        const q = await call(
+          route.courses,
+          '/api/trainee/courses?catalog=me1k'
+        );
         expect(q.body.courses.map((c: any) => c.id)).toEqual([COURSE.k1]);
         expect(JSON.stringify(f.body)).not.toContain('KfBM');
         expect(JSON.stringify(k.body)).not.toContain('FIAE');
@@ -429,10 +433,14 @@ if (!url) {
         );
         // a quiz of a training the trainee does not have is not found
         asUser(trainee(TK));
-        const foreign = await call(route.quiz, `/api/trainee/quizzes/${QUIZ.f}`, {
-          header: 'ME1K',
-          ctx: { quizId: QUIZ.f },
-        });
+        const foreign = await call(
+          route.quiz,
+          `/api/trainee/quizzes/${QUIZ.f}`,
+          {
+            header: 'ME1K',
+            ctx: { quizId: QUIZ.f },
+          }
+        );
         expect(foreign.status).toBe(404);
       });
 
@@ -490,7 +498,8 @@ if (!url) {
         // the second enrollment copied the profile start (36 months ago): it
         // counts with its own terms, which are the same here, so phase 2 of
         // KfBM: the course of phase 2 and its quiz, nothing of phase 1
-        const members = await sql`select course_id from course_members where user_id = ${TF} order by course_id`;
+        const members =
+          await sql`select course_id from course_members where user_id = ${TF} order by course_id`;
         expect(members.map(m => m.course_id).sort()).toEqual(
           [COURSE.f, COURSE.k2].sort()
         );
@@ -531,9 +540,9 @@ if (!url) {
             'ME1K',
           ]);
           expect(res.body.effectiveCatalogId).toBe(FIAE_DEFAULT);
-          expect(res.body.enrollments.map((e: any) => e.durationYears)).toEqual([
-            2, 2,
-          ]);
+          expect(res.body.enrollments.map((e: any) => e.durationYears)).toEqual(
+            [2, 2]
+          );
           expect(res.body.isImplicit).toBe(false);
         } finally {
           await sql`delete from trainee_enrollments where trainee_id = ${TN}`;
@@ -547,7 +556,8 @@ if (!url) {
 
       it('adding the same training again changes nothing', async () => {
         asUser(superAdmin());
-        const rowsBefore = await sql`select count(*)::int as n from course_members where user_id = ${TF}`;
+        const rowsBefore =
+          await sql`select count(*)::int as n from course_members where user_id = ${TF}`;
         const res = await call(route.enrollment, enrollmentUrl(TF), {
           method: 'PUT',
           body: { catalogId: CAT_K },
@@ -556,7 +566,8 @@ if (!url) {
         expect(res.status).toBe(200);
         expect(res.body).toMatchObject({ changed: false, enrollmentCount: 2 });
         expect(res.body.contentSync).toBeUndefined();
-        const rowsAfter = await sql`select count(*)::int as n from course_members where user_id = ${TF}`;
+        const rowsAfter =
+          await sql`select count(*)::int as n from course_members where user_id = ${TF}`;
         expect(rowsAfter[0].n).toBe(rowsBefore[0].n);
       });
 
@@ -721,8 +732,22 @@ if (!url) {
         await sql`insert into auth.users (id, email) values (${TX}, ${TX + '@t.test'}) on conflict (id) do nothing`;
         await sql`insert into profiles (id, email, role, organization_id, is_active, start_of_training_date, ausbildung_duration_years)
                   values (${TX}, ${TX + '@t.test'}, 'TRAINEE', ${ORG_A}, true, ${monthsAgo(36)}, 3)`;
-        await enroll(id(406), TX, CAT_F, '2026-09-01T08:00:00Z', monthsAgo(36), 3);
-        await enroll(id(407), TX, CAT_K, '2026-10-01T08:00:00Z', monthsAgo(1), 2);
+        await enroll(
+          id(406),
+          TX,
+          CAT_F,
+          '2026-09-01T08:00:00Z',
+          monthsAgo(36),
+          3
+        );
+        await enroll(
+          id(407),
+          TX,
+          CAT_K,
+          '2026-10-01T08:00:00Z',
+          monthsAgo(1),
+          2
+        );
         try {
           asUser(superAdmin());
           // removing the second one leaves the profile alone
@@ -733,10 +758,19 @@ if (!url) {
           });
           expect(keep.status).toBe(200);
           expect(
-            (await sql`select start_of_training_date::date::text as s, ausbildung_duration_years as d from profiles where id = ${TX}`)[0]
+            (
+              await sql`select start_of_training_date::date::text as s, ausbildung_duration_years as d from profiles where id = ${TX}`
+            )[0]
           ).toMatchObject({ s: monthsAgo(36), d: 3 });
           // back to two, then remove the first
-          await enroll(id(408), TX, CAT_K, '2026-10-02T08:00:00Z', monthsAgo(1), 2);
+          await enroll(
+            id(408),
+            TX,
+            CAT_K,
+            '2026-10-02T08:00:00Z',
+            monthsAgo(1),
+            2
+          );
           const res = await call(route.enrollment, enrollmentUrl(TX), {
             method: 'DELETE',
             body: { catalogId: CAT_F, confirm: true },
@@ -745,7 +779,9 @@ if (!url) {
           expect(res.status).toBe(200);
           expect(await enrollmentsOf(TX)).toEqual(['ME1K']);
           expect(
-            (await sql`select start_of_training_date::date::text as s, ausbildung_duration_years as d from profiles where id = ${TX}`)[0]
+            (
+              await sql`select start_of_training_date::date::text as s, ausbildung_duration_years as d from profiles where id = ${TX}`
+            )[0]
           ).toMatchObject({ s: monthsAgo(1), d: 2 });
         } finally {
           await sql`delete from trainee_enrollments where trainee_id = ${TX}`;
@@ -814,7 +850,8 @@ if (!url) {
       });
 
       it('counts a trainee once per training and takes one seat', async () => {
-        const { listOrganizationCatalogs } = await import('@/lib/catalog/admin');
+        const { listOrganizationCatalogs } =
+          await import('@/lib/catalog/admin');
         const { loadSeatUsage } = await import('@/lib/admin/seats');
         const catalogs = await listOrganizationCatalogs(ORG_A, {
           includeInactive: true,
@@ -827,7 +864,8 @@ if (!url) {
         const seats = await loadSeatUsage(db as never, ORG_A);
         // three trainee accounts, whatever the number of enrollments (5)
         expect(seats?.trainees).toBe(3);
-        const enrollments = await sql`select count(*)::int as n from trainee_enrollments e join profiles p on p.id = e.trainee_id where p.organization_id = ${ORG_A}`;
+        const enrollments =
+          await sql`select count(*)::int as n from trainee_enrollments e join profiles p on p.id = e.trainee_id where p.organization_id = ${ORG_A}`;
         expect(enrollments[0].n).toBe(5);
       });
     });
@@ -841,22 +879,81 @@ if (!url) {
         /** The catalogs whose row on the new profile must be the row of the old profile. */
         fromOld?: ('F' | 'K')[];
       }[] = [
-        { name: 'old KfBM replaces the default FIAE', old: ['K'], next: ['F'], expected: ['K'], fromOld: ['K'] },
-        { name: 'old FIAE alone never joins a deliberate KfBM', old: ['F'], next: ['K'], expected: ['K'] },
-        { name: 'two old enrollments move to a profile without any', old: ['F', 'K'], next: [], expected: ['F', 'K'], fromOld: ['F', 'K'] },
-        { name: 'two old enrollments replace the same catalog and bring the other', old: ['F', 'K'], next: ['F'], expected: ['F', 'K'], fromOld: ['F', 'K'] },
-        { name: 'the same catalog: the old row wins as a whole', old: ['K'], next: ['K'], expected: ['K'], fromOld: ['K'] },
-        { name: 'old FIAE moves to a profile without any', old: ['F'], next: [], expected: ['F'], fromOld: ['F'] },
-        { name: 'old FIAE replaces the new FIAE', old: ['F'], next: ['F'], expected: ['F'], fromOld: ['F'] },
-        { name: 'old KfBM wins over FIAE and KfBM of the new profile', old: ['K'], next: ['F', 'K'], expected: ['K'], fromOld: ['K'] },
-        { name: 'nothing to hand over keeps the new profile as it is', old: [], next: ['K'], expected: ['K'] },
-        { name: 'both old enrollments, new has KfBM only', old: ['F', 'K'], next: ['K'], expected: ['F', 'K'], fromOld: ['F', 'K'] },
+        {
+          name: 'old KfBM replaces the default FIAE',
+          old: ['K'],
+          next: ['F'],
+          expected: ['K'],
+          fromOld: ['K'],
+        },
+        {
+          name: 'old FIAE alone never joins a deliberate KfBM',
+          old: ['F'],
+          next: ['K'],
+          expected: ['K'],
+        },
+        {
+          name: 'two old enrollments move to a profile without any',
+          old: ['F', 'K'],
+          next: [],
+          expected: ['F', 'K'],
+          fromOld: ['F', 'K'],
+        },
+        {
+          name: 'two old enrollments replace the same catalog and bring the other',
+          old: ['F', 'K'],
+          next: ['F'],
+          expected: ['F', 'K'],
+          fromOld: ['F', 'K'],
+        },
+        {
+          name: 'the same catalog: the old row wins as a whole',
+          old: ['K'],
+          next: ['K'],
+          expected: ['K'],
+          fromOld: ['K'],
+        },
+        {
+          name: 'old FIAE moves to a profile without any',
+          old: ['F'],
+          next: [],
+          expected: ['F'],
+          fromOld: ['F'],
+        },
+        {
+          name: 'old FIAE replaces the new FIAE',
+          old: ['F'],
+          next: ['F'],
+          expected: ['F'],
+          fromOld: ['F'],
+        },
+        {
+          name: 'old KfBM wins over FIAE and KfBM of the new profile',
+          old: ['K'],
+          next: ['F', 'K'],
+          expected: ['K'],
+          fromOld: ['K'],
+        },
+        {
+          name: 'nothing to hand over keeps the new profile as it is',
+          old: [],
+          next: ['K'],
+          expected: ['K'],
+        },
+        {
+          name: 'both old enrollments, new has KfBM only',
+          old: ['F', 'K'],
+          next: ['K'],
+          expected: ['F', 'K'],
+          fromOld: ['F', 'K'],
+        },
       ];
 
       it.each(cases.map((c, index) => [c.name, c, index] as const))(
         '%s',
         async (_name, c, index) => {
-          const { mergeProfileReferences } = await import('@/lib/profile-identity');
+          const { mergeProfileReferences } =
+            await import('@/lib/profile-identity');
           // the merge treats the REAL FIAE catalog as the default, so F is it
           const catalogOf = { F: FIAE_DEFAULT, K: CAT_K } as const;
           const oldId = id(900 + index * 2);
@@ -889,20 +986,25 @@ if (!url) {
             await mergeProfileReferences(tx as never, oldId, newId);
           });
 
-          const rows = await sql`select e.id, c.code from trainee_enrollments e join training_catalogs c on c.id = e.training_catalog_id
+          const rows =
+            await sql`select e.id, c.code from trainee_enrollments e join training_catalogs c on c.id = e.training_catalog_id
                                  where e.trainee_id = ${newId}`;
           const short = (code: string) => (code === 'FIAE' ? 'F' : 'K');
-          expect(rows.map(r => short(r.code)).sort()).toEqual([...c.expected].sort());
+          expect(rows.map(r => short(r.code)).sort()).toEqual(
+            [...c.expected].sort()
+          );
           for (const code of c.fromOld ?? []) {
             const row = rows.find(r => short(r.code) === code);
             expect(row?.id).toBe(oldRows[code]);
           }
           if (oldRows.K && c.fromOld?.includes('K')) {
-            const choices = await sql`select count(*)::int as n from trainee_elective_choices where enrollment_id = ${oldRows.K}`;
+            const choices =
+              await sql`select count(*)::int as n from trainee_elective_choices where enrollment_id = ${oldRows.K}`;
             expect(choices[0].n).toBe(1);
           }
           // a trainee has at most one row per catalog on both profiles
-          const dup = await sql`select training_catalog_id from trainee_enrollments where trainee_id in (${oldId}, ${newId}) group by trainee_id, training_catalog_id having count(*) > 1`;
+          const dup =
+            await sql`select training_catalog_id from trainee_enrollments where trainee_id in (${oldId}, ${newId}) group by trainee_id, training_catalog_id having count(*) > 1`;
           expect(dup).toHaveLength(0);
         }
       );

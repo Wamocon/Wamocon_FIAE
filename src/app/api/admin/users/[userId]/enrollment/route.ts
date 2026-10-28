@@ -16,7 +16,6 @@ import {
 } from '@/lib/catalog/admin';
 import { syncTraineeContentAfterEnrollment } from '@/lib/catalog/trainee-content';
 import { invalidateTraineeListCaches } from '@/lib/catalog/trainee-cache';
-import { apiCache } from '@/lib/api-cache';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
@@ -80,14 +79,10 @@ export async function GET(
 
 /**
  * Data that depends on the enrollments of a trainee and is cached: the trainee
- * pages (the keys carry the catalog, but the rows behind them just changed) and
- * the trainer dashboards and course lists that count trainees.
+ * pages (the keys carry the catalog, but the rows behind them just changed).
  */
 function invalidateEnrollmentCaches() {
   invalidateTraineeListCaches();
-  for (const tag of ['trainer_dashboard', 'trainer_courses']) {
-    apiCache.invalidate(tag);
-  }
 }
 
 /**

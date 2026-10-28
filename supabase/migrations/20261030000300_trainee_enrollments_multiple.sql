@@ -69,6 +69,7 @@ begin
     select 1
       from pg_constraint c
      where c.conrelid = 'public.trainee_enrollments'::regclass
+       and c.connamespace = 'public'::regnamespace
        and c.conname = 'trainee_enrollments_trainee_catalog_unique'
        and c.contype = 'u'
   ) then
@@ -79,6 +80,7 @@ begin
     select 1
       from pg_constraint c
      where c.conrelid = 'public.trainee_enrollments'::regclass
+       and c.connamespace = 'public'::regnamespace
        and c.conname = 'trainee_enrollments_id_catalog_unique'
        and c.contype = 'u'
   ) then
@@ -114,6 +116,7 @@ begin
     cross join lateral unnest(c.conkey) with ordinality as k(attnum, ord)
     join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum
    where c.conrelid = 'public.trainee_enrollments'::regclass
+     and c.connamespace = 'public'::regnamespace
      and c.conname = 'trainee_enrollments_trainee_catalog_unique'
      and c.contype = 'u';
   if catalog_unique_columns is distinct from array['trainee_id', 'training_catalog_id'] then

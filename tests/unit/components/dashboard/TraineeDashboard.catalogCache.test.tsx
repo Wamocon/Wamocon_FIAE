@@ -58,7 +58,10 @@ describe('TraineeDashboard local cache per training', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
-    (useRouter as jest.Mock).mockReturnValue({ push: jest.fn(), replace: jest.fn() });
+    (useRouter as jest.Mock).mockReturnValue({
+      push: jest.fn(),
+      replace: jest.fn(),
+    });
     (useAuth as jest.Mock).mockReturnValue({
       user: { id: 'u1' },
       profile: {
