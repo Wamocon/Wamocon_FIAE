@@ -205,8 +205,10 @@ test(
       // K18 and the enabler texts are only counted
       assert.equal(plan.notPlanned.excluded, 1);
       assert.equal(plan.notPlanned.enabler, 2);
-      // the table is read as lines
-      assert.ok(plan.useCases[0].description.includes('Schrauben | 12'));
+      // the description is the title in one line (like FIAE), the assignment with
+      // its table (read as lines by the parser) is not part of the plan any more
+      assert.equal(plan.useCases[0].description, plan.useCases[0].title);
+      assert.ok(!plan.useCases[0].description.includes('Schrauben | 12'));
       assert.ok(!plan.useCases[0].description.includes('OMEGA'));
       assert.ok(plan.useCases[0].solution.includes('Schrauben | ZETA 1a'));
       // the plan file holds the content (it is the input of check and run), the summary does not

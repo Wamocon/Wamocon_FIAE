@@ -9,6 +9,7 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import { invalidateTraineeListCaches } from '@/lib/catalog/trainee-cache';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import {
   ensureContentInScope,
@@ -95,6 +96,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
       default:
         return NextResponse.json({ error: 'Unknown itemType' }, { status: 400 });
     }
+
+    // an assignment of a global quiz shows in the cached quiz list of the trainee
+    if (itemType === 'GLOBAL_QUIZ') invalidateTraineeListCaches();
 
     // Notify the trainee about the activation change
     try {

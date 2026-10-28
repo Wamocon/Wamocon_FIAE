@@ -49,12 +49,17 @@ export function solutionTextsOfUseCases(useCases: readonly PlanUseCase[]) {
  * and the one whose solution it is.
  */
 export function sharedSolutionBlocks(
-  useCases: readonly PlanUseCase[]
+  useCases: readonly PlanUseCase[],
+  assignments: ReadonlyMap<string, string> = new Map()
 ): Array<{ visibleIn: string; solutionOf: string }> {
   const visibleOf = new Map(
     useCases.map(u => [
       u.code,
-      normalize([u.description, u.topics ?? ''].join('\n')),
+      normalize(
+        [u.description, u.topics ?? '', assignments.get(u.code) ?? ''].join(
+          '\n'
+        )
+      ),
     ])
   );
   // blocks by their first characters, so a text is scanned once
@@ -103,16 +108,25 @@ export function leakInUseCaseText(
   return leakOf(text, solutions);
 }
 
-/** Problems of one use case: a solution in a field that trainees can see. */
+/**
+ * Problems of one use case: a solution in a field that trainees can see.
+ * `assignment` is the whole visible assignment text, only known while the plan
+ * is built.
+ */
 export function leaksInUseCase(
   useCase: PlanUseCase,
-  solutions: string[]
+  solutions: string[],
+  assignment?: string
 ): string[] {
   const problems: string[] = [];
   for (const [where, text] of [
     ['title', useCase.title],
     ['description', useCase.description],
     ['topics', useCase.topics],
+    // the visible assignment (situation, objective, steps) is not part of the
+    // plan any more (the description is the short title, the assignment is the
+    // task PDF), the check reads it while the plan is built
+    ['assignment', assignment],
   ] as const) {
     const reason = leakInUseCaseText(text, solutions);
     if (reason) problems.push(`use case ${useCase.code} ${where} ${reason}`);

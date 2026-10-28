@@ -30,6 +30,7 @@
 //    position is taken by another code) stops a writing run before the first
 //    write, a comparison without write only reports it
 
+import { lengthChangesOf } from '../descriptions';
 import type { Db, Row } from '../apply/db';
 import { ImportAbort } from '../apply/db';
 import type { Conflict, Difference, TableCount } from '../apply/types';
@@ -233,15 +234,20 @@ export async function executeLearningFieldPlan(
       descriptionFills ||
       descriptionDiffers
     ) {
+      const columns = [
+        ...(titleDiffers ? ['title'] : []),
+        ...(descriptionFills || descriptionDiffers ? ['description'] : []),
+        ...(hoursDiffers ? ['hours_budget'] : []),
+        ...(orderDiffers ? ['order_index'] : []),
+      ];
+      const lengths = lengthChangesOf(columns, existing, {
+        description: wantedDescription,
+      });
       differences.push({
         table: FIELDS,
         key: field.code,
-        columns: [
-          ...(titleDiffers ? ['title'] : []),
-          ...(descriptionFills || descriptionDiffers ? ['description'] : []),
-          ...(hoursDiffers ? ['hours_budget'] : []),
-          ...(orderDiffers ? ['order_index'] : []),
-        ],
+        columns,
+        ...(lengths ? { lengths } : {}),
       });
     }
     // --update-existing replaces a title only by an official title, a title of

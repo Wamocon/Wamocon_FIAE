@@ -27,6 +27,7 @@
 //  - new use cases are inactive unless the decisions say otherwise
 
 import type { Db, Row } from '../apply/db';
+import { lengthChangesOf } from '../descriptions';
 import { ImportAbort } from '../apply/db';
 import { TABLES } from '../apply/tables';
 import type { TableName } from '../apply/tables';
@@ -296,7 +297,8 @@ export async function executeUseCasePlan(
       observe({ table, key, status: 'unchanged' });
       return;
     }
-    differences.push({ table, key, columns });
+    const lengths = lengthChangesOf(columns, existing, desired);
+    differences.push({ table, key, columns, ...(lengths ? { lengths } : {}) });
     observe({ table, key, status: 'differs' });
     if (
       options.updateExisting &&

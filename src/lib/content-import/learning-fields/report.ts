@@ -1,6 +1,7 @@
 // Report of a run of the learning field import as Markdown (German). It holds
 // counts and codes, no content of the source table.
 
+import { renderLengthChanges } from '../descriptions';
 import type { JobMode } from '../apply/job';
 import type { LearningFieldReport } from './engine';
 
@@ -122,6 +123,7 @@ export function renderLearningFieldRunReport(
       out.push(`- und ${report.differences.length - MAX_LISTED} weitere`);
     }
     out.push('');
+    out.push(...renderLengthChanges(report.differences, info.updateExisting));
   }
   if (report.conflicts.length > 0) {
     out.push('## Konflikte');
