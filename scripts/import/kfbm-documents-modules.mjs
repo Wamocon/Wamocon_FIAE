@@ -49,10 +49,5 @@ export const {
   StorageError,
 } = storage;
 export const { classifyPdfPath } = classify;
-export const {
-  prepareWordDocument,
-  traineePdfProblem,
-  wordPdfName,
-  wordPdfPath,
-} = word;
+export const { prepareWordDocument, wordPdfName, wordPdfPath } = word;
 export const { cleanPdfMetadata } = pdfClean;

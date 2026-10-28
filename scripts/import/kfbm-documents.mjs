@@ -57,10 +57,10 @@
 //         cleans its metadata (author, title) and then goes on as above. Check and the dry run convert
 //         too (the plan needs size, hash and pages), nothing of it is kept: the temp folder is removed at
 //         the end. Only the targets local and preview exist, a real run needs the same confirmations.
-//   Solution protection: the PDF for the trainees of a scenario stops before the heading of the solution
-//   (the Word file holds the situation, the task and the solution), the task PDF of a use case stops
-//   before "Musterlösung", the solution PDF (whole document) goes to the private bucket. A file that
-//   cannot be cut gives no PDF. Details: src/lib/content-import/documents/word.ts.
+//   Scenario and use case: a scenario is ONE PDF made from the whole Word file (situation, solution and
+//   knowledge, public: the trainees may see all of it). Only the use cases are split: the task PDF stops
+//   before "Musterlösung" (public), the solution PDF (whole document) goes to the private bucket. A use
+//   case that cannot be cut gives no PDF. Details: src/lib/content-import/documents/word.ts.
 //
 // Exit codes: 0 done, 1 failed or refused, 2 wrong usage, 3 conflicts.
 
@@ -77,7 +77,6 @@ import {
   renderDocumentRunReport,
   renderPlanSummary,
   runDocumentJob,
-  traineePdfProblem,
   validateDocumentPlan,
   MAX_PDF_BYTES,
 } from './kfbm-documents-modules.mjs';
@@ -129,35 +128,18 @@ function withTimeout(promise, ms) {
   });
 }
 
-/**
- * Number of pages and the text of the first page, or nulls when the PDF cannot be read. With `full`
- * (the PDF of a scenario) all pages are read and `solutionMarker` tells whether the text shows a
- * solution part: the delivered scenario PDFs hold the whole Word file, solution included.
- */
-async function firstPage(bytes, full = false) {
+/** Number of pages and the text of the first page, or nulls when the PDF cannot be read. */
+async function firstPage(bytes) {
   try {
     // the file of the library itself: its index.js runs a test file when it is the main module
     const pdfParse = require('pdf-parse/lib/pdf-parse.js');
-    const result = await pdfParse(Buffer.from(bytes), full ? {} : { max: 1 });
-    const text = typeof result.text === 'string' ? result.text : null;
+    const result = await pdfParse(Buffer.from(bytes), { max: 1 });
     return {
       pageCount: Number.isInteger(result.numpages) ? result.numpages : null,
-      headText: text,
-      ...(full
-        ? {
-            solutionMarker:
-              text === null
-                ? true
-                : traineePdfProblem('scenario', text, []) !== null,
-          }
-        : {}),
+      headText: typeof result.text === 'string' ? result.text : null,
     };
   } catch {
-    return {
-      pageCount: null,
-      headText: null,
-      ...(full ? { solutionMarker: true } : {}),
-    };
+    return { pageCount: null, headText: null };
   }
 }
 
@@ -221,7 +203,7 @@ export async function scanSource(root, args, options = {}) {
       const magicOk =
         Buffer.from(bytes.subarray(0, 5)).toString('latin1') === '%PDF-';
       const page = magicOk
-        ? await parse(bytes, c.kind === 'scenario')
+        ? await parse(bytes)
         : { pageCount: null, headText: null };
       out.push({
         ...file,

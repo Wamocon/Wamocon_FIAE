@@ -6,22 +6,22 @@
 // What becomes which PDF (the same four kinds and the same rows as the PDF import, engine.ts):
 //
 //   enabler Word        -> enabler PDF         the whole text (public bucket)
-//   scenario Word       -> scenario PDF        ONLY the part before the solution (public bucket). The Word
-//                                              holds the starting situation, an optional task and, after
-//                                              them, the solution and the text "how the knowledge helps".
-//                                              The PDF for the trainees stops at the first heading of a
-//                                              solution part. A Word file that cannot be cut this way
-//                                              gives no PDF at all (CUT_NOT_FOUND).
+//   scenario Word       -> scenario PDF        the WHOLE document (public bucket). The Word holds the
+//                                              starting situation, an optional task, the solution and the
+//                                              text "how the knowledge helps". The trainees may see all of
+//                                              it (decision of the owner, 29.10.2026): there is no cut and
+//                                              no private copy for a scenario. Only the use cases are split.
 //   use case Word       -> task PDF            the part before "Musterlösung" (public bucket)
 //                       -> solution PDF        the whole document (private bucket, trainer only)
 //
-// Solution protection works in three layers, none of them is optional:
+// Solution protection of the use cases works in three layers, none of them is optional (a scenario is
+// whole and public, it is not part of this protection):
 //   1. the parsers of the import read the Word text, a marker word or a solution text in a visible
 //      section stops the file (SOLUTION_MARKER, the same checks as the content import)
-//   2. the docx is cut BEFORE the conversion: the body elements from the heading of the solution on are
-//      removed, so the solution never reaches the converter
-//   3. the text of the finished PDF is checked again (markers, solution texts, heading lines) and a
-//      PDF that fails is dropped (the `check` of the variant)
+//   2. the docx of the task is cut BEFORE the conversion: the body elements from the heading of the
+//      model solution on are removed, so the solution never reaches the converter
+//   3. the text of the finished task PDF is checked again (markers, solution texts) and a PDF that
+//      fails is dropped (the `check` of the variant)
 //
 // The docx that goes to the converter is also cleaned: external references (linked pictures, remote
 // templates) and macro projects are removed, so the converter has nothing to fetch and nothing to run.
@@ -34,11 +34,7 @@ import {
   readZipDirectory,
 } from '../docx-paragraphs';
 import { enablerKeysMatch } from '../path-info';
-import {
-  hasSolutionHeadingLine,
-  parseScenarioText,
-  sharesSolutionText,
-} from '../source-parsers';
+import { parseScenarioText } from '../source-parsers';
 import { parseUseCaseText, toTraineeUseCase } from '../use-cases/parser';
 import type { PdfKind } from './types';
 
@@ -329,21 +325,10 @@ export function cutBodyXml(
   return xml.slice(0, blocks[index].start) + xml.slice(tail);
 }
 
-// Headings of the solution parts ----------------------------------------------------------------
+// Heading of the solution part of a use case ---------------------------------------------------
 
-/** The heading line of a solution part: short, no sentence end, starts like a solution heading. */
-const SOLUTION_HEADING =
-  /^(?:L(?:ö|oe)sung|Wie das Fachwissen|Musterl(?:ö|oe)sung|Antwortschl(?:ü|ue)ssel|Korrekte\s+Antwort|Richtige\s+Antwort|Bewertungskriterien)/i;
-const TASK_HEADING = /^Aufgabe(?:n|nstellung)?\s*:?$/i;
 const USE_CASE_SOLUTION_HEADING =
   /^(?:Musterl(?:ö|oe)sung|Bewertungskriterien)\s*:?$/i;
-
-const looksLikeHeading = (text: string) =>
-  text.length <= 60 && !/[.!?]$/.test(text);
-
-/** The first heading of a solution part of a scenario (also variants like "Lösungsszenario (nur Trainer)"). */
-export const isScenarioSolutionHeading = (text: string): boolean =>
-  looksLikeHeading(text) && SOLUTION_HEADING.test(text);
 
 /** The first heading of a solution part of a use case. */
 export const isUseCaseSolutionHeading = (text: string): boolean =>
@@ -511,28 +496,15 @@ export async function prepareDocx(
 
 // The check of a finished PDF -----------------------------------------------------------------
 
-/** First non-empty line and the rest of a text. */
-function withoutTitle(text: string): string {
-  const lines = text.split(/\r?\n/);
-  const first = lines.findIndex(line => line.trim().length > 0);
-  return first < 0 ? '' : lines.slice(first + 1).join('\n');
-}
-
 /**
- * The check of the PDF text of a variant for trainees: no marker word, no solution text and, for a
- * scenario, no line that looks like the heading of a solution (the title line is left out, a title
- * may contain the word).
+ * The check of the PDF text of the task of a use case (the part for the trainees): no marker word and
+ * no solution text. A scenario is not checked, it is whole and public.
  */
 export function traineePdfProblem(
-  kind: PdfKind,
   pdfText: string,
   solutions: readonly string[]
 ): WordSkipCode | null {
-  if (leakOf(pdfText, [...solutions])) return 'PDF_SOLUTION';
-  if (kind === 'scenario' && hasSolutionHeadingLine(withoutTitle(pdfText))) {
-    return 'PDF_SOLUTION';
-  }
-  return null;
+  return leakOf(pdfText, [...solutions]) ? 'PDF_SOLUTION' : null;
 }
 
 // Preparing a Word file ---------------------------------------------------------------------------
@@ -609,28 +581,13 @@ async function prepareScenario(
   if (!enablerKeysMatch(s.code, context.enablerKey)) {
     return { ok: false, code: 'CODE_MISMATCH' };
   }
+  // The scenario goes out whole, with its solution and the text "how the knowledge helps". The parser
+  // only has to find the code and the structure. The solution texts still go to the check of the
+  // enabler texts (an enabler PDF is no copy of a scenario solution).
   const solutions = [s.solution, s.knowledgeContribution].filter(
     text => text.length > 0
   );
-  // the checks of the content import for the visible parts of a scenario
-  const visibleProblem =
-    leakOf(s.situation, solutions) ??
-    leakOf(s.title ?? '', solutions) ??
-    (s.task
-      ? (leakOf(s.task, solutions) ??
-        (hasSolutionHeadingLine(s.task) || sharesSolutionText(s.task, solutions)
-          ? 'task'
-          : null))
-      : null);
-  if (visibleProblem) return { ok: false, code: 'SOLUTION_MARKER' };
-  // A task that stands where the solution should be is the solution (the parser says so)
-  const taskIsSolution = parsed.issues.some(i => i.code === 'TASK_AS_SOLUTION');
-  const prepared = await prepareDocx(
-    data,
-    text =>
-      isScenarioSolutionHeading(text) ||
-      (taskIsSolution && TASK_HEADING.test(text))
-  );
+  const prepared = await prepareDocx(data);
   if (!prepared.ok) return { ok: false, code: prepared.code };
   return {
     ok: true,
@@ -641,7 +598,7 @@ async function prepareScenario(
         docx: prepared.bytes,
         title: `Szenario ${context.enablerCode}`,
         removed: prepared.removed,
-        check: text => traineePdfProblem('scenario', text, solutions),
+        check: () => null,
       },
     ],
   };
@@ -675,7 +632,7 @@ async function prepareUseCase(
         docx: task.bytes,
         title: `Use Case ${context.enablerCode}: Aufgabe`,
         removed: task.removed,
-        check: text => traineePdfProblem('usecase_task', text, solutions),
+        check: text => traineePdfProblem(text, solutions),
       },
       {
         kind: 'usecase_solution',
