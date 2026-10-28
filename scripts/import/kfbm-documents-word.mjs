@@ -323,8 +323,6 @@ export async function scanWordSource(root, args, deps) {
         pageCount: cleaned.pageCount,
         // only the head is kept, the plan reads the first lines
         headText: pdf.text.slice(0, 4000),
-        // the text was checked above (word.ts), for the scenarios the plan asks for this value
-        solutionMarker: variant.kind === 'scenario' ? false : undefined,
       });
       counts.made += 1;
     } catch {
