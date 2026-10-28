@@ -2489,5 +2489,9 @@
   "contentUpload.confirm.reopen": "Review again",
   "contentUpload.notice.reopened": "The run is back in review.",
   "contentUpload.notice.reopenState": "The run cannot be reviewed again in this state.",
-  "contentUpload.code.UNREADABLE": "The browser could not read the file (for example a path that is too long). Shorten the path or choose the file on its own."
+  "contentUpload.code.UNREADABLE": "The browser could not read the file (for example a path that is too long). Shorten the path or choose the file on its own.",
+  "contentUpload.originals.title": "Provide originals for the trainees",
+  "contentUpload.originals.hint": "The original PDF of an enabler text appears in the reader of the trainees after the activation. You can choose accepted PDF originals of enabler texts, at most {max} per transfer. The choice applies to the next dry run and the transfer, every file is checked again.",
+  "contentUpload.originals.count": "{count} of {max} chosen",
+  "contentUpload.originals.limit": "The limit of {max} originals is reached."
 }

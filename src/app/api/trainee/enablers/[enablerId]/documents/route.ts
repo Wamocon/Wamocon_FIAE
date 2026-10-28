@@ -23,12 +23,23 @@ import { requireContentScopeForUser } from '@/lib/catalog/scope';
 //  - it belongs to the shared curriculum, the platform or the own organization
 //    (documentVisibilityCondition, the rule of the trainer lists),
 //  - it carries a file: a row with an empty storage_url (a scenario kept as a
-//    row without a file) is no link and is not listed.
+//    row without a file) is no link and is not listed,
+//  - it is no Word file: the reader opens PDF files in a frame, so the Word
+//    original of an enabler text (kept for trainers) is not listed.
 // The answer names the fields the page needs. The uploader, the storage path,
 // the index state and the organization ids stay behind. The file itself is
 // reached through storageUrl as before, this route does not change that.
 // The data of the session user, a traineeId or userId in the query is ignored.
 const TRAINEE_VISIBILITIES = ['ALL', 'TRAINEE_ONLY'] as const;
+
+/** Word documents (docx, doc): no row of FIAE has one, the originals of the content upload may. */
+const WORD_MIME_PATTERN = '%wordprocessingml%';
+const WORD_MIME_LEGACY = 'application/msword';
+
+function isWordMime(mimeType: string | null | undefined): boolean {
+  const mime = (mimeType ?? '').toLowerCase();
+  return mime.includes('wordprocessingml') || mime === WORD_MIME_LEGACY;
+}
 
 export async function GET(
   req: NextRequest,
@@ -86,6 +97,7 @@ export async function GET(
         fileName: contentDocuments.fileName,
         fileSize: contentDocuments.fileSize,
         storageUrl: contentDocuments.storageUrl,
+        mimeType: contentDocuments.mimeType,
         pageCount: contentDocuments.pageCount,
         orderIndex: contentDocuments.orderIndex,
       })
@@ -102,6 +114,8 @@ export async function GET(
             ne(contentDocuments.documentType, 'TRAINER_SOLUTION')
           ),
           sql`btrim(${contentDocuments.storageUrl}) <> ''`,
+          sql`${contentDocuments.storageUrl} not like 'private://%'`,
+          sql`(${contentDocuments.mimeType} is null or (lower(${contentDocuments.mimeType}) not like ${WORD_MIME_PATTERN} and lower(${contentDocuments.mimeType}) <> ${WORD_MIME_LEGACY}))`,
           // The shared curriculum, the platform and the own organization
           documentVisibilityCondition(contentDocuments.organizationId, session)
         )
@@ -116,7 +130,9 @@ export async function GET(
         d =>
           d.visibility !== 'TRAINER_ONLY' &&
           d.documentType !== 'TRAINER_SOLUTION' &&
+          !isWordMime(d.mimeType) &&
           typeof d.storageUrl === 'string' &&
+          !d.storageUrl.startsWith('private://') &&
           d.storageUrl.trim() !== ''
       )
       .map(d => ({

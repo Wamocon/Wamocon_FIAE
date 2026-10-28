@@ -32,6 +32,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { AssignDialog } from '@/components/admin/content-upload/AssignDialog';
 import { BulkBar } from '@/components/admin/content-upload/BulkBar';
 import { ConfirmDialog } from '@/components/admin/content-upload/ConfirmDialog';
+import { OriginalsPicker } from '@/components/admin/content-upload/OriginalsPicker';
 import { DuplicateDialog } from '@/components/admin/content-upload/DuplicateDialog';
 import { ProcessingPanel } from '@/components/admin/content-upload/ProcessingPanel';
 import {
@@ -125,6 +126,9 @@ export function ReviewView({
   const [optionsFailed, setOptionsFailed] = useState(false);
   const [optionsTick, setOptionsTick] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // ids of the original PDFs that go with the transfer (publishOriginals of the dry run and the
+  // apply, at most 25). It stays while the person pages through the list.
+  const [originals, setOriginals] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [focusEditorOf, setFocusEditorOf] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -621,6 +625,13 @@ export function ReviewView({
                 onOpenDuplicate={key => setDialog({ kind: 'duplicate', key })}
               />
             )}
+
+            <OriginalsPicker
+              rows={data.rows}
+              selected={originals}
+              onChange={setOriginals}
+              disabled={!decidable || busy}
+            />
 
             <nav
               aria-label={t('contentUpload.paging.label')}

@@ -2491,5 +2491,9 @@
   "contentUpload.confirm.reopen": "Erneut prüfen",
   "contentUpload.notice.reopened": "Der Lauf ist wieder in der Prüfung.",
   "contentUpload.notice.reopenState": "Der Lauf lässt sich in diesem Zustand nicht erneut prüfen.",
-  "contentUpload.code.UNREADABLE": "Der Browser konnte die Datei nicht lesen (zum Beispiel ein zu langer Pfad). Kürzen Sie den Pfad oder wählen Sie die Datei einzeln."
+  "contentUpload.code.UNREADABLE": "Der Browser konnte die Datei nicht lesen (zum Beispiel ein zu langer Pfad). Kürzen Sie den Pfad oder wählen Sie die Datei einzeln.",
+  "contentUpload.originals.title": "Originale für die Azubis bereitstellen",
+  "contentUpload.originals.hint": "Das Original-PDF eines Enabler-Lehrtexts erscheint nach der Freischaltung im Reader der Azubis. Zur Wahl stehen angenommene PDF-Originale von Enabler-Lehrtexten, höchstens {max} je Übernahme. Die Auswahl gilt für den nächsten Probelauf und die Übernahme, geprüft wird jede Datei noch einmal.",
+  "contentUpload.originals.count": "{count} von {max} gewählt",
+  "contentUpload.originals.limit": "Das Limit von {max} Originalen ist erreicht."
 }

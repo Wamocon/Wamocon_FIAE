@@ -388,3 +388,45 @@ Der Lösungsschutz der Planung gilt unverändert: Eine Lösungsmarke in einem si
 ### Zählung der echten Dateien (Stand 27.10.2026)
 
 `check-quizzes` zählt in `alle_quizze 1.json` 226 Quizze mal drei Stufen (678 Sätze, 6744 Fragen, davon 18 Sätze mit 8 statt 10 Fragen) und in `global_quizze 1.json` 27 Quizze mit je 20 Fragen. Fehler gibt es keine, die Hinweise sind unter den Befunden aufgeführt. Der Plan aus beiden Dateien ohne Word-Baum ergibt 27 Komponenten, 226 Enabler (ohne Lehrtext), 675 Enabler-Quizze und 27 Global-Quizze. Übersprungen werden mit `alle_quizze 1.json` nur die drei Stufen von K14-a (Lösungsmarke im sichtbaren Text), mit `alle_quizze 1.korrigiert.json` keine. Der Titel des Enablers 6.2g trägt ein fremdes Zeichen vor dem Code und wird mit dem Hinweis `TITLE_REPAIRED` gelesen. Die Einzelheiten stehen im Bericht des Pull Requests.
+
+## PDF-Import der Komponenten (OR1)
+
+Der Ordner `Komponenten_PDF` enthält je Komponente die vier Unterordner Enabler, Szenarien, Use-Cases und Use-Cases_Musterlösung (der Unterordner Quizze gehört nicht dazu). Das Skript `scripts/import/kfbm-documents.mjs` (`npm run import:kfbm:documents`) macht daraus Zeilen in `content_documents` und Dateien im Speicher, in der Form, die FIAE für dieselbe Art Dokument nutzt. Sicherheitsaufbau wie bei den anderen Importskripten: Standard ist der Probelauf (Transaktion, am Ende Rückgängig, **kein Zugriff auf den Speicher**), ein echter Lauf braucht `--apply`, `--target local|preview` und bei der Preview `--confirm-host`. Production ist in jedem Fall verweigert.
+
+### Welche Zeilen entstehen
+
+| Datei | Typ | Sichtbarkeit | Ort | Bucket |
+| --- | --- | --- | --- | --- |
+| Enabler/…pdf | THEORY | ALL | am Enabler | `content` (öffentlich) |
+| Szenarien/…pdf | EXERCISE | ALL | am Enabler | `content` (öffentlich) |
+| Use-Cases/…pdf | TRAINEE_QUESTION | ALL | am Use Case | `content` (öffentlich) |
+| Use-Cases_Musterlösung/…pdf | TRAINER_SOLUTION | TRAINER_ONLY | am Use Case | `content-solutions` (privat) |
+
+- EXERCISE ist bei FIAE das Szenario: die Seite des Enablers zeigt diese Dokumente im Abschnitt Szenario (`scripts/upload-szenarien.mjs`, `src/app/trainee/enablers/[enablerId]/page.tsx`). THEORY zeigt sie als Lehrtext, TRAINEE_QUESTION und TRAINER_SOLUTION entsprechen `scripts/bulk-import-use-case-pdfs.ts`.
+- Titel (Schlüssel einer Zeile, fest): `Enabler K6.2-d: Lehrtext (Original PDF)` (derselbe Titel wie beim Original des Uploads, so entstehen nie zwei Zeilen für einen Text), `Szenario K6.2-d (PDF)`, `Use Case K6.2-d: Aufgabe (PDF)`, `Use Case K6.2-d: Musterlösung (PDF)`. Spalten: `mime_type` application/pdf, `file_size`, `page_count` (aus der ersten Seite des Lesers), `organization_id` leer (gemeinsamer Lehrplan, wie die Zeilen der FIAE-Skripte), `uploaded_by_id` aus `--created-by`, `is_indexed_by_hai` falsch.
+- Pfad im Speicher: `preview/kfbm/<Enablercode>/<enabler|szenario|aufgabe|musterloesung>/<Dateiname>` für die Preview, `kfbm/...` für local. Die Buckets teilen sich Preview und Production, das Präfix hält jeden Pfad von Production fern.
+- Die bestehenden Textzeilen der KfBM (Szenario-Ausgangssituation am Enabler, "Behandelte Themen" am Use Case, ohne Datei) bleiben: sie speisen die Suche des Tutors. Die Azubi-Routen liefern keine Zeile ohne Datei mehr aus (vorher zeigte die Use-Case-Seite dafür einen toten Knopf).
+
+### Zuordnung (nichts wird geraten)
+
+Jede PDF wird über den Dateinamen und die erste Überschrift der ersten Seite einem Enabler zugeordnet (`6d_…`, `24_2e).pdf`, `Szenario_25_1a_…`, `UC_6d_…`; Überschrift `6d) …`, `Szenario 25/1a) …`, `25/1b - …`). Der Use Case hängt über `use_cases.enabler_id` am Enabler. Nicht übernommen und im Plan genannt werden: falsch benannte Dateien (`misnamed`, zum Beispiel `14i.pdf` im Ordner Szenarien), Dateien mit Vermerk im Namen (`annotated`, `Szenario_23c (aus 23b).pdf`), Überschrift eines anderen Enablers (`heading-mismatch`), keine Kennung in der Überschrift (`heading-missing`, zum Beispiel ein Tippfehler `F12l)`), kein PDF oder zu groß (`unreadable`) und zwei Dateien für einen Platz (`duplicate`). Der Plan enthält nur Namen, Kennungen, Größen und Prüfsummen, nie Text.
+
+Stand der echten Dateien (27.10.2026, nur Plan): 934 PDF, davon 30 im Ordner Quizze. Zugeordnet 225 Enabler, 224 Szenarien, 226 Aufgaben, 226 Musterlösungen. Offen: `12l.pdf` (Überschrift mit Tippfehler), `14i.pdf` (Szenario, falscher Name), `Szenario_23c (aus 23b).pdf` (Inhalt 23c im Platz 23b, damit fehlt das Szenario 23b).
+
+### Musterlösungen: privater Bucket
+
+Ein öffentlicher Bucket gibt jedem mit der URL die Musterlösung. Darum liegen die Lösungs-PDF im privaten Bucket `content-solutions` (Name `content-solutions`, nicht öffentlich, Größenlimit 25 MB, erlaubter Typ `application/pdf`), den der Eigentümer von Hand anlegt. Die Zeile speichert keine URL, sondern die Referenz `private://content-solutions/<Pfad>`. Nur die Trainer-Liste der Use-Case-Dokumente (`GET /api/trainer/use-cases/[useCaseId]/documents`) macht daraus eine signierte URL, die zehn Minuten gilt, auf dem Server mit dem geheimen Schlüssel, nur für Zeilen mit TRAINER_ONLY, nur im Bucket `content-solutions`, mit streng geprüftem Pfad (`src/lib/solution-storage.ts`). Azubi-Routen liefern weder die Zeile noch die Referenz. Der Server liest die Referenz nie als Datei (die Prüfung `readableStorageUrl` lehnt sie ab), die Lösungs-PDF wird also auch nicht in die Suche des Tutors übernommen.
+
+### Befehle
+
+```
+node scripts/import/kfbm-documents.mjs plan  <Quellordner> [--out plan.json] [--components K1,K6.2] [--hydrate]
+node scripts/import/kfbm-documents.mjs check <Quellordner> --target local|preview --created-by <uuid>
+node scripts/import/kfbm-documents.mjs run   <Quellordner> --target local|preview --created-by <uuid> [--apply] [--overwrite-files] [--confirm-host <host>]
+```
+
+Der echte Lauf liest Adresse und Schlüssel aus `NEXT_PUBLIC_SUPABASE_URL` und `SUPABASE_SECRET_KEY`. Ein lokales Ziel verlangt eine lokale Speicheradresse, die Preview die https-Adresse des Projekts. Reihenfolge: Inhaltsimport, Use-Case-Import, dann dieses Skript. Zweiter Lauf: legt nichts doppelt an, Dateien werden nie überschrieben (nur mit `--overwrite-files`, und nur Dateien, deren Zeile genau auf den Pfad dieses Imports zeigt). Zuerst werden die Dateien kopiert, danach die Zeilen geschrieben. Schlägt etwas fehl, auch der Commit, nimmt der Lauf die Dateien dieses Laufs wieder heraus. Große Läufe komponentenweise (`--components`), die Transaktion bleibt während des Kopierens offen. Die Laufzeit an der echten Preview ist ungemessen.
+
+### Originale des Uploads im Reader
+
+Das Original-PDF eines Enabler-Lehrtexts, das die Übernahme des Inhalts-Uploads in den Bucket `content` kopiert (`transfer/originals.ts`), hat dieselbe Form wie eine FIAE-Zeile (THEORY, ALL, Pfad `[preview/]<Person>/<Zeitstempel>_<Name>`, öffentliche URL). Der Reader der Azubi-Seite zeigt es nach der Freischaltung, ohne Sonderfall: Enabler aktiv, Azubi Mitglied des Kurses, Katalog und Organisation freigeschaltet. Word-Originale zeigt der Reader nicht (nur PDF). Ein direkter Speicherlink eines noch inaktiven Originals bleibt erreichbar, solange der Bucket `content` öffentlich ist (offene Frage H6, bei FIAE ebenso). In der Prüfliste markiert die Person die Originale (höchstens 25 je Übernahme), der Block "Originale für die Azubis bereitstellen" erscheint für angenommene PDF-Originale; die Probelauf- und Übernahme-Oberfläche muss die Auswahl als `publishOriginals` mitsenden. PDF-Metadaten (Info-Dictionary, XMP) lassen sich serverseitig mit `pdf-lib` (schon Abhängigkeit) entfernen, das ist noch nicht eingebaut.
