@@ -48,6 +48,9 @@ const reviewSchema = z
     reviewedAt: z
       .string()
       .regex(DATE_PATTERN, 'reviewedAt must be YYYY-MM-DD')
+      .refine(value => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)), {
+        message: 'reviewedAt must be a real date',
+      })
       .nullable(),
     checked: text(800),
     notChecked: text(800),
@@ -189,6 +192,9 @@ export function validateCardSet(cards: readonly LearningTechniqueCard[]): void {
       throw new Error(
         `Card ${card.id} is ranked behind a card with a lower effectiveness`
       );
+    }
+    if (card.basedOn === card.id) {
+      throw new Error(`Card ${card.id} cannot be based on itself`);
     }
     if (card.basedOn && !ids.has(card.basedOn)) {
       throw new Error(

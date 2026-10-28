@@ -28,14 +28,14 @@ interface Rule {
 }
 
 const CONDITIONS =
-  'adhs|ads|legasthenie|dyskalkulie|lernstörung|lernschwäche|depression|depressiv|burnout|angststörung|autismus|konzentrationsstörung|aufmerksamkeitsstörung|prüfungsangst-störung';
+  'adhs|ads|legasthenie|dyskalkulie|lernstörung|lernstoerung|lernschwäche|lernschwaeche|depression|depressiv|burnout|angststörung|angststoerung|autismus|konzentrationsstörung|aufmerksamkeitsstörung|prüfungsangst-störung';
 
 const RULES: Rule[] = [
   {
     violation: 'lerntyp',
     patterns: [
       /\bdu\s+bist\s+(ein(e[nr]?)?\s+)?(eher\s+)?(visuell|auditiv|haptisch|kinästhetisch|kinaesthetisch)/i,
-      /\bdein(en)?\s+lerntyp\b/i,
+      /\bdein(en)?\s+lerntyp\b(?![^.!?]{0,40}\bnicht\b)/i,
       /\bals\s+(visuell|auditiv|haptisch|kinästhetisch)\w*\s+lerntyp\b/i,
       /\b(beantworte|mach(e)?)\s+(diese|die\s+folgenden)\s+fragen.{0,60}lerntyp/i,
     ],
@@ -44,7 +44,7 @@ const RULES: Rule[] = [
     violation: 'diagnose',
     patterns: [
       new RegExp(
-        `\\b(du\\s+hast|du\\s+leidest\\s+(an|unter)|das\\s+(klingt|sieht)\\s+nach|das\\s+ist\\s+(vermutlich|wahrscheinlich|ein[e]?)|ich\\s+vermute\\s+(bei\\s+dir)?)\\s*(eine[nr]?\\s+|ein\\s+)?(${CONDITIONS})`,
+        `\\b(du\\s+hast|du\\s+leidest\\s+(an|unter)|das\\s+(klingt|sieht)\\s+nach|das\\s+ist\\s+(vermutlich|wahrscheinlich|ein[e]?)|ich\\s+vermute\\s+(bei\\s+dir)?)\\s*(eine[nr]?\\s+|ein\\s+)?(${CONDITIONS})\\b`,
         'i'
       ),
       new RegExp(
@@ -64,7 +64,7 @@ const RULES: Rule[] = [
   {
     violation: 'heilversprechen',
     patterns: [
-      /\bgarantiert\b/i,
+      /(?<!\bnicht\s)\bgarantiert\b/i,
       /\b(du\s+)?(be)?stehst\s+(du\s+)?(die\s+\w+\s+)?(sicher|auf\s+jeden\s+fall)\b/i,
       /\bmit\s+(sicherheit|garantie)\b/i,
       /\bfür\s+immer\b/i,
@@ -84,15 +84,13 @@ export function lintLearningAnswer(
   occupation: ExampleOccupationCode | null
 ): LimitViolation[] {
   const found = new Set<LimitViolation>();
+  const text = answer.normalize('NFKC');
   for (const rule of RULES) {
-    if (rule.patterns.some(pattern => pattern.test(answer))) {
+    if (rule.patterns.some(pattern => pattern.test(text))) {
       found.add(rule.violation);
     }
   }
-  if (
-    occupation &&
-    findMarkers(answer, otherOccupation(occupation)).length > 0
-  ) {
+  if (occupation && findMarkers(text, otherOccupation(occupation)).length > 0) {
     found.add('fremdes-beispiel');
   }
   return [...found];

@@ -81,7 +81,7 @@ Drei Punkte, die vor dem ersten `--apply` zu prüfen sind (aus dem Code und den 
 
 ## 4. Prompt und Grenzen (B.3)
 
-Der Abschnitt "Lerntechniken: Tipps zum Lernen und Merken" steht am Ende des Systemprompts, in `processMessage` und in `processMessageStream` (beide rufen `buildSystemPrompt`). Er erscheint nur, wenn die Nachricht eine Lernfrage ist (Wortliste in `detect.ts`, bewusst großzügig) oder Lernkarten gefunden wurden. Für das neutrale Profil ohne Berufsbereich erscheint er nie.
+Der Abschnitt "Lerntechniken: Tipps zum Lernen und Merken" steht am Ende des Systemprompts, in `processMessage` und in `processMessageStream` (beide rufen `buildSystemPrompt`). Er erscheint nur, wenn die Nachricht eine Lernfrage ist (ganze Wörter oder Wortanfänge in `detect.ts`, bewusst eng gehalten, weil ein Treffer auch Karten reserviert und für Azubis den Datenkontext lädt) oder Lernkarten gefunden wurden. Für das neutrale Profil ohne Berufsbereich erscheint er nie.
 
 **FIAE bleibt byte-gleich.** Ohne den Abschnitt ist jeder Prompt unverändert, die Baseline-Fixture `fiae-baseline.json` ist nicht angefasst und der Baseline-Test läuft grün. Mit dem Abschnitt ist der Prompt exakt der alte Prompt plus der Abschnitt (Test über alle rund 80 Fälle der Matrix).
 

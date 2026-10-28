@@ -184,6 +184,52 @@ describe('searchWithContext for a question about learning', () => {
     expect(first.params.at(-1)).toBe(LEARNING_TECHNIQUE_SLOTS);
   });
 
+  it('returns a reserved card once, even when the global search finds it too', async () => {
+    mockExecute.mockImplementation(async (statement: unknown) => {
+      const { text } = render(statement);
+      return text.includes('AND source_type = $')
+        ? [row('card-1', 'learning_technique', 0.6)]
+        : [
+            row('card-1', 'learning_technique', 0.6),
+            row('e-1', 'enabler', 0.9),
+          ];
+    });
+    const result = await searchWithContext(
+      'Lernplan?',
+      { includeLearningTechniques: true },
+      options
+    );
+    expect(result.results.map(r => r.id)).toEqual(['card-1', 'e-1']);
+    expect(result.totalResults).toBe(2);
+  });
+
+  it('runs no further query when the cards fill every place', async () => {
+    mockExecute.mockResolvedValue([row('card-1', 'learning_technique', 0.6)]);
+    const result = await searchWithContext(
+      'Lernplan?',
+      {
+        includeLearningTechniques: true,
+        currentEnablerId: '3a0e4e4c-9f1e-4f3e-9c55-2f6a9d6a0001',
+      },
+      { ...options, topK: 1 }
+    );
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+    expect(result.results.map(r => r.id)).toEqual(['card-1']);
+  });
+
+  it('asks for no cards when no place is requested', async () => {
+    await searchWithContext(
+      'Lernplan?',
+      { includeLearningTechniques: true },
+      { ...options, topK: 0 }
+    );
+    expect(
+      mockExecute.mock.calls.every(
+        ([s]) => !render(s).text.includes('AND source_type = $')
+      )
+    ).toBe(true);
+  });
+
   it('does not look for cards on any other question', async () => {
     mockExecute.mockResolvedValue([row('e-1', 'enabler', 0.9)]);
     await searchWithContext('Was ist Normalisierung?', {}, options);

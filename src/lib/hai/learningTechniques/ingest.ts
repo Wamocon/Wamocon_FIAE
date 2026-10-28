@@ -116,17 +116,28 @@ export async function ingestLearningTechniques(
 
   for (const card of released) {
     const { title, content } = cardIndexInput(card, total);
-    const result = await deps.indexContent({
-      sourceType: LEARNING_TECHNIQUE_SOURCE_TYPE,
-      sourceId: cardSourceId(card.id),
-      title,
-      content,
-      metadata: cardMetadata(card),
-      // Platform scope: no occupation, for everyone, no owner
-      trainingCatalogId: null,
-      visibility: 'all',
-      organizationId: null,
-    });
+    let result: IndexResult;
+    try {
+      result = await deps.indexContent({
+        sourceType: LEARNING_TECHNIQUE_SOURCE_TYPE,
+        sourceId: cardSourceId(card.id),
+        title,
+        content,
+        metadata: cardMetadata(card),
+        // Platform scope: no occupation, for everyone, no owner
+        trainingCatalogId: null,
+        visibility: 'all',
+        organizationId: null,
+      });
+    } catch (error) {
+      result = {
+        success: false,
+        chunksIndexed: 0,
+        chunksSkipped: 0,
+        chunksFailed: 1,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
     if (!result.success) {
       summary.failed++;
       summary.errors.push(`${card.id}: ${result.error ?? 'index failed'}`);
@@ -138,9 +149,26 @@ export async function ingestLearningTechniques(
 
   // Withdrawn or deleted cards must leave the index
   const wanted = new Set(released.map(card => cardSourceId(card.id)));
-  for (const sourceId of await deps.listIndexedSourceIds()) {
+  let indexed: string[] = [];
+  try {
+    indexed = await deps.listIndexedSourceIds();
+  } catch (error) {
+    // Not knowing what is indexed must not look like "nothing to remove"
+    summary.errors.push(
+      `could not list the indexed cards: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+  for (const sourceId of indexed) {
     if (wanted.has(sourceId)) continue;
-    if (await deps.removeSource(sourceId)) summary.removed++;
+    let removed = false;
+    try {
+      removed = await deps.removeSource(sourceId);
+    } catch {
+      removed = false;
+    }
+    if (removed) summary.removed++;
     else summary.errors.push(`could not remove source ${sourceId}`);
   }
 
@@ -150,12 +178,22 @@ export async function ingestLearningTechniques(
 /** Real dependencies (database and embedding model). Loaded lazily. */
 export async function createIngestDeps(): Promise<IngestDeps> {
   const embeddings = await import('../embeddings');
+  const { default: haiDb } = await import('@/db/haiDb');
+  const { sql } = await import('drizzle-orm');
   return {
     indexContent: options => embeddings.indexContent(options),
-    listIndexedSourceIds: async () =>
-      (await embeddings.getIndexedSources())
-        .filter(s => s.sourceType === LEARNING_TECHNIQUE_SOURCE_TYPE)
-        .map(s => s.sourceId),
+    // Asked directly (not through getIndexedSources, which hides an error as
+    // an empty list): a failed query must stop the cleanup visibly
+    listIndexedSourceIds: async () => {
+      const rows = await haiDb.execute(sql`
+        SELECT DISTINCT source_id
+        FROM hai_embeddings
+        WHERE source_type = ${LEARNING_TECHNIQUE_SOURCE_TYPE}
+      `);
+      return (rows as unknown as Array<{ source_id: string }>).map(
+        row => row.source_id
+      );
+    },
     removeSource: sourceId =>
       embeddings.removeEmbeddings(LEARNING_TECHNIQUE_SOURCE_TYPE, sourceId),
   };

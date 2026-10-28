@@ -5,7 +5,7 @@
  * the typical content of one occupation must not appear in the example of the
  * other one, and an answer for a trainee of one occupation must not carry the
  * example of the other (see answerLint.ts). Lower case stems, matched as
- * substrings of the lower cased text.
+ * the start of a word of the lower cased text.
  *
  * @module lib/hai/learningTechniques/occupations
  */
@@ -19,7 +19,9 @@ export const OCCUPATION_MARKERS: Record<
   FIAE: [
     'sql',
     'datenbank',
-    'netzwerk',
+    'netzwerkgrund',
+    'netzwerkadress',
+    'netzwerkprotokoll',
     'schleife',
     'struktogramm',
     'primärschlüssel',
@@ -50,13 +52,18 @@ export function otherOccupation(
   return code === 'FIAE' ? 'KFBM' : 'FIAE';
 }
 
-/** Markers of the given occupation found in the text (lower case compare). */
+/**
+ * Markers of the given occupation found in the text. A marker must START a
+ * word, so "Rechnungswesen" matches "rechnung" and "Berechnung" does not.
+ */
 export function findMarkers(
   text: string,
   code: ExampleOccupationCode
 ): string[] {
-  const lower = text.toLowerCase();
-  return OCCUPATION_MARKERS[code].filter(marker => lower.includes(marker));
+  const lower = text.normalize('NFKC').toLowerCase();
+  return OCCUPATION_MARKERS[code].filter(marker =>
+    new RegExp(`(?<![\\p{L}\\p{N}])${marker}`, 'u').test(lower)
+  );
 }
 
 /** Example occupation of a catalog code, or null (no example for it). */

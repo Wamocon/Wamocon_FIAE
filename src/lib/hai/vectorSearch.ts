@@ -298,23 +298,26 @@ export async function searchWithContext(
 
     // Step 0: learning technique cards for a question about learning. They
     // come first, the other steps share the remaining places.
-    const cardResults = context.includeLearningTechniques
-      ? await searchSimilar(
-          query,
-          {
-            ...options,
-            topK: Math.min(LEARNING_TECHNIQUE_SLOTS, requestedTopK),
-            sourceType: 'learning_technique',
-            sourceIds: undefined,
-            courseId: undefined,
-          },
-          cachedEmbeddingVector
-        )
-      : [];
+    const cardResults =
+      context.includeLearningTechniques && requestedTopK > 0
+        ? await searchSimilar(
+            query,
+            {
+              ...options,
+              topK: Math.min(LEARNING_TECHNIQUE_SLOTS, requestedTopK),
+              sourceType: 'learning_technique',
+              sourceIds: undefined,
+              courseId: undefined,
+            },
+            cachedEmbeddingVector
+          )
+        : [];
     const topK = requestedTopK - cardResults.length;
+    // A card of step 0 must not come back from a later step
+    const reserved = new Set(cardResults.map(r => r.id));
 
     // Step 1: Search in current enabler context first (highest priority)
-    if (context.currentEnablerId) {
+    if (context.currentEnablerId && topK > 0) {
       const contextResults = await searchSimilar(query, {
         ...options,
         topK: Math.min(3, topK),
@@ -343,7 +346,7 @@ export async function searchWithContext(
 
       // Add non-duplicate results
       for (const r of courseResults) {
-        if (!results.find(existing => existing.id === r.id)) {
+        if (!reserved.has(r.id) && !results.find(e => e.id === r.id)) {
           results.push(r);
         }
       }
@@ -357,7 +360,7 @@ export async function searchWithContext(
       }, cachedEmbeddingVector);
 
       for (const r of globalResults) {
-        if (!results.find(existing => existing.id === r.id)) {
+        if (!reserved.has(r.id) && !results.find(e => e.id === r.id)) {
           results.push(r);
         }
       }

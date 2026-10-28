@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import path from 'path';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
 import { cardSourceId } from '@/lib/hai/learningTechniques/cards';
 import {
@@ -21,11 +22,14 @@ import { isPlatformSourceType, scopeProblem } from '@/lib/hai/indexScope';
 
 const mockIndexed = jest.fn();
 const mockRemoved = jest.fn();
-const mockSources = jest.fn();
+const mockExecute = jest.fn();
 jest.mock('@/lib/hai/embeddings', () => ({
   indexContent: (...args: unknown[]) => mockIndexed(...args),
-  getIndexedSources: () => mockSources(),
   removeEmbeddings: (...args: unknown[]) => mockRemoved(...args),
+}));
+jest.mock('@/db/haiDb', () => ({
+  __esModule: true,
+  default: { execute: (...args: unknown[]) => mockExecute(...args) },
 }));
 
 const cards = loadLearningTechniqueCards(
@@ -218,6 +222,44 @@ describe('apply', () => {
     expect(summary.errors).toEqual(['could not remove source x-1']);
   });
 
+  it('counts a throwing writer as a failed card and still cleans up', async () => {
+    const deps = fakeDeps({
+      indexContent: jest.fn().mockRejectedValue(new Error('db down')),
+      listIndexedSourceIds: jest.fn().mockResolvedValue(['stale']),
+    });
+    const summary = await ingestLearningTechniques(
+      [release(cards[0]), ...cards.slice(1)],
+      deps,
+      { dryRun: false }
+    );
+    expect(summary.failed).toBe(1);
+    expect(summary.errors[0]).toBe(`${cards[0].id}: db down`);
+    expect(summary.removed).toBe(1);
+  });
+
+  it('reports a source list that cannot be read instead of removing nothing silently', async () => {
+    const deps = fakeDeps({
+      listIndexedSourceIds: jest.fn().mockRejectedValue(new Error('no list')),
+    });
+    const summary = await ingestLearningTechniques(cards, deps, {
+      dryRun: false,
+    });
+    expect(summary.errors).toEqual([
+      'could not list the indexed cards: no list',
+    ]);
+  });
+
+  it('reports a removal that throws', async () => {
+    const deps = fakeDeps({
+      listIndexedSourceIds: jest.fn().mockResolvedValue(['x-2']),
+      removeSource: jest.fn().mockRejectedValue(new Error('locked')),
+    });
+    const summary = await ingestLearningTechniques(cards, deps, {
+      dryRun: false,
+    });
+    expect(summary.errors).toEqual(['could not remove source x-2']);
+  });
+
   it('needs dependencies', async () => {
     await expect(
       ingestLearningTechniques(cards, null, { dryRun: false })
@@ -271,16 +313,16 @@ describe('default dependencies', () => {
 
   it('wire the index writer, the source list and the removal', async () => {
     mockIndexed.mockResolvedValue({ success: true });
-    mockSources.mockResolvedValue([
-      { sourceType: 'learning_technique', sourceId: 'a' },
-      { sourceType: 'enabler', sourceId: 'b' },
-    ]);
+    mockExecute.mockResolvedValue([{ source_id: 'a' }]);
     mockRemoved.mockResolvedValue(true);
     const deps = await createIngestDeps();
     await deps.indexContent({} as never);
     expect(mockIndexed).toHaveBeenCalledTimes(1);
     // only the learning technique sources, never another source type
     expect(await deps.listIndexedSourceIds()).toEqual(['a']);
+    const rendered = new PgDialect().sqlToQuery(mockExecute.mock.calls[0][0]);
+    expect(rendered.sql).toMatch(/WHERE source_type = \$1/);
+    expect(rendered.params).toEqual(['learning_technique']);
     await deps.removeSource('a');
     expect(mockRemoved).toHaveBeenCalledWith('learning_technique', 'a');
   });

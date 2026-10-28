@@ -170,6 +170,33 @@ describe.each(LEARNING_CHECK_CASES)('check $id', testCase => {
   }
 });
 
+describe('the limit check on near misses', () => {
+  it.each([
+    ['Deinen Lerntyp kann ich nicht bestimmen.', 'FIAE'],
+    ['Das ist nicht garantiert, aber es hilft vielen.', 'FIAE'],
+    ['Du hast adsorbiert, was ich meinte, nicht ganz.', 'FIAE'],
+    ['Die Berechnung der Laufzeit hilft dir beim Üben.', 'FIAE'],
+    ['Beim Netzwerken mit Kollegen lernst du viel.', 'KFBM'],
+    ['In der Warteschleife übst du Begriffe ab.', 'KFBM'],
+  ] as const)('accepts: %s', (answer, occupation) => {
+    expect(lintLearningAnswer(answer, occupation)).toEqual([]);
+  });
+
+  it.each([
+    ['Rechnungswesen als Beispiel nehmen.', 'FIAE', ['fremdes-beispiel']],
+    ['Dein Lerntyp ist visuell.', 'KFBM', ['lerntyp']],
+    ['Du hast eine Lernstörung.', 'KFBM', ['diagnose']],
+    ['Das ist garantiert so.', 'KFBM', ['heilversprechen']],
+  ] as const)('flags: %s', (answer, occupation, expected) => {
+    expect(lintLearningAnswer(answer, occupation)).toEqual(expected);
+  });
+
+  it('reads decomposed umlauts like composed ones', () => {
+    const decomposed = 'Du hast eine Lernschwa\u0308che.';
+    expect(lintLearningAnswer(decomposed, null)).toEqual(['diagnose']);
+  });
+});
+
 describe('the limit check', () => {
   it('lets a neutral, correct explanation of learning types pass', () => {
     expect(

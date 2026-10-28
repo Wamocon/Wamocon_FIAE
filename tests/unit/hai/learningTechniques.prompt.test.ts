@@ -153,6 +153,9 @@ describe('isLearningTechniqueQuestion', () => {
     'Wie plane ich meinen Lernplan?',
     'ich schiebe alles auf, prokrastination',
     'Gib mir Eselsbrücken',
+    'Ich muss viel behalten bis zur Klausur',
+    'Wie gehe ich die Wiederholung an?',
+    'Tipps zur Prüfungsvorbereitung',
   ])('recognizes: %s', message => {
     expect(isLearningTechniqueQuestion(message)).toBe(true);
   });
@@ -162,6 +165,12 @@ describe('isLearningTechniqueQuestion', () => {
     'Zeig mir den Stundenplan',
     'Erkläre das Lernfeld 5',
     'Wo finde ich die Lernplattform?',
+    'Welche Merkmale hat ein Primärschlüssel?',
+    'Wie wiederholt sich die Schleife im Code?',
+    'Vorbehalt im Vertrag klären',
+    'Wie markiere ich eine Zeile in der Tabelle?',
+    'Das vorbereitete Statement hat einen Fehler',
+    'Kannst du die Rechnung zusammenfassen?',
     '',
   ])('ignores: %s', message => {
     expect(isLearningTechniqueQuestion(message)).toBe(false);

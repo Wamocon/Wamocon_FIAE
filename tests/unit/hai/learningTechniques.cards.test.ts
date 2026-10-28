@@ -178,6 +178,12 @@ describe('the release gate', () => {
     expect(() => parseLearningTechniqueCard(card)).toThrow(/no reviewedBy/);
   });
 
+  it('refuses a release date that is not a real date', () => {
+    const card = released(cards[0]);
+    card.review.reviewedAt = '2026-13-45';
+    expect(() => parseLearningTechniqueCard(card)).toThrow(/real date/);
+  });
+
   it('accepts a properly released card', () => {
     expect(() => parseLearningTechniqueCard(released(cards[0]))).not.toThrow();
   });
@@ -234,6 +240,13 @@ describe('the schema', () => {
     set[0].examples.FIAE =
       'Du nennst die Pflichtangaben einer Rechnung aus dem Kopf.';
     expect(() => validateCardSet(set)).toThrow(/other occupation/);
+  });
+
+  it('refuses a card that is based on itself', () => {
+    const set = clone(cards);
+    const own = set.find(c => c.basedOn)!;
+    own.basedOn = own.id;
+    expect(() => validateCardSet(set)).toThrow(/itself/);
   });
 
   it('refuses a base card that does not exist', () => {

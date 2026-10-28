@@ -8,31 +8,32 @@
  * @module lib/hai/learningTechniques/detect
  */
 
-/** A word that contains one of these parts is about learning (lower case). */
-const LEARNING_PARTS = [
+import { LEARNING_TECHNIQUE_SOURCE_TYPE } from '../indexScope';
+
+/** A word that STARTS with one of these parts is about learning (lower case). */
+const LEARNING_PREFIXES = [
   'lern',
   'karteikarte',
   'eselsbr',
   'auswendig',
   'einpräg',
   'einpraeg',
-  'behalt',
   'vergess',
   'vergiss',
-  'wiederhol',
-  'konzentr',
   'prokrastin',
   'aufschieb',
   'prüfungsangst',
   'pruefungsangst',
-  'zusammenfass',
-  'markier',
-  'vorbereit',
+  'konzentr',
   'abrufübung',
   'abrufuebung',
 ];
 
-/** "merk" only as a verb or "Merkhilfe", not "Merkmal". */
+/**
+ * Whole words that are about learning. Words with a common technical or
+ * everyday meaning are NOT matched by a stem: "Merkmal", "wiederholt" (a loop
+ * repeats), "markieren" (a line), "Vorbehalt", "vorbereitet" (a statement).
+ */
 const LEARNING_WORDS = new Set([
   'merke',
   'merken',
@@ -40,6 +41,16 @@ const LEARNING_WORDS = new Set([
   'merkst',
   'merkhilfe',
   'merkhilfen',
+  'behalten',
+  'behalte',
+  'wiederholen',
+  'wiederhole',
+  'wiederholung',
+  'wiederholungen',
+  'vorbereiten',
+  'vorbereitung',
+  'prüfungsvorbereitung',
+  'pruefungsvorbereitung',
 ]);
 
 /** Words with "lern" that are about the platform, not about learning. */
@@ -70,14 +81,16 @@ export function usesLearningTechniques(
 ): boolean {
   return (
     isLearningTechniqueQuestion(message) ||
-    results.some(r => r.sourceType === 'learning_technique')
+    results.some(r => r.sourceType === LEARNING_TECHNIQUE_SOURCE_TYPE)
   );
 }
 
 /**
  * Whether a message is about learning and memorizing techniques (also: study
- * plan, repeating, concentration, learning types). Deliberately generous: a
- * false positive only adds the limits and reserves places for cards.
+ * plan, repeating, concentration, learning types). Matches whole words or
+ * word starts. A false positive adds the limits to the prompt, reserves places
+ * for cards in the search and, for a trainee, loads the own progress and
+ * calendar data (learning_query), so the word lists stay narrow.
  */
 export function isLearningTechniqueQuestion(message: string): boolean {
   return wordsOf(message).some(word => {
@@ -85,6 +98,6 @@ export function isLearningTechniqueQuestion(message: string): boolean {
     if (NOT_LEARNING_PREFIXES.some(prefix => word.startsWith(prefix))) {
       return false;
     }
-    return LEARNING_PARTS.some(part => word.includes(part));
+    return LEARNING_PREFIXES.some(prefix => word.startsWith(prefix));
   });
 }
