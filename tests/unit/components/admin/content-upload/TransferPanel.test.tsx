@@ -100,7 +100,10 @@ describe('TransferPanel: the dry run', () => {
     const { user, onChanged } = mount({}, client);
     expect(applyButton()).toBeDisabled();
     await user.click(dryRunButton());
-    expect(client.dryRun).toHaveBeenCalledWith(RUN, { replaceFiles: [] });
+    expect(client.dryRun).toHaveBeenCalledWith(RUN, {
+      replaceFiles: [],
+      publishOriginals: [],
+    });
     expect(
       await screen.findByText(/Gültig für den Entscheidungsstand 3/)
     ).toBeInTheDocument();
@@ -234,6 +237,7 @@ describe('TransferPanel: replacing what differs', () => {
     await waitFor(() =>
       expect(client.dryRun).toHaveBeenLastCalledWith(RUN, {
         replaceFiles: [uuid(12)],
+        publishOriginals: [],
       })
     );
     await waitFor(() => expect(applyButton()).toBeEnabled());
@@ -283,6 +287,7 @@ describe('TransferPanel: the apply', () => {
     await user.click(confirm);
     expect(client.apply).toHaveBeenCalledWith(RUN, {
       replaceFiles: [],
+      publishOriginals: [],
       confirm: 'KFBM',
     });
     expect(
@@ -398,6 +403,7 @@ describe('TransferPanel: the apply', () => {
     await waitFor(() =>
       expect(client.dryRun).toHaveBeenLastCalledWith(RUN, {
         replaceFiles: [uuid(12)],
+        publishOriginals: [],
       })
     );
     // B no longer differs and left the choice: the dry run is void for the new choice
@@ -649,7 +655,9 @@ describe('ReviewView with the supply of content', () => {
     );
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('2 Dateien werden angenommen');
-    await user.click(within(dialog).getByRole('button', { name: 'Übernehmen' }));
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Übernehmen' })
+    );
     await waitFor(() =>
       expect(client.decide).toHaveBeenCalledWith(RUN, 0, {
         command: 'accept_stock',
@@ -667,7 +675,9 @@ describe('ReviewView with the supply of content', () => {
     await user.click(screen.getByRole('button', { name: 'Alle 2 bestätigen' }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('Die Komponente ist neu im Plan.');
-    await user.click(within(dialog).getByRole('button', { name: 'Übernehmen' }));
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Übernehmen' })
+    );
     await waitFor(() =>
       expect(client.decide).toHaveBeenCalledWith(RUN, 0, {
         command: 'accept_medium',
@@ -681,5 +691,89 @@ describe('ReviewView with the supply of content', () => {
     expect(
       screen.getByRole('heading', { name: 'Übernahme', level: 2 })
     ).toBeInTheDocument();
+  });
+});
+
+describe('TransferPanel: originals for the trainees', () => {
+  const A = uuid(31);
+  const B = uuid(32);
+
+  it('sends the chosen originals with the dry run and with the apply', async () => {
+    const client = fakeClient();
+    client.dryRun.mockResolvedValue(report());
+    client.apply.mockResolvedValue(report({ mode: 'apply', wrote: true }));
+    const { user } = mount({ publishOriginals: [B, A] }, client);
+    await user.click(dryRunButton());
+    expect(client.dryRun).toHaveBeenCalledWith(RUN, {
+      replaceFiles: [],
+      publishOriginals: [B, A],
+    });
+    await waitFor(() => expect(applyButton()).toBeEnabled());
+    await user.click(applyButton());
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Übernahme bestätigen',
+    });
+    await user.type(within(dialog).getByLabelText(/Katalogcode KFBM/), 'KFBM');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Jetzt übernehmen' })
+    );
+    await waitFor(() =>
+      expect(client.apply).toHaveBeenCalledWith(RUN, {
+        replaceFiles: [],
+        publishOriginals: [B, A],
+        confirm: 'KFBM',
+      })
+    );
+  });
+
+  it('a changed choice of originals voids the dry run', async () => {
+    const client = fakeClient();
+    client.dryRun.mockResolvedValue(report());
+    const { user, view } = mount({ publishOriginals: [A] }, client);
+    await user.click(dryRunButton());
+    await waitFor(() => expect(applyButton()).toBeEnabled());
+    view.rerender(
+      <TransferPanel
+        runId={RUN}
+        status="review"
+        version={3}
+        accepted={4}
+        client={client}
+        onChanged={jest.fn()}
+        publishOriginals={[A, B]}
+      />
+    );
+    expect(applyButton()).toBeDisabled();
+    // back to the choice of the dry run: it counts again
+    view.rerender(
+      <TransferPanel
+        runId={RUN}
+        status="review"
+        version={3}
+        accepted={4}
+        client={client}
+        onChanged={jest.fn()}
+        publishOriginals={[A]}
+      />
+    );
+    expect(applyButton()).toBeEnabled();
+  });
+
+  it('says how many originals the dry run takes and why it refuses the others', async () => {
+    const client = fakeClient();
+    client.dryRun.mockResolvedValue(
+      report({
+        originals: {
+          published: 1,
+          refused: [{ fileId: B, code: 'SOLUTION_MARKER', reason: 'x' }],
+        },
+      })
+    );
+    const { user } = mount({ publishOriginals: [A, B] }, client);
+    await user.click(dryRunButton());
+    expect(
+      await screen.findByText(/Originale: 1 bereitgestellt, 1 abgelehnt/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/SOLUTION_MARKER/)).toBeInTheDocument();
   });
 });

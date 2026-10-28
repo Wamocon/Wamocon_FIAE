@@ -2485,6 +2485,10 @@
   "contentUpload.notice.reopened": "The run is back in review.",
   "contentUpload.notice.reopenState": "The run cannot be reviewed again in this state.",
   "contentUpload.code.UNREADABLE": "The browser could not read the file (for example a path that is too long). Shorten the path or choose the file on its own.",
+  "contentUpload.originals.title": "Provide originals for the trainees",
+  "contentUpload.originals.hint": "The original PDF of an enabler text appears in the reader of the trainees after the activation. You can choose accepted PDF originals of enabler texts, at most {max} per transfer. The choice applies to the next dry run and the transfer, every file is checked again.",
+  "contentUpload.originals.count": "{count} of {max} chosen",
+  "contentUpload.originals.limit": "The limit of {max} originals is reached.",
   "contentUpload.stock.new": "New",
   "contentUpload.stock.extended": "Added",
   "contentUpload.stock.differs": "Differs",
@@ -2714,5 +2718,7 @@
   "contentUpload.code.DUPLICATE_ENTRY": "The file contains two parts with the same name.",
   "contentUpload.code.UNSUPPORTED_COMPRESSION": "The file uses a compression that is not read.",
   "contentUpload.code.TOO_MANY_RELATIONSHIP_FILES": "The file contains more relationship parts than a workbook has.",
-  "contentUpload.transfer.excluded.JSON_TOO_MANY": "JSON files above the limit of 10 per transfer (take them in the next run)"
+  "contentUpload.transfer.excluded.JSON_TOO_MANY": "JSON files above the limit of 10 per transfer (take them in the next run)",
+  "contentUpload.transfer.originals": "Originals: {published} provided, {refused} refused.",
+  "contentUpload.originals.clear": "Clear choice"
 }

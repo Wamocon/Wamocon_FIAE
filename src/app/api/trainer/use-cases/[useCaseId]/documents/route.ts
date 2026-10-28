@@ -25,6 +25,7 @@ import {
   documentStoragePath,
 } from '@/lib/document-storage';
 import { removeDocumentFile } from '@/lib/document-file-cleanup';
+import { withSignedSolutionUrls } from '@/lib/solution-storage';
 
 // GET documents for a use case
 export async function GET(
@@ -64,7 +65,9 @@ export async function GET(
       )
       .orderBy(contentDocuments.orderIndex);
 
-    return NextResponse.json({ documents: docs });
+    // A model solution of the KfBM lies in a private bucket: the trainer gets a signed url that
+    // works for a few minutes, never the reference of the row (src/lib/solution-storage.ts)
+    return NextResponse.json({ documents: await withSignedSolutionUrls(docs) });
   } catch (e) {
     console.error('Get use case documents error', e);
     return NextResponse.json(

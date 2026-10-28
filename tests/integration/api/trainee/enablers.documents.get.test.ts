@@ -382,3 +382,69 @@ describe('GET /api/trainee/enablers/[enablerId]/documents guards and scope', () 
     expect(await res.json()).toEqual({ error: 'Internal Server Error' });
   });
 });
+
+describe('GET /api/trainee/enablers/[enablerId]/documents originals', () => {
+  const WORD =
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+  it('lists the PDF original of an enabler text like any teaching text', async () => {
+    const { GET } = await load(
+      asTrainee(),
+      tables({
+        contentDocuments: [
+          doc({
+            id: 'orig',
+            organizationId: null,
+            title: 'Enabler K6.2-a: Lehrtext (Original PDF)',
+            fileName: '1761600000000_K6.2-a_lehrtext.pdf',
+          }),
+        ],
+      })
+    );
+    const body = await (await GET(request(), ctx())).json();
+    expect(body.documents.map((d: any) => d.id)).toEqual(['orig']);
+    expect(body.documents[0].documentType).toBe('THEORY');
+  });
+
+  it('keeps a Word original out of the reader, which opens PDF files only', async () => {
+    const { GET, mock } = await load(
+      asTrainee(),
+      tables({
+        contentDocuments: [
+          doc({ id: 'pdf' }),
+          doc({ id: 'word', mimeType: WORD }),
+          doc({ id: 'old-word', mimeType: 'application/msword' }),
+          doc({ id: 'no-mime', mimeType: null }),
+        ],
+      })
+    );
+    const body = await (await GET(request(), ctx())).json();
+    expect(body.documents.map((d: any) => d.id)).toEqual(['pdf', 'no-mime']);
+    // the query asks for it too
+    const where = mock.filters('select', 'content_documents');
+    expect(where.sql).toContain('"content_documents"."mime_type"');
+  });
+
+  it('never lists a private reference (a solution of the private bucket is no link for a trainee)', async () => {
+    const { GET } = await load(
+      asTrainee(),
+      tables({
+        contentDocuments: [
+          doc({ id: 'ok' }),
+          doc({
+            id: 'private',
+            storageUrl: 'private://content-solutions/preview/kfbm/K1-a/x.pdf',
+          }),
+        ],
+      })
+    );
+    const body = await (await GET(request(), ctx())).json();
+    expect(body.documents.map((d: any) => d.id)).toEqual(['ok']);
+  });
+
+  it('does not hand the mime type to the page', async () => {
+    const { GET } = await load(asTrainee());
+    const body = await (await GET(request(), ctx())).json();
+    expect(Object.keys(body.documents[0])).not.toContain('mimeType');
+  });
+});

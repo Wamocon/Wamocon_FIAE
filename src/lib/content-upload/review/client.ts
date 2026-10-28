@@ -142,11 +142,21 @@ export function createReviewClient(partial: Partial<ReviewClientDeps> = {}) {
      * The dry run: the whole transfer in a transaction that is rolled back. A report
      * with conflicts comes back as a report (status "conflict"), not as an error.
      */
-    dryRun(runId: string, body: { replaceFiles: string[] }) {
+    dryRun(
+      runId: string,
+      body: { replaceFiles: string[]; publishOriginals?: string[] }
+    ) {
       return transfer(`${BASE}/runs/${runId}/dry-run`, body);
     },
     /** The apply. Needs a valid dry run for exactly this state and the typed catalog code. */
-    apply(runId: string, body: { replaceFiles: string[]; confirm: string }) {
+    apply(
+      runId: string,
+      body: {
+        replaceFiles: string[];
+        publishOriginals?: string[];
+        confirm: string;
+      }
+    ) {
       return transfer(`${BASE}/runs/${runId}/apply`, body);
     },
     /** The SQL text that takes back the newest apply, or what stands in the way. */
