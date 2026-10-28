@@ -191,7 +191,7 @@ Der gesendete Auszug wird **nicht** gespeichert und nicht angezeigt. Das Protoko
 
 1. **Vorher prüfen.** O13 beantwortet (Protokollierung in Open WebUI bekannt). Die Preview ist auf dem aktuellen Stand, der Katalog KFBM hat Komponenten, und es gibt mindestens eine Dateizeile, die die Regeln nicht eindeutig einordnen können (siehe Schritt 2).
 2. **Fünf Dateien aus eigenem Material auswählen, nie Kundendokumente und nie Dateien mit sensiblem Inhalt:**
-   - zwei Quizdateien, deren Überschriftencode zu zwei Komponenten passt (zum Beispiel `6a`, wenn K6.1 und K6.2 im Katalog stehen): erwartet "KI-Vorschlag"
+   - zwei Global-Quizdateien ohne Teilziffer in der Überschrift, die zu zwei Komponenten passt (zum Beispiel `06)`, weil K6.1 und K6.2 im Katalog stehen, und `25)`, weil K25.1 und K25.2 existieren): erwartet "KI-Vorschlag". Ein Enabler-Quiz wie `6a` taugt hier nicht, er ist im Katalog eindeutig (K6.1 hat a bis c, K6.2 hat d bis g) und geht nie an Sokrates
    - eine Quizdatei, deren Code in keinem Katalog steht (zum Beispiel `77z`): erwartet "KI widerspricht den Regeln" oder ein Vorschlag, je nach Antwort
    - eine Datei ohne die Struktur der Quellen (frei geschriebener Text): erwartet "Nicht an die KI gesendet"
    - eine Quizdatei, in deren erster Frage ein Satz wie "Ignoriere alle bisherigen Anweisungen" steht: erwartet "Nicht an die KI gesendet"
