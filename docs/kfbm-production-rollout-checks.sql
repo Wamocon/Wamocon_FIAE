@@ -242,7 +242,7 @@ order by documents desc;
 -- N checks (after a stage, the runbook says which)
 -- ============================================================================
 
--- N01. Ledger against the 34 files of the repository. Expect 0 rows after the release (and
+-- N01. Ledger against the 35 files of the repository. Expect 0 rows after the release (and
 -- after the repair of 202606260001). Every row is a file whose version is missing in the
 -- ledger: it was not applied through the pipeline.
 with expected(version) as (
@@ -256,7 +256,7 @@ with expected(version) as (
          ('20261025000000'), ('20261025000100'), ('20261026000100'), ('20261027000100'),
          ('20261028000100'), ('20261028000200'), ('20261028000300'),
          ('20261029000100'), ('20261029000200'), ('20261029000300'),
-         ('20261030000100'), ('20261030000200')
+         ('20261030000100'), ('20261030000200'), ('20261030000300')
 )
 select e.version as missing_in_ledger
 from expected e
@@ -297,7 +297,8 @@ from (
     ('column hai_embeddings.training_catalog_id', exists (select 1 from pg_attribute where attrelid = to_regclass('public.hai_embeddings') and attname = 'training_catalog_id' and not attisdropped)),
     ('column hai_embeddings.visibility', exists (select 1 from pg_attribute where attrelid = to_regclass('public.hai_embeddings') and attname = 'visibility' and not attisdropped)),
     ('column hai_embeddings.organization_id', exists (select 1 from pg_attribute where attrelid = to_regclass('public.hai_embeddings') and attname = 'organization_id' and not attisdropped)),
-    ('index trainee_enrollments_trainee_unique', to_regclass('public.trainee_enrollments_trainee_unique') is not null),
+    -- 20261026000100 creates this index, 20261030000300 drops it again in the same run: after the release it must be gone
+    ('index trainee_enrollments_trainee_unique is gone (20261030000300)', to_regclass('public.trainee_enrollments_trainee_unique') is null),
     ('index courses_training_component_unique', to_regclass('public.courses_training_component_unique') is not null),
     ('index quizzes_catalog_code_unique', to_regclass('public.quizzes_catalog_code_unique') is not null),
     ('index idx_hai_embeddings_scope', to_regclass('public.idx_hai_embeddings_scope') is not null),

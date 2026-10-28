@@ -63,6 +63,22 @@ describe('MainLayout and the occupation tabs', () => {
   });
 
   it.each([
+    '/trainee/dashboard',
+    '/trainee/courses',
+    '/trainee/quizzes',
+    '/trainee/school',
+    '/trainee/activity-reports',
+  ])('shows the tabs above the content of the trainee page %s', path => {
+    renderLayout(path, 'trainee', TWO);
+    const tabs = screen.getByTestId('tabs');
+    expect(tabs).toBeInTheDocument();
+    expect(
+      tabs.compareDocumentPosition(screen.getByText('page')) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it.each([
     ['a detail page', '/trainer/use-cases/abc', 'trainer', TWO],
     ['an admin page', '/trainer/admin/users', 'trainer', TWO],
     ['the profile', '/trainer/profile', 'trainer', TWO],
@@ -73,7 +89,9 @@ describe('MainLayout and the occupation tabs', () => {
       [{ code: 'FIAE' }],
     ],
     ['no tabs', '/trainer/trainees', 'trainer', []],
-    ['the trainee area', '/trainee/dashboard', 'trainee', TWO],
+    ['a trainee with one occupation', '/trainee/dashboard', 'trainee', []],
+    ['a trainee quiz detail page', '/trainee/quizzes/abc', 'trainee', TWO],
+    ['the trainee profile', '/trainee/profile', 'trainee', TWO],
   ] as const)('shows no tabs on %s', (_label, path, role, tabs) => {
     renderLayout(path, role, [...tabs]);
     expect(screen.queryByTestId('tabs')).not.toBeInTheDocument();

@@ -95,11 +95,28 @@ describe('isCatalogTabPath', () => {
     '/trainer/use-cases/abc',
     '/trainer/lernfelder/abc',
     '/trainer/quiz-management/abc',
-    '/trainee/dashboard',
+    '/trainee/quizzes/abc',
+    '/trainee/use-cases/abc',
+    '/trainee/enablers/abc',
+    '/trainee/lernfelder/abc',
+    '/trainee/profile',
+    '/trainee/evaluations',
     '/berufswahl',
     null,
     undefined,
-  ])('does not show the tabs on %p (detail, admin or trainee page)', path => {
+  ])('does not show the tabs on %p (detail, admin or profile page)', path => {
     expect(isCatalogTabPath(path)).toBe(false);
+  });
+
+  it('shows the tabs on the trainee pages whose content depends on the occupation', () => {
+    expect(
+      CATALOG_TAB_PATHS.filter(path => path.startsWith('/trainee/')).sort()
+    ).toEqual([
+      '/trainee/activity-reports',
+      '/trainee/courses',
+      '/trainee/dashboard',
+      '/trainee/quizzes',
+      '/trainee/school',
+    ]);
   });
 });

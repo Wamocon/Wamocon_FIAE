@@ -71,6 +71,16 @@ describe('OrganizationCatalogsEditor', () => {
     expect(screen.getByText('Plattform: inaktiv')).toBeInTheDocument();
   });
 
+  it('says that a trainee in two trainings is counted in each but takes one seat', async () => {
+    mockApi();
+    renderWithProviders(<OrganizationCatalogsEditor organizationId={ORG} />);
+    expect(
+      await screen.findByText(
+        'Ein Azubi in zwei Ausbildungen wird in jeder gezählt, belegt aber nur einen Platz.'
+      )
+    ).toBeInTheDocument();
+  });
+
   it('enables a catalog with PUT and shows the new state', async () => {
     mockApi();
     renderWithProviders(<OrganizationCatalogsEditor organizationId={ORG} />);

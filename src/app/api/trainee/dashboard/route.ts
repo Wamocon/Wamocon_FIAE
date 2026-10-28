@@ -25,7 +25,10 @@ import {
   requireCatalogScopeForUser,
   type CatalogScope,
 } from '@/lib/catalog/scope';
-import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
+import {
+  loadEnrollmentTerms,
+  loadPhasePlan,
+} from '@/lib/catalog/phase-plan-db';
 import {
   getPhaseDeadline,
   getPhaseMonthRange,
@@ -466,10 +469,18 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         .where(eq(profiles.id, userId as any))
         .limit(1);
 
-      const startDate = traineeProfile?.startOfTrainingDate;
+      // A trainee in several trainings counts with the start date and duration
+      // of the training of the tab: the first enrollment follows the profile, a
+      // further one has its own terms. Single training: the profile, as ever.
+      // Asked for every trainee: whether an enrollment is a further one depends
+      // on all the enrollments, not only on the usable ones of the scope.
+      const terms = await loadEnrollmentTerms(userId, scope.activeCatalogId);
+      const startDate = terms?.startDate
+        ? new Date(terms.startDate)
+        : traineeProfile?.startOfTrainingDate;
       if (startDate) {
         const durationYears = normalizeDurationYears(
-          traineeProfile?.ausbildungDurationYears
+          terms?.durationYears ?? traineeProfile?.ausbildungDurationYears
         );
         const phasePlan = await loadPhasePlan(
           scope.activeCatalogId,
