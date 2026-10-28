@@ -43,6 +43,7 @@ function source(rel: string, heading: string, pages = 4): Source {
       sha256: sha(bytes),
       pageCount: pages,
       headText: heading,
+      solutionMarker: false,
     },
   };
 }

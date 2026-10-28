@@ -4,7 +4,12 @@
 //
 // No network, no database in here: it only loads code.
 
-import { ImportAbort } from './kfbm-apply-modules.mjs';
+import {
+  ImportAbort,
+  parseDecisions,
+  selectFiles,
+} from './kfbm-apply-modules.mjs';
+import { selectUseCaseFiles } from './kfbm-use-cases-modules.mjs';
 
 const load = name =>
   import(
@@ -13,16 +18,19 @@ const load = name =>
       import.meta.url
     ).href
   );
-const [args, plan, report, job, storage, classify] = await Promise.all([
-  load('args'),
-  load('plan'),
-  load('report'),
-  load('job'),
-  load('storage'),
-  load('classify'),
-]);
+const [args, plan, report, job, storage, classify, word, pdfClean] =
+  await Promise.all([
+    load('args'),
+    load('plan'),
+    load('report'),
+    load('job'),
+    load('storage'),
+    load('classify'),
+    load('word'),
+    load('pdf-clean'),
+  ]);
 
-export { ImportAbort };
+export { ImportAbort, parseDecisions, selectFiles, selectUseCaseFiles };
 export const { parseDocumentsArgs } = args;
 export const {
   buildDocumentPlan,
@@ -41,3 +49,10 @@ export const {
   StorageError,
 } = storage;
 export const { classifyPdfPath } = classify;
+export const {
+  prepareWordDocument,
+  traineePdfProblem,
+  wordPdfName,
+  wordPdfPath,
+} = word;
+export const { cleanPdfMetadata } = pdfClean;
