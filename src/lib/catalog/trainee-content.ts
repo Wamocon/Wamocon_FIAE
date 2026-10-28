@@ -47,6 +47,10 @@ import {
   type TrainingPhase,
 } from '@/lib/ausbildung/duration';
 import { resolvePhasePlan } from '@/lib/catalog/phase-plan';
+import {
+  effectiveEnrollmentTerms,
+  sortEnrollments,
+} from '@/lib/catalog/enrollments';
 import type { Executor } from '@/lib/catalog/admin';
 
 // ---------------------------------------------------------------------------
@@ -313,6 +317,31 @@ export async function syncCatalogTraineeContent(
 
   const traineeIds = enrolled.map(e => String(e.traineeId));
   const enrollmentIds = enrolled.map(e => String(e.enrollmentId));
+
+  // The first enrollment of each trainee follows the profile (start date and
+  // duration), a further one has its own terms: the phase is counted per
+  // enrollment, so a trainee in two trainings gets the content of the current
+  // phase of each (src/lib/catalog/enrollments.ts)
+  const allEnrollments = await q
+    .select({
+      traineeId: traineeEnrollments.traineeId,
+      trainingCatalogId: traineeEnrollments.trainingCatalogId,
+      startDate: traineeEnrollments.startDate,
+      createdAt: traineeEnrollments.createdAt,
+    })
+    .from(traineeEnrollments)
+    .where(inArray(traineeEnrollments.traineeId, traineeIds));
+  const firstCatalogOf = new Map<string, string>();
+  for (const e of sortEnrollments(
+    allEnrollments.map(row => ({
+      ...row,
+      trainingCatalogId: String(row.trainingCatalogId),
+    }))
+  )) {
+    const key = String(e.traineeId);
+    if (!firstCatalogOf.has(key)) firstCatalogOf.set(key, e.trainingCatalogId);
+  }
+
   const choices = await q
     .select({
       enrollmentId: traineeElectiveChoices.enrollmentId,
@@ -373,9 +402,19 @@ export async function syncCatalogTraineeContent(
 
   for (const trainee of enrolled) {
     const traineeId = String(trainee.traineeId);
-    const duration = trainee.profileDuration ?? trainee.enrollmentDuration;
-    const startRaw = trainee.profileStart ?? trainee.enrollmentStart;
-    const start = startRaw ? new Date(startRaw as string | Date) : null;
+    const terms = effectiveEnrollmentTerms({
+      enrollment: {
+        startDate: trainee.enrollmentStart,
+        durationYears: trainee.enrollmentDuration,
+      },
+      isPrimary: firstCatalogOf.get(traineeId) === input.catalogId,
+      profile: {
+        startDate: trainee.profileStart as string | Date | null,
+        durationYears: trainee.profileDuration,
+      },
+    });
+    const duration = terms.durationYears;
+    const start = terms.startDate ? new Date(terms.startDate) : null;
     const plan = resolvePhasePlan(catalog.settings, duration);
     const phase = currentPhaseOf({
       startDate: start,

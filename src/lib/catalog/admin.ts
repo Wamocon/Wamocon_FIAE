@@ -14,16 +14,19 @@
  *    their organization. A trainee without an enrollment row counts as FIAE.
  *  - An organization keeps at least one enabled, active catalog. An organization
  *    without any row counts as FIAE enabled (legacy), see effectiveOrganizationRows.
- *  - A trainee has exactly one occupation. The app enforces that inside the
- *    transaction, and since 20261026000100 the unique index
- *    trainee_enrollments_trainee_unique backs it in the database.
+ *  - A trainee can have several occupations, also at the same time, one
+ *    enrollment per catalog (unique on trainee_id plus training_catalog_id).
+ *    addTraineeEnrollment adds one and never replaces another,
+ *    removeTraineeEnrollment removes one only on purpose (confirmed) and never
+ *    the last one. Until 20261030000300 a unique index on trainee_id alone
+ *    allowed only one.
  *
  * The rules are pure functions (check*), they get the data as arguments and
  * return { ok: true, value } or { ok: false, status, code, count? }. The codes
  * are English and stable, the UI shows the German texts.
  */
 
-import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import db from '@/db';
 import {
   TRAINING_CATALOG_IDS,
@@ -35,6 +38,11 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { withDbRetry } from '@/lib/db-retry';
 import { normalizeRole, ROLE } from '@/lib/auth/roles';
+import {
+  isDateOnly,
+  sortEnrollments,
+  toDateOnly,
+} from '@/lib/catalog/enrollments';
 
 export const FIAE_CATALOG_ID: string = TRAINING_CATALOG_IDS.FIAE;
 const FIAE_CATALOG_CODE = 'FIAE';
@@ -79,7 +87,11 @@ export type RuleCode =
   | 'CATALOG_IN_USE'
   | 'LAST_ENABLED_CATALOG'
   | 'DEFAULT_CATALOG'
-  | 'CATALOG_REQUIRED';
+  | 'CATALOG_REQUIRED'
+  | 'ENROLLMENT_NOT_FOUND'
+  | 'LAST_ENROLLMENT'
+  | 'CONFIRMATION_REQUIRED'
+  | 'INVALID_ENROLLMENT_TERMS';
 
 export type RuleFailure = {
   ok: false;
@@ -107,27 +119,46 @@ export type OrganizationCatalogEntry = {
   traineeCount: number;
 };
 
+export type TraineeEnrollmentItem = {
+  id: string;
+  trainingCatalogId: string;
+  code: string;
+  title: string;
+  startDate: string | null;
+  durationYears: number;
+};
+
 export type TraineeEnrollmentView = {
-  enrollment: {
-    id: string;
-    trainingCatalogId: string;
-    code: string;
-    title: string;
-    startDate: string | null;
-    durationYears: number;
-  } | null;
-  /** The catalog the trainee works in: the enrollment, otherwise FIAE. */
+  /** Every enrollment of the trainee, the training started with first. */
+  enrollments: TraineeEnrollmentItem[];
+  /** The first enrollment (the default occupation), null without a row. */
+  enrollment: TraineeEnrollmentItem | null;
+  /** The default catalog of the trainee: the first enrollment, otherwise FIAE. */
   effectiveCatalogId: string;
   /** True when there is no enrollment row and FIAE applies by default. */
   isImplicit: boolean;
 };
 
-export type EnrollmentChange = {
+export type EnrollmentAddition = {
   trainingCatalogId: string;
   /** False when the trainee already was enrolled in exactly this catalog. */
   changed: boolean;
-  /** Number of other enrollments that were removed. */
-  replaced: number;
+  /** Number of enrollments of the trainee after the call. */
+  enrollmentCount: number;
+};
+
+export type EnrollmentRemoval = {
+  trainingCatalogId: string;
+  /** Number of enrollments the trainee still has. */
+  remaining: number;
+};
+
+/** Start date and duration of an enrollment that is added (both optional). */
+export type EnrollmentTermsInput = {
+  /** yyyy-mm-dd, or null for "unknown". Without it the profile start counts. */
+  startDate?: string | null;
+  /** 2 or 3. Without it the duration of the profile counts. */
+  durationYears?: number;
 };
 
 export type Executor = Pick<
@@ -342,6 +373,13 @@ const RULE_MESSAGES: Record<RuleCode, string> = {
   DEFAULT_CATALOG: 'The default training catalog (FIAE) cannot be deactivated',
   CATALOG_REQUIRED:
     'The organization offers several training catalogs, choose one for the trainee',
+  ENROLLMENT_NOT_FOUND: 'The trainee is not enrolled in this training catalog',
+  LAST_ENROLLMENT:
+    'The last enrollment of a trainee cannot be removed, add the other training first',
+  CONFIRMATION_REQUIRED:
+    'Removing an enrollment has to be confirmed explicitly (confirm: true)',
+  INVALID_ENROLLMENT_TERMS:
+    'startDate must be a date (yyyy-mm-dd) or null and durationYears 2 or 3',
 };
 
 /** JSON body of an error answer: readable text, stable code, optional count. */
@@ -740,18 +778,8 @@ export async function setOrganizationCatalog(
 // Trainee level: the occupation of a trainee
 // ---------------------------------------------------------------------------
 
-/** Latest start first, a missing start last (same order as the catalog scope). */
-function byLatestStart(
-  a: { startDate: string | null },
-  b: { startDate: string | null }
-) {
-  return String(b.startDate ?? '').localeCompare(String(a.startDate ?? ''));
-}
-
-/** The enrollment of a trainee. Without a row the trainee counts as FIAE. */
-export async function getTraineeEnrollment(
-  traineeId: string
-): Promise<TraineeEnrollmentView> {
+/** The enrollments of a trainee, the training started with first. */
+async function loadEnrollmentRows(traineeId: string) {
   const rows = await withDbRetry(() =>
     db
       .select({
@@ -759,6 +787,7 @@ export async function getTraineeEnrollment(
         trainingCatalogId: traineeEnrollments.trainingCatalogId,
         startDate: traineeEnrollments.startDate,
         durationYears: traineeEnrollments.durationYears,
+        createdAt: traineeEnrollments.createdAt,
         code: trainingCatalogs.code,
         title: trainingCatalogs.title,
       })
@@ -769,36 +798,54 @@ export async function getTraineeEnrollment(
       )
       .where(eq(traineeEnrollments.traineeId, traineeId))
   );
-  const [latest] = [...rows].sort(byLatestStart);
-  if (!latest) {
+  return sortEnrollments(
+    rows.map(r => ({ ...r, trainingCatalogId: String(r.trainingCatalogId) }))
+  );
+}
+
+/**
+ * The enrollments of a trainee. Without a row the trainee counts as FIAE. The
+ * first enrollment (the training the trainee started with) is the default
+ * occupation, the others follow in the order of their enrollment.
+ */
+export async function getTraineeEnrollment(
+  traineeId: string
+): Promise<TraineeEnrollmentView> {
+  const rows = await loadEnrollmentRows(traineeId);
+  const enrollments: TraineeEnrollmentItem[] = rows.map(r => ({
+    id: String(r.id),
+    trainingCatalogId: r.trainingCatalogId,
+    code: r.code,
+    title: r.title,
+    startDate: r.startDate ?? null,
+    durationYears: Number(r.durationYears),
+  }));
+  const [first] = enrollments;
+  if (!first) {
     return {
+      enrollments: [],
       enrollment: null,
       effectiveCatalogId: FIAE_CATALOG_ID,
       isImplicit: true,
     };
   }
   return {
-    enrollment: {
-      id: String(latest.id),
-      trainingCatalogId: String(latest.trainingCatalogId),
-      code: latest.code,
-      title: latest.title,
-      startDate: latest.startDate ?? null,
-      durationYears: Number(latest.durationYears),
-    },
-    effectiveCatalogId: String(latest.trainingCatalogId),
+    enrollments,
+    enrollment: first,
+    effectiveCatalogId: first.trainingCatalogId,
     isImplicit: false,
   };
 }
 
 /**
- * Catalog code per trainee id (one query for the enrollments, one for the
- * codes, no join). A trainee without an enrollment gets the FIAE code.
+ * Catalog codes per trainee id, every enrollment of the trainee in the order
+ * of the enrollment (one query for the enrollments, one for the codes, no
+ * join). A trainee without an enrollment gets the FIAE code.
  */
-export async function getTrainingCatalogCodes(
+export async function getTrainingCatalogCodeLists(
   traineeIds: string[]
-): Promise<Map<string, string>> {
-  const result = new Map<string, string>();
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
   if (traineeIds.length === 0) return result;
 
   const [enrollments, catalogs] = await Promise.all([
@@ -808,6 +855,7 @@ export async function getTrainingCatalogCodes(
           traineeId: traineeEnrollments.traineeId,
           trainingCatalogId: traineeEnrollments.trainingCatalogId,
           startDate: traineeEnrollments.startDate,
+          createdAt: traineeEnrollments.createdAt,
         })
         .from(traineeEnrollments)
         .where(inArray(traineeEnrollments.traineeId, traineeIds))
@@ -821,50 +869,71 @@ export async function getTrainingCatalogCodes(
   const codeById = new Map(catalogs.map(c => [String(c.id), c.code]));
   const defaultCode = codeById.get(FIAE_CATALOG_ID) ?? FIAE_CATALOG_CODE;
 
-  const latest = new Map<
-    string,
-    { catalogId: string; startDate: string | null }
-  >();
+  const byTrainee = new Map<string, typeof enrollments>();
   for (const e of enrollments) {
     const key = String(e.traineeId);
-    const current = latest.get(key);
-    if (!current || byLatestStart(e, current) < 0) {
-      latest.set(key, {
-        catalogId: String(e.trainingCatalogId),
-        startDate: e.startDate ?? null,
-      });
-    }
+    byTrainee.set(key, [...(byTrainee.get(key) ?? []), e]);
   }
   for (const id of traineeIds) {
-    result.set(
-      id,
-      codeById.get(latest.get(id)?.catalogId ?? '') ?? defaultCode
-    );
+    const codes = sortEnrollments(
+      (byTrainee.get(id) ?? []).map(e => ({
+        ...e,
+        trainingCatalogId: String(e.trainingCatalogId),
+      }))
+    )
+      .map(e => codeById.get(e.trainingCatalogId))
+      .filter((code): code is string => !!code);
+    result.set(id, codes.length > 0 ? codes : [defaultCode]);
   }
   return result;
 }
 
-/** Date part of a profile date (Date or text) for the date column, or null. */
-function toDateOnly(value: Date | string | null | undefined): string | null {
-  if (!value) return null;
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime())
-      ? null
-      : value.toISOString().slice(0, 10);
+/**
+ * Catalog code per trainee id: the code of the first enrollment, FIAE for a
+ * trainee without one (see getTrainingCatalogCodeLists for all of them).
+ */
+export async function getTrainingCatalogCodes(
+  traineeIds: string[]
+): Promise<Map<string, string>> {
+  const lists = await getTrainingCatalogCodeLists(traineeIds);
+  return new Map(
+    [...lists].map(([id, codes]) => [id, codes[0] ?? FIAE_CATALOG_CODE])
+  );
+}
+
+/** The start date and duration of an added enrollment, or the failure. */
+function checkEnrollmentTerms(
+  terms: EnrollmentTermsInput
+): RuleResult<EnrollmentTermsInput> {
+  const { startDate, durationYears } = terms;
+  if (startDate !== undefined && startDate !== null && !isDateOnly(startDate)) {
+    return fail(400, 'INVALID_ENROLLMENT_TERMS');
   }
-  return String(value).slice(0, 10);
+  if (
+    durationYears !== undefined &&
+    durationYears !== 2 &&
+    durationYears !== 3
+  ) {
+    return fail(400, 'INVALID_ENROLLMENT_TERMS');
+  }
+  return { ok: true, value: terms };
 }
 
 /**
- * Enroll a trainee in one catalog. In one transaction: the other enrollments
- * of the trainee are deleted (their elective choices follow by cascade), the
- * new enrollment is created with the start date and duration of the profile.
- * An enrollment that already exists for the target catalog is kept as it is.
+ * Enroll a trainee in one more catalog. In one transaction: the enrollment is
+ * created with the start date and duration the admin gave, or with those of the
+ * profile. Other enrollments of the trainee stay as they are (with their
+ * elective choices), an enrollment that already exists for the catalog is kept
+ * as it is.
  */
-export async function setTraineeEnrollment(
+export async function addTraineeEnrollment(
   traineeId: string,
-  catalogId: string
-): Promise<RuleResult<EnrollmentChange>> {
+  catalogId: string,
+  terms: EnrollmentTermsInput = {}
+): Promise<RuleResult<EnrollmentAddition>> {
+  const termsCheck = checkEnrollmentTerms(terms);
+  if (!termsCheck.ok) return termsCheck;
+
   return db.transaction(async tx => {
     await takeCatalogAdminLock(tx);
 
@@ -899,37 +968,144 @@ export async function setTraineeEnrollment(
       })
       .from(traineeEnrollments)
       .where(eq(traineeEnrollments.traineeId, traineeId));
-    const keep = current.find(e => String(e.trainingCatalogId) === catalogId);
-    const others = current.filter(
-      e => String(e.trainingCatalogId) !== catalogId
-    );
-
-    if (others.length > 0) {
-      await tx
-        .delete(traineeEnrollments)
-        .where(
-          and(
-            eq(traineeEnrollments.traineeId, traineeId),
-            ne(traineeEnrollments.trainingCatalogId, catalogId)
-          )
-        );
+    if (current.some(e => String(e.trainingCatalogId) === catalogId)) {
+      return {
+        ok: true,
+        value: {
+          trainingCatalogId: catalogId,
+          changed: false,
+          enrollmentCount: current.length,
+        },
+      };
     }
-    if (!keep) {
+
+    const profileStart = toDateOnly(trainee.startOfTrainingDate);
+    const profileDuration = trainee.ausbildungDurationYears === 2 ? 2 : 3;
+
+    // A trainee without any row works in FIAE (the default). Adding another
+    // training must not take that away, so the FIAE becomes a real enrollment
+    // first, with the terms of the profile (when the organization offers it).
+    // It is created before the new one: it stays the first enrollment.
+    const makeDefaultReal =
+      current.length === 0 &&
+      catalogId !== FIAE_CATALOG_ID &&
+      usableCatalogIds(orgRows, catalogs).includes(FIAE_CATALOG_ID);
+    if (makeDefaultReal) {
       await tx.insert(traineeEnrollments).values({
         traineeId,
-        trainingCatalogId: catalogId,
-        startDate: toDateOnly(trainee.startOfTrainingDate),
-        durationYears: trainee.ausbildungDurationYears === 2 ? 2 : 3,
+        trainingCatalogId: FIAE_CATALOG_ID,
+        startDate: profileStart,
+        durationYears: profileDuration,
+        // Both rows are written in this transaction (same now()): the default
+        // is older by a second, so it stays the first whatever start date the
+        // admin gives the new training
+        createdAt: sql`now() - interval '1 second'`,
       });
     }
+
+    await tx.insert(traineeEnrollments).values({
+      traineeId,
+      trainingCatalogId: catalogId,
+      startDate: terms.startDate !== undefined ? terms.startDate : profileStart,
+      durationYears: terms.durationYears ?? profileDuration,
+    });
 
     return {
       ok: true,
       value: {
         trainingCatalogId: catalogId,
-        changed: !keep || others.length > 0,
-        replaced: others.length,
+        changed: true,
+        enrollmentCount: current.length + (makeDefaultReal ? 2 : 1),
       },
+    };
+  });
+}
+
+/**
+ * The old name of addTraineeEnrollment. It used to replace the other
+ * enrollments of the trainee, it only adds now.
+ *
+ * @deprecated use addTraineeEnrollment
+ */
+export const setTraineeEnrollment = addTraineeEnrollment;
+
+/**
+ * Remove one enrollment of a trainee, only on purpose (`confirmed` has to be
+ * true) and never the last one (the trainee would silently count as FIAE).
+ *
+ * It deletes the one row of this trainee and catalog, nothing else. The elective
+ * choices of the enrollment follow by cascade. Course memberships, quiz
+ * assignments and every submission of the trainee stay as they are: they hold
+ * what the trainee did, and the catalog filters of the trainee area no longer
+ * show the content of the removed training. Enrolling in the catalog again
+ * brings it back. When the FIRST training is removed, the profile takes over
+ * the start date and duration of the next one (see the comment in the body).
+ */
+export async function removeTraineeEnrollment(
+  traineeId: string,
+  catalogId: string,
+  options: { confirmed: boolean }
+): Promise<RuleResult<EnrollmentRemoval>> {
+  if (options?.confirmed !== true) return fail(400, 'CONFIRMATION_REQUIRED');
+
+  return db.transaction(async tx => {
+    await takeCatalogAdminLock(tx);
+
+    const [trainee] = await tx
+      .select({ id: profiles.id })
+      .from(profiles)
+      .where(eq(profiles.id, traineeId))
+      .limit(1);
+    if (!trainee) return fail(404, 'USER_NOT_FOUND');
+
+    const current = await tx
+      .select({
+        id: traineeEnrollments.id,
+        trainingCatalogId: traineeEnrollments.trainingCatalogId,
+        startDate: traineeEnrollments.startDate,
+        durationYears: traineeEnrollments.durationYears,
+        createdAt: traineeEnrollments.createdAt,
+      })
+      .from(traineeEnrollments)
+      .where(eq(traineeEnrollments.traineeId, traineeId));
+    const target = current.find(e => String(e.trainingCatalogId) === catalogId);
+    if (!target) return fail(404, 'ENROLLMENT_NOT_FOUND');
+    if (current.length < 2) return fail(409, 'LAST_ENROLLMENT');
+
+    // The profile (start date, duration) describes the FIRST training. If that
+    // one goes, the next one becomes the first and the profile takes over its
+    // own dates, otherwise it would be counted with the dates of the training
+    // that is gone. Without a start date of its own the profile stays.
+    const ordered = sortEnrollments(
+      current.map(e => ({
+        ...e,
+        trainingCatalogId: String(e.trainingCatalogId),
+      }))
+    );
+    if (ordered[0].id === target.id && ordered[1].startDate) {
+      await tx
+        .update(profiles)
+        .set({
+          startOfTrainingDate: new Date(
+            `${ordered[1].startDate}T00:00:00.000Z`
+          ),
+          ausbildungDurationYears: ordered[1].durationYears,
+        })
+        .where(eq(profiles.id, traineeId));
+    }
+
+    await tx
+      .delete(traineeEnrollments)
+      .where(
+        and(
+          eq(traineeEnrollments.id, target.id),
+          eq(traineeEnrollments.traineeId, traineeId)
+        )
+      );
+
+    return {
+      ok: true,
+      value: { trainingCatalogId: catalogId, remaining: current.length - 1 },
     };
   });
 }

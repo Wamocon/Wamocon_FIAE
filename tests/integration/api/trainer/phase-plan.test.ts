@@ -306,9 +306,12 @@ describe('GET /api/trainer/activity-reports', () => {
     );
     await mod.GET(get());
     expect(plans.loadPhasePlansForUsers).toHaveBeenCalledTimes(1);
-    expect(plans.loadPhasePlansForUsers).toHaveBeenCalledWith([
-      { id: 'k1', durationYears: 3 },
-    ]);
+    // no occupation chosen: no preferred plan
+    expect(plans.loadPhasePlansForUsers).toHaveBeenCalledWith(
+      [{ id: 'k1', durationYears: 3 }],
+      undefined,
+      null
+    );
   });
 
   it('asks for no plans when there are no reports', async () => {

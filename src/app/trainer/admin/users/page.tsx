@@ -51,6 +51,8 @@ type UserItem = {
   orgSlug: string | null;
   createdAt: string;
   trainingCatalogCode?: string | null;
+  /** Every training of a trainee (a trainee can have several). */
+  trainingCatalogCodes?: string[] | null;
 };
 
 type OrgOption = {
@@ -597,8 +599,18 @@ export default function AdminUsersPage() {
                     {isSuperAdmin && (
                       <td className="px-6 py-4">
                         {upperRole === 'TRAINEE' && (
-                          <span className="bg-accent/10 text-foreground inline-flex rounded-full px-2.5 py-1 text-xs font-medium">
-                            {u.trainingCatalogCode || t('common.unassigned')}
+                          <span className="flex flex-wrap gap-1">
+                            {(u.trainingCatalogCodes?.length
+                              ? u.trainingCatalogCodes
+                              : [u.trainingCatalogCode || t('common.unassigned')]
+                            ).map(code => (
+                              <span
+                                key={code}
+                                className="bg-accent/10 text-foreground inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
+                              >
+                                {code}
+                              </span>
+                            ))}
                           </span>
                         )}
                       </td>

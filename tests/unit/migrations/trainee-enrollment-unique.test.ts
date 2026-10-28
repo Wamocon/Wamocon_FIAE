@@ -184,14 +184,19 @@ describe('trainee enrollment unique index migration: no data is changed', () => 
 describe('Drizzle schema of trainee_enrollments', () => {
   const config = getTableConfig(traineeEnrollments);
 
-  it('declares the unique index with the name of the migration', () => {
-    const index = config.indexes.find(i => i.config.name === INDEX);
-    expect(index).toBeDefined();
-    expect(index!.config.unique).toBe(true);
+  it('no longer declares the unique index, 20261030000300 drops it', () => {
+    // The file under test still creates the index (a recorded migration is
+    // never edited), the owner decided a trainee can have several enrollments
+    // and 20261030000300 drops it again. The schema follows the end state.
+    expect(config.indexes.find(i => i.config.name === INDEX)).toBeUndefined();
     expect(
-      index!.config.columns.map(column => (column as { name: string }).name)
-    ).toEqual(['trainee_id']);
-    expect(index!.config.where).toBeUndefined();
+      fs.existsSync(
+        path.join(
+          MIGRATIONS_DIR,
+          '20261030000300_trainee_enrollments_multiple.sql'
+        )
+      )
+    ).toBe(true);
   });
 
   it('keeps the two unique constraints', () => {

@@ -4,8 +4,13 @@
  *
  * Rules (always derived from the session and the database, never from client
  * input alone):
- *  - TRAINEE: catalogs of the trainee's rows in trainee_enrollments (latest
- *    start first), otherwise the FIAE default catalog.
+ *  - TRAINEE: catalogs of the trainee's rows in trainee_enrollments (the
+ *    training enrolled in first comes first, it is the default), otherwise the
+ *    FIAE default catalog. A trainee can be enrolled in several trainings. With
+ *    more than one, a request works in ONE of them: the one named by the header
+ *    or query parameter (validated against the own enrollments), otherwise the
+ *    default. The scope of such a trainee therefore counts as "selected", so a
+ *    read never mixes the content of two trainings (see narrowMultiple below).
  *  - TRAINER, ADMIN, TEMP_ADMIN: catalogs enabled for the organization in
  *    organization_catalogs (is_enabled, catalog is_active). An organization
  *    without any row (legacy) gets FIAE.
@@ -50,6 +55,7 @@ import { withDbRetry } from '@/lib/db-retry';
 import { isSuperAdmin, normalizeRole, ROLE } from '@/lib/auth/roles';
 import { isUuid } from '@/lib/uuid';
 import { NO_CATALOG_CODE } from '@/lib/catalog/client';
+import { sortEnrollments } from '@/lib/catalog/enrollments';
 
 export const FIAE_CATALOG_ID: string = TRAINING_CATALOG_IDS.FIAE;
 export const CATALOG_HEADER = 'x-catalog';
@@ -152,14 +158,30 @@ async function loadScopeData(subject: CatalogSubject) {
             .select({
               trainingCatalogId: traineeEnrollments.trainingCatalogId,
               startDate: traineeEnrollments.startDate,
+              createdAt: traineeEnrollments.createdAt,
             })
             .from(traineeEnrollments)
             .where(eq(traineeEnrollments.traineeId, subject.id))
-        )) as { trainingCatalogId: string; startDate: string | null }[])
+        )) as {
+          trainingCatalogId: string;
+          startDate: string | null;
+          createdAt?: Date | string | null;
+        }[])
       : [];
 
   return { catalogs, orgRows, enrollments };
 }
+
+export type CatalogScopeOptions = {
+  /**
+   * A trainee with more than one usable enrollment works in one of them: the
+   * scope counts as selected (also without a choice in the request), so the
+   * reads of the trainee area stay inside one training. Default true. The
+   * server internal readers that have no request (HAI context) turn it off and
+   * get all the enrollments of the trainee.
+   */
+  narrowMultiple?: boolean;
+};
 
 /**
  * Resolve the catalog scope of a caller. Throws CatalogScopeError (403 for a
@@ -167,7 +189,8 @@ async function loadScopeData(subject: CatalogSubject) {
  */
 export async function getCatalogScope(
   subject: CatalogSubject,
-  request?: CatalogRequestLike | null
+  request?: CatalogRequestLike | null,
+  options: CatalogScopeOptions = {}
 ): Promise<CatalogScope> {
   let data;
   try {
@@ -206,11 +229,14 @@ export async function getCatalogScope(
         const fiae = byId.get(FIAE_CATALOG_ID);
         allowed = fiae ? [fiae] : [];
       } else {
-        const ordered = [...enrollments].sort((a, b) =>
-          String(b.startDate ?? '').localeCompare(String(a.startDate ?? ''))
-        );
-        const ids = ordered
-          .map(e => String(e.trainingCatalogId))
+        // The training enrolled in first is the default
+        const ids = sortEnrollments(
+          enrollments.map(e => ({
+            ...e,
+            trainingCatalogId: String(e.trainingCatalogId),
+          }))
+        )
+          .map(e => e.trainingCatalogId)
           .filter(id => usable(id));
         allowed = ids.map(id => byId.get(id)!);
         defaultId = ids[0] ?? null;
@@ -249,7 +275,18 @@ export async function getCatalogScope(
     selected = true;
   }
 
-  return { allowedCatalogIds: allowedIds, activeCatalogId: activeId, selected };
+  // A trainee in several trainings works in one of them at a time
+  const narrowTrainee =
+    options.narrowMultiple !== false &&
+    !superAdmin &&
+    normalizeRole(subject.role) === ROLE.TRAINEE &&
+    allowedIds.length > 1;
+
+  return {
+    allowedCatalogIds: allowedIds,
+    activeCatalogId: activeId,
+    selected: selected || narrowTrainee,
+  };
 }
 
 function scopeFailure(err: unknown): NextResponse {
@@ -269,10 +306,11 @@ function scopeFailure(err: unknown): NextResponse {
 /** Like getCatalogScope, but returns a ready-made error response. */
 export async function requireCatalogScope(
   subject: CatalogSubject,
-  request?: CatalogRequestLike | null
+  request?: CatalogRequestLike | null,
+  options?: CatalogScopeOptions
 ): Promise<CatalogScope | NextResponse> {
   try {
-    return await getCatalogScope(subject, request);
+    return await getCatalogScope(subject, request, options);
   } catch (err) {
     return scopeFailure(err);
   }
@@ -286,7 +324,8 @@ export async function requireCatalogScope(
  */
 export async function requireCatalogScopeForUser(
   userId: string,
-  request?: CatalogRequestLike | null
+  request?: CatalogRequestLike | null,
+  options?: CatalogScopeOptions
 ): Promise<CatalogScope | NextResponse> {
   let row;
   try {
@@ -322,20 +361,26 @@ export async function requireCatalogScopeForUser(
         isPlatformOwner: row.isPlatformOwner === true,
       }),
     },
-    request
+    request,
+    options
   );
 }
 
 /**
  * Scope of a user id for server-internal readers (HAI data context): the scope
  * or null if it cannot be determined. Callers must treat null as "no access"
- * and return no content (fail closed).
+ * and return no content (fail closed). Without a request there is no choice to
+ * follow, so a trainee in several trainings gets all of them (the HAI reads the
+ * content of every training the trainee is enrolled in). With a request the
+ * choice of the request decides, like in the routes.
  */
 export async function getCatalogScopeForUserId(
   userId: string,
   request?: CatalogRequestLike | null
 ): Promise<CatalogScope | null> {
-  const scope = await requireCatalogScopeForUser(userId, request);
+  const scope = await requireCatalogScopeForUser(userId, request, {
+    narrowMultiple: !!request,
+  });
   return scope instanceof Response ? null : scope;
 }
 

@@ -122,6 +122,7 @@ export function OrganizationCatalogsEditor({
           );
         })}
       </ul>
+      <p className="text-muted mt-2 text-xs">{t('admin.catalogs.countNote')}</p>
     </div>
   );
 }

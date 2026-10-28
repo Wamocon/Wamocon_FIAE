@@ -20,6 +20,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCatalog } from '@/contexts/CatalogContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import dynamic from 'next/dynamic';
@@ -78,11 +79,15 @@ type DashboardData = {
 const TRAINEE_DASHBOARD_CACHE_KEY = 'wmc_trainee_dashboard_cache';
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (increased from 5)
 
+// A trainee in several trainings has one dashboard per training: the training
+// is part of the key, so the placeholder never shows the other one. With one
+// training the key stays as it was.
 const getDashboardCacheKey = (
   userId: string | undefined,
-  durationYears: number | null | undefined
+  durationYears: number | null | undefined,
+  catalogCode: string | null
 ) =>
-  `${TRAINEE_DASHBOARD_CACHE_KEY}_${userId || 'anonymous'}_${durationYears || 3}`;
+  `${TRAINEE_DASHBOARD_CACHE_KEY}_${userId || 'anonymous'}_${durationYears || 3}${catalogCode ? `_${catalogCode}` : ''}`;
 
 const getCachedDashboard = (cacheKey: string): DashboardData | null => {
   try {
@@ -108,6 +113,7 @@ export default function TraineeDashboard() {
   const router = useRouter();
   const { profile } = useAuth();
   const { t } = useLanguage();
+  const { activeCode, isMultiple } = useCatalog();
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -125,7 +131,8 @@ export default function TraineeDashboard() {
     : null;
   const dashboardCacheKey = getDashboardCacheKey(
     profile?.id,
-    profile?.ausbildung_duration_years
+    profile?.ausbildung_duration_years,
+    isMultiple ? activeCode : null
   );
 
   const { data, error: dataError } = useApiQuery<DashboardData>(url, {
