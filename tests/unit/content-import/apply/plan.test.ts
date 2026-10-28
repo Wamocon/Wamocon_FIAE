@@ -653,7 +653,11 @@ describe('validatePlan', () => {
     expect(validatePlan(a).join(' ')).toMatch(/solution/i);
     const b = clone();
     b.scenarios[0].situation = `${b.scenarios[0].solution} ${b.scenarios[0].situation}`;
-    expect(validatePlan(b).join(' ')).toMatch(/solution/i);
+    // the solution of a scenario is no secret (the whole scenario is public)
+    expect(validatePlan(b)).toEqual([]);
+    const c = clone();
+    c.scenarios[0].situation += ' Lösungsszenario';
+    expect(validatePlan(c).join(' ')).toMatch(/solution/i);
   });
 
   it('rejects a task that shows or repeats a solution, and a task that is no text', () => {

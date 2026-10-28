@@ -108,25 +108,48 @@ describe('findSolutionLeaks', () => {
     const p = plan();
     expect(findSolutionLeaks(p)).toEqual([]);
     const texts = solutionTexts(p);
-    expect(texts).toContain('Eine erfundene Lösung OMEGA.');
-    expect(texts).toContain('Ein erfundener Beitrag SIGMA.');
     expect(texts.some(t => t.startsWith('Erfundene Begründung ZETA-'))).toBe(
       true
     );
   });
 
+  it('does not protect the solution parts of a scenario: a scenario is whole and public', () => {
+    const p = plan();
+    expect(p.scenarios[0].solution).toBe('Eine erfundene Lösung OMEGA.');
+    const texts = solutionTexts(p);
+    expect(texts).not.toContain('Eine erfundene Lösung OMEGA.');
+    expect(texts).not.toContain('Ein erfundener Beitrag SIGMA.');
+    // a teaching text, a component and a scenario situation may repeat them
+    p.enablers[0].descriptionText = 'Dazu gehört: Eine erfundene Lösung OMEGA.';
+    p.components[0].reference = 'Ein erfundener Beitrag SIGMA.';
+    p.scenarios[0].situation = 'Eine erfundene Lösung OMEGA.';
+    expect(findSolutionLeaks(p)).toEqual([]);
+  });
+
+  it('still protects the rationales of a quiz and the markers of a solution', () => {
+    const p = plan();
+    const rationale = solutionTexts(p).find(t =>
+      t.startsWith('Erfundene Begründung ZETA-')
+    ) as string;
+    p.quizzes[0].title = `Titel ${rationale}`;
+    p.enablers[0].descriptionText = 'Hinweis: Musterlösung: folgt';
+    const problems = findSolutionLeaks(p).join(' ');
+    expect(problems).toMatch(/quiz .* title contains a solution text/);
+    expect(problems).toMatch(/enabler K1-a text contains a solution marker/);
+  });
+
   it('names the place of a leak, never the text', () => {
     const p = plan();
     p.enablers[0].descriptionText = 'Hinweis: Kurzbegründung: folgt';
-    p.components[0].reference = 'Eine erfundene Lösung OMEGA.';
+    p.components[0].reference = 'Richtige Antwort: B';
     const problems = findSolutionLeaks(p);
     expect(problems.join(' ')).toMatch(
       /enabler K1-a text contains a solution marker/
     );
     expect(problems.join(' ')).toMatch(
-      /component K1 reference contains a solution text/
+      /component K1 reference contains a solution marker/
     );
-    expect(problems.join(' ')).not.toContain('OMEGA');
+    expect(problems.join(' ')).not.toContain('Richtige Antwort: B');
   });
 });
 
@@ -244,6 +267,57 @@ describe('findRowLeaks', () => {
     ]);
   });
 
+  it('lets the whole scenario of an enabler pass as an exercise document for everyone', () => {
+    const scenario = {
+      document_type: 'EXERCISE',
+      visibility: 'ALL',
+      enabler_id: 'e1',
+      title: 'Szenario K1-a (PDF)',
+      description: null,
+      file_name: '1_K1-a_szenario.pdf',
+    };
+    expect(findRowLeaks({ content_documents: [scenario] }, solutions)).toEqual(
+      []
+    );
+    // title, description and file name are checked like those of a theory document
+    expect(
+      findRowLeaks(
+        {
+          content_documents: [
+            { ...scenario, title: 'Musterlösung: K1-a' },
+            { ...scenario, description: solutions[0] },
+            { ...scenario, file_name: 'Richtige Antwort.pdf' },
+          ],
+        },
+        solutions
+      )
+    ).toEqual([
+      'content_documents.title contains a solution',
+      'content_documents.description contains a solution text',
+      'content_documents.file_name contains a solution marker',
+    ]);
+  });
+
+  it('refuses an exercise document that names no enabler, names a use case, or is trainer only', () => {
+    const base = { document_type: 'EXERCISE', visibility: 'ALL', title: 't' };
+    expect(
+      findRowLeaks(
+        {
+          content_documents: [
+            base,
+            { ...base, enabler_id: 'e1', use_case_id: 'u1' },
+            { ...base, enabler_id: 'e1', visibility: 'TRAINER_ONLY' },
+          ],
+        },
+        []
+      )
+    ).toEqual([
+      'content_documents EXERCISE row names no enabler',
+      'content_documents EXERCISE row belongs to a use case',
+      'content_documents row has an unexpected type or visibility',
+    ]);
+  });
+
   it('refuses a document that is neither a trainee question nor a trainer solution, and a solution in a trainee document', () => {
     const problems = findRowLeaks(
       {
@@ -294,7 +368,9 @@ describe('the task of a scenario', () => {
     expect(findSolutionLeaks(p).join(' ')).toMatch(/scenario K1-a task/);
     const q = plan();
     q.scenarios[0].task = `Vorweg. ${q.scenarios[0].solution} Danach.`;
-    expect(findSolutionLeaks(q).join(' ')).toMatch(/scenario K1-a task/);
+    expect(findSolutionLeaks(q).join(' ')).toMatch(
+      /scenario K1-a task repeats text of a solution part/
+    );
   });
 
   it('is a leak when it repeats one paragraph of the solution or knowledge part', () => {
@@ -344,11 +420,12 @@ describe('the task of a scenario', () => {
         solutions
       ).join(' ')
     ).toMatch(/content_documents\.description/);
+    // the solution text of a scenario is no longer a protected text (the whole scenario is public)
     expect(
       findRowLeaks(
         rowOf(`Eine Lage.\n\nAufgabe\n\n${p.scenarios[0].solution}`),
         solutions
-      ).join(' ')
-    ).toMatch(/content_documents\.description/);
+      )
+    ).toEqual([]);
   });
 });
