@@ -20,7 +20,7 @@ type Props = {
 
 /**
  * "Originale für die Azubis bereitstellen": the person marks the original PDFs of enabler texts
- * that go with the next transfer to the document bucket and appear in the reader of the trainees
+ * and whole scenarios that go with the next transfer to the document bucket and appear in the reader of the trainees
  * after the activation. Only accepted PDF originals are offered, at most 25. The transfer checks
  * every file again.
  */

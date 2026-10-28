@@ -108,12 +108,20 @@ export interface TransferPlan {
 
 export type TransferMode = 'dry_run' | 'apply';
 
-/** One original that goes to the document bucket (a confirmed enabler text). */
+/** What an original is: the teaching text of an enabler or a whole scenario. */
+export type OriginalKind = 'enabler' | 'scenario';
+
+/**
+ * One original that goes to the document bucket (a confirmed enabler text or a whole
+ * scenario).
+ */
 export interface OriginalPlan {
   fileId: string;
   sha256: string;
   enablerCode: string;
   ext: 'docx' | 'pdf';
+  /** Set for a whole scenario only, an original without it is an enabler text. */
+  kind?: Exclude<OriginalKind, 'enabler'>;
   sizeBytes: number;
   pageCount: number | null;
 }

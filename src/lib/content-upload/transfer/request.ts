@@ -2,7 +2,7 @@
 //
 //   { replaceFiles?: string[],         ids of files whose DIFFERING rows are replaced (default: none,
 //                                      only new rows and added questions are written)
-//     publishOriginals?: string[],     ids of enabler text files whose original goes to the document bucket
+//     publishOriginals?: string[],     ids of enabler text and whole scenario files whose original goes to the document bucket
 //     confirm?: string }               apply only: the catalog code, typed by the person
 //
 // Strict: a field of another type is an error, an unknown field is ignored (the

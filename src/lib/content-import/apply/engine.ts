@@ -23,10 +23,10 @@ import type { Db, Row } from './db';
 import { ImportAbort } from './db';
 import {
   findRowLeaks,
+  LONG_SOLUTION_TEXTS,
   leakOf,
   leakOfEnablerText,
   reviewedEnablerCodes,
-  scenarioSolutionTexts,
   solutionTexts,
 } from './guard';
 import { validatePlan } from './plan';
@@ -59,9 +59,11 @@ export interface RunOptions {
    */
   activate: boolean;
   /**
-   * Also write the trainer-only parts of the scenarios (solution, knowledge
-   * text). Off by default: the policy cd_select of content_documents lets the
-   * public key read rows without an organization.
+   * Also write the solution parts of the scenarios (solution, knowledge text) as
+   * trainer-only text rows. Off by default and not needed for the upload: a scenario
+   * is one whole file that trainees may read (the original of the upload, see
+   * enablerOriginals). The policy cd_select of content_documents lets the public key
+   * read rows without an organization.
    */
   scenarioSolutions: boolean;
   /**
@@ -203,9 +205,10 @@ export function scenarioDocuments(
 }
 
 /**
- * The document row of the original file of an enabler text: a theory document
- * for everyone at the enabler, with the data of the stored file. The text
- * fields stay empty, the solution guard checks title and file name.
+ * The document row of the original file of an enabler text (a theory document) or
+ * of a whole scenario (an exercise document): for everyone at the enabler, with
+ * the data of the stored file. The text fields stay empty, the solution guard
+ * checks title and file name.
  */
 export function enablerOriginalRow(
   original: EnablerOriginal,
@@ -219,7 +222,7 @@ export function enablerOriginalRow(
     organization_id: null,
     title: original.title,
     description: null,
-    document_type: 'THEORY',
+    document_type: original.documentType ?? 'THEORY',
     visibility: 'ALL',
     file_name: original.fileName,
     file_size: original.fileSize,
@@ -227,7 +230,7 @@ export function enablerOriginalRow(
     storage_url: original.storageUrl,
     storage_path: original.storagePath,
     page_count: original.pageCount,
-    order_index: 0,
+    order_index: original.orderIndex ?? 0,
     uploaded_by_id: createdBy,
   };
 }
@@ -894,7 +897,7 @@ export async function executePlan(
     );
     const found = enabler
       ? (docsByEnabler.get(String(enabler.id)) ?? []).find(
-          d => d.document_type === 'THEORY' && d.title === row.title
+          d => d.document_type === row.document_type && d.title === row.title
         )
       : undefined;
     if (found && found.visibility !== row.visibility) {
@@ -1041,7 +1044,7 @@ export async function executePlan(
     const leaks = findRowLeaks(
       preview,
       solutionTexts(plan),
-      scenarioSolutionTexts(plan),
+      LONG_SOLUTION_TEXTS,
       reviewedEnablerCodes(plan)
     );
     if (leaks.length > 0) {

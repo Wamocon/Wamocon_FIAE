@@ -987,6 +987,63 @@ if (!url) {
       expect((await counts(sql)).content_documents).toBe(0);
     });
 
+    it('lays a whole scenario PDF down as the exercise document for everyone', async () => {
+      const files = await enablerFiles({ tree: true });
+      const scenarioPdf = fixtureFile(
+        new Uint8Array(
+          pdfBytes({
+            pages: [
+              [
+                'Szenario 4a) Der ausgefallene Router',
+                'Loesungsszenario',
+                'Die Auszubildende prueft zuerst den Router und danach die beiden Switches.',
+              ],
+            ],
+          })
+        ),
+        {
+          ext: 'pdf',
+          name: 'Szenario_4a.pdf',
+          docType: 'pdf_original',
+          componentCode: 'K4',
+          enablerCode: 'K4-a',
+          dupKey: 'pdf:scenario:4a',
+        }
+      );
+      const seeded = await seedRun(sql, [...files, scenarioPdf]);
+      const bucket = new MemoryBucket();
+      const deps = transferDeps(app, seeded, { contentBucket: () => bucket });
+      const ids = [scenarioPdf.file.id];
+      await runTransfer(
+        deps,
+        request(seeded.runId, 'dry_run', { publishOriginals: ids })
+      );
+      const done = await runTransfer(
+        deps,
+        request(seeded.runId, 'apply', { publishOriginals: ids })
+      );
+      expect(done.ok && done.data.originals).toEqual({
+        published: 1,
+        refused: [],
+      });
+      const [path] = [...bucket.objects.keys()];
+      const rows =
+        await sql`select title, document_type, visibility, storage_path, order_index, use_case_id, enabler_id
+                    from content_documents where document_type = 'EXERCISE'`;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        title: 'Szenario K4-a (PDF)',
+        visibility: 'ALL',
+        storage_path: path,
+        order_index: 100,
+        use_case_id: null,
+      });
+      // no trainer-only row exists: the scenario is whole, the use case writes none either
+      expect(
+        await sql`select id from content_documents where visibility = 'TRAINER_ONLY'`
+      ).toHaveLength(0);
+    });
+
     it('a file that is no enabler text never reaches the bucket', async () => {
       const files = await enablerFiles({ tree: true });
       const seeded = await seedRun(sql, files);

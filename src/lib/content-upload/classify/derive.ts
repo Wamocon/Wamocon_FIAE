@@ -109,9 +109,10 @@ export interface Visibility {
   /** Solution parts, for trainers only. */
   trainerOnly: string[];
   /**
-   * May the original file go to a public bucket? Only a file without solution
-   * parts may (concept 8.5): an enabler text, never a quiz, a scenario or a use
-   * case.
+   * May the original file go to a public bucket? Only a file that trainees may
+   * read whole may (concept 8.5): an enabler text and a whole scenario (decision of
+   * the owner of 29.10.2026), never a quiz or a use case, whose task and model
+   * solution are kept apart.
    */
   originalMayBePublic: boolean;
 }
@@ -128,10 +129,17 @@ const VISIBILITY: Record<OriginalType, Visibility> = {
     trainerOnly: ['correct_answer', 'rationale'],
     originalMayBePublic: false,
   },
+  // A scenario is one file, whole: trainees see the solution approach and the knowledge text
+  // too (FIAE: exercise document, visibility ALL). Only a use case keeps a private solution.
   scenario: {
-    trainee: ['situation'],
-    trainerOnly: ['solution_scenario', 'knowledge_contribution'],
-    originalMayBePublic: false,
+    trainee: [
+      'situation',
+      'task',
+      'solution_scenario',
+      'knowledge_contribution',
+    ],
+    trainerOnly: [],
+    originalMayBePublic: true,
   },
   use_case: {
     trainee: ['topics', 'situation', 'objective', 'steps'],
