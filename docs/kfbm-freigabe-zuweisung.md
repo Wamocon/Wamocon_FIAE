@@ -31,6 +31,7 @@ Der Katalog eines Azubis kommt aus seiner Einschreibung (`trainee_enrollments`, 
 Ort: Seite Organisationen, Karte "Ausbildungsberufe", Schaltfläche "Inhalte freigeben oder sperren" je Beruf. Nur Plattform-Admin (SUPER_ADMIN, ADMIN der Plattformorganisation). API: `POST /api/admin/catalogs/[catalogId]/content-release` mit `{ mode: "release" | "lock", execute?, confirmCode? }`.
 
 - Ablauf: Zahlen ansehen, Probelauf (zählt, schreibt nichts), den Katalogcode eintippen, ausführen.
+- Die Zeile "Komponenten" der Tabelle zählt die Kurse der Ausbildung (`courses`) und ist dieselbe Zahl wie die Kennzahl "Komponenten" der Inhaltsstatistik (`docs/content-stats.md`).
 - Geändert werden nur `is_active` (alle vier Arten), `is_published` (Kurse) und `activated_at` (Enabler und Use Cases, nur wo leer, wie die Ausbilder-Route). Keine Texte, Fragen oder Antworten.
 - Freigeben und Sperren sind Gegenstücke. Es wird immer der ganze Katalog geschaltet, auch Zeilen, die ein Ausbilder vorher einzeln aktiviert hatte.
 - Wiederholbar: ein zweiter Lauf zeigt 0 Änderungen.

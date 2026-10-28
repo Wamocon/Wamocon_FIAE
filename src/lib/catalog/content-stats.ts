@@ -7,7 +7,15 @@
  * catalog). Every count is limited to one catalog through its own catalog
  * column, never through a join that could multiply rows:
  *
- *  - components      training_components of the catalog.
+ *  - components      COURSES of the catalog (courses.training_catalog_id), the
+ *                    same count as the course row of the release card of the
+ *                    occupation administration, so both show one number. NOT
+ *                    the rows of training_components: those are the units of
+ *                    the phase plan (framework training plan) with weeks and
+ *                    hours, the base of the activity reports. A course belongs
+ *                    to at most one component, but an occupation may have
+ *                    courses without any component row (FIAE: 26 courses, no
+ *                    training_components row), so the rows would count 0 there.
  *  - enablers        enablers of the catalog.
  *  - scenarios       ENABLERS that have a scenario, never document rows. The
  *                    KfBM import writes up to three document rows per scenario
@@ -36,7 +44,8 @@
  *  - active          enablers, use cases and quizzes with is_active = true.
  *                    The inactive ones are the actual number minus the active
  *                    ones. Components, scenarios and learning fields have no
- *                    activation of their own.
+ *                    activation of their own here (the course release state
+ *                    is_active is shown by the release card, not by this page).
  *
  * Who sees what: the platform admin (SUPER_ADMIN, or ADMIN of the platform
  * organization) sees every catalog with targets and differences. An admin of
@@ -117,7 +126,7 @@ export async function loadStatsRows(
       c.title,
       c.is_active,
       c.settings,
-      (select count(*) from training_components x
+      (select count(*) from courses x
         where x.training_catalog_id = c.id)::int as components,
       (select count(*) from enablers x
         where x.training_catalog_id = c.id)::int as enablers,
