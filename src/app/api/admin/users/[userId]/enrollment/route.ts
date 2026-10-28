@@ -13,6 +13,8 @@ import {
   ruleFailureBody,
   setTraineeEnrollment,
 } from '@/lib/catalog/admin';
+import { syncTraineeContentAfterEnrollment } from '@/lib/catalog/trainee-content';
+import { apiCache } from '@/lib/api-cache';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
@@ -110,11 +112,34 @@ export async function PUT(
       });
     }
 
+    // A new enrollment gives the trainee the courses and global quizzes of
+    // the phase plan (only where the courses are linked to components, FIAE
+    // courses are not). A failure is logged and does not undo the enrollment,
+    // the platform admin can run the tool for the catalog later.
+    let contentSync: { courseMembersAdded: number; quizAssignmentsAdded: number } | null =
+      null;
+    if (result.value.changed) {
+      const sync = await syncTraineeContentAfterEnrollment({
+        catalogId: body.catalogId,
+        traineeId: userId,
+        actorId: session.id,
+      });
+      if (sync) {
+        contentSync = {
+          courseMembersAdded: sync.courseMembersAdded,
+          quizAssignmentsAdded: sync.quizAssignmentsAdded,
+        };
+        apiCache.invalidate('trainee_courses');
+        apiCache.invalidate('trainee_quizzes');
+      }
+    }
+
     const view = await getTraineeEnrollment(userId);
     return NextResponse.json({
       ...view,
       changed: result.value.changed,
       replaced: result.value.replaced,
+      ...(contentSync ? { contentSync } : {}),
     });
   } catch (e) {
     console.error('Admin set enrollment error', e);

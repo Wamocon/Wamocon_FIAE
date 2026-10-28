@@ -673,6 +673,18 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   { route: 'admin/catalogs', method: 'GET', guard: 'superAdmin', params: [] },
   { route: 'admin/content-stats', method: 'GET', guard: 'admin', params: [] },
   {
+    route: 'admin/catalogs/[catalogId]/content-release',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/trainee-content',
+    method: 'POST',
+    guard: 'admin',
+    params: ['catalogId'],
+  },
+  {
     route: 'admin/catalogs/[catalogId]/content-targets',
     method: 'PUT',
     guard: 'curriculum',

@@ -1,0 +1,59 @@
+# Freigabe und Zuweisung der Inhalte einer Ausbildung
+
+Stand: 28.10.2026. Dieses Paket enthält keine Migration und hat keine Wirkung auf Production.
+
+## Warum ein Azubi nichts sieht
+
+Ein Azubi sieht einen Inhalt nur, wenn zwei Dinge zusammenkommen:
+
+| Was                | Bedingung                                                                                        | Gesetzt von                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| Kurs (Lernen)      | Mitgliedschaft in `course_members` (die Spalten `is_active` und `is_published` zählen dort nicht) | Ausbilder je Kurs (`POST /api/trainer/courses/[id]/members`), neu: Werkzeug und Einschreibung |
+| Enabler            | `enablers.is_active` und Mitgliedschaft im Kurs                                                  | Plattform-Admin (`PATCH /api/trainer/enablers/[id]`), neu: Werkzeug |
+| Use Case           | `use_cases.is_active` und Mitgliedschaft im Kurs                                                 | wie Enabler                                      |
+| Quiz zum Enabler   | `quizzes.is_active`, Enabler aktiv, Mitgliedschaft im Kurs                                       | Plattform-Admin, neu: Werkzeug                   |
+| Global-Quiz (Quizze) | `quizzes.is_active` und eine Zeile in `quiz_assignments` für den Azubi                         | Ausbilder beim Anlegen des Quiz, neu: Werkzeug und Einschreibung |
+| Ausbildung         | Katalog aktiv, für die Organisation freigeschaltet, Azubi eingeschrieben                          | Plattform-Admin (Organisationen, Ausbildungsberufe) |
+
+Der Import legt alles inaktiv an und schreibt keine Mitgliedschaften. Bei FIAE geben Ausbilder beides von Hand. Bei KfBM sind das 27 Kurse, 226 Enabler und 705 Quizze, deshalb gibt es zwei Werkzeuge.
+
+## Werkzeug 1: Inhalte freigeben oder sperren
+
+Ort: Seite Organisationen, Karte "Ausbildungsberufe", Schaltfläche "Inhalte freigeben oder sperren" je Beruf. Nur Plattform-Admin (SUPER_ADMIN, ADMIN der Plattformorganisation). API: `POST /api/admin/catalogs/[catalogId]/content-release` mit `{ mode: "release" | "lock", execute?, confirmCode? }`.
+
+- Ablauf: Zahlen ansehen, Probelauf (zählt, schreibt nichts), den Katalogcode eintippen, ausführen.
+- Geändert werden nur `is_active` (alle vier Arten), `is_published` (Kurse) und `activated_at` (Enabler und Use Cases, nur wo leer, wie die Ausbilder-Route). Keine Texte, Fragen oder Antworten.
+- Freigeben und Sperren sind Gegenstücke. Es wird immer der ganze Katalog geschaltet, auch Zeilen, die ein Ausbilder vorher einzeln aktiviert hatte.
+- Wiederholbar: ein zweiter Lauf zeigt 0 Änderungen.
+- Protokoll: eine Zeile in `activity_log` (`CONTENT_RELEASE` oder `CONTENT_LOCK`, Katalogcode, Zahlen) und eine Logzeile. Fehlt die Protokollzeile, meldet die Oberfläche das.
+- Die Standardausbildung FIAE ist im Betrieb: ein echter Lauf wird mit 409 abgelehnt, der Probelauf geht.
+- Die Zwischenspeicher der Azubi-Listen werden nach einem echten Lauf geleert.
+
+## Werkzeug 2: Azubis den Kursen zuweisen
+
+Ort: Seite Organisationen, in der Karte der Organisation, Schaltfläche "Zuweisen" je Beruf. API: `POST /api/admin/catalogs/[catalogId]/trainee-content` mit `{ execute?, organizationId? }`.
+
+- Regel (Phasenplan): Pflichtkomponenten der aktuellen Phase des Azubis, integrative Komponenten, gewählte Wahlkomponenten (`trainee_elective_choices`). Die Phase folgt aus Startdatum, Dauer und den Phasenmonaten des Katalogs (KfBM 15 und 21). Ohne Startdatum gilt Phase 1.
+- Geschrieben werden `course_members` (Rolle TRAINEE) und `quiz_assignments` (Global-Quiz der Komponente), nur einfügen, `ON CONFLICT DO NOTHING`, nie löschen. Eine Zuweisung von Hand bleibt.
+- Kurse ohne Komponente (alle FIAE-Kurse) werden nie berührt.
+- Wer darf: Plattform-Admin für jede Organisation, ADMIN und TEMP_ADMIN einer Organisation nur für die eigene Organisation und nur für einen Beruf, der für sie freigeschaltet und aktiv ist. Das ist dasselbe Recht, das Ausbilder und Admins mit den bestehenden Routen je Kurs schon haben, hier als Sammelaufruf. Azubis ohne Organisation werden nie angefasst (Org-Admin) oder nur als übersprungen gezählt (Plattform-Admin).
+- Automatisch ausgelöst wird dieselbe Logik bei der Einschreibung (`PUT /api/admin/users/[userId]/enrollment`) und beim Anlegen eines Azubis (`POST /api/admin/users`). Der Registrierungsabgleich (`sync-profile`) übernimmt Mitgliedschaften und Zuweisungen eines vorab angelegten Profils bereits (`mergeProfileReferences`).
+- Bei einem Phasenwechsel oder neuen Wahlkomponenten das Werkzeug erneut ausführen, es fügt nur Fehlendes ein.
+
+## Reihenfolge in der Preview
+
+1. Beruf aktiv und für die Organisation freigeschaltet (Karte "Ausbildungsberufe", Organisationskarte).
+2. Azubi eingeschrieben (Nutzerverwaltung).
+3. Werkzeug 2: Probelauf, ausführen.
+4. Werkzeug 1: Probelauf, Code eintippen, freigeben.
+5. Als Azubi prüfen: Lernen, Quizze, Berufsschule, Lernfelder.
+
+## Lösungsschutz
+
+Die Werkzeuge ändern keine Lesepfade. Azubis bekommen Dokumente mit `TRAINER_ONLY` und `TRAINER_SOLUTION` nie, Antworten und Begründungen eines Quiz erst nach der Abgabe. Das HAI liest aktive Inhalte nur bei einer eigenen Indexierung, die Antworten der Quizze liegen dort im Trainerteil. Die Werkzeuge lösen keine Indexierung aus (Test `tests/unit/lib/catalog/content-release.static.test.ts`).
+
+## Prüfung
+
+- `tests/unit/lib/catalog/trainee-content-pg.test.ts` (Wegwerf-Postgres, Variable `TRAINEE_CONTENT_TEST_DB`, nur lokale Hosts): zwei Kataloge, Rollenmatrix, Lösungsschutz, Probelauf, Wiederholung, Sperren.
+- `tests/integration/api/admin/catalog-content.test.ts`: Rollen, Eingaben, Tippbestätigung.
+- `tests/unit/app/internalLinks.test.ts`: jedes Linkziel im Quelltext führt auf eine vorhandene Seite.

@@ -1,3 +1,4 @@
+import { syncTraineeContentAfterEnrollment } from '@/lib/catalog/trainee-content';
 import {
   requireAdmin,
   isErrorResponse,
@@ -319,6 +320,18 @@ export async function POST(req: NextRequest) {
       await removeAuthUser(admin, user.id);
       const failure = userWriteFailureBody(records);
       return NextResponse.json(failure.body, { status: failure.status });
+    }
+
+    // A new trainee gets the courses and global quizzes of the phase plan of
+    // the occupation (only where courses are linked to components, so FIAE
+    // stays as it is). A failure is logged, the tool of the platform admin
+    // can catch up later.
+    if (records.catalog) {
+      await syncTraineeContentAfterEnrollment({
+        catalogId: records.catalog.id,
+        traineeId: user.id,
+        actorId: session.id,
+      });
     }
 
     // Send credentials email. Preview sends it only when asked for (sendEmail
