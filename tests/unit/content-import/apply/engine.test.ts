@@ -82,7 +82,7 @@ describe('executePlan: first run', () => {
       phase: 2,
       order_index: 62,
       total_weeks: 11,
-      total_hours: 0,
+      total_hours: 440,
     });
     expect(comp('K10')).toMatchObject({ kind: 'wahl', phase: null });
     expect(comp('K20')).toMatchObject({ kind: 'integrativ', phase: null });
@@ -850,6 +850,10 @@ describe('executePlan: weeks of the components (total_weeks only)', () => {
     Object.fromEntries(
       db.tables.training_components.map(c => [c.code, c.total_weeks])
     );
+  const hoursOf = (db: MemoryImportDb) =>
+    Object.fromEntries(
+      db.tables.training_components.map(c => [c.code, c.total_hours])
+    );
   const planWeeks = {
     K1: 11,
     'K6.1': 6,
@@ -857,14 +861,63 @@ describe('executePlan: weeks of the components (total_weeks only)', () => {
     K10: 22,
     K20: 0,
   };
+  // weeks times 40 (owner decision of 28.10.2026), 0 without weeks
+  const planHours = {
+    K1: 440,
+    'K6.1': 240,
+    'K6.2': 440,
+    K10: 880,
+    K20: 0,
+  };
 
-  it('writes the weeks of the training framework plan with a new component and keeps the hours at 0', async () => {
+  it('writes the weeks and the hours (weeks times 40) with a new component, 0 where there are no weeks', async () => {
     const db = new MemoryImportDb();
     await executePlan(db, plan(), options());
     expect(weeksOf(db)).toEqual(planWeeks);
-    expect(db.tables.training_components.every(c => c.total_hours === 0)).toBe(
-      true
-    );
+    expect(hoursOf(db)).toEqual(planHours);
+  });
+
+  it('sets weeks and hours of an existing component that still holds 0, without --update-existing, in one update', async () => {
+    const db = new MemoryImportDb();
+    await executePlan(db, plan(), options());
+    for (const row of db.tables.training_components) {
+      row.total_weeks = 0;
+      row.total_hours = 0;
+    }
+    const logBefore = db.log.length;
+
+    const report = await executePlan(db, plan(), options());
+    expect(weeksOf(db)).toEqual(planWeeks);
+    expect(hoursOf(db)).toEqual(planHours);
+    expect(report.tables.training_components).toEqual({
+      insert: 0,
+      update: 4,
+      unchanged: 1,
+    });
+    const writes = db.log.slice(logBefore);
+    expect(writes).toHaveLength(4);
+    for (const entry of writes) {
+      expect(entry.columns).toEqual(['total_weeks', 'total_hours']);
+    }
+    expect(report.differences.find(d => d.key === 'K1')).toEqual({
+      table: 'training_components',
+      key: 'K1',
+      columns: ['total_weeks', 'total_hours'],
+      filled: ['total_weeks', 'total_hours'],
+    });
+  });
+
+  it('fills only the hours when the weeks are already set', async () => {
+    const db = new MemoryImportDb();
+    await executePlan(db, plan(), options());
+    for (const row of db.tables.training_components) row.total_hours = 0;
+    const logBefore = db.log.length;
+
+    await executePlan(db, plan(), options());
+    expect(hoursOf(db)).toEqual(planHours);
+    for (const entry of db.log.slice(logBefore)) {
+      expect(entry.columns).toEqual(['total_hours']);
+    }
   });
 
   it('sets the weeks of an existing component that still holds 0, without --update-existing, and nothing else', async () => {
@@ -922,12 +975,27 @@ describe('executePlan: weeks of the components (total_weeks only)', () => {
     });
   });
 
-  it('overwrites a value that differs with --update-existing, only total_weeks', async () => {
+  it('overwrites values that differ with --update-existing, only total_weeks and total_hours', async () => {
     const db = new MemoryImportDb();
     await executePlan(db, plan(), options());
     component(db, 'K1').total_weeks = 15;
     component(db, 'K1').total_hours = 123;
     const logBefore = db.log.length;
+
+    // without the switch both values stay, the difference is reported
+    const quiet = await executePlan(db, plan(), options());
+    expect(component(db, 'K1')).toMatchObject({
+      total_weeks: 15,
+      total_hours: 123,
+    });
+    expect(quiet.differences).toEqual([
+      {
+        table: 'training_components',
+        key: 'K1',
+        columns: ['total_weeks', 'total_hours'],
+      },
+    ]);
+    expect(db.log.length).toBe(logBefore);
 
     const report = await executePlan(
       db,
@@ -935,14 +1003,14 @@ describe('executePlan: weeks of the components (total_weeks only)', () => {
       options({ updateExisting: true })
     );
     expect(component(db, 'K1').total_weeks).toBe(11);
-    expect(component(db, 'K1').total_hours).toBe(123);
+    expect(component(db, 'K1').total_hours).toBe(440);
     expect(report.tables.training_components.update).toBe(1);
     expect(db.log.slice(logBefore)).toEqual([
       {
         op: 'update',
         table: 'training_components',
         rows: 1,
-        columns: ['total_weeks'],
+        columns: ['total_weeks', 'total_hours'],
       },
     ]);
   });
@@ -963,22 +1031,64 @@ describe('executePlan: weeks of the components (total_weeks only)', () => {
     expect(report.differences).toEqual([]);
   });
 
-  it('never writes total_hours into an existing component, with or without the switch', async () => {
+  it('keeps an hours value that is not 0 without the switch and never replaces it by 0', async () => {
     const db = new MemoryImportDb();
     await executePlan(db, plan(), options());
-    for (const row of db.tables.training_components) {
-      row.total_weeks = 0;
-      row.total_hours = 77;
-    }
-    const withHours = clone(plan());
-    for (const c of withHours.components) c.totalHours = 999;
+    for (const row of db.tables.training_components) row.total_hours = 77;
+    component(db, 'K20').total_weeks = 5;
 
-    await executePlan(db, withHours, options());
-    await executePlan(db, withHours, options({ updateExisting: true }));
+    await executePlan(db, plan(), options());
+    // the filled rows hold a value, the plan hours do not replace it
     expect(db.tables.training_components.every(c => c.total_hours === 77)).toBe(
       true
     );
-    expect(component(db, 'K1').total_weeks).toBe(11);
+    // with the switch the hours of the weeks win, but K20 (0 hours in the plan)
+    // keeps its 77 and its weeks
+    await executePlan(db, plan(), options({ updateExisting: true }));
+    expect(hoursOf(db)).toEqual({ ...planHours, K20: 77 });
+    expect(component(db, 'K20').total_weeks).toBe(5);
+  });
+
+  it('a plan without weeks or with hours 0 never writes 0 over a value', async () => {
+    const db = new MemoryImportDb();
+    await executePlan(db, plan(), options());
+    const zero = clone(plan());
+    for (const c of zero.components) {
+      c.totalWeeks = 0;
+      c.totalHours = 0;
+      delete c.weeksSource;
+      delete c.hoursSource;
+    }
+    const before = db.snapshot();
+    const report = await executePlan(
+      db,
+      zero,
+      options({ updateExisting: true })
+    );
+    expect(db.snapshot()).toBe(before);
+    expect(report.differences).toEqual([]);
+  });
+
+  it('writes the hours of a decision of the owner where one exists', async () => {
+    const db = new MemoryImportDb();
+    const decided = buildImportPlan(
+      sampleTree(),
+      loadDecisions(raw => {
+        raw.components.totalWeeks = { K1: 4 };
+        raw.components.totalHours = { K10: 900 };
+      }),
+      { now: NOW }
+    );
+    await executePlan(db, decided, options());
+    // K1: decided weeks 4, hours follow (160). K10: decided hours win over 880
+    expect([
+      component(db, 'K1').total_weeks,
+      component(db, 'K1').total_hours,
+    ]).toEqual([4, 160]);
+    expect([
+      component(db, 'K10').total_weeks,
+      component(db, 'K10').total_hours,
+    ]).toEqual([22, 900]);
   });
 
   it('is idempotent: after the weeks are set a second run writes nothing', async () => {
@@ -1049,6 +1159,34 @@ describe('executePlan: weeks of the components (total_weeks only)', () => {
     (source.components[0] as { weeksSource: unknown }).weeksSource = 'guess';
     await expectAbort(
       executePlan(new MemoryImportDb(), source, options()),
+      'PLAN_INVALID'
+    );
+    // hours that claim to be weeks times 40 must be exactly that
+    const off = clone(plan());
+    off.components[0].totalHours = 441;
+    await expectAbort(
+      executePlan(new MemoryImportDb(), off, options()),
+      'PLAN_INVALID'
+    );
+    const noWeeks = clone(plan());
+    noWeeks.components[0].totalWeeks = 0;
+    noWeeks.components[0].weeksSource = 'decision';
+    await expectAbort(
+      executePlan(new MemoryImportDb(), noWeeks, options()),
+      'PLAN_INVALID'
+    );
+    const none = clone(plan());
+    const k20 = none.components.find(c => c.code === 'K20')!;
+    k20.totalHours = 5;
+    await expectAbort(
+      executePlan(new MemoryImportDb(), none, options()),
+      'PLAN_INVALID'
+    );
+    const hourSource = clone(plan());
+    (hourSource.components[0] as { hoursSource: unknown }).hoursSource =
+      'guess';
+    await expectAbort(
+      executePlan(new MemoryImportDb(), hourSource, options()),
       'PLAN_INVALID'
     );
     for (const hours of [-5, 100000, Number.NaN, '40']) {

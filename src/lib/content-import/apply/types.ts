@@ -97,6 +97,12 @@ export interface PlanComponent {
    * named a value). Plans of older runs have no such field.
    */
   weeksSource?: 'rahmenplan' | 'decision' | 'none' | 'placeholder';
+  /**
+   * Where totalHours comes from: a decision of the owner, the weeks (weeks
+   * times 40, an owner decision of 28.10.2026, not official), none (no weeks,
+   * so 0 is right) or a placeholder. Plans of older runs have no such field.
+   */
+  hoursSource?: 'decision' | 'weeks' | 'none' | 'placeholder';
   /** True when the weeks or the hours are placeholders. */
   provisionalTotals: boolean;
 }
