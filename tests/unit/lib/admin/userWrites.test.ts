@@ -87,7 +87,8 @@ describe('createUserRecords', () => {
         role: 'TRAINEE',
         organizationId: ORG,
         isActive: true,
-        trainerActivated: false,
+        // the administrator who creates the account is the one who releases it
+        trainerActivated: true,
       },
     ]);
     expect(mock.writes('insert', 'trainee_enrollments')).toEqual([
@@ -99,6 +100,17 @@ describe('createUserRecords', () => {
       },
     ]);
   });
+
+  it.each(['TRAINEE', 'TRAINER', 'TEMP_ADMIN', 'ADMIN'])(
+    'a %s created by an administrator is released at once (a trainee would wait for a release nobody gives)',
+    async role => {
+      const { mod, mock } = await load(baseTables());
+      await mod.createUserRecords(newUser({ role }));
+      expect(mock.writes('insert', 'profiles')).toEqual([
+        expect.objectContaining({ role, trainerActivated: true }),
+      ]);
+    }
+  );
 
   it('takes the requested catalog for the enrollment', async () => {
     const { mod, mock } = await load(baseTables());

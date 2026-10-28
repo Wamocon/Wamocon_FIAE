@@ -2,10 +2,14 @@
 
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
+import { AccountAccessNotice } from '@/components/auth/AccountAccessNotice';
 import { MainLayout } from '@/components/layout/MainLayout';
+import {
+  resolveAccessState,
+  signedOutTarget,
+} from '@/lib/auth/access-state';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useSidebar } from '@/contexts/SidebarContext';
 
@@ -14,7 +18,7 @@ const TrainerLayoutComponent = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, sessionEnd } = useAuth();
   const { t } = useLanguage();
   const router = useRouter();
   const { isOpen: sidebarOpen, toggle: handleToggleSidebar } = useSidebar();
@@ -41,27 +45,28 @@ const TrainerLayoutComponent = ({
     }
   }, [loading, user, profile]);
 
-  // Memoize authentication check to prevent unnecessary re-renders
-  const isAuthenticated = useMemo(() => {
-    return user && profile && isTrainerLevelRole(profile.role);
-  }, [user, profile]);
-
-  // Determine if we're still in a loading state
-  const isLoading = loading || (user && waitingForProfile && !profile);
-
-  // Memoize redirect logic - only redirect when we're sure auth is complete
-  const shouldRedirect = useMemo(() => {
-    if (isLoading) return false;
-    if (!user) return true;
-    if (profile && !isTrainerLevelRole(profile.role)) return true;
-    return false;
-  }, [isLoading, user, profile]);
+  // What this person sees. Only somebody who is not signed in goes to the
+  // login (with the reason). Everybody else who is stopped (wrong area,
+  // account not released or deactivated, profile not loaded) sees a page with
+  // a message and a sign out button, not a silent jump back to /login.
+  const access = useMemo(
+    () =>
+      resolveAccessState({
+        area: 'trainer',
+        loading,
+        signedIn: !!user,
+        profile,
+        waitingForProfile,
+      }),
+    [loading, user, profile, waitingForProfile]
+  );
 
   useEffect(() => {
-    if (shouldRedirect) {
-      router.push('/login');
+    if (access.kind === 'signedOut') {
+      // replace: the back button does not lead into the same redirect again
+      router.replace(signedOutTarget(sessionEnd));
     }
-  }, [shouldRedirect, router]);
+  }, [access.kind, sessionEnd, router]);
 
   const handleGoBack = useCallback(() => {
     // Use window.history.back() instead of router.back() to prevent potential loops
@@ -73,7 +78,7 @@ const TrainerLayoutComponent = ({
   }, [router]);
 
   // Show loading state while auth is initializing or waiting for profile
-  if (isLoading) {
+  if (access.kind === 'loading') {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -84,8 +89,8 @@ const TrainerLayoutComponent = ({
     );
   }
 
-  // Show redirect state
-  if (shouldRedirect) {
+  // Not signed in: on the way to the login
+  if (access.kind === 'signedOut') {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -96,27 +101,14 @@ const TrainerLayoutComponent = ({
     );
   }
 
-  // User exists but profile hasn't arrived yet
-  if (user && !profile) {
+  // Stopped with a reason: nothing of the area is mounted
+  if (access.kind === 'blocked') {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">{t('common.loading')}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // No user and no profile after auth completed
-  if (!isAuthenticated) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">{t('common.accessDenied')}</p>
-        </div>
-      </div>
+      <AccountAccessNotice
+        reason={access.reason}
+        area="trainer"
+        fullName={profile?.full_name}
+      />
     );
   }
 

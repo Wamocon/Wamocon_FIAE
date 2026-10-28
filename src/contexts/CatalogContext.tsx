@@ -20,7 +20,7 @@ import {
   type CatalogBranding,
 } from '@/lib/catalog/branding';
 import { isSuperAdmin, isTrainerLevelRole } from '@/lib/auth/roles';
-import { normalizeCatalogCode } from '@/lib/catalog/client';
+import { NO_CATALOG_CODE, normalizeCatalogCode } from '@/lib/catalog/client';
 import {
   navigateTo,
   pushCatalogUrl,
@@ -83,6 +83,11 @@ export interface CatalogContextValue {
   selectCatalog: (code: string, destination?: string) => void;
   /** A CatalogProvider is mounted (false for the neutral default value). */
   inProvider: boolean;
+  /**
+   * The server said the signed in user has no occupation to work in (403 with
+   * the code NO_CATALOG). Any other failure only sets the status to 'error'.
+   */
+  noCatalog: boolean;
 }
 
 const NO_CATALOGS: CatalogOption[] = [];
@@ -99,6 +104,7 @@ const NEUTRAL: CatalogContextValue = {
   brandingApplied: false,
   selectCatalog: () => {},
   inProvider: false,
+  noCatalog: false,
 };
 
 const CatalogContext = createContext<CatalogContextValue>(NEUTRAL);
@@ -197,6 +203,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [epoch, setEpoch] = useState(0);
+  const [noCatalog, setNoCatalog] = useState(false);
   const previousUserId = useRef<string | null>(null);
   // Tabs and the URL choice are for trainer level users only (a trainee has
   // the occupation of the enrollment).
@@ -233,6 +240,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         setStatus('idle');
         setLoaded(null);
         setActiveCode(null);
+        setNoCatalog(false);
         setCatalogSelection({ header: null, pending: false });
       }
       return;
@@ -267,7 +275,16 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
           cache: 'no-store',
           signal: controller.signal,
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          // The one failure the trainee area explains: no occupation at all
+          if (res.status === 403) {
+            const body = await res.json().catch(() => null);
+            if (!cancelled && body?.code === NO_CATALOG_CODE) {
+              setNoCatalog(true);
+            }
+          }
+          throw new Error(`HTTP ${res.status}`);
+        }
         const data = parseCatalogs(await res.json());
         if (!data) throw new Error('unusable answer');
         if (cancelled) return;
@@ -301,6 +318,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         }
         setLoaded(data);
         setActiveCode(active);
+        setNoCatalog(false);
         setStatus('ready');
       } catch (error) {
         if (cancelled) return;
@@ -402,8 +420,18 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       brandingApplied,
       selectCatalog,
       inProvider: true,
+      noCatalog,
     };
-  }, [status, catalogs, activeCode, selectCatalog, tabs, selectTab, epoch]);
+  }, [
+    status,
+    catalogs,
+    activeCode,
+    selectCatalog,
+    tabs,
+    selectTab,
+    epoch,
+    noCatalog,
+  ]);
 
   return (
     <CatalogContext.Provider value={value}>{children}</CatalogContext.Provider>

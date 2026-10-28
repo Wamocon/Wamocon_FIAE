@@ -3,6 +3,12 @@
  * server imports, so pages and components can use them.
  */
 
+/**
+ * The code of the 403 answer for a caller who has no occupation to work in
+ * (the server sets it, the occupation context reads it).
+ */
+export const NO_CATALOG_CODE = 'NO_CATALOG';
+
 /** Occupation codes are short upper case keys such as FIAE or KFBM. */
 const CATALOG_CODE = /^[A-Z0-9_-]{2,16}$/;
 

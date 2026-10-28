@@ -75,6 +75,49 @@ describe('OnboardingProvider auto start', () => {
     expect(screen.getByTestId('tour')).toHaveTextContent('active');
   });
 
+  it('does not start the tour behind the notice of an account that is stopped', () => {
+    (usePathname as jest.Mock).mockReturnValue('/trainee/dashboard');
+    for (const extra of [
+      { trainerActivated: false },
+      { isActive: false },
+      { organization: { isActive: false } },
+    ]) {
+      (useAuth as jest.Mock).mockReturnValue({
+        profile: { id: 'u1', role: 'trainee', ...extra },
+      });
+      const view = mount();
+      act(() => {
+        jest.advanceTimersByTime(5000);
+      });
+      expect(screen.getByTestId('tour')).toHaveTextContent('idle');
+      view.unmount();
+    }
+  });
+
+  it('starts it once the account is released', () => {
+    (usePathname as jest.Mock).mockReturnValue('/trainee/dashboard');
+    (useAuth as jest.Mock).mockReturnValue({
+      profile: { id: 'u1', role: 'trainee', trainerActivated: false },
+    });
+    const view = mount();
+    act(() => {
+      jest.advanceTimersByTime(3000);
+    });
+    expect(screen.getByTestId('tour')).toHaveTextContent('idle');
+    (useAuth as jest.Mock).mockReturnValue({
+      profile: { id: 'u1', role: 'trainee', trainerActivated: true },
+    });
+    view.rerender(
+      <OnboardingProvider>
+        <Probe />
+      </OnboardingProvider>
+    );
+    act(() => {
+      jest.advanceTimersByTime(1300);
+    });
+    expect(screen.getByTestId('tour')).toHaveTextContent('active');
+  });
+
   it('does not start a tour that was completed', () => {
     window.localStorage.setItem('onboarding_main_completed', 'true');
     (usePathname as jest.Mock).mockReturnValue('/trainer/dashboard');

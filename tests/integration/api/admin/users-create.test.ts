@@ -208,10 +208,33 @@ describe('POST /api/admin/users: roles', () => {
         role: 'TRAINEE',
         organizationId: ORG,
         isActive: true,
-        trainerActivated: false,
+        // created by an administrator: released at once, so the first sign in
+        // leads to the dashboard and not to the notice of an unreleased account
+        trainerActivated: true,
       }),
     ]);
   });
+
+  it.each([
+    ['ADMIN', admin],
+    ['TEMP_ADMIN', tempAdmin],
+    ['SUPER_ADMIN', superAdmin],
+  ])(
+    'a trainee created by %s is released and active, with the enrollment',
+    async (_caller, make) => {
+      const { mod, mock } = await load({ session: make() });
+      const res = await mod.POST(post(body({ role: 'TRAINEE' })));
+      expect(res.status).toBe(201);
+      expect(mock.writes('insert', 'profiles')).toEqual([
+        expect.objectContaining({
+          role: 'TRAINEE',
+          isActive: true,
+          trainerActivated: true,
+        }),
+      ]);
+      expect(mock.writes('insert', 'trainee_enrollments')).toHaveLength(1);
+    }
+  );
 
   it.each(['TRAINER', 'TRAINEE'])(
     'TEMP_ADMIN creates a %s in the own organization',

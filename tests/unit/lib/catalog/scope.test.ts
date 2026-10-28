@@ -211,6 +211,36 @@ describe('catalog scope', () => {
         status: 403,
       });
     });
+
+    it('names the case "no occupation" with a code, so the trainee area can say so', async () => {
+      const { requireCatalogScope } = await load({
+        trainingCatalogs: catalogRows,
+        organizationCatalogs: [{ trainingCatalogId: FIAE, isEnabled: true }],
+        traineeEnrollments: [
+          { trainingCatalogId: KFBM, startDate: '2026-08-01' },
+        ],
+      });
+      const res = (await requireCatalogScope(trainee, req())) as Response;
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({
+        error: 'No training catalog available',
+        code: 'NO_CATALOG',
+      });
+    });
+
+    it('a refused choice has no code', async () => {
+      const { requireCatalogScope } = await load({
+        trainingCatalogs: catalogRows,
+        organizationCatalogs: [{ trainingCatalogId: FIAE, isEnabled: true }],
+        traineeEnrollments: [],
+      });
+      const res = (await requireCatalogScope(
+        trainee,
+        req({ header: 'KFBM' })
+      )) as Response;
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: 'Training catalog not allowed' });
+    });
   });
 
   describe('super admin', () => {

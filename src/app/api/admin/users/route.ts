@@ -355,7 +355,7 @@ export async function POST(req: NextRequest) {
           actorId: user.id,
           type: 'TRAINEE_REGISTERED',
           title: 'Neuer Azubi hinzugefügt',
-          message: `${fullName} (${email.trim()}) wurde als Azubi hinzugefügt und wartet auf Freischaltung.`,
+          message: `${fullName} (${email.trim()}) wurde als Azubi hinzugefügt.`,
           linkUrl: '/trainer/trainees',
           isRead: false,
           organizationId: organizationId as any,

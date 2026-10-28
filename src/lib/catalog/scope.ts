@@ -49,6 +49,7 @@ import {
 import { withDbRetry } from '@/lib/db-retry';
 import { isSuperAdmin, normalizeRole, ROLE } from '@/lib/auth/roles';
 import { isUuid } from '@/lib/uuid';
+import { NO_CATALOG_CODE } from '@/lib/catalog/client';
 
 export const FIAE_CATALOG_ID: string = TRAINING_CATALOG_IDS.FIAE;
 export const CATALOG_HEADER = 'x-catalog';
@@ -80,7 +81,9 @@ export type CatalogScope = {
 export class CatalogScopeError extends Error {
   constructor(
     public readonly status: 403 | 503,
-    message: string
+    message: string,
+    /** Set for the one case the client tells apart (no occupation at all). */
+    public readonly code?: typeof NO_CATALOG_CODE
   ) {
     super(message);
     this.name = 'CatalogScopeError';
@@ -218,7 +221,11 @@ export async function getCatalogScope(
   }
 
   if (allowed.length === 0) {
-    throw new CatalogScopeError(403, 'No training catalog available');
+    throw new CatalogScopeError(
+      403,
+      'No training catalog available',
+      NO_CATALOG_CODE
+    );
   }
 
   const allowedIds = allowed.map(c => String(c.id));
@@ -247,7 +254,10 @@ export async function getCatalogScope(
 
 function scopeFailure(err: unknown): NextResponse {
   if (err instanceof CatalogScopeError) {
-    return NextResponse.json({ error: err.message }, { status: err.status });
+    return NextResponse.json(
+      err.code ? { error: err.message, code: err.code } : { error: err.message },
+      { status: err.status }
+    );
   }
   console.error('[catalog-scope] unexpected error:', err);
   return NextResponse.json(

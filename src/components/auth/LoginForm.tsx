@@ -8,6 +8,10 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { isSignInTimeout } from '@/lib/auth/sign-in-timeout';
+import {
+  isSignInBlockedError,
+  type LoginReason,
+} from '@/lib/auth/access-state';
 import { authFetch } from '@/lib/authFetch';
 import { writePreferredCatalog } from '@/lib/catalog/selection';
 import {
@@ -21,18 +25,34 @@ import { LanguageToggle } from '@/components/ui/LanguageToggle';
 
 type CatalogState = 'idle' | 'ready' | 'unknown' | 'unavailable';
 
+// The text of every reason the person was sent back to the login with
+const REASON_TEXT: Record<LoginReason, string> = {
+  'signin-required': 'auth.reason.signinRequired',
+  deactivated: 'auth.reason.deactivated',
+  'organization-deactivated': 'auth.reason.organizationDeactivated',
+};
+
 // The check of the login link must not hold the sign in back for long: after
 // this time the sign in goes on to the dashboard, as if the check had failed.
 const LINK_CHECK_TIMEOUT_MS = 4000;
 
 // catalogCode: the occupation the visitor chose on /ausbildung (?catalog=CODE).
 // Without it the form behaves exactly as before.
-export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
+// reason: why the person was sent back here (?reason=...), the form says so.
+export default function LoginForm({
+  catalogCode,
+  reason,
+}: {
+  catalogCode?: string;
+  reason?: LoginReason | null;
+}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  // The banner of the reason goes away with the first attempt to sign in
+  const [showReason, setShowReason] = useState(true);
   const [catalogTitle, setCatalogTitle] = useState<string | null>(null);
   const [catalogState, setCatalogState] = useState<CatalogState>('idle');
   // Number of active occupations of the platform, null while it is not known
@@ -126,6 +146,11 @@ export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setShowReason(false);
+    // The sign in itself takes the person on (AuthProvider.signIn): until it
+    // has decided, the profile it puts into its state must not send the person
+    // to the dashboard, or the message of a sign in that is stopped is lost
+    holdRedirect.current = true;
     try {
       // The occupation of the login link becomes the occupation to work in. The
       // CatalogProvider only uses it if it is one of the account's occupations.
@@ -134,7 +159,6 @@ export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
       }
       if (activeCount !== null && activeCount > 1) {
         // Several active occupations: signIn asks where to go
-        holdRedirect.current = true;
         await signIn(email.trim(), password, resolveRedirect);
       } else {
         await signIn(email.trim(), password);
@@ -146,10 +170,13 @@ export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
     } catch (err: any) {
       holdRedirect.current = false;
       // A sign in that did not answer in time has its own, translated text
+      // and so has a sign in that was stopped (deactivated, no profile)
       setError(
         isSignInTimeout(err)
           ? t('auth.signInTimeout')
-          : err?.message || t('auth.loginFailed')
+          : isSignInBlockedError(err)
+            ? t(`auth.blocked.${err.code}`)
+            : err?.message || t('auth.loginFailed')
       );
     } finally {
       setIsLoading(false);
@@ -194,6 +221,26 @@ export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
           )}
         </div>
         <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-8 shadow-2xl">
+          {reason && showReason && (
+            <div
+              role={reason === 'signin-required' ? 'status' : 'alert'}
+              className={
+                reason === 'signin-required'
+                  ? 'bg-accent/10 border-accent/30 mb-6 rounded-xl border p-3'
+                  : 'bg-destructive/10 border-destructive/20 mb-6 rounded-xl border p-3'
+              }
+            >
+              <p
+                className={
+                  reason === 'signin-required'
+                    ? 'text-foreground text-sm'
+                    : 'text-destructive text-sm'
+                }
+              >
+                {t(REASON_TEXT[reason])}
+              </p>
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label
@@ -260,7 +307,10 @@ export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
               </div>
             </div>
             {error && (
-              <div className="bg-destructive/10 border-destructive/20 rounded-xl border p-3">
+              <div
+                role="alert"
+                className="bg-destructive/10 border-destructive/20 rounded-xl border p-3"
+              >
                 <p className="text-destructive text-sm">{error}</p>
               </div>
             )}
