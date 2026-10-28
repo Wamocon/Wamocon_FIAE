@@ -38,6 +38,8 @@ type Props = {
   client: ReviewClient;
   /** Something changed on the server: read the list again. */
   onChanged: () => void;
+  /** Ids of the original PDFs that go with the transfer (publishOriginals, at most 25). */
+  publishOriginals?: readonly string[];
 };
 
 type Translate = ReturnType<typeof useLanguage>['t'];
@@ -48,6 +50,8 @@ interface DryRun {
   version: number;
   /** The choice of files to replace the dry run was made for. */
   replaceKey: string;
+  /** The choice of originals the dry run was made for. */
+  originalsKey: string;
 }
 
 /** The text for the error of a transfer call: by code, else by status, else a general one. */
@@ -101,6 +105,7 @@ export function TransferPanel({
   accepted,
   client,
   onChanged,
+  publishOriginals = [],
 }: Props) {
   const { t } = useLanguage();
   const headingId = useId();
@@ -121,10 +126,18 @@ export function TransferPanel({
     () => [...selection].sort().join(','),
     [selection]
   );
+  // another choice of originals is another transfer: the dry run no longer counts
+  const originalsKey = useMemo(
+    () => [...publishOriginals].sort().join(','),
+    [publishOriginals]
+  );
   const reviewing = status === 'review';
   const busy = phase !== 'idle';
   const valid =
-    dry !== null && dry.version === version && dry.replaceKey === replaceKey;
+    dry !== null &&
+    dry.version === version &&
+    dry.replaceKey === replaceKey &&
+    dry.originalsKey === originalsKey;
   const report = dry?.report ?? null;
   const clean = valid && report?.status === 'ok' && report.readyToApply;
   const differing = useMemo(
@@ -139,6 +152,7 @@ export function TransferPanel({
     try {
       const answer = await client.dryRun(runId, {
         replaceFiles: [...selection],
+        publishOriginals: [...publishOriginals],
       });
       // The dry run is valid for what the SERVER computed it for (another tab may have
       // changed the decisions since this page was read)
@@ -146,6 +160,7 @@ export function TransferPanel({
         report: answer,
         version: answer.decisionsVersion,
         replaceKey: [...answer.replaceFiles].sort().join(','),
+        originalsKey,
       });
       // a file that no longer differs cannot be replaced: it leaves the choice
       const differs = new Set(
@@ -177,6 +192,7 @@ export function TransferPanel({
     try {
       const answer = await client.apply(runId, {
         replaceFiles: [...selection],
+        publishOriginals: [...publishOriginals],
         confirm: typed,
       });
       if (answer.status === 'conflict') {
@@ -184,6 +200,7 @@ export function TransferPanel({
           report: answer,
           version: answer.decisionsVersion,
           replaceKey: [...answer.replaceFiles].sort().join(','),
+          originalsKey,
         });
         setError(t('contentUpload.transfer.error.conflictAtApply'));
       } else {
@@ -368,6 +385,18 @@ export function TransferPanel({
           }
         />
       )}
+
+      {reviewing &&
+        report &&
+        (report.originals.published > 0 || report.originals.refused.length > 0) && (
+          <p className="text-foreground text-sm">
+            {t('contentUpload.transfer.originals', {
+              published: report.originals.published,
+              refused: report.originals.refused.length,
+            })}{' '}
+            {report.originals.refused.map(r => r.code).join(', ')}
+          </p>
+        )}
 
       {status === 'applied' && (
         <div className="space-y-3">

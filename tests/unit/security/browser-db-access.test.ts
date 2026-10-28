@@ -157,7 +157,9 @@ describe('browser access to the database', () => {
     // private bucket content-upload only, on the server; the transfer writes the
     // copies of enabler text originals to the document bucket with it, only in the exact
     // path form of document-storage.ts, upsert off, and only for files that a person
-    // named in the apply)
+    // named in the apply; solution-storage.ts signs the model solutions of the private
+    // bucket content-solutions for the trainer list, server side, ten minutes, only for
+    // trainer-only rows)
     // (a new one needs a look at the key it uses)
     expect(creators).toEqual([
       'src/app/api/admin/users/[userId]/route.ts',
@@ -170,6 +172,7 @@ describe('browser access to the database', () => {
       'src/lib/content-upload/staging/storage.ts',
       'src/lib/content-upload/transfer/content-bucket.ts',
       'src/lib/document-file-cleanup.ts',
+      'src/lib/solution-storage.ts',
       'src/lib/supabase.ts',
       'src/utils/supabase/server.ts',
     ]);

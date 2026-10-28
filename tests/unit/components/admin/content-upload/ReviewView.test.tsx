@@ -1234,3 +1234,52 @@ describe('ReviewView: the skip link', () => {
     expect(document.getElementById('review-list')).toBeInTheDocument();
   });
 });
+
+describe('ReviewView: originals for the trainees', () => {
+  const original = () => {
+    const base = rowDto({
+      fileName: '1a.pdf',
+      effective: {
+        docType: 'pdf_original',
+        componentCode: 'K1',
+        enablerCode: 'K1-a',
+        quizLevel: null,
+      },
+    });
+    return {
+      ...base,
+      ext: 'pdf',
+      decision: {
+        action: 'accept' as const,
+        dupChoice: null,
+        decidedAt: '2026-10-27T10:00:00Z',
+        docType: 'pdf_original',
+        componentCode: 'K1',
+        enablerCode: 'K1-a',
+        quizLevel: null,
+      },
+    };
+  };
+
+  it('offers an accepted PDF original and keeps the mark', async () => {
+    const { user } = await open(fakeClient(), fakeUpload(), [
+      original(),
+      ...standardRows(),
+    ]);
+    const group = screen.getByRole('group', {
+      name: 'Originale für die Azubis bereitstellen',
+    });
+    expect(within(group).getByText('0 von 25 gewählt')).toBeInTheDocument();
+    await user.click(within(group).getByRole('checkbox', { name: /1a\.pdf/ }));
+    expect(within(group).getByText('1 von 25 gewählt')).toBeInTheDocument();
+  });
+
+  it('shows nothing when the page has no such file', async () => {
+    await open();
+    expect(
+      screen.queryByRole('group', {
+        name: 'Originale für die Azubis bereitstellen',
+      })
+    ).not.toBeInTheDocument();
+  });
+});

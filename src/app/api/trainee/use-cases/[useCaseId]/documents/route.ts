@@ -79,6 +79,7 @@ export async function GET(
                 fileName: contentDocuments.fileName,
                 fileSize: contentDocuments.fileSize,
                 storageUrl: contentDocuments.storageUrl,
+                mimeType: contentDocuments.mimeType,
                 orderIndex: contentDocuments.orderIndex,
                 pageCount: contentDocuments.pageCount,
             })
@@ -94,14 +95,32 @@ export async function GET(
                     ),
                     // Also exclude TRAINER_SOLUTION document type
                     ne(contentDocuments.documentType as any, 'TRAINER_SOLUTION'),
+                    // A row without a file is no link (the text rows of the import), a private
+                    // reference is no link for a trainee, and the reader opens PDF files only
+                    sql`btrim(${contentDocuments.storageUrl}) <> ''`,
+                    sql`${contentDocuments.storageUrl} not like 'private://%'`,
+                    sql`(${contentDocuments.mimeType} is null or (lower(${contentDocuments.mimeType}) not like '%wordprocessingml%' and lower(${contentDocuments.mimeType}) <> 'application/msword'))`,
                     // The shared curriculum, the platform and the own organization
                     documentVisibilityCondition(contentDocuments.organizationId, session)
                 )
             )
             .orderBy(contentDocuments.orderIndex);
 
+        // The same rule once more on the rows, so a change of the query alone can not hand a
+        // solution, a private reference or a row without a file to a trainee
+        const documents = docs
+            .filter(
+                d =>
+                    d.documentType !== 'TRAINER_SOLUTION' &&
+                    typeof d.storageUrl === 'string' &&
+                    d.storageUrl.trim() !== '' &&
+                    !d.storageUrl.startsWith('private://') &&
+                    !/wordprocessingml|^application\/msword$/i.test(d.mimeType ?? '')
+            )
+            .map(({ mimeType: _mimeType, ...rest }) => rest);
+
         return NextResponse.json({ 
-            documents: docs,
+            documents,
             useCaseTitle: useCase.title 
         });
     } catch (e) {
