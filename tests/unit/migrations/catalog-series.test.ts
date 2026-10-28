@@ -58,6 +58,7 @@ const FOLLOW_UP_FILES = [
   '20261029000300_security_revoke_api_table_access.sql',
   '20261030000100_content_upload_tables.sql',
   '20261030000200_content_upload_json_xlsx.sql',
+  '20261030000300_trainee_enrollments_multiple.sql',
 ];
 const catalogFiles = seriesFiles.filter(
   name => !SECURITY_FILES.includes(name) && !FOLLOW_UP_FILES.includes(name)

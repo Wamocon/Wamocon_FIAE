@@ -494,7 +494,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['id'],
   },
   { route: 'trainer/lernfelder', method: 'GET', guard: 'trainer', params: [] },
-  { route: 'trainer/lernfelder', method: 'POST', guard: 'curriculum', params: [] },
+  {
+    route: 'trainer/lernfelder',
+    method: 'POST',
+    guard: 'curriculum',
+    params: [],
+  },
   { route: 'trainer/profile', method: 'GET', guard: 'trainer', params: [] },
   { route: 'trainer/profiles', method: 'GET', guard: 'trainer', params: [] },
   {
@@ -736,6 +741,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'admin/users/[userId]/enrollment',
     method: 'PUT',
+    guard: 'superAdmin',
+    params: ['userId'],
+  },
+  {
+    route: 'admin/users/[userId]/enrollment',
+    method: 'DELETE',
     guard: 'superAdmin',
     params: ['userId'],
   },

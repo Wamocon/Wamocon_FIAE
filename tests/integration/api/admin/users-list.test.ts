@@ -10,8 +10,9 @@ import {
 } from '../../../helpers/mockNext';
 
 // GET /api/admin/users answers every user as before and adds trainingCatalogCode
-// for trainees (the code of the catalog they are enrolled in, FIAE without an
-// enrollment). The lookup is separate from the user query and never breaks the
+// (the code of the first enrollment) and trainingCatalogCodes (the codes of all
+// enrollments, a trainee can be in several trainings) for trainees, FIAE without
+// an enrollment. The lookup is separate from the user query and never breaks the
 // list.
 
 const FIAE = '00000000-0000-4000-8000-000000000001';
@@ -40,12 +41,26 @@ const tables = {
     user({ id: 'kfbm-trainee', email: 'k@example.com' }),
     user({ id: 'fiae-trainee', email: 'f@example.com' }),
     user({ id: 'trainer', role: 'TRAINER', email: 't@example.com' }),
+    user({ id: 'both-trainee', email: 'b@example.com' }),
   ],
   traineeEnrollments: [
     {
       traineeId: 'kfbm-trainee',
       trainingCatalogId: KFBM,
       startDate: '2026-09-01',
+    },
+    // enrolled in KfBM later than in FIAE: FIAE is the first one
+    {
+      traineeId: 'both-trainee',
+      trainingCatalogId: KFBM,
+      startDate: '2026-09-01',
+      createdAt: new Date('2026-10-02'),
+    },
+    {
+      traineeId: 'both-trainee',
+      trainingCatalogId: FIAE,
+      startDate: '2025-09-01',
+      createdAt: new Date('2026-09-01'),
     },
   ],
   trainingCatalogs: [
@@ -62,7 +77,7 @@ async function load(options: { failCodes?: boolean } = {}) {
   if (options.failCodes) {
     jest.doMock('@/lib/catalog/admin', () => ({
       ...(jest.requireActual('@/lib/catalog/admin') as object),
-      getTrainingCatalogCodes: async () => {
+      getTrainingCatalogCodeLists: async () => {
         throw new Error('relation "trainee_enrollments" does not exist');
       },
     }));
@@ -95,6 +110,23 @@ describe('GET /api/admin/users', () => {
     expect(byId['fiae-trainee'].trainingCatalogCode).toBe('FIAE');
     // other roles have no occupation
     expect(byId['trainer'].trainingCatalogCode).toBeNull();
+    expect(byId['trainer'].trainingCatalogCodes).toBeNull();
+  });
+
+  it('lists all the trainings of a trainee, the first one is the main code', async () => {
+    const { mod } = await load();
+    const res = await mod.GET(
+      makeRequest('GET', 'http://localhost/api/admin/users', { token: 't' })
+    );
+    const { users } = await res.json();
+    const byId = Object.fromEntries(users.map((u: any) => [u.id, u]));
+    expect(byId['both-trainee'].trainingCatalogCodes).toEqual([
+      'FIAE',
+      'KFBM',
+    ]);
+    expect(byId['both-trainee'].trainingCatalogCode).toBe('FIAE');
+    expect(byId['kfbm-trainee'].trainingCatalogCodes).toEqual(['KFBM']);
+    expect(byId['fiae-trainee'].trainingCatalogCodes).toEqual(['FIAE']);
   });
 
   it('keeps the fields of the user list as they were', async () => {
@@ -103,7 +135,7 @@ describe('GET /api/admin/users', () => {
       makeRequest('GET', 'http://localhost/api/admin/users', { token: 't' })
     );
     const { users } = await res.json();
-    expect(users).toHaveLength(3);
+    expect(users).toHaveLength(4);
     expect(Object.keys(users[0]).sort()).toEqual(
       [
         'avatarUrl',
@@ -120,6 +152,7 @@ describe('GET /api/admin/users', () => {
         'role',
         'trainerActivated',
         'trainingCatalogCode',
+        'trainingCatalogCodes',
       ].sort()
     );
   });
@@ -132,8 +165,9 @@ describe('GET /api/admin/users', () => {
     );
     expect(res.status).toBe(200);
     const { users } = await res.json();
-    expect(users).toHaveLength(3);
+    expect(users).toHaveLength(4);
     expect(users.every((u: any) => u.trainingCatalogCode === null)).toBe(true);
+    expect(users.every((u: any) => u.trainingCatalogCodes === null)).toBe(true);
     errorSpy.mockRestore();
   });
 });

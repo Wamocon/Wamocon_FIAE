@@ -106,6 +106,9 @@ export function CatalogActivationPanel({ onChanged }: Props) {
           <p className="text-muted text-sm">
             {t('admin.catalogs.sectionSubtitle')}
           </p>
+          <p className="text-muted mt-1 text-xs">
+            {t('admin.catalogs.countNote')}
+          </p>
         </div>
       </div>
 

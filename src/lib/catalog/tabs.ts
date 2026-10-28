@@ -1,6 +1,7 @@
 /**
  * Occupation tabs (one tab per training) on the content and list pages of
- * trainer level users. Pure functions without server or React imports.
+ * trainer level users and of trainees with more than one enrollment. Pure
+ * functions without server or React imports.
  *
  * The chosen occupation is part of the URL (`?catalog=CODE`), so the page can
  * be shared and the back button works. Order of precedence for the occupation
@@ -37,6 +38,15 @@ export const CATALOG_TAB_PATHS: readonly string[] = [
   '/trainer/school',
   '/trainer/activity-reports',
   '/trainer/activity-reports/arbeitszeugnis',
+  // The trainee area: the pages whose content depends on the training. A
+  // trainee with several enrollments picks one with the same tabs, only
+  // among the own enrollments (the server checks it again). The detail pages
+  // (a quiz, a use case) belong to one training and show no tabs.
+  '/trainee/dashboard',
+  '/trainee/courses',
+  '/trainee/quizzes',
+  '/trainee/school',
+  '/trainee/activity-reports',
 ];
 
 export function isCatalogTabPath(pathname: string | null | undefined): boolean {

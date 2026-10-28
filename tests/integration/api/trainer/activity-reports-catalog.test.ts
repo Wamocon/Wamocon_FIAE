@@ -53,6 +53,9 @@ function req(url: string, header?: string) {
   } as any;
 }
 
+const planCalls: { database?: unknown; preferredCatalogId?: string | null }[] =
+  [];
+
 async function load(tables: Record<string, any> = {}) {
   jest.resetModules();
   const mock = createTableDb({
@@ -64,10 +67,17 @@ async function load(tables: Record<string, any> = {}) {
     ...tables,
   });
   jest.doMock('@/db', () => ({ __esModule: true, default: mock.db }));
+  planCalls.length = 0;
   jest.doMock('@/lib/catalog/phase-plan-db', () => ({
     __esModule: true,
-    loadPhasePlansForUsers: async (users: { id: string }[]) =>
-      new Map(users.map(u => [u.id, { phaseMonths: [18, 18] }])),
+    loadPhasePlansForUsers: async (
+      users: { id: string }[],
+      database?: unknown,
+      preferredCatalogId?: string | null
+    ) => {
+      planCalls.push({ database, preferredCatalogId });
+      return new Map(users.map(u => [u.id, { phaseMonths: [18, 18] }]));
+    },
   }));
   mockSession(fakeSession({ id: 'tr1', organizationId: ORG }));
   const mod = await import('@/app/api/trainer/activity-reports/route');
@@ -132,6 +142,21 @@ describe('GET /api/trainer/activity-reports per occupation', () => {
     const res = await mod.GET(req(`${URL_LIST}?catalog=kfbm`));
     expect(res.status).toBe(200);
     expect(mock.filters('select', 'profiles').params).toContain(KFBM);
+  });
+
+  it('labels the phases with the plan of the chosen occupation (a trainee in two trainings)', async () => {
+    const { mod } = await load();
+    await mod.GET(req(URL_LIST, 'KFBM'));
+    expect(planCalls).toHaveLength(1);
+    expect(planCalls[0].preferredCatalogId).toBe(KFBM);
+  });
+
+  it('without a chosen occupation no preferred plan is asked for and no scope is looked up twice', async () => {
+    const { mock, mod } = await load();
+    await mod.GET(req(URL_LIST));
+    expect(planCalls).toHaveLength(1);
+    expect(planCalls[0].preferredCatalogId ?? null).toBeNull();
+    expect(selectsFrom(mock, 'training_catalogs')).toHaveLength(0);
   });
 
   it('lists the reports of the trainees of the chosen occupation only', async () => {

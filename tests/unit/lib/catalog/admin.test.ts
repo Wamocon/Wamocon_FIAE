@@ -786,38 +786,44 @@ describe('catalog admin database helpers', () => {
     it('a trainee without an enrollment row counts as FIAE', async () => {
       const { mod } = await load({ traineeEnrollments: [] });
       expect(await mod.getTraineeEnrollment(TRAINEE)).toEqual({
+        enrollments: [],
         enrollment: null,
         effectiveCatalogId: FIAE,
         isImplicit: true,
       });
     });
 
-    it('returns the enrollment with the latest start', async () => {
-      const older = {
+    it('lists every enrollment, the training started with first', async () => {
+      const first = {
         id: 'e1',
         trainingCatalogId: FIAE,
         code: 'FIAE',
         title: 'FIAE',
-        startDate: '2024-09-01',
+        startDate: '2026-09-01',
         durationYears: 3,
+        createdAt: new Date('2026-09-01T08:00:00Z'),
       };
-      const newer = {
+      const second = {
         id: 'e2',
         trainingCatalogId: KFBM,
         code: 'KFBM',
         title: 'KfBM',
-        startDate: '2026-09-01',
-        durationYears: 3,
+        startDate: '2024-09-01',
+        durationYears: 2,
+        createdAt: new Date('2026-10-01T08:00:00Z'),
       };
-      const { mod } = await load({ traineeEnrollments: [older, newer] });
-      expect(await mod.getTraineeEnrollment(TRAINEE)).toEqual({
-        enrollment: newer,
-        effectiveCatalogId: KFBM,
-        isImplicit: false,
-      });
+      const { mod } = await load({ traineeEnrollments: [second, first] });
+      const view = await mod.getTraineeEnrollment(TRAINEE);
+      expect(view.enrollments.map(e => e.id)).toEqual(['e1', 'e2']);
+      // the first enrollment is the default occupation, whatever the start dates say
+      expect(view.enrollment).toMatchObject({ id: 'e1' });
+      expect(view.effectiveCatalogId).toBe(FIAE);
+      expect(view.isImplicit).toBe(false);
+      // the creation time is no part of the answer
+      expect(view.enrollments[0]).not.toHaveProperty('createdAt');
     });
 
-    it('sorts a missing start date last', async () => {
+    it('sorts a missing start date last when nothing else decides', async () => {
       const dated = {
         id: 'e1',
         trainingCatalogId: FIAE,
@@ -842,30 +848,59 @@ describe('catalog admin database helpers', () => {
   });
 
   describe('getTrainingCatalogCodes', () => {
-    it('maps every trainee to a catalog code, FIAE by default', async () => {
+    const rows = [
+      {
+        traineeId: 't1',
+        trainingCatalogId: KFBM,
+        startDate: '2026-09-01',
+        createdAt: new Date('2026-09-01'),
+      },
+      {
+        traineeId: 't2',
+        trainingCatalogId: KFBM,
+        startDate: '2022-09-01',
+        createdAt: new Date('2026-10-05'),
+      },
+      {
+        traineeId: 't2',
+        trainingCatalogId: FIAE,
+        startDate: '2024-09-01',
+        createdAt: new Date('2026-09-05'),
+      },
+    ];
+
+    it('maps every trainee to the code of the first enrollment, FIAE by default', async () => {
       const { mod } = await load({
-        traineeEnrollments: [
-          { traineeId: 't1', trainingCatalogId: KFBM, startDate: '2026-09-01' },
-          { traineeId: 't2', trainingCatalogId: FIAE, startDate: '2024-09-01' },
-          { traineeId: 't2', trainingCatalogId: KFBM, startDate: '2022-09-01' },
-        ],
+        traineeEnrollments: rows,
         trainingCatalogs: catalogs,
       });
       const codes = await mod.getTrainingCatalogCodes(['t1', 't2', 't3']);
       expect(codes.get('t1')).toBe('KFBM');
-      // the latest start wins
+      // the training started with first wins
       expect(codes.get('t2')).toBe('FIAE');
       expect(codes.get('t3')).toBe('FIAE');
+    });
+
+    it('lists all codes of a trainee with several trainings', async () => {
+      const { mod } = await load({
+        traineeEnrollments: rows,
+        trainingCatalogs: catalogs,
+      });
+      const lists = await mod.getTrainingCatalogCodeLists(['t1', 't2', 't3']);
+      expect(lists.get('t1')).toEqual(['KFBM']);
+      expect(lists.get('t2')).toEqual(['FIAE', 'KFBM']);
+      expect(lists.get('t3')).toEqual(['FIAE']);
     });
 
     it('does not query anything for an empty list', async () => {
       const { mod, mock } = await load({});
       expect((await mod.getTrainingCatalogCodes([])).size).toBe(0);
+      expect((await mod.getTrainingCatalogCodeLists([])).size).toBe(0);
       expect(mock.db.select).not.toHaveBeenCalled();
     });
   });
 
-  describe('setTraineeEnrollment', () => {
+  describe('addTraineeEnrollment', () => {
     const traineeRow = {
       id: TRAINEE,
       role: 'TRAINEE',
@@ -881,20 +916,16 @@ describe('catalog admin database helpers', () => {
       ...extra,
     });
 
-    it('replaces the enrollment and takes start and duration from the profile', async () => {
+    it('adds a second enrollment and keeps the first one', async () => {
       const { mod, mock } = await load(tables());
-      const result = await mod.setTraineeEnrollment(TRAINEE, KFBM);
+      const result = await mod.addTraineeEnrollment(TRAINEE, KFBM);
       expect(result).toEqual({
         ok: true,
-        value: { trainingCatalogId: KFBM, changed: true, replaced: 1 },
+        value: { trainingCatalogId: KFBM, changed: true, enrollmentCount: 2 },
       });
-      // the other enrollments of this trainee are removed (elective choices
-      // follow by cascade), the new one is inserted
-      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(1);
-      expect(mock.filters('delete', 'trainee_enrollments').params).toEqual([
-        TRAINEE,
-        KFBM,
-      ]);
+      // nothing is deleted: the first enrollment and its elective choices stay
+      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(0);
+      // start and duration come from the profile
       expect(mock.writes('insert', 'trainee_enrollments')).toEqual([
         {
           traineeId: TRAINEE,
@@ -907,31 +938,100 @@ describe('catalog admin database helpers', () => {
       expect(mock.db.execute).toHaveBeenCalledTimes(1);
     });
 
-    it('creates the first enrollment of a trainee without any row', async () => {
-      const { mod, mock } = await load(tables({ traineeEnrollments: [] }));
-      const result = await mod.setTraineeEnrollment(TRAINEE, KFBM);
-      expect(result).toEqual({
-        ok: true,
-        value: { trainingCatalogId: KFBM, changed: true, replaced: 0 },
+    it('takes the start date and duration that the admin gives', async () => {
+      const { mod, mock } = await load(tables());
+      const result = await mod.addTraineeEnrollment(TRAINEE, KFBM, {
+        startDate: '2027-03-01',
+        durationYears: 3,
       });
-      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(0);
-      expect(mock.writes('insert', 'trainee_enrollments')).toHaveLength(1);
+      expect(result.ok).toBe(true);
+      expect(mock.writes('insert', 'trainee_enrollments')).toEqual([
+        {
+          traineeId: TRAINEE,
+          trainingCatalogId: KFBM,
+          startDate: '2027-03-01',
+          durationYears: 3,
+        },
+      ]);
     });
 
-    it('keeps the enrollment (and its elective choices) when nothing changes', async () => {
-      const { mod, mock } = await load(
-        tables({ traineeEnrollments: [{ id: 'e1', trainingCatalogId: KFBM }] })
-      );
-      const result = await mod.setTraineeEnrollment(TRAINEE, KFBM);
-      expect(result).toEqual({
-        ok: true,
-        value: { trainingCatalogId: KFBM, changed: false, replaced: 0 },
+    it('a given start date of null means "unknown", not "take the profile"', async () => {
+      const { mod, mock } = await load(tables());
+      await mod.addTraineeEnrollment(TRAINEE, KFBM, { startDate: null });
+      expect(
+        (mock.writes('insert', 'trainee_enrollments')[0] as any).startDate
+      ).toBeNull();
+    });
+
+    it.each([
+      [{ startDate: '01.03.2027' }],
+      [{ startDate: '2027-02-30' }],
+      [{ durationYears: 4 }],
+      [{ durationYears: 1.5 }],
+    ])('refuses unusable terms %j (400) and writes nothing', async terms => {
+      const { mod, mock } = await load(tables());
+      expect(
+        await mod.addTraineeEnrollment(TRAINEE, KFBM, terms as any)
+      ).toEqual({
+        ok: false,
+        status: 400,
+        code: 'INVALID_ENROLLMENT_TERMS',
       });
-      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(0);
       expect(mock.writes('insert', 'trainee_enrollments')).toHaveLength(0);
     });
 
-    it('cleans up extra enrollments but keeps the one that is wanted', async () => {
+    it('a trainee without any row works in FIAE: adding KfBM makes that FIAE a real enrollment first', async () => {
+      const { mod, mock } = await load(tables({ traineeEnrollments: [] }));
+      const result = await mod.addTraineeEnrollment(TRAINEE, KFBM);
+      // "add" never replaces: what the trainee has (the implicit FIAE) stays
+      expect(result).toEqual({
+        ok: true,
+        value: { trainingCatalogId: KFBM, changed: true, enrollmentCount: 2 },
+      });
+      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(0);
+      const inserts = mock.writes('insert', 'trainee_enrollments') as any[];
+      expect(inserts.map(row => row.trainingCatalogId)).toEqual([FIAE, KFBM]);
+      // both with the terms of the profile
+      expect(inserts.map(row => row.startDate)).toEqual([
+        '2026-09-01',
+        '2026-09-01',
+      ]);
+      // the default is made older than the new row on purpose (same
+      // transaction, same now()), so it stays the first enrollment
+      expect(inserts[0]).toHaveProperty('createdAt');
+      expect(inserts[1]).not.toHaveProperty('createdAt');
+    });
+
+    it('the implicit FIAE is not made real when the organization does not offer FIAE', async () => {
+      const { mod, mock } = await load(
+        tables({
+          traineeEnrollments: [],
+          organizationCatalogs: [enabled(KFBM)],
+        })
+      );
+      const result = await mod.addTraineeEnrollment(TRAINEE, KFBM);
+      expect(result).toEqual({
+        ok: true,
+        value: { trainingCatalogId: KFBM, changed: true, enrollmentCount: 1 },
+      });
+      expect(
+        (mock.writes('insert', 'trainee_enrollments') as any[]).map(
+          row => row.trainingCatalogId
+        )
+      ).toEqual([KFBM]);
+    });
+
+    it('adding FIAE itself to a trainee without any row creates one row', async () => {
+      const { mod, mock } = await load(tables({ traineeEnrollments: [] }));
+      const result = await mod.addTraineeEnrollment(TRAINEE, FIAE);
+      expect(result).toEqual({
+        ok: true,
+        value: { trainingCatalogId: FIAE, changed: true, enrollmentCount: 1 },
+      });
+      expect(mock.writes('insert', 'trainee_enrollments')).toHaveLength(1);
+    });
+
+    it('keeps the enrollment (and its elective choices) when it exists already', async () => {
       const { mod, mock } = await load(
         tables({
           traineeEnrollments: [
@@ -940,13 +1040,16 @@ describe('catalog admin database helpers', () => {
           ],
         })
       );
-      const result = await mod.setTraineeEnrollment(TRAINEE, KFBM);
+      const result = await mod.addTraineeEnrollment(TRAINEE, KFBM, {
+        startDate: '2030-01-01',
+      });
       expect(result).toEqual({
         ok: true,
-        value: { trainingCatalogId: KFBM, changed: true, replaced: 1 },
+        value: { trainingCatalogId: KFBM, changed: false, enrollmentCount: 2 },
       });
-      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(1);
+      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(0);
       expect(mock.writes('insert', 'trainee_enrollments')).toHaveLength(0);
+      expect(mock.writes('update', 'trainee_enrollments')).toHaveLength(0);
     });
 
     it('defaults start and duration when the profile has none', async () => {
@@ -961,7 +1064,7 @@ describe('catalog admin database helpers', () => {
           ],
         })
       );
-      await mod.setTraineeEnrollment(TRAINEE, KFBM);
+      await mod.addTraineeEnrollment(TRAINEE, KFBM);
       expect(mock.writes('insert', 'trainee_enrollments')).toEqual([
         {
           traineeId: TRAINEE,
@@ -980,7 +1083,7 @@ describe('catalog admin database helpers', () => {
           ],
         })
       );
-      await mod.setTraineeEnrollment(TRAINEE, KFBM);
+      await mod.addTraineeEnrollment(TRAINEE, KFBM);
       expect(
         (mock.writes('insert', 'trainee_enrollments')[0] as any).startDate
       ).toBe('2026-02-15');
@@ -988,7 +1091,7 @@ describe('catalog admin database helpers', () => {
 
     it('an unknown user is 404 and nothing is written', async () => {
       const { mod, mock } = await load(tables({ profiles: [] }));
-      expect(await mod.setTraineeEnrollment(TRAINEE, KFBM)).toMatchObject({
+      expect(await mod.addTraineeEnrollment(TRAINEE, KFBM)).toMatchObject({
         ok: false,
         status: 404,
         code: 'USER_NOT_FOUND',
@@ -1000,7 +1103,7 @@ describe('catalog admin database helpers', () => {
       const { mod, mock } = await load(
         tables({ profiles: [{ ...traineeRow, role: 'TRAINER' }] })
       );
-      expect(await mod.setTraineeEnrollment(TRAINEE, KFBM)).toEqual({
+      expect(await mod.addTraineeEnrollment(TRAINEE, KFBM)).toEqual({
         ok: false,
         status: 400,
         code: 'NOT_A_TRAINEE',
@@ -1013,7 +1116,7 @@ describe('catalog admin database helpers', () => {
       const { mod, mock } = await load(
         tables({ organizationCatalogs: [enabled(FIAE)] })
       );
-      expect(await mod.setTraineeEnrollment(TRAINEE, KFBM)).toEqual({
+      expect(await mod.addTraineeEnrollment(TRAINEE, KFBM)).toEqual({
         ok: false,
         status: 400,
         code: 'CATALOG_NOT_ENABLED',
@@ -1026,7 +1129,7 @@ describe('catalog admin database helpers', () => {
       const { mod } = await load(
         tables({ trainingCatalogs: [fiae, kfbmInactive] })
       );
-      expect(await mod.setTraineeEnrollment(TRAINEE, KFBM)).toMatchObject({
+      expect(await mod.addTraineeEnrollment(TRAINEE, KFBM)).toMatchObject({
         ok: false,
         status: 400,
         code: 'CATALOG_INACTIVE',
@@ -1037,11 +1140,185 @@ describe('catalog admin database helpers', () => {
       const { mod } = await load(
         tables({ profiles: [{ ...traineeRow, organizationId: null }] })
       );
-      expect(await mod.setTraineeEnrollment(TRAINEE, KFBM)).toMatchObject({
+      expect(await mod.addTraineeEnrollment(TRAINEE, KFBM)).toMatchObject({
         ok: false,
         code: 'CATALOG_NOT_ENABLED',
       });
-      expect((await mod.setTraineeEnrollment(TRAINEE, FIAE)).ok).toBe(true);
+      expect((await mod.addTraineeEnrollment(TRAINEE, FIAE)).ok).toBe(true);
+    });
+
+    it('setTraineeEnrollment is the same function (old name, no replacing any more)', async () => {
+      const { mod, mock } = await load(tables());
+      expect(mod.setTraineeEnrollment).toBe(mod.addTraineeEnrollment);
+      await mod.setTraineeEnrollment(TRAINEE, KFBM);
+      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(0);
+    });
+  });
+
+  describe('removeTraineeEnrollment', () => {
+    const two = [
+      { id: 'e1', trainingCatalogId: FIAE },
+      { id: 'e2', trainingCatalogId: KFBM },
+    ];
+    const tables = (extra: Record<string, any> = {}) => ({
+      profiles: [{ id: TRAINEE, role: 'TRAINEE', organizationId: ORG }],
+      traineeEnrollments: two,
+      ...extra,
+    });
+
+    it('removes only the enrollment of that catalog, after the confirmation', async () => {
+      const { mod, mock } = await load(tables());
+      const result = await mod.removeTraineeEnrollment(TRAINEE, KFBM, {
+        confirmed: true,
+      });
+      expect(result).toEqual({
+        ok: true,
+        value: { trainingCatalogId: KFBM, remaining: 1 },
+      });
+      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(1);
+      // the row of this trainee in this catalog, by its id: nothing else
+      expect(mock.filters('delete', 'trainee_enrollments').params).toEqual([
+        'e2',
+        TRAINEE,
+      ]);
+      // memberships, quiz assignments and submissions are not touched
+      for (const table of [
+        'course_members',
+        'quiz_assignments',
+        'quiz_submissions',
+        'use_case_submissions',
+        'profiles',
+      ]) {
+        expect(mock.writes('delete', table)).toHaveLength(0);
+        expect(mock.writes('update', table)).toHaveLength(0);
+      }
+      expect(mock.db.transaction).toHaveBeenCalledTimes(1);
+      expect(mock.db.execute).toHaveBeenCalledTimes(1);
+    });
+
+    describe('removing the first training', () => {
+      const first = {
+        id: 'e1',
+        trainingCatalogId: FIAE,
+        startDate: '2024-09-01',
+        durationYears: 3,
+        createdAt: new Date('2026-09-01'),
+      };
+      const second = (startDate: string | null) => ({
+        id: 'e2',
+        trainingCatalogId: KFBM,
+        startDate,
+        durationYears: 2,
+        createdAt: new Date('2026-10-01'),
+      });
+
+      it('the second training becomes the first and the profile takes over its own start date and duration', async () => {
+        // the profile describes the first training; without this the second
+        // one would be counted with the dates of the training that is gone
+        const { mod, mock } = await load(
+          tables({ traineeEnrollments: [first, second('2027-03-01')] })
+        );
+        const result = await mod.removeTraineeEnrollment(TRAINEE, FIAE, {
+          confirmed: true,
+        });
+        expect(result.ok).toBe(true);
+        expect(mock.writes('update', 'profiles')).toEqual([
+          {
+            startOfTrainingDate: new Date('2027-03-01T00:00:00.000Z'),
+            ausbildungDurationYears: 2,
+          },
+        ]);
+      });
+
+      it('without a start date of its own the profile is left alone', async () => {
+        const { mod, mock } = await load(
+          tables({ traineeEnrollments: [first, second(null)] })
+        );
+        await mod.removeTraineeEnrollment(TRAINEE, FIAE, { confirmed: true });
+        expect(mock.writes('update', 'profiles')).toHaveLength(0);
+      });
+
+      it('removing a further training never touches the profile', async () => {
+        const { mod, mock } = await load(
+          tables({ traineeEnrollments: [first, second('2027-03-01')] })
+        );
+        await mod.removeTraineeEnrollment(TRAINEE, KFBM, { confirmed: true });
+        expect(mock.writes('update', 'profiles')).toHaveLength(0);
+      });
+    });
+
+    it('without the confirmation nothing happens (400)', async () => {
+      const { mod, mock } = await load(tables());
+      for (const confirmed of [false, undefined as unknown as boolean]) {
+        expect(
+          await mod.removeTraineeEnrollment(TRAINEE, KFBM, { confirmed })
+        ).toEqual({ ok: false, status: 400, code: 'CONFIRMATION_REQUIRED' });
+      }
+      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(0);
+      expect(mock.db.transaction).not.toHaveBeenCalled();
+    });
+
+    it('the only enrollment cannot be removed (409), the trainee would count as FIAE', async () => {
+      const { mod, mock } = await load(
+        tables({ traineeEnrollments: [two[1]] })
+      );
+      expect(
+        await mod.removeTraineeEnrollment(TRAINEE, KFBM, { confirmed: true })
+      ).toEqual({ ok: false, status: 409, code: 'LAST_ENROLLMENT' });
+      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(0);
+    });
+
+    it('a catalog the trainee is not enrolled in is 404', async () => {
+      const { mod, mock } = await load(
+        tables({ traineeEnrollments: [two[0]] })
+      );
+      expect(
+        await mod.removeTraineeEnrollment(TRAINEE, KFBM, { confirmed: true })
+      ).toEqual({ ok: false, status: 404, code: 'ENROLLMENT_NOT_FOUND' });
+      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(0);
+    });
+
+    it('an unknown user is 404', async () => {
+      const { mod, mock } = await load(tables({ profiles: [] }));
+      expect(
+        await mod.removeTraineeEnrollment(TRAINEE, KFBM, { confirmed: true })
+      ).toMatchObject({ ok: false, status: 404, code: 'USER_NOT_FOUND' });
+      expect(mock.writes('delete', 'trainee_enrollments')).toHaveLength(0);
+    });
+  });
+
+  describe('trainees with several enrollments in the counts', () => {
+    it('a trainee counts once in every catalog and once as a person', async () => {
+      const { mod } = await load();
+      // 3 trainees: one in FIAE only, one in KfBM only, one in both
+      const usage = {
+        enrollmentCounts: { [FIAE]: 2, [KFBM]: 2 },
+        unenrolledTrainees: 0,
+      };
+      expect(mod.countTraineesInCatalog(FIAE, usage)).toBe(2);
+      expect(mod.countTraineesInCatalog(KFBM, usage)).toBe(2);
+      // the people are counted by the seats (profiles), not by this sum
+      expect(
+        mod.countTraineesInCatalog(FIAE, usage) +
+          mod.countTraineesInCatalog(KFBM, usage)
+      ).toBe(4);
+    });
+
+    it('a trainee in two catalogs blocks switching off either of them', async () => {
+      const { mod } = await load();
+      const usage = {
+        enrollmentCounts: { [FIAE]: 1, [KFBM]: 1 },
+        unenrolledTrainees: 0,
+      };
+      expect(
+        mod.checkOrganizationCatalogChange({
+          catalogId: KFBM,
+          isEnabled: false,
+          catalogs,
+          orgRows: [enabled(FIAE), enabled(KFBM)],
+          usage,
+        })
+      ).toMatchObject({ ok: false, status: 409, code: 'CATALOG_IN_USE' });
     });
   });
 });

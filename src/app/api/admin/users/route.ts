@@ -12,7 +12,7 @@ import db from '@/db';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { TRAINER_LEVEL_ROLES, normalizeRole, ROLE } from '@/lib/auth/roles';
 import {
-  getTrainingCatalogCodes,
+  getTrainingCatalogCodeLists,
   isUuid,
   ruleFailureBody,
 } from '@/lib/catalog/admin';
@@ -67,9 +67,9 @@ export async function GET(req: NextRequest) {
     // The occupation of every trainee comes from its own lookup over the
     // trainee ids (no join). The list works without it, so a failing lookup
     // is only logged and leaves the code empty.
-    let catalogCodes = new Map<string, string>();
+    let catalogCodes = new Map<string, string[]>();
     try {
-      catalogCodes = await getTrainingCatalogCodes(
+      catalogCodes = await getTrainingCatalogCodeLists(
         rows
           .filter(r => normalizeRole(r.role) === ROLE.TRAINEE)
           .map(r => String(r.id))
@@ -93,7 +93,9 @@ export async function GET(req: NextRequest) {
         orgName: r.orgName,
         orgSlug: r.orgSlug,
         createdAt: r.createdAt,
-        trainingCatalogCode: catalogCodes.get(String(r.id)) ?? null,
+        // The first enrollment, and all of them (a trainee can have several)
+        trainingCatalogCode: catalogCodes.get(String(r.id))?.[0] ?? null,
+        trainingCatalogCodes: catalogCodes.get(String(r.id)) ?? null,
       })),
     });
   } catch (e) {

@@ -6,7 +6,10 @@ import { createTableDb } from '../../../helpers/mockDb';
 
 // loadPhasePlansForUsers: the phase plans of many trainees in two queries (the
 // trainer lists, KfBM S4b). Same rule as the scope of one trainee: the
-// occupation of the latest enrollment, FIAE without an enrollment.
+// occupation of the training the trainee started with (the first enrollment),
+// FIAE without an enrollment. A list that was opened in one occupation (a
+// trainer tab) asks for that one first.
+
 
 const FIAE = '00000000-0000-4000-8000-000000000001';
 const KFBM = '00000000-0000-4000-8000-000000000002';
@@ -85,18 +88,82 @@ describe('loadPhasePlansForUsers', () => {
     expect(mock.filters('select', 'training_catalogs').params).toContain(FIAE);
   });
 
-  it('takes the enrollment that started last', async () => {
+  it('takes the enrollment the trainee started with, whatever the start dates say', async () => {
     const { mod } = await load({
       traineeEnrollments: [
-        { traineeId: 't1', trainingCatalogId: FIAE, startDate: '2024-08-01' },
-        { traineeId: 't1', trainingCatalogId: KFBM, startDate: '2026-08-01' },
+        {
+          traineeId: 't1',
+          trainingCatalogId: KFBM,
+          startDate: '2026-08-01',
+          createdAt: new Date('2026-10-01'),
+        },
+        {
+          traineeId: 't1',
+          trainingCatalogId: FIAE,
+          startDate: '2027-08-01',
+          createdAt: new Date('2026-09-01'),
+        },
       ],
       trainingCatalogs: catalogs,
     });
     const plans = await mod.loadPhasePlansForUsers([
       { id: 't1', durationYears: 3 },
     ]);
-    expect(plans.get('t1')?.phaseMonths).toEqual([15, 21]);
+    expect(plans.get('t1')?.phaseMonths).toEqual([18, 18]);
+  });
+
+  describe('a list opened in one occupation', () => {
+    const both = [
+      {
+        traineeId: 't1',
+        trainingCatalogId: FIAE,
+        startDate: '2026-08-01',
+        createdAt: new Date('2026-09-01'),
+      },
+      {
+        traineeId: 't1',
+        trainingCatalogId: KFBM,
+        startDate: '2026-08-01',
+        createdAt: new Date('2026-10-01'),
+      },
+      {
+        traineeId: 'f1',
+        trainingCatalogId: FIAE,
+        startDate: '2026-08-01',
+        createdAt: new Date('2026-09-01'),
+      },
+    ];
+
+    it('uses the plan of that occupation for a trainee enrolled in both', async () => {
+      const { mod } = await load({
+        traineeEnrollments: both,
+        trainingCatalogs: catalogs,
+      });
+      const plans = await mod.loadPhasePlansForUsers(
+        [
+          { id: 't1', durationYears: 3 },
+          { id: 'f1', durationYears: 3 },
+        ],
+        undefined,
+        KFBM
+      );
+      expect(plans.get('t1')?.phaseMonths).toEqual([15, 21]);
+      // not enrolled in the occupation: the first enrollment, as without a choice
+      expect(plans.get('f1')?.phaseMonths).toEqual([18, 18]);
+    });
+
+    it('without a preferred occupation the first enrollment decides', async () => {
+      const { mod } = await load({
+        traineeEnrollments: both,
+        trainingCatalogs: catalogs,
+      });
+      const plans = await mod.loadPhasePlansForUsers(
+        [{ id: 't1', durationYears: 3 }],
+        undefined,
+        null
+      );
+      expect(plans.get('t1')?.phaseMonths).toEqual([18, 18]);
+    });
   });
 
   it('asks for the enrollments of the listed trainees and the catalogs in use, nothing else', async () => {

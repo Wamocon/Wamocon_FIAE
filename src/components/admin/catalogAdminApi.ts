@@ -26,19 +26,25 @@ export type OrganizationCatalogEntry = {
   traineeCount: number;
 };
 
+export type TraineeEnrollmentItem = {
+  id: string;
+  trainingCatalogId: string;
+  code: string;
+  title: string;
+  startDate: string | null;
+  durationYears: number;
+};
+
 export type TraineeEnrollmentResponse = {
-  enrollment: {
-    id: string;
-    trainingCatalogId: string;
-    code: string;
-    title: string;
-    startDate: string | null;
-    durationYears: number;
-  } | null;
+  /** Every training of the trainee, the first one is the default. */
+  enrollments: TraineeEnrollmentItem[];
+  enrollment: TraineeEnrollmentItem | null;
   effectiveCatalogId: string;
   isImplicit: boolean;
+  /** Only in the answer of an add (PUT): false if it existed already. */
   changed?: boolean;
-  replaced?: number;
+  /** Only in the answer of a remove (DELETE): the catalog that was removed. */
+  removed?: string;
 };
 
 /** The code of the default occupation, which is never switched off. */

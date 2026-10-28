@@ -207,3 +207,99 @@ describe('dashboard deadlines per occupation', () => {
     });
   });
 });
+
+describe('dashboard deadlines for a trainee in two trainings', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  // The profile says: started 2099-08-01. KfBM is the second enrollment, it
+  // started 2100-03-01 (7 months later) and has its own duration.
+  async function twoTrainings(options: {
+    active: string;
+    kfbmStart: string | null;
+    kfbmDuration: number;
+  }) {
+    jest.resetModules();
+    const mock = createTableDb({
+      courseMembers: courseRows,
+      profiles: [
+        { startOfTrainingDate: start, ausbildungDurationYears: 3 },
+      ],
+      traineeEnrollments: [
+        {
+          trainingCatalogId: FIAE,
+          startDate: '2099-08-01',
+          durationYears: 3,
+          createdAt: new Date('2026-09-01'),
+        },
+        {
+          trainingCatalogId: KFBM,
+          startDate: options.kfbmStart,
+          durationYears: options.kfbmDuration,
+          createdAt: new Date('2026-10-01'),
+        },
+      ],
+      trainingCatalogs: [
+        { id: FIAE, settings: fiaeSettings },
+        { id: KFBM, settings: kfbmSettings },
+      ].filter(row => row.id === options.active),
+    });
+    jest.doMock('@/db', () => ({ __esModule: true, default: mock.db }));
+    mockTraineeSession();
+    mockCatalogScope({
+      allowedCatalogIds: [FIAE, KFBM],
+      activeCatalogId: options.active,
+      selected: true,
+    });
+    const mod = await import('@/app/api/trainee/dashboard/route');
+    const res = await mod.GET({
+      url: 'http://localhost/api/trainee/dashboard',
+    } as any);
+    return (await res.json()) as {
+      deadlines: { label: string; dueDate: string; year: number }[];
+    };
+  }
+
+  it('the tab of the first enrollment counts with the profile', async () => {
+    const body = await twoTrainings({
+      active: FIAE,
+      kfbmStart: '2100-03-01',
+      kfbmDuration: 2,
+    });
+    expect(body.deadlines[0]).toEqual({
+      label: 'Phase 1 (1. bis 18. Ausbildungsmonat)',
+      dueDate: iso(2101, 1),
+      year: 1,
+    });
+  });
+
+  it('the tab of a further enrollment counts with its own start date and duration', async () => {
+    const body = await twoTrainings({
+      active: KFBM,
+      kfbmStart: '2100-03-01',
+      kfbmDuration: 2,
+    });
+    // KfBM shortened: phase 1 is 10 months, counted from 2100-03 (not from the
+    // 2099-08 of the profile, which would end in 2100)
+    expect(body.deadlines[0].label).toBe(
+      'Phase 1 (1. bis 10. Ausbildungsmonat)'
+    );
+    // 2100-03 plus 10 months is January 2101 (or the day before, in a zone
+    // ahead of UTC), the profile start would give June 2100
+    const due = new Date(body.deadlines[0].dueDate);
+    expect(due.getTime()).toBeGreaterThan(new Date('2100-12-30').getTime());
+    expect(due.getTime()).toBeLessThan(new Date('2101-02-02').getTime());
+  });
+
+  it('without an own start date the profile start is used for the second training too', async () => {
+    const body = await twoTrainings({
+      active: KFBM,
+      kfbmStart: null,
+      kfbmDuration: 3,
+    });
+    expect(body.deadlines[0]).toEqual({
+      label: 'Phase 1 (1. bis 15. Ausbildungsmonat)',
+      dueDate: iso(2100, 10),
+      year: 1,
+    });
+  });
+});

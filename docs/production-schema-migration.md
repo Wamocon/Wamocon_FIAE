@@ -158,7 +158,7 @@ gilt nur, solange die Reihe nicht angewendet ist.
    `true` auf `false` wechseln. Als Nächstes läuft `20261026000100` (eindeutiger
    Index auf `trainee_enrollments (trainee_id)`). Vorcheck (nur lesend): Abfrage
    C11 der Verifikations-SQL muss null Zeilen liefern, sonst bricht die Datei
-   mit einer Meldung ab und ändert nichts. Nachcheck: Abfrage C11b. Danach läuft
+   mit einer Meldung ab und ändert nichts. Nachcheck: Abfrage C11b (nur bis `20261030000300`, danach C11c). Danach läuft
    `20261027000100` (HAI-Index, Beruf und Lösungsschutz). Vorcheck (nur lesend):
    Abfrage C12 der Verifikations-SQL zeigt die Zeilen je `source_type`. Im Lauf die
    Meldungen `raise notice` lesen: Zeilen ohne ableitbaren Katalog gehen an FIAE.
@@ -245,11 +245,13 @@ gilt nur, solange die Reihe nicht angewendet ist.
   hält diese fest: Die Komponente lässt sich nicht löschen (`on delete restrict`).
   Das Seed-Skript für die FIAE-Komponenten löscht Komponenten und scheitert dann
   laut, sobald ein FIAE-Kurs verbunden ist.
-- Ein Azubi hat genau eine Einschreibung. Der Berufswechsel ersetzt sie (die
-  Administration löscht die anderen Einschreibungen in derselben Transaktion,
-  `setTraineeEnrollment`). Ab `20261026000100` sichert ein eindeutiger Index auf
-  `trainee_id` das in der Datenbank ab: Eine zweite Einschreibung desselben
-  Azubis scheitert mit `unique_violation`.
+- Ein Azubi kann mehreren Ausbildungen zugeordnet werden, auch gleichzeitig
+  (Entscheidung des Eigentümers vom 28.10.2026). Die Administration fügt eine
+  Einschreibung hinzu (`addTraineeEnrollment`) und entfernt eine nur
+  ausdrücklich bestätigt (`removeTraineeEnrollment`). `20261026000100` hatte
+  noch einen eindeutigen Index auf `trainee_id` angelegt, `20261030000300`
+  entfernt ihn wieder. Eindeutig bleibt der Azubi je Beruf: Dieselbe
+  Einschreibung zweimal scheitert mit `unique_violation`.
 
 - HAI-Index (ab `20261027000100`): Die Suche der HAI filtert im SQL, vor dem
   `LIMIT`, nach Beruf (`training_catalog_id` aus dem Katalogbereich des Nutzers),

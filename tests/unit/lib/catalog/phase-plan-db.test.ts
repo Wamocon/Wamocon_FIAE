@@ -147,3 +147,74 @@ describe('phase plan loading', () => {
     });
   });
 });
+
+describe('loadEnrollmentTerms', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  const profile = {
+    startOfTrainingDate: '2026-09-01',
+    ausbildungDurationYears: 2,
+  };
+  const first = {
+    trainingCatalogId: FIAE,
+    startDate: '2025-01-01',
+    durationYears: 3,
+    createdAt: new Date('2026-09-01'),
+  };
+  const second = {
+    trainingCatalogId: KFBM,
+    startDate: '2027-03-01',
+    durationYears: 3,
+    createdAt: new Date('2026-10-01'),
+  };
+
+  it('the first enrollment follows the profile, a further one has its own terms', async () => {
+    const { mod } = await load({
+      profiles: [profile],
+      traineeEnrollments: [second, first],
+    });
+    expect(await mod.loadEnrollmentTerms('t1', FIAE)).toEqual({
+      startDate: '2026-09-01',
+      durationYears: 2,
+    });
+    expect(await mod.loadEnrollmentTerms('t1', KFBM)).toEqual({
+      startDate: '2027-03-01',
+      durationYears: 3,
+    });
+  });
+
+  it('a trainee with one enrollment counts with the profile, as before', async () => {
+    const { mod } = await load({
+      profiles: [profile],
+      traineeEnrollments: [{ ...first, startDate: null, durationYears: 3 }],
+    });
+    expect(await mod.loadEnrollmentTerms('t1', FIAE)).toEqual({
+      startDate: '2026-09-01',
+      durationYears: 2,
+    });
+  });
+
+  it('is null without an enrollment in the catalog, the caller keeps the profile values', async () => {
+    const { mod } = await load({
+      profiles: [profile],
+      traineeEnrollments: [first],
+    });
+    expect(await mod.loadEnrollmentTerms('t1', KFBM)).toBeNull();
+  });
+
+  it('is null for an unknown user and when the lookup fails', async () => {
+    const unknown = await load({ profiles: [], traineeEnrollments: [first] });
+    expect(await unknown.mod.loadEnrollmentTerms('t1', FIAE)).toBeNull();
+    const failing = {
+      select: () => {
+        throw new Error('boom');
+      },
+    };
+    const broken = await load({}, failing);
+    expect(await broken.mod.loadEnrollmentTerms('t1', FIAE)).toBeNull();
+    expect(console.error).toHaveBeenCalled();
+  });
+});
