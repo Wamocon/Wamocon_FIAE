@@ -58,7 +58,7 @@ describe('ContentReleasePanel', () => {
       />
     );
     // the numbers come from a trial run on open
-    expect(await screen.findByText('Kurse')).toBeInTheDocument();
+    expect(await screen.findByText('Komponenten')).toBeInTheDocument();
     expect(JSON.parse(authFetchMock.mock.calls[0][1].body)).toEqual({
       mode: 'release',
       execute: false,
@@ -106,7 +106,7 @@ describe('ContentReleasePanel', () => {
         onClose={() => undefined}
       />
     );
-    await screen.findByText('Kurse');
+    await screen.findByText('Komponenten');
     fireEvent.click(screen.getByRole('button', { name: 'Probelauf' }));
     await screen.findByRole('button', { name: 'Jetzt freigeben' });
     fireEvent.click(screen.getByLabelText('Sperren'));
@@ -127,7 +127,7 @@ describe('ContentReleasePanel', () => {
         onClose={() => undefined}
       />
     );
-    await screen.findByText('Kurse');
+    await screen.findByText('Komponenten');
     fireEvent.click(screen.getByRole('button', { name: 'Probelauf' }));
     expect(await screen.findByText(/Nichts zu ändern/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/KFBM eintippen/), {
