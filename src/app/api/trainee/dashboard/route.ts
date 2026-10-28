@@ -6,13 +6,11 @@ import {
   courses,
   enablers,
   enablerCompletions,
-  enablerQuizLinks,
   traineeAchievedSkills,
   skills,
   courseSkills,
   quizzes,
   quizSubmissions,
-  enablerSubmissions,
   useCases,
   useCaseSubmissions,
   profiles,
@@ -146,20 +144,7 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
     ]);
 
     const courseIds = memberCourses.map(c => c.id);
-    const completedSet = new Set(
-      allCompletionsRaw.map(c => String(c.enablerId))
-    );
     const achievedSet = new Set(achievedSkillsRaw.map(a => String(a.skillId)));
-
-    // Build quiz best-scores map
-    const quizBestScores = new Map<string, number>();
-    for (const s of allQuizSubs) {
-      const qid = String(s.quizId);
-      const currentBest = quizBestScores.get(qid) || 0;
-      if ((s.score || 0) > currentBest) {
-        quizBestScores.set(qid, s.score || 0);
-      }
-    }
 
     // ── Phase 2: courseId-dependent queries in PARALLEL ──
     const modules: Array<{ id: string; title: string; progress: number }> = [];

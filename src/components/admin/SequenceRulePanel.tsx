@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import toast from 'react-hot-toast';
 import { ListOrdered } from 'lucide-react';
 import { authFetch } from '@/lib/authFetch';
@@ -23,8 +30,14 @@ export function SequenceRulePanel({ catalogId }: Props) {
   const id = useId();
   const [since, setSince] = useState<string | null | undefined>(undefined);
   const [value, setValue] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'invalid' | 'save' | 'load' | null>(null);
   const [saving, setSaving] = useState(false);
+  const dateRef = useRef<HTMLInputElement | null>(null);
+
+  // The keyboard user lands in the field of the panel that was just opened
+  useEffect(() => {
+    dateRef.current?.focus();
+  }, []);
 
   const url = `/api/admin/catalogs/${catalogId}/sequence-rule`;
 
@@ -37,6 +50,7 @@ export function SequenceRulePanel({ catalogId }: Props) {
       setValue(body.since ? body.since.slice(0, 10) : '');
     } catch {
       setSince(undefined);
+      setError('load');
     }
   }, [url]);
 
@@ -61,7 +75,7 @@ export function SequenceRulePanel({ catalogId }: Props) {
         next === null ? t('sequenceRule.removed') : t('sequenceRule.saved')
       );
     } catch {
-      setError(t('sequenceRule.failed'));
+      setError('save');
     } finally {
       setSaving(false);
     }
@@ -70,7 +84,7 @@ export function SequenceRulePanel({ catalogId }: Props) {
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      setError(t('sequenceRule.invalid'));
+      setError('invalid');
       return;
     }
     void send(value);
@@ -94,7 +108,9 @@ export function SequenceRulePanel({ catalogId }: Props) {
         <ListOrdered className="h-4 w-4" aria-hidden="true" />
         {t('sequenceRule.title')}
       </h3>
-      <p className="text-muted mt-1 text-sm">{t('sequenceRule.hint')}</p>
+      <p className="text-muted-foreground mt-1 text-sm">
+        {t('sequenceRule.hint')}
+      </p>
       <p className="text-foreground mt-2 text-sm font-medium" role="status">
         {since === undefined
           ? ''
@@ -112,11 +128,12 @@ export function SequenceRulePanel({ catalogId }: Props) {
           </label>
           <input
             id={`${id}-date`}
+            ref={dateRef}
             type="date"
             value={value}
             onChange={e => setValue(e.target.value)}
             disabled={saving}
-            aria-invalid={error === t('sequenceRule.invalid')}
+            aria-invalid={error === 'invalid'}
             className="bg-background border-border text-foreground focus:ring-accent min-h-[44px] rounded-xl border px-3 py-2 focus:ring-2 focus:outline-none"
           />
         </div>
@@ -139,7 +156,11 @@ export function SequenceRulePanel({ catalogId }: Props) {
         )}
       </div>
       <div role="alert" className="mt-2 text-sm text-red-700 dark:text-red-400">
-        {error}
+        {error === 'invalid'
+          ? t('sequenceRule.invalid')
+          : error
+            ? t('sequenceRule.failed')
+            : null}
       </div>
     </form>
   );

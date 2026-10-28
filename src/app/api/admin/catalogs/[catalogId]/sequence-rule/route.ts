@@ -6,6 +6,7 @@ import {
   sequenceRuleBodySchema,
 } from '@/lib/catalog/sequence-rule';
 import { NextRequest, NextResponse } from 'next/server';
+import { apiCache } from '@/lib/api-cache';
 
 const notFound = () =>
   NextResponse.json(
@@ -75,6 +76,8 @@ export async function PUT(
       organizationId: session.organizationId,
     });
     if (since === undefined) return notFound();
+    // The dashboard caches the next item, which depends on the order
+    apiCache.invalidate('trainee_dashboard');
     return NextResponse.json({ catalogId, since });
   } catch (e) {
     console.error('Admin update sequence rule error', e);

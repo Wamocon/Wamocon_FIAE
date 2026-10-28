@@ -6,12 +6,14 @@ import {
   activityLog,
   courseMembers,
   enablers,
+  profiles,
   traineeEnablerOverrides,
   traineeUseCaseOverrides,
   quizAssignments,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, getUserOrgIdStrict } from '@/lib/auth-helpers';
+import { apiCache } from '@/lib/api-cache';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import { invalidateTraineeListCaches } from '@/lib/catalog/trainee-cache';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import {
@@ -78,15 +80,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
     let organizationId: string;
     if (itemType === 'ENABLER') {
       // Fail closed: no organization, no exception (and no fallback to the
-      // platform organization, which getUserOrgId would use)
-      try {
-        organizationId = await getUserOrgIdStrict(traineeId);
-      } catch {
+      // platform organization, which getUserOrgId would use). A failed query
+      // is no "missing organization": it reaches the catch below (500).
+      const [owner] = await db
+        .select({ organizationId: profiles.organizationId })
+        .from(profiles)
+        .where(eq(profiles.id, traineeId as any));
+      if (!owner?.organizationId) {
         return NextResponse.json(
           { error: 'Trainee has no organization' },
           { status: 409 }
         );
       }
+      organizationId = String(owner.organizationId);
     } else {
       organizationId = await getUserOrgId(traineeId);
     }
@@ -158,8 +164,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
             },
           });
         });
-        // No list of the trainee is cached with the state of an enabler (the
-        // course detail is not cached), so no cache has to be cleared here
+        // The dashboard caches the next item, which depends on the state
+        apiCache.invalidate('trainee_dashboard');
         break;
       }
       case 'USE_CASE': {

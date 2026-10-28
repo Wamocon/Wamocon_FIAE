@@ -56,7 +56,9 @@ describe('EnablerStateBadge', () => {
   });
 
   it('shows open and completed with symbol and word', () => {
-    const { rerender } = renderWithProviders(<EnablerStateBadge state="open" />);
+    const { rerender } = renderWithProviders(
+      <EnablerStateBadge state="open" />
+    );
     expect(screen.getByTestId('enabler-state-open')).toHaveTextContent('Offen');
     rerender(<EnablerStateBadge state="completed" />);
     expect(screen.getByTestId('enabler-state-completed')).toHaveTextContent(

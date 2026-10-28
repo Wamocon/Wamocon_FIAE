@@ -44,6 +44,27 @@ function answeredQuestionIds(
   );
 }
 
+/**
+ * A lesson quiz is repeated until it is passed. While it is not passed the
+ * answer says only right or wrong per question: the right option, the
+ * reasoning and the expected answer come with the pass. Otherwise a failed
+ * attempt would hand over the key for the next one.
+ */
+function withholdKey<
+  T extends {
+    correctOptionId?: unknown;
+    explanation?: unknown;
+    correctAnswerText?: unknown;
+  },
+>(items: T[]): T[] {
+  return items.map(f => ({
+    ...f,
+    correctOptionId: null,
+    explanation: null,
+    correctAnswerText: null,
+  }));
+}
+
 // POST: submit answers for a quiz attempt
 // Body: { answers: [{ questionId, selectedOptionId? , textAnswer? }] }
 // The session user is the trainee, a traineeId in the body is ignored.
@@ -379,6 +400,10 @@ export async function POST(
       }
     });
 
+    // The key of a lesson quiz comes with the pass, not before (see withholdKey)
+    const shownFeedback =
+      isGlobal || isQuizPassed(score) ? feedback : withholdKey(feedback);
+
     // Notify trainers (reuse existing pattern)
     try {
       if (isGlobal) {
@@ -389,7 +414,7 @@ export async function POST(
         return NextResponse.json({
           submissionId: submission.id,
           score,
-          feedback,
+          feedback: shownFeedback,
           locked: false,
         });
       }
@@ -442,7 +467,7 @@ export async function POST(
     return NextResponse.json({
       submissionId: submission.id,
       score,
-      feedback,
+      feedback: shownFeedback,
       locked: false,
     });
   } catch (e) {
@@ -499,8 +524,17 @@ export async function GET(
       );
     if (!subs.length)
       return NextResponse.json({ error: 'No submission' }, { status: 404 });
-    // Use the most recent by id as a proxy (schema may have timestamp); adjust if submittedAt exists
-    const latest = subs[subs.length - 1];
+    // Use the most recent by id as a proxy (schema may have timestamp); adjust if submittedAt exists.
+    // A lesson quiz that was passed shows the attempt that passed (the best one).
+    const isGlobalQuiz =
+      String((quiz as any).quizType || '').toUpperCase() === 'GLOBAL';
+    const passedSubs = subs.filter(s => isQuizPassed(s.score));
+    const latest =
+      !isGlobalQuiz && passedSubs.length
+        ? passedSubs.reduce((best, s) =>
+            (s.score ?? 0) > (best.score ?? 0) ? s : best
+          )
+        : subs[subs.length - 1];
     const storedAnswers = await db
       .select()
       .from(quizSubmissionAnswers)
@@ -550,10 +584,14 @@ export async function GET(
       };
     });
 
+    // The key of a lesson quiz that is not passed yet stays back
     return NextResponse.json({
       submissionId: latest.id,
       score: latest.score,
-      feedback,
+      feedback:
+        isGlobalQuiz || isQuizPassed(latest.score)
+          ? feedback
+          : withholdKey(feedback),
     });
   } catch (e) {
     console.error('Get quiz latest submission error', e);

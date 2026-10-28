@@ -20,7 +20,9 @@ const url = process.env.PROGRESSION_TEST_DB;
 function assertLocal(connection: string) {
   const host = new URL(connection).hostname;
   if (!['localhost', '127.0.0.1', '::1', '[::1]'].includes(host)) {
-    throw new Error('PROGRESSION_TEST_DB must point at a database on this machine');
+    throw new Error(
+      'PROGRESSION_TEST_DB must point at a database on this machine'
+    );
   }
 }
 
@@ -268,7 +270,8 @@ if (!url) {
       import('@/app/api/trainer/trainees/[traineeId]/activate/route'),
     overview: () =>
       import('@/app/api/trainer/trainees/[traineeId]/overview/route'),
-    rule: () => import('@/app/api/admin/catalogs/[catalogId]/sequence-rule/route'),
+    rule: () =>
+      import('@/app/api/admin/catalogs/[catalogId]/sequence-rule/route'),
   };
 
   const stateMap = (body: any) =>
@@ -289,9 +292,14 @@ if (!url) {
 
     it('the list of the course shows everything: the first enabler open, the next ones locked (the inactive one is not there)', async () => {
       asUser(sessionOf(TNEW, ORG_A));
-      const r = await call(route.course, 'GET', `/api/trainee/courses/${COURSE}`, {
-        courseId: COURSE,
-      });
+      const r = await call(
+        route.course,
+        'GET',
+        `/api/trainee/courses/${COURSE}`,
+        {
+          courseId: COURSE,
+        }
+      );
       expect(r.status).toBe(200);
       expect(r.body.enablers.map((e: any) => e.id)).toEqual([E1, E2]);
       expect(stateMap(r.body)).toEqual({ [E1]: 'open', [E2]: 'locked' });
@@ -309,9 +317,14 @@ if (!url) {
 
     it('a locked enabler gives title and material, but no questions and no submission', async () => {
       asUser(sessionOf(TNEW, ORG_A));
-      const detail = await call(route.enabler, 'GET', `/api/trainee/enablers/${E2}`, {
-        enablerId: E2,
-      });
+      const detail = await call(
+        route.enabler,
+        'GET',
+        `/api/trainee/enablers/${E2}`,
+        {
+          enablerId: E2,
+        }
+      );
       expect(detail.status).toBe(200);
       expect(detail.body.enabler).toMatchObject({
         title: 'Enabler Zwei',
@@ -329,9 +342,14 @@ if (!url) {
       expect(questions.body.code).toBe('ENABLER_LOCKED');
       expect(JSON.stringify(questions.body)).not.toContain('Frage');
 
-      const list = await call(route.list, 'GET', `/api/trainee/enablers/${E2}/quizzes`, {
-        enablerId: E2,
-      });
+      const list = await call(
+        route.list,
+        'GET',
+        `/api/trainee/enablers/${E2}/quizzes`,
+        {
+          enablerId: E2,
+        }
+      );
       expect(list.body.enablerLocked).toBe(true);
       expect(list.body.quizzes.every((q: any) => !q.unlocked)).toBe(true);
 
@@ -368,13 +386,19 @@ if (!url) {
       expect(useCase.status).toBe(403);
 
       expect(
-        await count(sql`select count(*)::int as n from enabler_submissions where trainee_id = ${TNEW}`)
+        await count(
+          sql`select count(*)::int as n from enabler_submissions where trainee_id = ${TNEW}`
+        )
       ).toBe(0);
       expect(
-        await count(sql`select count(*)::int as n from quiz_submissions where trainee_id = ${TNEW}`)
+        await count(
+          sql`select count(*)::int as n from quiz_submissions where trainee_id = ${TNEW}`
+        )
       ).toBe(0);
       expect(
-        await count(sql`select count(*)::int as n from use_case_submissions where trainee_id = ${TNEW}`)
+        await count(
+          sql`select count(*)::int as n from use_case_submissions where trainee_id = ${TNEW}`
+        )
       ).toBe(0);
     });
 
@@ -391,20 +415,35 @@ if (!url) {
       const first = await post(false)();
       expect(first.status).toBe(200);
       expect(first.body).toMatchObject({ score: 0, locked: false });
-      let course = await call(route.course, 'GET', `/api/trainee/courses/${COURSE}`, {
-        courseId: COURSE,
-      });
+      let course = await call(
+        route.course,
+        'GET',
+        `/api/trainee/courses/${COURSE}`,
+        {
+          courseId: COURSE,
+        }
+      );
       expect(stateMap(course.body)).toEqual({ [E1]: 'open', [E2]: 'locked' });
 
       const second = await post(true)();
       expect(second.status).toBe(200);
       expect(second.body).toMatchObject({ score: 100, locked: false });
-      course = await call(route.course, 'GET', `/api/trainee/courses/${COURSE}`, {
-        courseId: COURSE,
+      course = await call(
+        route.course,
+        'GET',
+        `/api/trainee/courses/${COURSE}`,
+        {
+          courseId: COURSE,
+        }
+      );
+      expect(stateMap(course.body)).toEqual({
+        [E1]: 'completed',
+        [E2]: 'open',
       });
-      expect(stateMap(course.body)).toEqual({ [E1]: 'completed', [E2]: 'open' });
       expect(
-        await count(sql`select count(*)::int as n from quiz_submissions where trainee_id = ${TNEW} and quiz_id = ${Q1}`)
+        await count(
+          sql`select count(*)::int as n from quiz_submissions where trainee_id = ${TNEW} and quiz_id = ${Q1}`
+        )
       ).toBe(2);
 
       // after the pass: no further attempt, the stored answers come back
@@ -412,7 +451,9 @@ if (!url) {
       expect(third.body.locked).toBe(true);
       expect(third.body.score).toBe(100);
       expect(
-        await count(sql`select count(*)::int as n from quiz_submissions where trainee_id = ${TNEW} and quiz_id = ${Q1}`)
+        await count(
+          sql`select count(*)::int as n from quiz_submissions where trainee_id = ${TNEW} and quiz_id = ${Q1}`
+        )
       ).toBe(2);
 
       // the enabler is open now: questions come, the scenario can be submitted
@@ -470,21 +511,34 @@ if (!url) {
         { enablerId: E2, difficulty: 'MEDIUM' }
       );
       expect(mediumNow.status).toBe(200);
-      const list = await call(route.list, 'GET', `/api/trainee/enablers/${E2}/quizzes`, {
-        enablerId: E2,
-      });
+      const list = await call(
+        route.list,
+        'GET',
+        `/api/trainee/enablers/${E2}/quizzes`,
+        {
+          enablerId: E2,
+        }
+      );
       const byDifficulty = Object.fromEntries(
         list.body.quizzes.map((q: any) => [q.difficulty, q])
       );
-      expect(byDifficulty.LOW).toMatchObject({ completed: true, passed: false });
+      expect(byDifficulty.LOW).toMatchObject({
+        completed: true,
+        passed: false,
+      });
       expect(byDifficulty.MEDIUM).toMatchObject({ unlocked: true });
     });
 
     it('a trainee who joined before the cut-off date works as before (grandfathered)', async () => {
       asUser(sessionOf(TOLD, ORG_A));
-      const course = await call(route.course, 'GET', `/api/trainee/courses/${COURSE}`, {
-        courseId: COURSE,
-      });
+      const course = await call(
+        route.course,
+        'GET',
+        `/api/trainee/courses/${COURSE}`,
+        {
+          courseId: COURSE,
+        }
+      );
       expect(stateMap(course.body)).toEqual({ [E1]: 'open', [E2]: 'open' });
       const submit = await call(
         route.enablerSubmit,
@@ -509,16 +563,26 @@ if (!url) {
         );
       };
       asTrainee();
-      let course = await call(route.course, 'GET', `/api/trainee/courses/${COURSE}`, {
-        courseId: COURSE,
-      });
+      let course = await call(
+        route.course,
+        'GET',
+        `/api/trainee/courses/${COURSE}`,
+        {
+          courseId: COURSE,
+        }
+      );
       expect(stateMap(course.body)[E2]).toBe('locked');
 
       expect((await patch(true)).status).toBe(200);
       asTrainee();
-      course = await call(route.course, 'GET', `/api/trainee/courses/${COURSE}`, {
-        courseId: COURSE,
-      });
+      course = await call(
+        route.course,
+        'GET',
+        `/api/trainee/courses/${COURSE}`,
+        {
+          courseId: COURSE,
+        }
+      );
       expect(stateMap(course.body)).toEqual({ [E1]: 'open', [E2]: 'open' });
 
       // the trainer sees it in the overview
@@ -530,13 +594,22 @@ if (!url) {
         { traineeId: TNEW2 }
       );
       const e2 = overview.body.enablers.find((e: any) => e.id === E2);
-      expect(e2).toMatchObject({ override: true, state: 'open', sequenceEnforced: true });
+      expect(e2).toMatchObject({
+        override: true,
+        state: 'open',
+        sequenceEnforced: true,
+      });
 
       expect((await patch(false)).status).toBe(200);
       asTrainee();
-      course = await call(route.course, 'GET', `/api/trainee/courses/${COURSE}`, {
-        courseId: COURSE,
-      });
+      course = await call(
+        route.course,
+        'GET',
+        `/api/trainee/courses/${COURSE}`,
+        {
+          courseId: COURSE,
+        }
+      );
       expect(course.body.enablers.find((e: any) => e.id === E2)).toMatchObject({
         state: 'locked',
         lockReason: 'MANUAL',
@@ -544,13 +617,18 @@ if (!url) {
 
       expect((await patch(null)).status).toBe(200);
       expect(
-        await count(sql`select count(*)::int as n from trainee_enabler_overrides where trainee_id = ${TNEW2}`)
+        await count(
+          sql`select count(*)::int as n from trainee_enabler_overrides where trainee_id = ${TNEW2}`
+        )
       ).toBe(0);
-      const log = await sql`select user_id, organization_id, context from activity_log
+      const log =
+        await sql`select user_id, organization_id, context from activity_log
                             where activity_type = 'TRAINEE_ENABLER_OVERRIDE' order by created_at`;
       expect(log).toHaveLength(3);
       expect(log.map(l => l.context.value)).toEqual([true, false, null]);
-      expect(log.every(l => l.user_id === TRAINER_A && l.organization_id === ORG_A)).toBe(true);
+      expect(
+        log.every(l => l.user_id === TRAINER_A && l.organization_id === ORG_A)
+      ).toBe(true);
     });
 
     it('a trainer of another organization changes nothing (404)', async () => {
@@ -564,7 +642,9 @@ if (!url) {
       );
       expect(r.status).toBe(404);
       expect(
-        await count(sql`select count(*)::int as n from trainee_enabler_overrides where trainee_id = ${TNEW2}`)
+        await count(
+          sql`select count(*)::int as n from trainee_enabler_overrides where trainee_id = ${TNEW2}`
+        )
       ).toBe(0);
     });
 
@@ -594,7 +674,9 @@ if (!url) {
       expect([404, 409]).toContain(noOrg.status);
       await sql`update profiles set organization_id = ${ORG_A} where id = ${TNEW2}`;
       expect(
-        await count(sql`select count(*)::int as n from trainee_enabler_overrides where trainee_id = ${TNEW2}`)
+        await count(
+          sql`select count(*)::int as n from trainee_enabler_overrides where trainee_id = ${TNEW2}`
+        )
       ).toBe(0);
     });
 
@@ -618,15 +700,23 @@ if (!url) {
         { since: null }
       );
       expect(off.body.since).toBeNull();
-      const kept = await sql`select settings from training_catalogs where id = ${CAT}`;
+      const kept =
+        await sql`select settings from training_catalogs where id = ${CAT}`;
       expect(kept[0].settings).toEqual({ content_targets: { enablers: 3 } });
 
       // not in force: even a trainee who joined late works as before
       asUser(sessionOf(TNEW, ORG_A));
-      let course = await call(route.course, 'GET', `/api/trainee/courses/${COURSE}`, {
-        courseId: COURSE,
-      });
-      expect(course.body.enablers.every((e: any) => e.state !== 'locked')).toBe(true);
+      let course = await call(
+        route.course,
+        'GET',
+        `/api/trainee/courses/${COURSE}`,
+        {
+          courseId: COURSE,
+        }
+      );
+      expect(course.body.enablers.every((e: any) => e.state !== 'locked')).toBe(
+        true
+      );
 
       asUser(adminSession());
       const on = await call(
@@ -637,19 +727,28 @@ if (!url) {
         { since: '2026-12-01' }
       );
       expect(on.body.since).toBe('2026-12-01T00:00:00.000Z');
-      const stored = await sql`select settings from training_catalogs where id = ${CAT}`;
+      const stored =
+        await sql`select settings from training_catalogs where id = ${CAT}`;
       expect(stored[0].settings).toEqual({
         content_targets: { enablers: 3 },
         sequence_since: '2026-12-01T00:00:00.000Z',
       });
       // a cut-off date after the join of TNEW: grandfathered now
       asUser(sessionOf(TNEW, ORG_A));
-      course = await call(route.course, 'GET', `/api/trainee/courses/${COURSE}`, {
-        courseId: COURSE,
-      });
-      expect(course.body.enablers.every((e: any) => e.state !== 'locked')).toBe(true);
+      course = await call(
+        route.course,
+        'GET',
+        `/api/trainee/courses/${COURSE}`,
+        {
+          courseId: COURSE,
+        }
+      );
+      expect(course.body.enablers.every((e: any) => e.state !== 'locked')).toBe(
+        true
+      );
 
-      const log = await sql`select context from activity_log where activity_type = 'CATALOG_SEQUENCE_RULE' order by created_at`;
+      const log =
+        await sql`select context from activity_log where activity_type = 'CATALOG_SEQUENCE_RULE' order by created_at`;
       expect(log.map(l => l.context.value)).toEqual([
         null,
         '2026-12-01T00:00:00.000Z',

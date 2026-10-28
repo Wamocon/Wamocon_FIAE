@@ -368,8 +368,9 @@ describe('trainee lists per occupation', () => {
     });
 
     it('activation: a trainee of the chosen occupation is changed', async () => {
+      // the third read of profiles is the organization of the trainee
       const { mock, mod } = await load('[traineeId]/activate/route', {
-        ...lookups(true, true),
+        ...lookups(true, true, [{ organizationId: ORG }]),
         ...item,
       });
       const res = await mod.PATCH(activate('KFBM'), params);

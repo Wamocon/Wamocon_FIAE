@@ -131,7 +131,11 @@ export async function GET(
     // order is a matter of the trainee.
     const enablerState = new Map<
       string,
-      { state: string; lockedBy: { id: string; title: string } | null }
+      {
+        state: string;
+        lockReason: string | null;
+        lockedBy: { id: string; title: string } | null;
+      }
     >();
     if (session && !session.isTrainerLevel) {
       const memberOf = Array.from(
@@ -146,6 +150,7 @@ export async function GET(
         for (const e of p.progression.enablers) {
           enablerState.set(e.enablerId, {
             state: e.state,
+            lockReason: e.lockReason,
             lockedBy: e.lockedBy
               ? { id: e.lockedBy.enablerId, title: e.lockedBy.title }
               : null,
@@ -176,6 +181,7 @@ export async function GET(
         return {
           ...e,
           state: own?.state ?? null,
+          lockReason: own?.lockReason ?? null,
           lockedBy: own?.lockedBy ?? null,
           // the name of a course the caller is not in stays with its members
           courseTitle: isMember ? e.courseTitle : null,

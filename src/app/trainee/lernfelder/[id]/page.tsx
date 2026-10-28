@@ -49,6 +49,7 @@ interface EnablerItem {
   accessible: boolean;
   /** Order of work (a trainee who is a member of the course): locked, open or completed */
   state?: EnablerStateValue | null;
+  lockReason?: 'SEQUENCE' | 'MANUAL' | null;
   lockedBy?: { id: string; title: string } | null;
 }
 
@@ -242,7 +243,7 @@ export default function TraineeLernfeldDetailPage() {
                   <div className="mt-2">
                     <EnablerStateBadge
                       state={enabler.state}
-                      reason={enabler.lockedBy ? 'SEQUENCE' : 'MANUAL'}
+                      reason={enabler.lockReason}
                       lockedByTitle={enabler.lockedBy?.title}
                     />
                   </div>

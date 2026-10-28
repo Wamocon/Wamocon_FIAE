@@ -383,6 +383,9 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
   }, [groupedEnablers, openCourses]);
 
   // Helpers
+  // The enabler whose exception is being saved (the buttons wait)
+  const [busyEnabler, setBusyEnabler] = useState<string | null>(null);
+
   // isActive null (only for an enabler) removes the exception to the order
   const toggleItem = async (
     itemType: 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ',
@@ -390,6 +393,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     isActive: boolean | null
   ) => {
     if (!trainee?.id) return;
+    if (itemType === 'ENABLER') setBusyEnabler(itemId);
 
     // Optimistic update (an enabler shows the new state after the reload: the
     // state follows from the order of work, not from the switch alone)
@@ -439,7 +443,11 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       }
     } catch (e) {
       console.error(e);
-      toast.error(t('error.unknown'));
+      toast.error(
+        itemType === 'ENABLER'
+          ? t('trainee.detail.order.failed')
+          : t('error.unknown')
+      );
       // Revert: full reload on error
       const oRes = await authFetch(
         `/api/trainer/trainees/${trainee.id}/overview`,
@@ -451,6 +459,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         const oData = await oRes.json();
         setOverview(normalizeOverview(oData));
       }
+    } finally {
+      setBusyEnabler(null);
     }
   };
 
@@ -848,6 +858,9 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                                                   e.state === 'locked' ? (
                                                     <button
                                                       type="button"
+                                                      disabled={busyEnabler === e.id}
+                                                      aria-busy={busyEnabler === e.id}
+                                                      aria-label={`${t('trainee.detail.order.releaseOut')}: ${e.title}`}
                                                       onClick={() =>
                                                         toggleItem(
                                                           'ENABLER',
@@ -855,7 +868,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                                                           true
                                                         )
                                                       }
-                                                      className="text-foreground cursor-pointer rounded-md border border-green-600 px-2 py-1 text-sm transition-opacity hover:opacity-80"
+                                                      className="text-foreground min-h-[44px] cursor-pointer rounded-md border border-green-600 px-3 py-2 text-sm transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-50"
                                                     >
                                                       {t(
                                                         'trainee.detail.order.releaseOut'
@@ -864,6 +877,9 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                                                   ) : e.state === 'open' ? (
                                                     <button
                                                       type="button"
+                                                      disabled={busyEnabler === e.id}
+                                                      aria-busy={busyEnabler === e.id}
+                                                      aria-label={`${t('trainee.detail.order.lock')}: ${e.title}`}
                                                       onClick={() =>
                                                         toggleItem(
                                                           'ENABLER',
@@ -871,7 +887,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                                                           false
                                                         )
                                                       }
-                                                      className="text-foreground cursor-pointer rounded-md border border-amber-600 px-2 py-1 text-sm transition-opacity hover:opacity-80"
+                                                      className="text-foreground min-h-[44px] cursor-pointer rounded-md border border-amber-600 px-3 py-2 text-sm transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-50"
                                                     >
                                                       {t(
                                                         'trainee.detail.order.lock'
@@ -881,6 +897,9 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                                                 ) : (
                                                   <button
                                                     type="button"
+                                                    disabled={busyEnabler === e.id}
+                                                    aria-busy={busyEnabler === e.id}
+                                                    aria-label={`${t('trainee.detail.order.reset')}: ${e.title}`}
                                                     onClick={() =>
                                                       toggleItem(
                                                         'ENABLER',
@@ -888,7 +907,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                                                         null
                                                       )
                                                     }
-                                                    className="cursor-pointer rounded-md border border-slate-500 px-2 py-1 text-sm transition-opacity hover:opacity-80"
+                                                    className="text-foreground min-h-[44px] cursor-pointer rounded-md border border-slate-500 px-3 py-2 text-sm transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-50"
                                                   >
                                                     {t(
                                                       'trainee.detail.order.reset'

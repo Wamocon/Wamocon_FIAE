@@ -180,12 +180,10 @@ export async function loadCourseProgressions(
   const joinedOf = new Map(
     enrollmentRows.map(e => [
       String(e.trainingCatalogId),
-      e.createdAt ? new Date(e.createdAt as unknown as string) : null,
+      e.createdAt ?? null,
     ])
   );
-  const profileCreated = profileRows[0]?.createdAt
-    ? new Date(profileRows[0].createdAt as unknown as string)
-    : null;
+  const profileCreated = profileRows[0]?.createdAt ?? null;
 
   for (const course of courseRows) {
     const courseId = String(course.id);

@@ -7,7 +7,6 @@ import {
   courseMembers,
   courses,
   enablers,
-  enablerCompletions,
   useCases,
   useCaseSubmissions,
   quizzes,

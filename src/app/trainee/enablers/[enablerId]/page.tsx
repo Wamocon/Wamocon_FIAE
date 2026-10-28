@@ -33,6 +33,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { lockText } from '@/components/trainee/EnablerStateBadge';
+import { PASS_THRESHOLD } from '@/lib/catalog/progression';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -644,7 +645,6 @@ export default function TraineeEnablerPage() {
       {/* Order of work: a locked enabler says why */}
       {isLocked && (
         <div
-          role="status"
           data-testid="enabler-locked-banner"
           className="text-foreground flex items-start gap-3 rounded-2xl border border-amber-600/60 bg-amber-500/15 p-4"
         >
@@ -887,7 +887,7 @@ export default function TraineeEnablerPage() {
           />
         </div>
 
-        {isLocked && (
+        {isLocked && (!submission || submission.status === 'REJECTED') && (
           <div className="flex flex-col items-end gap-1">
             <button
               type="button"
@@ -1147,12 +1147,12 @@ export default function TraineeEnablerPage() {
                   <div
                     role="status"
                     className={`text-foreground rounded-lg border p-2 text-sm ${
-                      (result?.score ?? 0) >= 50
+                      (result?.score ?? 0) >= PASS_THRESHOLD
                         ? 'border-green-600/60 bg-green-500/15'
                         : 'border-amber-600/60 bg-amber-500/15'
                     }`}
                   >
-                    {(result?.score ?? 0) >= 50
+                    {(result?.score ?? 0) >= PASS_THRESHOLD
                       ? t('progression.resultPassed')
                       : t('progression.resultFailed')}
                   </div>
@@ -1202,17 +1202,17 @@ export default function TraineeEnablerPage() {
                 </ul>
                 {!reviewMode &&
                   !quizLocked &&
-                  (result?.score ?? 0) < 50 &&
+                  (result?.score ?? 0) < PASS_THRESHOLD &&
                   selectedDifficulty && (
                     <button
-                      className="bg-primary text-primary-foreground hover:bg-primary/90 mr-2 rounded-md px-4 py-2"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 mr-2 min-h-[44px] rounded-md px-4 py-2"
                       onClick={() => loadQuizContent(selectedDifficulty)}
                     >
                       {t('progression.retryQuiz')}
                     </button>
                   )}
                 <button
-                  className="border-accent/30 hover:bg-background/60 rounded-md border px-4 py-2"
+                  className="border-accent/30 hover:bg-background/60 min-h-[44px] rounded-md border px-4 py-2"
                   onClick={() => {
                     setQuizContent(null);
                     setResult(null);

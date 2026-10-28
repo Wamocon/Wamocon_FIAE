@@ -134,10 +134,10 @@ describe('PATCH /api/trainer/trainees/[traineeId]/activate: the quiz list of the
     cleared();
   });
 
-  it('is left alone for an enabler (no list of the trainee shows it)', async () => {
+  it('clears only the dashboard for an enabler (it caches the next item), no list', async () => {
     const { mod } = await loadScoped(route, { tables });
     expect((await mod.PATCH(patch('ENABLER', true), params)).status).toBe(200);
-    untouched();
+    expect(tags()).toEqual(['trainee_dashboard']);
   });
 });
 

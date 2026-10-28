@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { getTableName } from 'drizzle-orm';
 import {
   FIAE,
   ORG,
@@ -10,6 +11,7 @@ import {
   TRAINER,
   loadScoped,
   scopeReq,
+  superAdminSession,
 } from '../../../helpers/trainerScope';
 
 // PATCH /api/trainer/trainees/[traineeId]/activate for an ENABLER: the
@@ -159,27 +161,47 @@ describe('exception to the order of work (enabler)', () => {
   });
 
   it('fails closed for a trainee without an organization (409), nothing written', async () => {
+    // only the super admin reaches such a trainee at all
     const { mod, mock } = await loadScoped(
       'trainer/trainees/[traineeId]/activate/route',
       {
-        tables: world,
-        setup: () => {
-          jest.doMock('@/lib/auth-helpers', () => ({
-            __esModule: true,
-            verifyTrainer: async () => true,
-            verifyPlatformOwner: async () => false,
-            getUserOrgId: async () => ORG,
-            getUserOrgIdStrict: async () => {
-              throw new Error('profile has no organization');
-            },
-          }));
-        },
+        tables: { ...world, profiles: [traineeRow(null)] },
+        session: superAdminSession(),
       }
     );
     const res = await mod.PATCH(patch(true), params);
     expect(res.status).toBe(409);
     expect(mock.writes('insert', 'trainee_enabler_overrides')).toEqual([]);
     expect(mock.writes('insert', 'activity_log')).toEqual([]);
+  });
+
+  it('a failed query is a 500, not a missing organization', async () => {
+    const { mod, mock } = await loadScoped(
+      'trainer/trainees/[traineeId]/activate/route',
+      { tables: world }
+    );
+    // the guard read the trainee (first read of profiles), the second read of
+    // profiles (the organization) fails
+    let profileReads = 0;
+    const real = mock.db.select.getMockImplementation() as () => any;
+    mock.db.select.mockImplementation(() => {
+      const chain = real();
+      return new Proxy(chain, {
+        get(target, prop) {
+          if (prop === 'from') {
+            return (table: any) => {
+              if (getTableName(table) === 'profiles' && ++profileReads >= 2)
+                throw new Error('connection lost');
+              return target.from(table);
+            };
+          }
+          return target[prop];
+        },
+      });
+    });
+    const res = await mod.PATCH(patch(true), params);
+    expect(res.status).toBe(500);
+    expect(mock.writes('insert', 'trainee_enabler_overrides')).toEqual([]);
   });
 
   it('answers 403 for a trainee caller (rights unchanged)', async () => {

@@ -255,6 +255,60 @@ describe('POST /api/trainee/quizzes/[quizId]/submit', () => {
     });
   });
 
+  it('a failed attempt at a lesson quiz says right or wrong only, the key comes with the pass', async () => {
+    const wrong = [
+      { questionId: 'q-1', selectedOptionId: 'o-2' },
+      { questionId: 'q-2', selectedOptionId: 'o-4' },
+    ];
+    const { mod } = await load(lessonTables());
+    const res = await mod.POST(post({ answers: wrong }), ctx);
+    const body = await res.json();
+    expect(body.score).toBe(0);
+    expect(body.feedback).toHaveLength(2);
+    expect(body.feedback.every((f: any) => f.correct === false)).toBe(true);
+    expect(
+      body.feedback.every(
+        (f: any) =>
+          f.correctOptionId === null &&
+          f.explanation === null &&
+          f.correctAnswerText === null
+      )
+    ).toBe(true);
+    expect(JSON.stringify(body)).not.toContain(SECRET_1);
+    expect(JSON.stringify(body)).not.toContain(SECRET_2);
+    expect(JSON.stringify(body)).not.toContain('o-1');
+  });
+
+  it('the review of a lesson quiz that was not passed keeps the key back as well', async () => {
+    const { mod } = await load({
+      ...lessonTables(),
+      quizSubmissions: [{ id: 's1', quizId: 'q1', traineeId: 't1', score: 0 }],
+      quizSubmissionAnswers: [
+        { submissionId: 's1', questionId: 'q-1', selectedOptionId: 'o-2' },
+        { submissionId: 's1', questionId: 'q-2', selectedOptionId: 'o-4' },
+      ],
+    });
+    const body = await (await mod.GET(get(), ctx)).json();
+    expect(body.feedback).toHaveLength(2);
+    expect(JSON.stringify(body)).not.toContain(SECRET_1);
+    expect(body.feedback[0].correctOptionId).toBeNull();
+  });
+
+  it('a failed attempt at a global quiz still shows the solution (repeatable by design)', async () => {
+    const { mod } = await load({
+      ...lessonTables(),
+      quizzes: [globalQuiz],
+      quizAssignments: [{ quizId: 'q1', traineeId: 't1' }],
+    });
+    const wrong = [
+      { questionId: 'q-1', selectedOptionId: 'o-2' },
+      { questionId: 'q-2', selectedOptionId: 'o-4' },
+    ];
+    const body = await (await mod.POST(post({ answers: wrong }), ctx)).json();
+    expect(body.score).toBe(0);
+    expect(body.feedback[0].correctOptionId).toBe('o-1');
+  });
+
   it('a lesson quiz stays locked after a pass, whatever a later attempt scored', async () => {
     const { mod, mock } = await load({
       ...lessonTables(),
@@ -363,7 +417,7 @@ describe('GET /api/trainee/quizzes/[quizId]/submit', () => {
   it('after a submission it shows the solution of the answered questions only', async () => {
     const { mod } = await load({
       ...lessonTables(),
-      quizSubmissions: [{ id: 's1', quizId: 'q1', traineeId: 't1', score: 0 }],
+      quizSubmissions: [{ id: 's1', quizId: 'q1', traineeId: 't1', score: 80 }],
       quizSubmissionAnswers: [
         { submissionId: 's1', questionId: 'q-1', selectedOptionId: 'o-2' },
       ],
