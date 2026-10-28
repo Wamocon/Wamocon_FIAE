@@ -15,6 +15,7 @@ import {
   ruleFailureBody,
 } from '@/lib/catalog/admin';
 import { syncTraineeContentAfterEnrollment } from '@/lib/catalog/trainee-content';
+import { invalidateTraineeListCaches } from '@/lib/catalog/trainee-cache';
 import { apiCache } from '@/lib/api-cache';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
@@ -83,13 +84,8 @@ export async function GET(
  * the trainer dashboards and course lists that count trainees.
  */
 function invalidateEnrollmentCaches() {
-  for (const tag of [
-    'trainee_courses',
-    'trainee_quizzes',
-    'trainee_dashboard',
-    'trainer_dashboard',
-    'trainer_courses',
-  ]) {
+  invalidateTraineeListCaches();
+  for (const tag of ['trainer_dashboard', 'trainer_courses']) {
     apiCache.invalidate(tag);
   }
 }
@@ -160,6 +156,9 @@ export async function PUT(
           quizAssignmentsAdded: sync.quizAssignmentsAdded,
         };
       }
+      // The lists of the trainee are cached for minutes. The scope of the
+      // trainee changed with the enrollment, so they are cleared whatever
+      // became of the sync.
       invalidateEnrollmentCaches();
     }
 

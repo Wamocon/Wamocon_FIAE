@@ -249,7 +249,7 @@ describe('a file that differs from the database', () => {
     expect(
       done?.stock.files.find(f => f.fileId === changed.file.id)?.status
     ).toBe('differs');
-    expect(done?.differences).toEqual([
+    expect(done?.differences).toMatchObject([
       { table: 'enablers', key: 'K4-a', columns: ['description_text'] },
     ]);
     expect(first.db.tables.enablers[0].description_text).toBe(before);

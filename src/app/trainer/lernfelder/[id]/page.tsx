@@ -173,7 +173,7 @@ export default function LernfeldDetailPage({
                 {lernfeld.title}
               </h1>
               {lernfeld.description && (
-                <p className="text-muted mt-2 max-w-2xl">
+                <p className="text-muted mt-2 max-w-2xl whitespace-pre-line">
                   {lernfeld.description}
                 </p>
               )}

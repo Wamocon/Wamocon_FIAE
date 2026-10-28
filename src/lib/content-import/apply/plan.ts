@@ -7,6 +7,11 @@
 // skipped and why. Anything that is unclear is skipped with a reason and never
 // guessed. Skipped files do not reach the database.
 
+import {
+  MAX_ENABLER_DESCRIPTION,
+  lengthStats,
+} from '../descriptions';
+import { summarizeEnablerText } from '../enabler-summary';
 import { enablerKeysMatch } from '../path-info';
 import type {
   Paragraph,
@@ -548,6 +553,9 @@ export function buildImportPlan(
 
   // Enablers -----------------------------------------------------------------
   const enablers: PlanEnabler[] = [];
+  // The whole text of each enabler document, only for the solution guard below
+  // (never part of the plan).
+  const fullTextByCode = new Map<string, string>();
   for (const file of ready) {
     const { info, content } = file;
     if (info.type !== 'enabler' || content?.type !== 'enabler') continue;
@@ -595,7 +603,22 @@ export function buildImportPlan(
       );
       continue;
     }
-    const text = lines.slice(1).join('\n\n');
+    // The whole text of the document is the teaching text, it stays in the PDF
+    // document of the enabler. The description is the short form like the one
+    // of FIAE (enabler-summary.ts). The guard still reads the whole text.
+    const bodyLines = lines.slice(1);
+    const text = bodyLines.join('\n\n');
+    const summary = decisions.content.enablerText
+      ? summarizeEnablerText(
+          content.paragraphs
+            .filter(p => p.text.trim().length > 0)
+            .slice(1),
+          heading.title
+        )
+      : null;
+    if (decisions.content.enablerText && text.length > 0) {
+      fullTextByCode.set(code, text);
+    }
     enablers.push({
       code,
       letter: info.enablerLetter,
@@ -603,8 +626,7 @@ export function buildImportPlan(
         .code,
       title: heading.title,
       orderIndex: letterOrdinal(info.enablerLetter),
-      descriptionText:
-        decisions.content.enablerText && text.length > 0 ? text : null,
+      descriptionText: summary,
       source: file.rel,
     });
   }
@@ -911,7 +933,7 @@ export function buildImportPlan(
     // rationales come from it), only a marker or a scenario solution counts.
     // The title stays strict.
     const text = leakOfEnablerText(
-      e.descriptionText ?? '',
+      fullTextByCode.get(e.code) ?? e.descriptionText ?? '',
       strong,
       reviewedByCode.has(e.code)
     );
@@ -1227,6 +1249,16 @@ export function validatePlan(raw: unknown): string[] {
         `enabler ${e.code} names the unknown component ${e.componentCode}`
       );
     }
+    // The description is a short text (like FIAE). A long one is the whole
+    // Word text of a plan that was built before the short form.
+    if (
+      typeof e.descriptionText === 'string' &&
+      e.descriptionText.length > MAX_ENABLER_DESCRIPTION
+    ) {
+      errors.push(
+        `enabler ${e.code} has a description of ${e.descriptionText.length} characters (limit ${MAX_ENABLER_DESCRIPTION}): the plan was built before the short description, build it again`
+      );
+    }
   }
   const scenarioOwners = new Set<string>();
   for (const s of plan.scenarios) {
@@ -1389,6 +1421,14 @@ export function renderPlanSummary(plan: ImportPlan): string {
   );
   out.push(`| Fragen | ${counts.questions} |`);
   out.push(`| Optionen | ${counts.options} |`);
+  const stats = lengthStats(
+    plan.enablers.map(e => (e.descriptionText ?? '').length)
+  );
+  if (stats) {
+    out.push(
+      `| Länge der Enabler-Beschreibung (Zeichen) | kleinste ${stats.min}, Median ${stats.median}, Mittel ${stats.mean}, größte ${stats.max} (FIAE: Mittel 265, größte 956) |`
+    );
+  }
   out.push(`| übersprungene Dateien | ${counts.skipped} |`);
   out.push(
     `| ältere Kopien (neueste Fassung gewählt) | ${counts.superseded} |`

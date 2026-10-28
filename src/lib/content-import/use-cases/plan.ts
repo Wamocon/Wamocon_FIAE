@@ -13,6 +13,7 @@
 
 import { kindOfComponent } from '../apply/decisions';
 import type { Decisions } from '../apply/types';
+import { MAX_USE_CASE_DESCRIPTION, describeUseCase } from '../descriptions';
 import { enablerKeysMatch } from '../path-info';
 import type { ParseResult, PathInfo } from '../types';
 import {
@@ -243,6 +244,10 @@ export function buildUseCasePlan(
   const warnings: string[] = [];
   const byRel = new Map(files.map(f => [f.rel, f]));
   const useCases: PlanUseCase[] = [];
+  // The whole visible assignment of each use case, only for the solution guard
+  // below (never part of the plan: the description is the short title and the
+  // assignment is the task PDF).
+  const assignments = new Map<string, string>();
 
   for (const rel of selection.chosen) {
     const file = byRel.get(rel);
@@ -326,13 +331,15 @@ export function buildUseCasePlan(
         .filter(i => i.severity === 'warning')
         .map(i => `${key}: ${i.code}`)
     );
+    assignments.set(code, assignmentText(trainee));
     useCases.push({
       code,
       componentCode: component.code,
       enablerCode: code,
       letter,
       title: trainee.title ?? '',
-      description: assignmentText(trainee),
+      // the short title, like FIAE: the assignment is the task PDF
+      description: describeUseCase(trainee.title ?? ''),
       topics: trainee.topics.length > 0 ? trainee.topics : null,
       solution: parsedUseCase.solution,
       criteria:
@@ -369,7 +376,7 @@ export function buildUseCasePlan(
   const kept = useCases.filter(u => !clashing.has(u));
   // A solution paragraph of one use case that stands in the visible text of
   // another is named for the owner (no skip, see sharedSolutionBlocks).
-  for (const pair of sharedSolutionBlocks(kept)) {
+  for (const pair of sharedSolutionBlocks(kept, assignments)) {
     warnings.push(
       `use-case:${pair.visibleIn}: SOLUTION_TEXT_OF_${pair.solutionOf}_IN_VISIBLE_TEXT`
     );
@@ -400,7 +407,10 @@ export function buildUseCasePlan(
   // text that holds the solution of another one is found too.
   const solutions = solutionTextsOfUseCases(kept);
   for (const useCase of kept) {
-    if (leaksInUseCase(useCase, solutions).length > 0) {
+    if (
+      leaksInUseCase(useCase, solutions, assignments.get(useCase.code)).length >
+      0
+    ) {
       skipped.push(
         skip(
           useCase.source,
@@ -514,6 +524,10 @@ export function validateUseCasePlan(raw: unknown): string[] {
     if (!text(u.title)) errors.push(`use case ${u.code} has no title`);
     if (!text(u.description)) {
       errors.push(`use case ${u.code} has no description`);
+    } else if (u.description.length > MAX_USE_CASE_DESCRIPTION) {
+      errors.push(
+        `use case ${u.code} has a description of ${u.description.length} characters (limit ${MAX_USE_CASE_DESCRIPTION}): the plan was built before the short description, build it again`
+      );
     }
     if (!text(u.solution)) errors.push(`use case ${u.code} has no solution`);
     for (const field of ['topics', 'criteria'] as const) {

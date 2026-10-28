@@ -92,7 +92,8 @@ describe('executeUseCasePlan: first run', () => {
       order_index: 4,
       is_active: false,
     });
-    expect(String(uc?.description_text)).toContain('Zielsetzung');
+    // the short title, like FIAE, not the assignment
+    expect(uc?.description_text).toBe('Erfundener Titel 6.2d');
 
     const doc = db.tables[DOC].find(r => r.use_case_id === uc?.id);
     expect(doc).toMatchObject({

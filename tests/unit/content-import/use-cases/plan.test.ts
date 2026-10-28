@@ -57,8 +57,11 @@ describe('buildUseCasePlan: the sample tree', () => {
 
   it('keeps the solution out of the visible description and the topics', () => {
     for (const uc of plan.useCases) {
-      expect(uc.description).toContain('Ausgangssituation');
-      expect(uc.description).toContain('Weg zum Ziel');
+      // like FIAE: the description is the short title, the assignment is the
+      // task PDF and stays out of the plan
+      expect(uc.description).toBe(uc.title);
+      expect(uc.description).not.toContain('Ausgangssituation');
+      expect(uc.description).not.toContain('Weg zum Ziel');
       expect(uc.description).not.toContain('OMEGA');
       expect(uc.description).not.toContain('ZETA');
       expect(uc.topics).not.toContain('OMEGA');
