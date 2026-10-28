@@ -109,6 +109,92 @@ export function firstCatalogId(
   return null;
 }
 
+/** A content_documents row as the reindex reads it, with the catalogs of its parents. */
+export interface DocumentIndexRow {
+  documentType: string | null;
+  visibility: string | null;
+  storageUrl: string | null;
+  mimeType: string | null;
+  description: string | null;
+  organizationId: string | null;
+  enablerCatalogId: string | null;
+  useCaseCatalogId: string | null;
+  courseCatalogId: string | null;
+}
+
+export type DocumentSkipReason =
+  | 'no training catalog'
+  | 'private reference'
+  | 'word file'
+  | 'not a pdf'
+  | 'not an http url'
+  | 'no file and no text';
+
+/** What the reindex does with a document row. */
+export type DocumentIndexPlan =
+  | { kind: 'pdf' | 'text'; scope: IndexScope }
+  | { kind: 'skip'; reason: DocumentSkipReason };
+
+/** A text row needs at least this much text to be worth a chunk. */
+export const MIN_DOCUMENT_TEXT_CHARS = 20;
+
+const PRIVATE_REFERENCE = /^\s*private:\/\//i;
+const WORD_MIME = /wordprocessingml|^application\/msword$/i;
+
+/**
+ * Decides what the reindex does with a document row, and for whom the chunks
+ * are.
+ *
+ *  - pdf: the file is read from its url. text: the row has no file and holds
+ *    its text in the description (the text rows of the import: the situation of
+ *    a scenario, the solution of a use case).
+ *  - visibility comes from documentVisibility: a solution or a trainer-only
+ *    row is 'trainer' in every form (file or text), everything else follows the
+ *    rule of the trainee routes.
+ *  - skip: no catalog (nobody would see the chunk), a private reference (the
+ *    model solutions of the private bucket are never fetched by a script), a
+ *    Word file or another file that is no PDF, or a row without file and text.
+ */
+export function planDocumentIndexing(row: DocumentIndexRow): DocumentIndexPlan {
+  const trainingCatalogId = firstCatalogId(
+    row.enablerCatalogId,
+    row.useCaseCatalogId,
+    row.courseCatalogId
+  );
+  if (!trainingCatalogId) {
+    return { kind: 'skip', reason: 'no training catalog' };
+  }
+
+  const url = (row.storageUrl ?? '').trim();
+  if (PRIVATE_REFERENCE.test(url)) {
+    return { kind: 'skip', reason: 'private reference' };
+  }
+  const mime = (row.mimeType ?? '').trim();
+  if (WORD_MIME.test(mime)) return { kind: 'skip', reason: 'word file' };
+
+  const scope: IndexScope = {
+    trainingCatalogId,
+    visibility: documentVisibility(row.documentType, row.visibility),
+    organizationId: row.organizationId ? String(row.organizationId) : null,
+  };
+
+  if (url === '') {
+    const text = (row.description ?? '').trim();
+    return text.length >= MIN_DOCUMENT_TEXT_CHARS
+      ? { kind: 'text', scope }
+      : { kind: 'skip', reason: 'no file and no text' };
+  }
+  // Only an http or https address is fetched (the host of a stored url is not
+  // checked here: the url is written by an import or a trainer)
+  if (!/^https?:\/\//i.test(url)) {
+    return { kind: 'skip', reason: 'not an http url' };
+  }
+  if (mime !== '' && !/^application\/pdf$/i.test(mime)) {
+    return { kind: 'skip', reason: 'not a pdf' };
+  }
+  return { kind: 'pdf', scope };
+}
+
 /** Half-open range [from, to) of the chunk indexes of the part at `offset`. */
 export function chunkIndexRange(offset: number): { from: number; to: number } {
   return { from: offset, to: offset + CHUNK_INDEX_BLOCK };

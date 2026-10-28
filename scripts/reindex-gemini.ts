@@ -67,10 +67,13 @@ import {
   QUIZ_QUESTIONS_VISIBILITY,
   SCENARIO_HINT_VISIBILITY,
   TRAINER_PART_CHUNK_OFFSET,
-  documentVisibility,
-  firstCatalogId,
+  planDocumentIndexing,
   type IndexScope,
 } from '../src/lib/hai/indexScope';
+import {
+  DEFAULT_CHARS_PER_TOKEN,
+  estimateTokens,
+} from '../src/lib/hai/embeddingCost';
 import {
   buildQuizTexts,
   type QuizQuestionInput,
@@ -122,7 +125,8 @@ let CATALOG_ID: string | null = null;
 // Dry run: chunks per source type, catalog and visibility
 const CATALOG_CODES = new Map<string, string>();
 const PLAN_INVENTORY = new ChunkPlan(); // everything the index holds afterwards
-const PLAN_CHANGES = new ChunkPlan(); // what a real run would write now
+const PLAN_CHANGES = new ChunkPlan(); // what a real run would embed now
+const PLAN_RESCOPE = new ChunkPlan(); // chunks that only change their scope
 
 // ============================================================================
 // STYLING
@@ -536,7 +540,10 @@ async function indexSource(
   content: string,
   metadata: Record<string, unknown>,
   scope: IndexScope,
-  part: SourcePart = WHOLE_SOURCE
+  part: SourcePart = WHOLE_SOURCE,
+  // Name of the source in the plan of a dry run (several kinds of source are
+  // stored as 'document')
+  planLabel?: string
 ): Promise<SourceResult> {
   const chunks = chunkText(content);
   if (chunks.length === 0) {
@@ -558,11 +565,19 @@ async function indexSource(
     return { success: false, chunks: 0, skipped: false };
   }
 
+  // What goes to the model is the chunk, cut at MAX_EMBED_CHARS
+  const measure = {
+    chars: chunks.reduce(
+      (sum, c) => sum + Math.min(c.content.length, MAX_EMBED_CHARS),
+      0
+    ),
+  };
   PLAN_INVENTORY.add(
-    sourceType,
+    planLabel ?? sourceType,
     catalogLabel(scope),
     scope.visibility,
-    chunks.length
+    chunks.length,
+    measure
   );
 
   // Never write a chunk without an occupation: the search shows it to nobody
@@ -586,11 +601,14 @@ async function indexSource(
     return { success: true, chunks: existing, skipped: true };
   }
 
-  PLAN_CHANGES.add(
-    sourceType,
+  // A rescope (same text, other scope) writes no new embedding and costs
+  // nothing at the model, so it is counted apart from the changes that embed
+  (allMatch ? PLAN_RESCOPE : PLAN_CHANGES).add(
+    planLabel ?? sourceType,
     catalogLabel(scope),
     scope.visibility,
-    chunks.length
+    chunks.length,
+    measure
   );
 
   if (IS_DRY_RUN) {
@@ -1241,7 +1259,9 @@ async function indexLernfelder(db: postgres.Sql) {
       `${lfLabel}: ${lf.title}`,
       content,
       { lernfeldLabel: lfLabel },
-      platformScope(lf.training_catalog_id)
+      platformScope(lf.training_catalog_id),
+      WHOLE_SOURCE,
+      'document (lernfeld)'
     );
 
     if (result.skipped) {
@@ -1371,7 +1391,9 @@ async function indexTrainingComponents(db: postgres.Sql) {
       `${comp.code}: ${comp.title}`,
       content,
       buildTrainingComponentMetadata(comp, tucs.length),
-      platformScope(comp.training_catalog_id)
+      platformScope(comp.training_catalog_id),
+      WHOLE_SOURCE,
+      'document (training_component)'
     );
 
     if (result.skipped) {
@@ -1465,13 +1487,14 @@ async function extractPDFText(
 }
 
 async function indexPDFDocuments(db: postgres.Sql) {
-  log('📄 Indexing PDF Documents...');
+  log('📄 Indexing PDF Documents and text rows...');
 
   const docs = await db`
     SELECT cd.id, cd.title, cd.storage_url, cd.document_type,
            cd.enabler_id, cd.use_case_id, cd.course_id,
            cd.page_count, cd.is_indexed_by_hai,
            cd.organization_id, cd.visibility,
+           cd.description, cd.mime_type,
            e.title as enabler_title,
            c.title as course_title,
            uc.title as use_case_title,
@@ -1494,64 +1517,64 @@ async function indexPDFDocuments(db: postgres.Sql) {
     return { indexed: 0, skipped: 0, failed: 0, total: 0, pages: 0 };
   }
 
-  log(`Found ${docs.length} PDF documents to process`);
+  log(`Found ${docs.length} documents to process`);
 
   let indexed = 0,
     skipped = 0,
     failed = 0,
     totalPages = 0;
+  // Why a document was not indexed (reason of planDocumentIndexing → count)
+  const skippedByReason = new Map<string, number>();
 
   for (let di = 0; di < docs.length; di++) {
     const doc = docs[di];
     const docLabel = `${doc.document_type} — ${doc.title}`;
 
-    if (!doc.storage_url) {
-      warn(`No storage URL for document: ${docLabel}`);
-      skipped++;
-      continue;
-    }
-
-    // Occupation of the document: its enabler, use case or course. A document
-    // without any of them has no occupation and would be visible to nobody.
-    // Trainer solutions and trainer-only documents are trainer level.
-    const scope: IndexScope = {
-      trainingCatalogId: firstCatalogId(
-        doc.enabler_catalog_id,
-        doc.use_case_catalog_id,
-        doc.course_catalog_id
-      ),
-      visibility: documentVisibility(doc.document_type, doc.visibility),
+    // One rule for the whole decision (src/lib/hai/indexScope.ts): what the
+    // row is (a PDF file or a text row), whether it is read at all, and for
+    // whom its chunks are. The occupation is the one of its enabler, use case
+    // or course. A solution or a trainer-only row is trainer level in every
+    // form (file or text). A private reference (the model solutions of the private
+    // bucket) is never fetched.
+    const plan = planDocumentIndexing({
+      documentType: doc.document_type,
+      visibility: doc.visibility,
+      storageUrl: doc.storage_url,
+      mimeType: doc.mime_type,
+      description: doc.description,
       organizationId: doc.organization_id ? String(doc.organization_id) : null,
-    };
-    if (!scope.trainingCatalogId) {
-      warn(`No training catalog for document, not indexed: ${docLabel}`);
-      skipped++;
-      continue;
-    }
-
-    // A dry run does not download the PDF: it counts the document
-    if (IS_DRY_RUN) {
-      PLAN_INVENTORY.add(
-        'document (PDF files, not chunks)',
-        catalogLabel(scope),
-        scope.visibility,
-        1
+      enablerCatalogId: doc.enabler_catalog_id
+        ? String(doc.enabler_catalog_id)
+        : null,
+      useCaseCatalogId: doc.use_case_catalog_id
+        ? String(doc.use_case_catalog_id)
+        : null,
+      courseCatalogId: doc.course_catalog_id
+        ? String(doc.course_catalog_id)
+        : null,
+    });
+    if (plan.kind === 'skip') {
+      warn(`Document not indexed (${plan.reason}): ${docLabel}`);
+      skippedByReason.set(
+        plan.reason,
+        (skippedByReason.get(plan.reason) ?? 0) + 1
       );
+      // A row that is no longer indexable (retyped to a solution, moved to a
+      // private reference, text shortened, no catalog) must not keep the chunks
+      // an earlier run wrote with its old scope
+      if (!IS_DRY_RUN) {
+        await db`
+          DELETE FROM hai_embeddings
+          WHERE source_type = 'document'
+            AND source_id = ${doc.id}::uuid
+        `.catch((e: any) => warn(`Old chunks not removed: ${e.message}`));
+      }
       skipped++;
       continue;
     }
+    const scope = plan.scope;
 
-    // Extract PDF text
-    const extraction = await extractPDFText(doc.storage_url);
-    if (!extraction || extraction.text.length < 20) {
-      warn(`No usable text from PDF: ${docLabel}`);
-      skipped++;
-      continue;
-    }
-
-    totalPages += extraction.pageCount;
-
-    // Build enriched content with document context
+    // Context of the document, for both forms
     const contextParts: string[] = [];
     if (doc.enabler_title) contextParts.push(`Enabler: ${doc.enabler_title}`);
     if (doc.course_title) contextParts.push(`Kurs: ${doc.course_title}`);
@@ -1560,13 +1583,10 @@ async function indexPDFDocuments(db: postgres.Sql) {
     contextParts.push(`Dokumenttyp: ${doc.document_type}`);
     contextParts.push(`Dokument: ${doc.title}`);
 
-    const fullContent = contextParts.join('\n') + '\n\n' + extraction.text;
-
     const metadata: Record<string, unknown> = {
       documentId: doc.id,
       documentTitle: doc.title,
       documentType: doc.document_type,
-      pageCount: extraction.pageCount,
     };
     if (doc.enabler_id) metadata.enablerId = doc.enabler_id;
     if (doc.enabler_title) metadata.enablerTitle = doc.enabler_title;
@@ -1575,15 +1595,77 @@ async function indexPDFDocuments(db: postgres.Sql) {
     if (doc.use_case_id) metadata.useCaseId = doc.use_case_id;
     if (doc.use_case_title) metadata.useCaseTitle = doc.use_case_title;
 
-    const result = await indexSource(
-      db,
-      'document',
-      doc.id,
-      doc.title,
-      fullContent,
-      metadata,
-      scope
-    );
+    let result: SourceResult;
+    let pageCount = 0;
+
+    if (plan.kind === 'text') {
+      // A text row of the import: the text is the description, nothing is
+      // fetched, a dry run counts its chunks like any other text source
+      const fullContent =
+        contextParts.join('\n') + '\n\n' + String(doc.description).trim();
+      result = await indexSource(
+        db,
+        'document',
+        doc.id,
+        doc.title,
+        fullContent,
+        { ...metadata, contentFormat: 'text' },
+        scope,
+        WHOLE_SOURCE,
+        'document (text row)'
+      );
+    } else {
+      // A dry run does not download the PDF: it counts the file and its pages
+      if (IS_DRY_RUN) {
+        const measure = {
+          unit: 'files' as const,
+          pages: Number(doc.page_count ?? 0),
+        };
+        PLAN_INVENTORY.add(
+          'document (PDF files, not chunks)',
+          catalogLabel(scope),
+          scope.visibility,
+          1,
+          measure
+        );
+        // Upper bound: a real run reads every PDF and embeds what changed or
+        // what another model tagged, a dry run cannot know that without the file
+        PLAN_CHANGES.add(
+          'document (PDF files, not chunks)',
+          catalogLabel(scope),
+          scope.visibility,
+          1,
+          measure
+        );
+        skipped++;
+        continue;
+      }
+
+      // Extract PDF text
+      const extraction = await extractPDFText(doc.storage_url);
+      if (!extraction || extraction.text.length < 20) {
+        warn(`No usable text from PDF: ${docLabel}`);
+        skipped++;
+        continue;
+      }
+
+      totalPages += extraction.pageCount;
+      pageCount = extraction.pageCount;
+      metadata.pageCount = extraction.pageCount;
+
+      const fullContent = contextParts.join('\n') + '\n\n' + extraction.text;
+      result = await indexSource(
+        db,
+        'document',
+        doc.id,
+        doc.title,
+        fullContent,
+        metadata,
+        scope,
+        WHOLE_SOURCE,
+        'document (PDF)'
+      );
+    }
 
     if (result.skipped) {
       skipped++;
@@ -1594,12 +1676,12 @@ async function indexPDFDocuments(db: postgres.Sql) {
         title: docLabel,
         status: 'skipped',
         chunks: result.chunks,
-        pages: extraction.pageCount,
+        pages: pageCount,
       });
     } else if (result.success) {
       indexed++;
       ok(
-        `PDF: ${docLabel} (${result.chunks} chunks, ${extraction.pageCount} pages)`
+        `${plan.kind === 'text' ? 'Text row' : 'PDF'}: ${docLabel} (${result.chunks} chunks${pageCount ? `, ${pageCount} pages` : ''})`
       );
       addLogEntry({
         timestamp: new Date().toISOString(),
@@ -1608,15 +1690,15 @@ async function indexPDFDocuments(db: postgres.Sql) {
         title: docLabel,
         status: 'indexed',
         chunks: result.chunks,
-        pages: extraction.pageCount,
+        pages: pageCount,
       });
 
       // Mark as indexed in content_documents table
       if (!IS_DRY_RUN) {
         await db`
-          UPDATE content_documents 
-          SET is_indexed_by_hai = true, 
-              page_count = ${extraction.pageCount},
+          UPDATE content_documents
+          SET is_indexed_by_hai = true,
+              page_count = ${pageCount > 0 ? pageCount : (doc.page_count ?? null)},
               updated_at = NOW()
           WHERE id = ${doc.id}
         `.catch(() => {
@@ -1637,12 +1719,19 @@ async function indexPDFDocuments(db: postgres.Sql) {
     }
 
     if ((di + 1) % 20 === 0) {
-      log(`  PDF progress: ${di + 1}/${docs.length}...`);
+      log(`  Document progress: ${di + 1}/${docs.length}...`);
     }
   }
 
+  if (skippedByReason.size > 0) {
+    info(
+      `documents skipped by reason: ${[...skippedByReason]
+        .map(([reason, count]) => `${reason} ${count}`)
+        .join(', ')}`
+    );
+  }
   log(
-    `PDFs done: ${indexed} indexed, ${skipped} unchanged, ${failed} failed (${docs.length} docs, ${totalPages} pages total)`
+    `Documents done: ${indexed} indexed, ${skipped} unchanged or skipped, ${failed} failed (${docs.length} docs, ${totalPages} pages total)`
   );
   return { indexed, skipped, failed, total: docs.length, pages: totalPages };
 }
@@ -1777,14 +1866,30 @@ function printPlan(title: string, plan: ChunkPlan) {
     return;
   }
   console.log(
-    `    ${'source type'.padEnd(36)}${'catalog'.padEnd(14)}${'visibility'.padEnd(12)}chunks`
+    `    ${'source type'.padEnd(36)}${'catalog'.padEnd(14)}${'visibility'.padEnd(12)}${'count'.padEnd(10)}${'chars'.padEnd(12)}est. tokens (${DEFAULT_CHARS_PER_TOKEN} chars each)`
   );
   for (const row of plan.rows()) {
+    const count = row.unit === 'files' ? `${row.chunks} files` : row.chunks;
+    // pages of files that are not read, characters of chunks that are
+    const measure =
+      row.unit === 'files'
+        ? `${row.pages} pages`.padEnd(12) + '-'
+        : String(row.chars).padEnd(12) + estimateTokens(row.chars);
     console.log(
-      `    ${row.sourceType.padEnd(36)}${row.catalog.padEnd(14)}${row.visibility.padEnd(12)}${row.chunks}`
+      `    ${row.sourceType.padEnd(36)}${row.catalog.padEnd(14)}${row.visibility.padEnd(12)}${String(count).padEnd(10)}${measure}`
     );
   }
-  console.log(`    ${'total'.padEnd(62)}${plan.total()}`);
+  const chars = plan
+    .rows()
+    .reduce((sum, row) => sum + (row.unit === 'chunks' ? row.chars : 0), 0);
+  console.log(
+    `    ${'total chunks'.padEnd(62)}${String(plan.total()).padEnd(10)}${String(chars).padEnd(12)}${estimateTokens(chars)}`
+  );
+  if (plan.totalFiles() > 0) {
+    console.log(
+      `    ${'files not read (no chunks counted)'.padEnd(62)}${plan.totalFiles()}`
+    );
+  }
 }
 
 // ============================================================================
@@ -2091,9 +2196,21 @@ async function main() {
       PLAN_INVENTORY
     );
     console.log();
+    printPlan('Of those, chunks a real run would embed now:', PLAN_CHANGES);
+    console.log();
     printPlan(
-      'Of those, chunks a real run would embed or rescope now:',
-      PLAN_CHANGES
+      'Chunks with the same text that only change their scope (no embedding, no cost):',
+      PLAN_RESCOPE
+    );
+    console.log();
+    console.log(
+      '  Cost estimate from the log of this run (no model call, no network):'
+    );
+    console.log(
+      '    npx tsx scripts/hai-embedding-cost.ts --inventory logs/reindex-<time>.json [--runs 2]'
+    );
+    console.log(
+      '  PDF files are priced from their pages: replace assumed numbers by measured ones.'
     );
   }
   if (!IS_DRY_RUN) {
@@ -2135,7 +2252,11 @@ async function main() {
     target: OPTIONS.target,
     catalog: OPTIONS.catalogCode,
     plan: IS_DRY_RUN
-      ? { inventory: PLAN_INVENTORY.rows(), changes: PLAN_CHANGES.rows() }
+      ? {
+          inventory: PLAN_INVENTORY.rows(),
+          changes: PLAN_CHANGES.rows(),
+          rescope: PLAN_RESCOPE.rows(),
+        }
       : undefined,
     model: EMBEDDING_MODEL,
     dimensions: EMBEDDING_DIMS,
