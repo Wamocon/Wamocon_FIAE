@@ -168,7 +168,7 @@ describe('searchSimilar', () => {
     await searchSimilar('frage', trainee({ topK: 4 }), VECTOR);
     const { text, params } = rendered();
     expect(text).toMatch(
-      /WHERE training_catalog_id IN \(\$\d+::uuid\) AND visibility = 'all' AND .*AND embedding IS NOT NULL ORDER BY .* LIMIT \$\d+\s*$/
+      /WHERE \(training_catalog_id IN \(\$\d+::uuid\) OR \(source_type = 'learning_technique' AND training_catalog_id IS NULL AND organization_id IS NULL\)\) AND visibility = 'all' AND .*AND embedding IS NOT NULL ORDER BY .* LIMIT \$\d+\s*$/
     );
     expect(params).toContain(FIAE);
     expect(params[params.length - 1]).toBe(4);

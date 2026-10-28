@@ -37,6 +37,7 @@ export type SourceType =
   | 'document'
   | 'quiz'
   | 'use_case'
+  | 'learning_technique'
   | 'trainee_schedule'
   | 'trainee_profile'
   | 'trainee_progress';
@@ -53,7 +54,9 @@ export interface IndexContentOptions {
    * occupation (training catalog) of the source, who may see the chunks and
    * the owning organization (null = platform content). A call without a
    * complete scope writes nothing: a chunk without an occupation is visible to
-   * nobody.
+   * nobody. The one exception are platform source types (learning technique
+   * cards): they are written with trainingCatalogId null on purpose, see
+   * isPlatformSourceType in indexScope.ts.
    */
   trainingCatalogId: string | null;
   visibility: HaiVisibility;
@@ -313,7 +316,7 @@ export async function indexContent(
   };
 
   // No complete scope, no write (fail closed, nothing is embedded)
-  const problem = scopeProblem(scope);
+  const problem = scopeProblem(scope, sourceType);
   if (problem) {
     return {
       success: false,

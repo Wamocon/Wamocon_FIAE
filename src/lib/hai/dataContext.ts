@@ -37,6 +37,7 @@ import {
 import { toHaiRole } from '@/lib/auth-helpers';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { buildHaiTrainingScope } from './trainingScope';
+import { isLearningTechniqueQuestion } from './learningTechniques/detect';
 import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 
@@ -58,6 +59,7 @@ export type DataIntent =
     | 'review_query'        // Trainer: "Was muss ich bewerten?"
     | 'trainee_overview'    // Trainer: "Wie stehen meine Azubis?"
     | 'trainee_detail_query' // Trainer: "Wie steht [Name]?" / "Noten von [Name]"
+    | 'learning_query'      // Trainee: tips on learning (quiz scores, next exams)
     | 'none';               // No data intent detected
 
 export interface LiveDataContext {
@@ -249,6 +251,10 @@ export function classifyDataIntent(message: string, userRole: UserRole): DataInt
     if (KW_USE_CASE.some(k => lower.includes(k))) return 'use_case_query';
     if (KW_REPORT.some(k => lower.includes(k))) return 'report_query';
     if (KW_NOTIFICATION.some(k => lower.includes(k))) return 'notification_query';
+
+    // Tips on learning and memorizing (package B): the trainee's own quiz
+    // scores and upcoming exams, nothing else. Only when no other intent matched.
+    if (userRole === 'TRAINEE' && isLearningTechniqueQuestion(message)) return 'learning_query';
 
     return 'none';
 }
@@ -1423,6 +1429,16 @@ export async function fetchDataContext(
                         const notifs = await fetchNotifications(userId);
                         parts.push(formatNotifications(notifs));
                         intentTokenEstimate = 150;
+                        break;
+                    }
+                    case 'learning_query': {
+                        // Only what the trainee sees in the platform anyway:
+                        // progress with the latest quiz score, upcoming exams
+                        const progress = await fetchTraineeProgress(userId);
+                        parts.push(formatProgress(progress));
+                        const calendar = await fetchCalendar(userId);
+                        parts.push(formatCalendar(calendar));
+                        intentTokenEstimate = 550;
                         break;
                     }
                     case 'review_query': {

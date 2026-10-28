@@ -495,6 +495,8 @@ describe('writers of hai_embeddings (gap closed by package H2)', () => {
       .filter(entry => entry.file !== 'src/lib/hai/embeddings.ts');
     expect(callers.map(entry => entry.file).sort()).toEqual([
       'src/app/api/hai/embed/route.ts',
+      // learning technique cards: platform scope, trainingCatalogId null on purpose
+      'src/lib/hai/learningTechniques/ingest.ts',
       'src/lib/hai/traineeDataIndexer.ts',
     ]);
     for (const entry of callers) {

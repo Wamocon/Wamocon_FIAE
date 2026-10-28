@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "abrufuebung",
+  "rank": 1,
+  "title": "Abrufübung (Üben mit Tests)",
+  "effectiveness": "hoch",
+  "dunlosky": {
+    "technique": "Practice testing",
+    "utility": "high"
+  },
+  "keywords": [
+    "Karteikarten",
+    "Selbsttest",
+    "Quiz",
+    "Vokabeln lernen",
+    "auswendig lernen",
+    "Definitionen merken",
+    "Prüfungsvorbereitung"
+  ],
+  "what": "Du holst Stoff aus dem Gedächtnis, ohne ins Material zu schauen, zum Beispiel mit Karteikarten, Quizfragen oder freiem Aufschreiben. Das Abrufen selbst festigt das Wissen stärker als nochmaliges Ansehen.",
+  "whenUseful": "Bei Fachbegriffen, Definitionen, Abläufen und allem, was du in Klausur und Prüfung ohne Hilfe wissen musst. Ab dem Moment, in dem du den Stoff einmal verstanden hast.",
+  "steps": [
+    "Stoff kurz durcharbeiten, dann Unterlagen schließen.",
+    "Aufschreiben oder laut sagen, was du weißt, oder Quizfragen beantworten.",
+    "Mit den Unterlagen vergleichen, Lücken markieren und diese Lücken beim nächsten Mal zuerst abfragen."
+  ],
+  "examples": {
+    "FIAE": "Nach dem Kapitel zu SQL schreibst du ohne Vorlage eine Abfrage mit JOIN für eine kleine Beispieltabelle auf und prüfst sie danach in einer Testdatenbank.",
+    "KFBM": "Nach der Einheit zur Rechnungsbearbeitung nennst du aus dem Kopf die Pflichtangaben einer Rechnung und gleichst sie danach mit deinem Material ab."
+  },
+  "source": {
+    "citation": "Dunlosky, J., Rawson, K. A., Marsh, E. J., Nathan, M. J. & Willingham, D. T. (2013). Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology. Psychological Science in the Public Interest, 14(1), 4-58.",
+    "basis": "Dunlosky",
+    "note": "Praktisches Üben mit Tests ist in der Übersichtsarbeit eine von zwei Techniken mit hohem Nutzen."
+  },
+  "review": {
+    "reviewed": false,
+    "status": "Entwurf, ungeprüft gegen Originaltext",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
+    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt."
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "elaborative-befragung",
+  "rank": 5,
+  "title": "Elaborative Befragung (Warum stimmt das?)",
+  "effectiveness": "mittel",
+  "dunlosky": {
+    "technique": "Elaborative interrogation",
+    "utility": "moderate"
+  },
+  "keywords": [
+    "Zusammenhänge verstehen",
+    "Warum-Fragen",
+    "verknüpfen",
+    "tiefer verstehen",
+    "Begründungen"
+  ],
+  "what": "Zu einer Aussage fragst du dich: Warum ist das so? Warum gilt das hier und nicht anders? Deine Antwort verknüpft den neuen Stoff mit dem, was du schon weißt.",
+  "whenUseful": "Bei Fakten und Zusammenhängen, die sich begründen lassen, und wenn du schon etwas Vorwissen hast. Bei völlig neuem Stoff fällt sie schwerer.",
+  "steps": [
+    "Eine Aussage aus dem Material auswählen.",
+    "Die Fragen \"Warum?\" und \"Warum nicht anders?\" stellen und eine eigene Erklärung formulieren.",
+    "Die Erklärung mit dem Material prüfen und korrigieren."
+  ],
+  "examples": {
+    "FIAE": "Du fragst dich: Warum nutzt man in einer Datenbank einen Primärschlüssel und nicht den Namen als Kennung?",
+    "KFBM": "Du fragst dich: Warum bestätigt man einen vereinbarten Termin schriftlich, statt sich auf die mündliche Absprache zu verlassen?"
+  },
+  "source": {
+    "citation": "Dunlosky, J., Rawson, K. A., Marsh, E. J., Nathan, M. J. & Willingham, D. T. (2013). Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology. Psychological Science in the Public Interest, 14(1), 4-58.",
+    "basis": "Dunlosky",
+    "note": "Mittlerer Nutzen in der Übersichtsarbeit."
+  },
+  "review": {
+    "reviewed": false,
+    "status": "Entwurf, ungeprüft gegen Originaltext",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
+    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt. Der Hinweis auf Vorwissen ist aus dem Gedächtnis formuliert und nicht am Text geprüft."
+  }
+}

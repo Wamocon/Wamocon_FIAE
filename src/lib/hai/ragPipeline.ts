@@ -55,6 +55,10 @@ import type { UserRole } from './dataContext';
 import { handleActionMessage } from './actionFlow';
 import type { PendingAction } from './actionPolicy';
 import type { HaiTrainingScope } from './trainingScope';
+import {
+  isLearningTechniqueQuestion,
+  usesLearningTechniques,
+} from './learningTechniques/detect';
 
 // ============================================================================
 // TYPES
@@ -451,6 +455,10 @@ export async function retrieveContext(
       {
         currentEnablerId: context.currentEnablerId,
         currentCourseId: context.currentCourseId,
+        // A question about learning reserves places for learning cards
+        ...(isLearningTechniqueQuestion(userMessage)
+          ? { includeLearningTechniques: true }
+          : {}),
       },
       {
         topK: 5,
@@ -704,6 +712,7 @@ export async function processMessage(
       crossSessionMemory: context.crossSessionMemory,
       trainingScope: context.trainingScope,
       persona,
+      learningTechniques: usesLearningTechniques(userMessage, searchResults),
     });
 
     // Step 5: Convert previous messages to provider format
@@ -916,6 +925,7 @@ export async function processMessageStream(
       crossSessionMemory: context.crossSessionMemory,
       trainingScope: context.trainingScope,
       persona,
+      learningTechniques: usesLearningTechniques(userMessage, searchResults),
     });
 
     // Convert messages to provider format
