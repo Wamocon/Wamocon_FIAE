@@ -7,8 +7,8 @@
 -- check (from its "-- V.." or "-- N.." line to the semicolon) and run the selection. Save
 -- every output with date and time (the rollout log in the runbook names where).
 --
--- V checks (V01 to V13): BEFORE the rollout. They turn the assumptions of the runbook into
---   measured facts. N checks (N01 to N11): AFTER the stage named in the runbook. The older
+-- V checks (V01 to V14): BEFORE the rollout. They turn the assumptions of the runbook into
+--   measured facts. N checks (N01 to N12): AFTER the stage named in the runbook. The older
 --   checks C1 to C20 (docs/production-schema-migration-verification.sql) and the checks 1 to
 --   13 of supabase/manual/verify-rls-lockdown.sql stay valid and are referenced by number.
 -- Language: comments and column names are English like all SQL in the repository, the
@@ -238,6 +238,29 @@ left join public.organizations o on o.id = d.organization_id
 group by d.organization_id, o.name, o.is_platform_owner
 order by documents desc;
 
+-- V14. Trainees that wait for the release (trainer_activated = false). With the app release
+-- (pull request 164) the server answers 403 AWAITING_ACTIVATION to EVERY request of such an
+-- account; before, only the user interface sent the person back to the login. Expect: only
+-- accounts that are meant to wait. A trainee who is active but not released is locked out
+-- from the deploy on until a trainer or an administrator releases the account.
+select p.is_active, p.trainer_activated, count(*) as trainees
+from public.profiles p
+where p.role = 'TRAINEE'
+group by p.is_active, p.trainer_activated
+order by p.is_active desc, p.trainer_activated;
+
+-- V14b. Column defaults that decide the activation state of content the sync inserts.
+-- The sync never writes is_active, is_published or activated_at into public, a new row takes
+-- the default. Expect: is_active and is_published default false, activated_at has no default.
+-- A drifted default would let new content start active.
+select table_name, column_name, column_default, is_nullable
+from information_schema.columns
+where table_schema = 'public'
+  and ((table_name in ('courses', 'enablers', 'use_cases', 'quizzes') and column_name = 'is_active')
+    or (table_name = 'courses' and column_name = 'is_published')
+    or (table_name in ('enablers', 'use_cases') and column_name = 'activated_at'))
+order by table_name, column_name;
+
 -- ============================================================================
 -- N checks (after a stage, the runbook says which)
 -- ============================================================================
@@ -390,9 +413,30 @@ order by c.code;
 
 select c.code as catalog,
        count(*) filter (where e.is_active) as enablers_active,
+       count(*) filter (where e.activated_at is not null) as enablers_with_activated_at,
        count(e.id) as enablers_total
 from public.training_catalogs c
 left join public.enablers e on e.training_catalog_id = c.id
+group by c.code
+order by c.code;
+
+-- The content sync never writes the activation state into public (withheldFromPublic in
+-- supabase/content-tables.json): a use case or quiz that the sync brought in is inactive.
+-- N07b. Use cases and quizzes (select from this line to the semicolon of each query).
+select c.code as catalog,
+       count(*) filter (where u.is_active) as use_cases_active,
+       count(*) filter (where u.activated_at is not null) as use_cases_with_activated_at,
+       count(u.id) as use_cases_total
+from public.training_catalogs c
+left join public.use_cases u on u.training_catalog_id = c.id
+group by c.code
+order by c.code;
+
+select c.code as catalog,
+       count(*) filter (where q.is_active) as quizzes_active,
+       count(q.id) as quizzes_total
+from public.training_catalogs c
+left join public.quizzes q on q.training_catalog_id = c.id
 group by c.code
 order by c.code;
 
@@ -452,3 +496,31 @@ select policyname, cmd, roles
 from pg_policies
 where schemaname = 'storage' and tablename = 'objects'
 order by policyname;
+
+-- N12. Files behind the document rows. Preview and Production share ONE storage project, and
+-- the content sync copies only the rows (storage_url, storage_path), never a file. Expect
+-- 0 rows in the second query: every row of public.content_documents that names a
+-- storage_path finds its object in the bucket the row points to (private:// means
+-- content-solutions, everything else content). A row there means a file was deleted or
+-- replaced under its path after the copy, for example by a clean-up of the prefix preview/
+-- (runbook section 4.5). Run it after the content sync and again before every demo.
+select split_part(d.storage_path, '/', 1) as first_folder,
+       case when d.storage_url like 'private://%' then 'content-solutions' else 'content' end as bucket,
+       count(*) as rows_with_path
+from public.content_documents d
+where d.storage_path is not null
+group by 1, 2
+order by 1, 2;
+
+select d.id, d.storage_path,
+       case when d.storage_url like 'private://%' then 'content-solutions' else 'content' end as bucket
+from public.content_documents d
+where d.storage_path is not null
+  and not exists (
+    select 1
+    from storage.objects o
+    where o.bucket_id = case when d.storage_url like 'private://%' then 'content-solutions' else 'content' end
+      and o.name = d.storage_path
+  )
+order by d.storage_path
+limit 100;

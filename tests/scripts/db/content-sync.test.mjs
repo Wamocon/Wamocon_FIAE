@@ -6,6 +6,7 @@ import {
   DIRECTIONS,
   buildScript,
   castExpression,
+  ownerCheck,
   parseReport,
   summarize,
   validateConfig,
@@ -109,6 +110,187 @@ test('the allowlist file contains no user data tables', () => {
     assert.ok(!names.includes(forbidden), forbidden);
   }
   assert.ok(names.includes('courses') && names.includes('training_components'));
+});
+
+// ---------------------------------------------------------------------------
+// RO2 / WP1: allowlist against the model of the KfBM import
+// ---------------------------------------------------------------------------
+
+/** The tables the KfBM import may write: keys of TABLES in tables.ts. */
+function importWriteSurface() {
+  const text = readFileSync('src/lib/content-import/apply/tables.ts', 'utf8');
+  const body = text.slice(text.indexOf('export const TABLES'));
+  const end = body.indexOf('export const TABLE_ORDER');
+  return [...body.slice(0, end).matchAll(/^ {2}([a-z_]+): \{$/gm)].map(
+    m => m[1]
+  );
+}
+
+test('B3: the allowlist does not name the compatibility views lernfelder and lernfeld_mappings', () => {
+  // Since 20261024000500 both are views over the catalog tables. The view
+  // lernfelder has a column label instead of code (the sync aborted on the
+  // key), and an insert into the view lernfeld_mappings would write the
+  // mappings of the FIAE catalog a second time.
+  const names = realConfig().tables.map(t => t.name);
+  assert.ok(!names.includes('lernfelder'));
+  assert.ok(!names.includes('lernfeld_mappings'));
+});
+
+test('every table the KfBM import writes is in the allowlist (drift guard)', () => {
+  const surface = importWriteSurface();
+  assert.ok(surface.length >= 11, surface.join(', '));
+  const names = new Set(realConfig().tables.map(t => t.name));
+  for (const table of surface) assert.ok(names.has(table), table);
+  // and the catalog table that the importer only reads
+  assert.ok(names.has('training_catalogs'));
+});
+
+test('learning fields and their mappings travel through the catalog tables, after their parents', () => {
+  const c = realConfig();
+  const index = new Map(c.tables.map((t, i) => [t.name, i]));
+  const tables = Object.fromEntries(c.tables.map(t => [t.name, t]));
+  const fields = tables.training_catalog_learning_fields;
+  const mappings = tables.training_catalog_content_mappings;
+  assert.deepEqual(fields.key, ['training_catalog_id', 'code']);
+  assert.deepEqual(mappings.key, [
+    'learning_field_id',
+    'enabler_id',
+    'use_case_id',
+  ]);
+  // the catalog id of a mapping is derived from its learning field by a trigger
+  assert.ok(!mappings.columns.includes('training_catalog_id'));
+  assert.equal(fields.remap.training_catalog_id.table, 'training_catalogs');
+  assert.equal(
+    mappings.remap.learning_field_id.table,
+    'training_catalog_learning_fields'
+  );
+  assert.ok(
+    index.get('training_catalog_learning_fields') >
+      index.get('training_catalogs')
+  );
+  for (const parent of [
+    'training_catalog_learning_fields',
+    'enablers',
+    'use_cases',
+  ]) {
+    assert.ok(
+      index.get('training_catalog_content_mappings') > index.get(parent)
+    );
+  }
+  // both are limited to one occupation by --catalog and never copy the id
+  for (const t of [fields, mappings]) {
+    assert.ok(t.catalogScope, t.name);
+    assert.ok(!t.columns.includes('id'), t.name);
+  }
+});
+
+test('RO2: the sync never writes the activation state into public (Production)', () => {
+  const tables = Object.fromEntries(realConfig().tables.map(t => [t.name, t]));
+  assert.deepEqual(tables.courses.withheldFromPublic, [
+    'is_active',
+    'is_published',
+  ]);
+  assert.deepEqual(tables.enablers.withheldFromPublic, [
+    'is_active',
+    'activated_at',
+  ]);
+  assert.deepEqual(tables.use_cases.withheldFromPublic, [
+    'is_active',
+    'activated_at',
+  ]);
+  assert.deepEqual(tables.quizzes.withheldFromPublic, ['is_active']);
+  // no content table carries an activation column without the protection
+  for (const t of realConfig().tables) {
+    for (const column of t.columns) {
+      if (['is_active', 'is_published', 'activated_at'].includes(column)) {
+        assert.ok(
+          (t.withheldFromPublic ?? []).includes(column),
+          `${t.name}.${column}`
+        );
+      }
+    }
+  }
+});
+
+/** Column metadata of both schemas from the allowlist (every column is text). */
+function realMeta(config) {
+  const tables = {};
+  for (const t of config.tables) {
+    tables[t.name] = [...new Set(['id', ...t.columns])].map(n => col(n));
+  }
+  for (const [name, spec] of Object.entries(config.lookups ?? {})) {
+    tables[name] = ['id', ...spec.matchOn].map(n => col(n));
+  }
+  return { public_preview: tables, public: tables };
+}
+
+test('RO2: an insert into public carries no activation column, an insert into public_preview still does', () => {
+  const c = realConfig();
+  const toPublic = buildScript({
+    config: c,
+    meta: realMeta(c),
+    from: 'public_preview',
+    to: 'public',
+    ownerEmail: 'owner@example.test',
+    rollback: true,
+    updateMode: 'configured',
+  });
+  assert.deepEqual(toPublic.errors, []);
+  for (const table of ['courses', 'enablers', 'use_cases', 'quizzes']) {
+    const lines = toPublic.sql
+      .split('\n')
+      .filter(
+        l => l.includes(`public.${table} `) && /insert into|update/.test(l)
+      );
+    assert.ok(lines.length > 0, table);
+    for (const line of lines) {
+      assert.ok(!/\bis_active\b/.test(line), `${table}: ${line}`);
+      assert.ok(!/\bis_published\b/.test(line), `${table}: ${line}`);
+      assert.ok(!/\bactivated_at\b/.test(line), `${table}: ${line}`);
+    }
+  }
+  const toPreview = buildScript({
+    config: c,
+    meta: realMeta(c),
+    from: 'public',
+    to: 'public_preview',
+    ownerEmail: 'owner@example.test',
+    rollback: true,
+    updateMode: 'never',
+  });
+  assert.deepEqual(toPreview.errors, []);
+  const insert = toPreview.sql
+    .split('\n')
+    .find(l => l.includes('insert into public_preview.courses'));
+  assert.ok(/\bis_active\b/.test(insert) && /\bis_published\b/.test(insert));
+});
+
+test('RO2: withheldFromPublic is validated (column list, only listed columns, no key)', () => {
+  const base = () => ({
+    tables: [{ name: 'a', key: ['id'], columns: ['id', 'is_active'] }],
+  });
+  const withheld = value => {
+    const c = base();
+    c.tables[0].withheldFromPublic = value;
+    return validateConfig(c);
+  };
+  assert.deepEqual(withheld(['is_active']), []);
+  assert.ok(withheld('is_active').length > 0);
+  assert.ok(withheld(['x; drop']).length > 0);
+  assert.ok(withheld(['not_copied']).length > 0);
+  assert.ok(withheld(['id']).length > 0);
+});
+
+test('RO2: the key columns are unique for the KfBM model (no collision of KfBM and FIAE in a run without --catalog)', () => {
+  // training_components keeps [code] without --catalog (the FIAE codes differ
+  // from the KfBM codes K1 to K25.2). A run with --catalog uses the key that
+  // is unique per catalog (training_components_catalog_code_unique).
+  const tables = Object.fromEntries(realConfig().tables.map(t => [t.name, t]));
+  assert.deepEqual(tables.training_components.key, ['code']);
+  assert.deepEqual(tables.training_components.catalogKey, [
+    'training_catalog_id',
+    'code',
+  ]);
 });
 
 test('user data tables are refused even if someone adds them', () => {
@@ -545,6 +727,47 @@ test('script: array columns of user defined types are refused loudly', () => {
       col('x', { dataType: 'ARRAY', udtSchema: 'public', udtName: '_mood' }),
       col('x')
     )
+  );
+});
+
+test('RO2: the owner profile is checked, a wrong address does not skip rows silently', () => {
+  const c = realConfig();
+  // the real allowlist uses the owner as the creator of courses and quizzes
+  const found = ownerCheck({
+    config: c,
+    ownerEmail: 'owner@example.test',
+    ownerFound: true,
+    to: 'public',
+  });
+  assert.deepEqual(found, { errors: [], warnings: [] });
+  const wrong = ownerCheck({
+    config: c,
+    ownerEmail: 'owner@example.test',
+    ownerFound: false,
+    to: 'public',
+  });
+  assert.equal(wrong.errors.length, 1);
+  assert.ok(wrong.errors[0].includes('public.profiles'));
+  assert.ok(!wrong.errors[0].includes('owner@example.test'));
+  const none = ownerCheck({
+    config: c,
+    ownerEmail: null,
+    ownerFound: false,
+    to: 'public',
+  });
+  assert.deepEqual(none.errors, []);
+  assert.equal(none.warnings.length, 1);
+  assert.ok(none.warnings[0].includes('CONTENT_SYNC_OWNER_EMAIL'));
+  // no table uses the owner: nothing to check
+  const plain = { tables: [{ name: 'a', key: ['id'], columns: ['id'] }] };
+  assert.deepEqual(
+    ownerCheck({
+      config: plain,
+      ownerEmail: null,
+      ownerFound: false,
+      to: 'public',
+    }),
+    { errors: [], warnings: [] }
   );
 });
 

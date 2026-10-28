@@ -13,6 +13,12 @@
 #           Production deploy. The workflow first WAITS (up to 20 minutes)
 #           until public has the migrations of that release.
 #
+# Catalog : catalog (optional) limits the run to one occupation, for example
+#           KFBM (the code of a training catalog). Empty (default) = all
+#           catalogs, exactly as before. In a run with a catalog each table is
+#           matched by its stable codes and only the rows of that catalog are
+#           read and written, see the header of scripts/db/content-sync.mjs.
+#
 # Update  : update_mode never (default) only inserts new rows. newer also updates
 #           existing rows as configured per table; only a person starts that.
 #           The release workflow never updates.
@@ -52,6 +58,11 @@ on:
         options:
           - never
           - newer
+      catalog:
+        description: 'Limit the run to one occupation: the code of a training catalog, for example KFBM. Empty = all catalogs (as before).'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: content-sync
@@ -75,6 +86,7 @@ jobs:
       APPLY: ${{ inputs.apply }}
       DIRECTION: ${{ inputs.direction }}
       UPDATE_MODE: ${{ inputs.update_mode }}
+      CATALOG: ${{ inputs.catalog }}
     steps:
       - name: Determine the latest release
         id: release
@@ -118,8 +130,16 @@ jobs:
           # newer = the per-table update setting of the allowlist applies
           mode=never
           if [ "$UPDATE_MODE" = "newer" ]; then mode=configured; fi
-          if [ "$APPLY" = "true" ]; then
-            node scripts/db/content-sync.mjs --linked --direction "$DIRECTION" --update "$mode" --apply
-          else
-            node scripts/db/content-sync.mjs --linked --direction "$DIRECTION" --update "$mode"
+          args=(--linked --direction "$DIRECTION" --update "$mode")
+          # empty = all catalogs (unchanged); otherwise the code of one occupation
+          # (the same rule as parseCatalogCode in scripts/db/content-sync.mjs)
+          if [ -n "$CATALOG" ]; then
+            pattern='^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'
+            if ! [[ "$CATALOG" =~ $pattern ]]; then
+              echo "::error::Invalid catalog code (letters, digits, '.', '_' and '-', 1 to 64 characters)."
+              exit 1
+            fi
+            args+=(--catalog "$CATALOG")
           fi
+          if [ "$APPLY" = "true" ]; then args+=(--apply); fi
+          node scripts/db/content-sync.mjs "${args[@]}"
