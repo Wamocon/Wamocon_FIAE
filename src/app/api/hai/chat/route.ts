@@ -917,6 +917,30 @@ export async function POST(req: NextRequest) {
               }
             );
 
+            // No chat provider could answer (the primary failed and there is no
+            // Sokrates fallback): send the key of the message for the user and
+            // the end event (so the client learns the session id). Nothing is
+            // stored as an answer of the assistant.
+            if (result.errorKey) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ error: result.errorKey })}\n\n`
+                )
+              );
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    done: true,
+                    sessionId,
+                    citations: [],
+                    intent: result.intent,
+                  })}\n\n`
+                )
+              );
+              controller.close();
+              return;
+            }
+
             // Save assistant response — UPDATE existing or INSERT new
             if (validEditMessageId && existingAssistantId) {
               await updateAssistantMessage(
@@ -1022,6 +1046,22 @@ export async function POST(req: NextRequest) {
 
     // Non-streaming response
     const result = await processMessage(message.trim(), pipelineContext);
+
+    // No chat provider could answer: a clear error, nothing stored as an answer
+    if (result.errorKey) {
+      const lang = req.headers.get('x-language') || 'de';
+      return NextResponse.json(
+        {
+          error:
+            lang === 'en'
+              ? 'HAI is not reachable right now. Please try again in a few minutes or contact your trainer.'
+              : 'HAI ist gerade nicht erreichbar. Bitte versuche es in ein paar Minuten noch einmal oder wende dich an deinen Trainer.',
+          errorKey: result.errorKey,
+          sessionId,
+        },
+        { status: 503 }
+      );
+    }
 
     // Save assistant response — UPDATE existing or INSERT new
     if (validEditMessageId && existingAssistantId) {
