@@ -34,9 +34,12 @@ export const MAX_REASON_CHARS = 200;
 /** The model alone never gets above this (concept 6.2, and a check of the database). */
 export const KI_CONFIDENCE_CAP = 0.8;
 
+// Any text is read here (the answer as a whole is at most 4000 characters): whether
+// it is a code of the list is the question of the check below, which takes the exact
+// code and nothing else. A code with words around it is not turned into a code, and
+// an overlong one fails the same way as a short one (not_in_whitelist).
 const nullableCode = z
   .string()
-  .max(40)
   .nullable()
   .optional()
   .transform(v => v ?? null);

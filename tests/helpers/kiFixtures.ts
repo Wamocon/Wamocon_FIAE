@@ -146,7 +146,11 @@ export interface KiHarness {
   /** Works the queue with the model stage off: the rules decide, nothing is sent. */
   rules(): Promise<void>;
   /** Works the queue until it is empty, moving the clock between the calls. */
-  pump(options?: { rounds?: number; concurrency?: number }): Promise<void>;
+  pump(options?: {
+    rounds?: number;
+    concurrency?: number;
+    stepTimeoutMs?: number;
+  }): Promise<void>;
 }
 
 export interface HarnessOptions {
@@ -204,12 +208,17 @@ export async function kiHarness(
         })
       );
     },
-    async pump({ rounds = 12, concurrency } = {}) {
+    async pump({ rounds = 12, concurrency, stepTimeoutMs } = {}) {
       for (let i = 0; i < rounds; i += 1) {
         const result = await pumpReviewRun(
           ctx.reviewDeps,
           created.data.id,
-          { closeUpload: true, retryDelaySeconds: 0, concurrency },
+          {
+            closeUpload: true,
+            retryDelaySeconds: 0,
+            concurrency,
+            stepTimeoutMs,
+          },
           env()
         );
         if (result.done) return;

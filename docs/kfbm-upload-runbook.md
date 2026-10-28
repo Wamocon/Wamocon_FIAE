@@ -166,8 +166,9 @@ Stand: 28.10.2026, Paket U5. **Es wurde noch kein echter Aufruf gemacht.** Alles
 | Schlüssel | `OPENAI_COMPATIBLE_API_KEY` (dieselbe Variable wie der Chat). Nur aus der Umgebung, nie im Protokoll |
 | Adresse | `OPENAI_COMPATIBLE_BASE_URL`, Standard `https://sokrates.test-qualitaetsmanagement.com/api`. Nur https, Standardport, keine Zugangsdaten, nur ein Host der Positivliste. Eine falsch gesetzte Variable schaltet die Stufe ab, sie sendet nichts an einen anderen Host |
 | Positivliste der Hosts | Standard nur `sokrates.test-qualitaetsmanagement.com`. `CONTENT_UPLOAD_KI_ALLOWED_HOSTS` ersetzt die Liste (genaue Namen, mit Punkt, höchstens 5). Die Liste prüft den Namen, nicht die aufgelöste Adresse: ein Name, der auf eine interne Adresse zeigt, wäre erlaubt. Nur der Betreiber setzt sie |
-| Modell | `OPENAI_COMPATIBLE_MODEL`, dasselbe Modell wie der Chat (Entscheidung O5). Der Modellname steht im Protokoll |
-| Obergrenzen (optional) | `CONTENT_UPLOAD_KI_MAX_CALLS_PER_RUN` (Standard 1500), `CONTENT_UPLOAD_KI_MAX_CALLS_PER_DAY` (Standard 3000, alle Läufe, gleitende 24 Stunden), `CONTENT_UPLOAD_KI_TIMEOUT_MS` (Standard 15000, höchstens 20000). Je Datei höchstens 3 Aufrufe |
+| Modell | `OPENAI_COMPATIBLE_MODEL`. Empfohlen für diese Stufe: `sokrates-fast` (gemma4:31b), weil es im Test das Format hielt (siehe 11.7). Dass der Chat dasselbe Modell nutzt (Entscheidung O5), ist **nicht verifiziert**: Wer die Variable für den Chat ändert, ändert sie auch hier. Der Modellname steht im Protokoll |
+| Denken des Modells (optional) | `CONTENT_UPLOAD_KI_REASONING_EFFORT`, erlaubt `none`, `minimal`, `low`, `medium`, `high`, Standard `none`. Jeder andere Wert wird verworfen, es gilt der Standard (der Wert wird nie ausgegeben oder protokolliert). Gesendet wird er als Anfrageparameter `reasoning_effort` |
+| Obergrenzen (optional) | `CONTENT_UPLOAD_KI_MAX_CALLS_PER_RUN` (Standard 1500), `CONTENT_UPLOAD_KI_MAX_CALLS_PER_DAY` (Standard 3000, alle Läufe, gleitende 24 Stunden), `CONTENT_UPLOAD_KI_TIMEOUT_MS` (Standard 30000, höchstens 45000). Je Datei höchstens 3 Aufrufe |
 | Opt-in je Lauf | Beim Anlegen des Laufs die Option "Auszüge zur Einordnung an Sokrates senden" ankreuzen. **Standard aus**, später nicht änderbar |
 | Umgebung | nur Preview oder lokal. In Production ist der ganze Upload aus, also auch diese Stufe |
 | Open WebUI (Entscheidung O13) | Vor dem ersten Lauf klären, ob Open WebUI Anfragen über die Schnittstelle speichert oder protokolliert und wie lange. Sonst liegen die Auszüge dort |
@@ -179,8 +180,8 @@ Stand: 28.10.2026, Paket U5. **Es wurde noch kein echter Aufruf gemacht.** Alles
 | Quelle "KI-Vorschlag" mit Hinweis | Der Vorschlag stammt von Sokrates. Er ist keine Entscheidung. Bitte prüfen. Der Knopf "Übernehmen" öffnet den Editor, die Person nennt die Zuordnung |
 | "KI widerspricht den Regeln" (Band Widerspruch) | Die Regeln und Sokrates nennen Verschiedenes. Die Werte der Regeln bleiben, die Person entscheidet |
 | "Nicht an die KI gesendet" | Die Datei war nicht für die KI geeignet oder die Prüfung vor dem Senden hat sie ausgeschlossen. Der Code in den Details nennt den Grund (zum Beispiel `STRUCTURE_UNKNOWN`, `INSTRUCTION_TEXT`, `GUARD_REFUSED`, `PII_THRESHOLD`) |
-| "KI nicht erreichbar oder ohne Antwort" | Zeitüberschreitung, Serverfehler oder die Datei hat ihre Aufrufe verbraucht |
-| "Antwort der KI nicht verwertbar" | kein JSON, ein Code außerhalb der Liste. Es wurde nichts übernommen |
+| "KI nicht erreichbar oder ohne Antwort" | Zeitüberschreitung, Serverfehler, **leere Antwort** (Code `KI_EMPTY`, siehe 11.7) oder die Datei hat ihre Aufrufe verbraucht |
+| "Antwort der KI nicht verwertbar" | kein JSON, ein Code außerhalb der Liste, auch ein Code mit Zusatztext (`K6.1 (Titel)`). Es wurde nichts übernommen |
 | "KI konnte nicht einordnen" | Sokrates hat "unbekannt" geantwortet |
 
 Der gesendete Auszug wird **nicht** gespeichert und nicht angezeigt. Das Protokoll (`content_upload_ki_calls`) hält je Aufruf: Lauf, Datei, Stufe, Modell, Host, Länge und SHA-256 des Auszugs, Zahl der ersetzten Muster, Status, HTTP-Status, Dauer, Tokenzahlen, Nummer des Versuchs und die geprüfte Antwort ohne Begründungstext. Ablehnungen vor dem Senden stehen mit Status `refused_by_guard` oder `skipped` darin.
@@ -202,7 +203,8 @@ Der gesendete Auszug wird **nicht** gespeichert und nicht angezeigt. Das Protoko
    - Zahl der Anfragen bei Open WebUI gleich der Zahl der Zeilen mit Status `ok` im Protokoll der Plattform. In der Datenbank: `select status, model, endpoint_host, excerpt_chars, attempt from content_upload_ki_calls where run_id = '<Lauf>' order by requested_at` (nur Zahlen und Codes)
    - In keiner Anfrage bei Open WebUI darf stehen: ein Dateiname oder Pfad, die Wörter `Richtige Antwort`, `Kurzbegründung`, `Musterlösung`, ein Lösungstext, der Anweisungssatz der fünften Datei, der Schlüssel
    - Die Nutzernachricht jeder Anfrage besteht aus den Markierungen `<<<AUSZUG-xxxxxxxx` und `AUSZUG-xxxxxxxx>>>` und dem Auszug dazwischen. SHA-256 des Textes zwischen den Markierungen (ohne den letzten Zeilenumbruch) muss gleich `excerpt_sha256` im Protokoll sein: `node -e "console.log(require('crypto').createHash('sha256').update(require('fs').readFileSync(0,'utf8'),'utf8').digest('hex'))" < auszug.txt`
-   - Die Temperatur ist 0, `stream` ist falsch, höchstens 300 Antwort-Token
+   - Die Temperatur ist 0, `stream` ist falsch, höchstens 400 Antwort-Token, `reasoning_effort` ist `none` (oder der gesetzte Wert)
+   - **Leere Antworten?** Dann reicht Open WebUI oder LiteLLM den Parameter `reasoning_effort` nicht an Ollama durch. Fehlerbild und Abhilfe stehen in 11.7. Das ist die wichtigste Prüfung des Livetests: Im Protokoll muss nach den ersten Aufrufen `ok` stehen, nicht `invalid_json` mit Dauer nahe am Zeitlimit
 6. **Abbruch.** Findet sich ein Lösungsteil, ein Dateiname oder der Schlüssel in der Anfrage: sofort `CONTENT_UPLOAD_KI_ENABLED` entfernen (Schutzschalter) und den Befund melden. Nicht weiter testen.
 7. **Aufräumen.** Lauf verwerfen. Einträge in Open WebUI löschen oder Aufbewahrung klären. `CONTENT_UPLOAD_KI_ENABLED` entfernen, wenn kein weiterer Lauf folgt.
 
@@ -214,8 +216,8 @@ Der gesendete Auszug wird **nicht** gespeichert und nicht angezeigt. Das Protoko
 | Opt-in des Laufs | ohne Opt-in kein Aufruf für diesen Lauf |
 | Aufrufe je Lauf, je Tag, je Datei | bei Erreichen werden keine weiteren Dateien genommen. Der Lauf kommt trotzdem in die Prüfung |
 | Schutzschalter bei Fehlern | 5 Fehler in Folge (Zeitüberschreitung, Serverfehler, kein JSON) halten die Stufe des Laufs 10 Minuten an, danach geht ein Versuch hinaus. Ein abgelehnter Schlüssel (401, 403, 404) zählt dazu und markiert keine Datei |
-| Zeit und Größe | 15 Sekunden je Aufruf (auch beim Lesen der Antwort), Antwort höchstens 32 KB, keine Weiterleitung |
-| Wiederholung | bei Zeitüberschreitung, 429, 5xx oder kaputtem JSON ein zweiter Versuch nach 10 Sekunden, danach ist die Datei fertig mit der Stufe |
+| Zeit und Größe | 30 Sekunden je Aufruf (auch beim Lesen der Antwort, einstellbar bis 45 Sekunden), Antwort höchstens 32 KB, keine Weiterleitung. Ein Schritt der Warteschlange darf bis 50 Sekunden dauern, kein Aufruf endet später als der Schritt (Zeitlimit des Schritts minus 2 Sekunden Reserve, höchstens 40 Sekunden seit Schrittbeginn), ein zweiter Aufruf (Enabler) beginnt nur, wenn mindestens 3 Sekunden bleiben |
+| Wiederholung | bei Zeitüberschreitung, 429, 5xx, kaputtem JSON oder **leerer Antwort** ein zweiter Versuch nach 10 Sekunden, danach ist die Datei fertig mit der Stufe. Eine leere Antwort wird höchstens einmal wiederholt |
 
 ### 11.6 Bekannte Grenzen
 
@@ -224,6 +226,36 @@ Der gesendete Auszug wird **nicht** gespeichert und nicht angezeigt. Das Protoko
 - Eine Datei, die die Stufe nicht einordnen konnte, wird nicht erneut genommen. Eine Schaltfläche "KI erneut versuchen" gibt es nicht. Ein neuer Lauf nimmt sie wieder.
 - Der Aufbau der Liste der Lösungstexte liest jede Word-Datei des Laufs einmal aus dem Speicher und hält sie bis zu 10 Minuten im Arbeitsspeicher der Instanz. Bei einem Lauf mit allen 1445 Dateien kostet das mehrere Sekunden je Aufruf der Pumpe, bis die Liste fertig ist (nicht an der echten Preview gemessen).
 - Die Zähler der Obergrenzen werden vor dem Aufruf geprüft: bei gleichzeitigen Aufrufen sind wenige Aufrufe mehr möglich.
+
+### 11.7 Modellwahl, Denkmodelle und Messwerte
+
+**Messung** (Orchestrator, 28.10.2026, Spark sokrates1, Ollama, Endpunkt `/v1/chat/completions`, nur erfundene Prompts, Temperatur 0, höchstens 300 Token, `response_format` `json_object`). Es wurde kein Dokument und kein Auszug gesendet.
+
+| Modell (LiteLLM-Name) | Ohne Zusatzparameter | Mit `reasoning_effort` `none` | Format des Feldes `component` |
+| --- | --- | --- | --- |
+| gemma4:31b (`sokrates-fast`) | Denkmodell: die 300 Token gehen ins Denken, `finish_reason` `length`, Inhalt leer, `reasoning` rund 1100 Zeichen | gültiges JSON, `finish_reason` `stop`, kein `reasoning` | hielt das Format, nur der Code |
+| qwen3.6:35b (`sokrates`, `sokrates-pro`) | wie oben | gültiges JSON, `finish_reason` `stop`, kein `reasoning` | lieferte Zusatztext im Feld |
+
+- `think=false` wirkt auf diesem Endpunkt **nicht**. Wirksam ist nur `reasoning_effort` `none`.
+- Der erste Aufruf dauert rund 8 bis 10 Sekunden (das Modell wird geladen). Deshalb ist das Zeitlimit 30 Sekunden.
+
+**Modellwahl.** Empfohlen ist `sokrates-fast` (gemma4:31b), weil es das Format hielt. Gesetzt wird es in der Vercel-Variable `OPENAI_COMPATIBLE_MODEL` (nur Preview). Ob der Chat dasselbe Modell nutzt, ist nicht verifiziert, und die Variable gilt für beide. Mit `sokrates` oder `sokrates-pro` gibt es Zusatztext im Feld `komponente`. Die Antwortprüfung lehnt ihn ab (`not_in_whitelist`, Anzeige "Antwort der KI nicht verwertbar"), sie schneidet den Code nicht aus dem Text heraus. Das ist gewollt: nur der genaue Code der Positivliste zählt.
+
+**Was die Plattform sendet und prüft.**
+
+- Jede Anfrage trägt `reasoning_effort` (Standard `none`) und höchstens 400 Antwort-Token. Der Prompt verlangt, dass `komponente` nur den Komponentencode enthält (zum Beispiel `K6.1`), `enabler` nur den Enablercode.
+- Ein leerer Inhalt der Antwort (auch bei `finish_reason` `length`) ist ein Fehler "Antwort leer" (Code `KI_EMPTY`) und kein Vorschlag. Er wird höchstens einmal wiederholt (10 Sekunden Wartezeit), danach ist die Datei fertig mit der Stufe und steht als "KI nicht erreichbar oder ohne Antwort" in der Prüfliste. Im Protokoll (`content_upload_ki_calls`) steht er mit dem Status `invalid_json` (es gibt ohne Migration keinen eigenen Status). Er zählt für den Schutzschalter bei Fehlern (5 in Folge) und für die Obergrenzen.
+- Die Felder `reasoning` und `reasoning_content` der Antwort werden nie ausgewertet, nie gespeichert, nie protokolliert und nie angezeigt. Ein Vorschlag entsteht nur aus dem Inhalt der Nachricht.
+
+**Fehlerbild und Abhilfe: Open WebUI oder LiteLLM reichen `reasoning_effort` nicht durch.** Die Messung ging direkt an Ollama. Der Livetest muss prüfen, ob der Weg über Open WebUI und LiteLLM den Parameter an Ollama weitergibt.
+
+| Zeichen im Livetest | Ursache | Abhilfe |
+| --- | --- | --- |
+| Fast alle Aufrufe enden in `invalid_json` mit Dauer von einigen Sekunden, die Dateien zeigen "KI nicht erreichbar oder ohne Antwort" mit Code `KI_EMPTY`, der Schutzschalter hält die Stufe nach 5 Fehlern an | Der Parameter kommt nicht bei Ollama an, das Modell denkt und verbraucht die 400 Token | Beim Betreiber von Open WebUI und LiteLLM klären, dass `reasoning_effort` durchgereicht wird (bei LiteLLM unter den Parametern des Modells, Beispiel `reasoning_effort: none`), oder dem Modell `none` dort fest einstellen. Danach die Preview neu prüfen. Ein höheres Zeitlimit oder mehr Token helfen nicht (das Denken füllt auch sie) |
+| Antwort des Servers mit HTTP 400 und dem Hinweis auf einen unbekannten Parameter (Code `KI_HTTP`) | Die Weitergabe weist `reasoning_effort` für dieses Modell ab | Beim Betreiber klären (bei LiteLLM `drop_params` für das Modell oder ein Modell wählen, das den Parameter kennt). Der Wert lässt sich in der Plattform nicht weglassen, nur ändern |
+| Aufrufe laufen in das Zeitlimit (`timeout`) | Das Modell ist nicht geladen oder überlastet | `CONTENT_UPLOAD_KI_TIMEOUT_MS` bis 45000 anheben, ersten Aufruf abwarten |
+
+Nach jeder Änderung an der Kette (Open WebUI, LiteLLM, Modell) denselben kleinen Lauf aus 11.4 wiederholen.
 
 ## 12. Nachschub
 
