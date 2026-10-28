@@ -154,7 +154,7 @@ export default function TraineeLernfeldDetailPage() {
               {lernfeld.title}
             </h1>
             {lernfeld.description ? (
-              <p className="text-muted mt-2 max-w-2xl text-sm">
+              <p className="text-muted mt-2 max-w-2xl text-sm whitespace-pre-line">
                 {lernfeld.description}
               </p>
             ) : (

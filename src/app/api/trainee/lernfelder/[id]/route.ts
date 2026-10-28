@@ -127,14 +127,29 @@ export async function GET(
 
     return NextResponse.json({
       lernfeld: row,
-      useCases: relatedUseCases.map(u => ({
-        ...u,
-        accessible: accessible(u.courseId ? String(u.courseId) : null),
-      })),
-      enablers: uniqueEnablers.map(e => ({
-        ...e,
-        accessible: accessible(String(e.courseId)),
-      })),
+      // The description of a use case is for the members of its course, like
+      // the use case itself (GET /api/trainee/use-cases/[id] answers 403
+      // otherwise). A caller who is no member, and an anonymous caller, get the
+      // title and the times only.
+      useCases: relatedUseCases.map(u => {
+        const isMember = accessible(u.courseId ? String(u.courseId) : null);
+        return {
+          ...u,
+          descriptionText: isMember ? u.descriptionText : null,
+          // the id of a course the caller is not in is of no use to them
+          courseId: isMember ? u.courseId : null,
+          accessible: isMember,
+        };
+      }),
+      enablers: uniqueEnablers.map(e => {
+        const isMember = accessible(String(e.courseId));
+        return {
+          ...e,
+          // the name of a course the caller is not in stays with its members
+          courseTitle: isMember ? e.courseTitle : null,
+          accessible: isMember,
+        };
+      }),
     });
   } catch (e) {
     console.error('Trainee get lernfeld detail error', e);

@@ -124,7 +124,7 @@ describe('observe', () => {
       updateFilter: () => false,
     });
     expect(status(refused.events, 'enablers', 'K1-a')).toEqual(['differs']);
-    expect(refused.report.differences).toEqual([
+    expect(refused.report.differences).toMatchObject([
       { table: 'enablers', key: 'K1-a', columns: ['description_text'] },
     ]);
     expect(textOf()).toBe(before);

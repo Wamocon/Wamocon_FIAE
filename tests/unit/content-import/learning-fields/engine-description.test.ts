@@ -88,7 +88,7 @@ describe('executeLearningFieldPlan: descriptions', () => {
       seed(db, over);
       db.log.length = 0;
       const report = await run(db, plan());
-      expect(report.differences).toEqual([
+      expect(report.differences).toMatchObject([
         { table: LF, key: 'LF1', columns: ['description'] },
       ]);
       expect(report.tables[LF]).toEqual({
@@ -115,9 +115,11 @@ describe('executeLearningFieldPlan: descriptions', () => {
     seed(db, { description: 'Von Hand geschrieben.' });
     db.log.length = 0;
     const report = await run(db, plan());
-    expect(report.differences).toEqual([
+    expect(report.differences).toMatchObject([
       { table: LF, key: 'LF1', columns: ['description'] },
     ]);
+    // the report names the lengths before (21) and after, numbers only
+    expect(report.differences[0].lengths?.description.before).toBe(21);
     expect(report.tables[LF]).toEqual({ insert: 12, update: 0, unchanged: 1 });
     expect(updates(db)).toEqual([]);
     expect(lf1(db)?.description).toBe('Von Hand geschrieben.');

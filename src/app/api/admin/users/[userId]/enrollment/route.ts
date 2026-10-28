@@ -14,7 +14,7 @@ import {
   setTraineeEnrollment,
 } from '@/lib/catalog/admin';
 import { syncTraineeContentAfterEnrollment } from '@/lib/catalog/trainee-content';
-import { apiCache } from '@/lib/api-cache';
+import { invalidateTraineeListCaches } from '@/lib/catalog/trainee-cache';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
@@ -129,9 +129,12 @@ export async function PUT(
           courseMembersAdded: sync.courseMembersAdded,
           quizAssignmentsAdded: sync.quizAssignmentsAdded,
         };
-        apiCache.invalidate('trainee_courses');
-        apiCache.invalidate('trainee_quizzes');
       }
+      // The lists of the trainee (Lernen, Quizze) are cached for minutes. The
+      // scope of the trainee changed with the enrollment, so they are cleared
+      // whatever became of the sync (a failed sync used to leave them as they
+      // were).
+      invalidateTraineeListCaches();
     }
 
     const view = await getTraineeEnrollment(userId);

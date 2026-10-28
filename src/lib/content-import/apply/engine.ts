@@ -18,6 +18,7 @@
 //  - solutions stay in their columns (guard.ts checks every row before it is
 //    written)
 
+import { componentDescription, lengthChangesOf } from '../descriptions';
 import type { Db, Row } from './db';
 import { ImportAbort } from './db';
 import {
@@ -454,11 +455,13 @@ export async function executePlan(
         (TABLES[table].fillWhenEmpty ?? []).includes(c) &&
         isEmptyNumber(existing[c])
     );
+    const lengths = lengthChangesOf(columns, existing, desired);
     differences.push({
       table,
       key,
       columns,
       ...(filled.length > 0 ? { filled } : {}),
+      ...(lengths ? { lengths } : {}),
     });
     observe({ table, key, status: 'differs' });
     // A person may allow the update for some rows only (the upload: per file)
@@ -489,7 +492,7 @@ export async function executePlan(
     }
     noteExisting('training_components', c.code, existing, {
       title: c.title,
-      description: c.reference,
+      description: componentDescription(c),
       total_weeks: c.totalWeeks,
       total_hours: c.totalHours,
       phase: c.phase,
@@ -530,7 +533,7 @@ export async function executePlan(
     }
     noteExisting('courses', c.code, existing, {
       title: c.title,
-      description: c.reference,
+      description: componentDescription(c),
     });
   }
 
@@ -922,7 +925,7 @@ export async function executePlan(
     training_catalog_id: catalogId,
     code: c.code,
     title: c.title,
-    description: c.reference,
+    description: componentDescription(c),
     total_weeks: c.totalWeeks,
     total_hours: c.totalHours,
     training_year: null,
@@ -938,7 +941,7 @@ export async function executePlan(
     code: c.code,
     training_component_id: componentId,
     title: c.title,
-    description: c.reference,
+    description: componentDescription(c),
     year: c.phase,
     chapter: c.orderIndex,
     exam_part: null,

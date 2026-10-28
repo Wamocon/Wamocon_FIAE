@@ -14,6 +14,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
+import { invalidateTraineeListCaches } from '@/lib/catalog/trainee-cache';
 import { isInOrgScope, orgScopeCondition, scopeOrg } from '@/lib/auth/session';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import {
@@ -234,6 +235,9 @@ export async function POST(
       );
     }
 
+    // the course list of the trainee is cached, a new membership must show
+    invalidateTraineeListCaches();
+
     // Notify the added user
     try {
       const [courseInfo] = await db
@@ -378,6 +382,9 @@ export async function DELETE(
           eq(courseMembers.userId, userId as any)
         )
       );
+
+    // the course list of the trainee is cached, the removed course must go
+    invalidateTraineeListCaches();
 
     // Notify the removed user
     try {
