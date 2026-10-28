@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
+import { requireEnablerOpen } from '@/lib/catalog/progression-db';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { getUserOrgId } from '@/lib/auth-helpers';
@@ -59,6 +60,13 @@ export async function POST(
       );
     if (!member)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    // Order of work: the scenario of a locked enabler takes no submission
+    const locked = await requireEnablerOpen(traineeId, {
+      id: String(e.id),
+      courseId: String(e.courseId),
+    });
+    if (locked) return locked;
 
     // Upsert-like: if trainee already has a submission, update the latest; else insert
     const existing: EnablerSubmission[] = await db

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
+import { requireEnablerOpen } from '@/lib/catalog/progression-db';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { getUserOrgId } from '@/lib/auth-helpers';
@@ -64,6 +65,13 @@ export async function POST(
       );
     if (!member)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    // Order of work: a locked enabler takes no quiz attempt
+    const locked = await requireEnablerOpen(traineeId, {
+      id: String(enabler.id),
+      courseId: String(enabler.courseId),
+    });
+    if (locked) return locked;
 
     const [link] = await db
       .select()

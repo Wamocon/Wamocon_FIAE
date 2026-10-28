@@ -12,6 +12,8 @@ import {
   quizzes,
 } from '@/db/migrations/schemas/schema';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
+import { getEnablerProgression } from '@/lib/catalog/progression-db';
+import { bestScoresOf, computeQuizChain } from '@/lib/catalog/progression';
 
 // GET: list active quizzes for an enabler visible to the trainee with gating
 // The data of the session user, a traineeId or userId in the query is ignored.
@@ -82,53 +84,64 @@ export async function GET(
       isActive: boolean;
     }>;
 
-    // gating: medium visible if submission exists for low; high visible if submission exists for medium
-    const low = active.find(a => a.difficulty === 'LOW');
-    const med = active.find(a => a.difficulty === 'MEDIUM');
-    const high = active.find(a => a.difficulty === 'HIGH');
+    // The lock chain LOW, MEDIUM, HIGH and the order of work, both decided by
+    // the same code that the quiz routes enforce. The list shows titles only,
+    // never questions: a locked enabler lists its quizzes as locked.
+    const found = await getEnablerProgression(traineeId, {
+      id: String(enabler.id),
+      courseId: String(enabler.courseId),
+    });
+    const enablerLocked = !!found?.enabler.locked;
+    const subs = active.length
+      ? await db
+          .select({
+            quizId: quizSubmissions.quizId,
+            score: quizSubmissions.score,
+          })
+          .from(quizSubmissions)
+          .where(
+            and(
+              inArray(
+                quizSubmissions.quizId,
+                active.map(a => a.quizId)
+              ),
+              eq(quizSubmissions.traineeId, traineeId)
+            )
+          )
+      : [];
+    const best = bestScoresOf(subs);
+    const chain = computeQuizChain(
+      active.map(a => ({
+        quizId: String(a.quizId),
+        difficulty: a.difficulty,
+        quizIsActive: true,
+      })),
+      best,
+      new Set(best.keys())
+    );
 
-    const subs = await db
-      .select({ quizId: quizSubmissions.quizId })
-      .from(quizSubmissions)
-      .where(
-        and(
-          inArray(
-            quizSubmissions.quizId,
-            [low?.quizId, med?.quizId, high?.quizId].filter(Boolean) as string[]
-          ),
-          eq(quizSubmissions.traineeId, traineeId)
-        )
-      );
-    const submitted = new Set(subs.map(s => String(s.quizId)));
+    const visible = active.map(a => {
+      const entry = chain.find(c => c.quizId === String(a.quizId));
+      return {
+        ...a,
+        unlocked: !enablerLocked && !!entry?.unlocked,
+        // an attempt was made (the chain opens the next quiz)
+        completed: !!entry?.submitted,
+        // the best attempt reached the passing score (otherwise it can be repeated)
+        passed: !!entry?.passed,
+      };
+    });
 
-    const visible: Array<{
-      difficulty: 'LOW' | 'MEDIUM' | 'HIGH';
-      quizId: string;
-      title: string;
-      isActive: boolean;
-      unlocked: boolean;
-      completed: boolean;
-    }> = [];
-    if (low)
-      visible.push({
-        ...low,
-        unlocked: true,
-        completed: submitted.has(String(low.quizId)),
-      });
-    if (med)
-      visible.push({
-        ...med,
-        unlocked: low ? submitted.has(String(low.quizId)) : false,
-        completed: submitted.has(String(med.quizId)),
-      });
-    if (high)
-      visible.push({
-        ...high,
-        unlocked: med ? submitted.has(String(med.quizId)) : false,
-        completed: submitted.has(String(high.quizId)),
-      });
-
-    return NextResponse.json({ quizzes: visible });
+    return NextResponse.json({
+      quizzes: visible,
+      enablerLocked,
+      lockedBy: found?.enabler.lockedBy
+        ? {
+            id: found.enabler.lockedBy.enablerId,
+            title: found.enabler.lockedBy.title,
+          }
+        : null,
+    });
   } catch (e) {
     console.error('List trainee enabler quizzes error', e);
     return NextResponse.json(

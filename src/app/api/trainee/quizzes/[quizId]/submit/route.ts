@@ -18,6 +18,8 @@ import {
 import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
+import { requireQuizOpen } from '@/lib/catalog/progression-db';
+import { isQuizPassed } from '@/lib/catalog/progression';
 
 /**
  * Ids of the questions that hold a real answer: a selected option, or a text.
@@ -127,6 +129,16 @@ export async function POST(
         );
       if (!member)
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+      // Order of work: a locked enabler takes no attempt (ENABLER_LOCKED), and
+      // neither does a quiz whose predecessor in the chain LOW, MEDIUM, HIGH
+      // was not attempted yet (QUIZ_LOCKED)
+      const access = await requireQuizOpen(
+        traineeId,
+        { id: String(enabler.id), courseId: String(enabler.courseId) },
+        String(quizId)
+      );
+      if (access.blocked) return access.blocked;
     }
 
     const qs = await db
@@ -141,7 +153,9 @@ export async function POST(
 
     const allowMultipleAttempts = isGlobal;
 
-    // Check for existing submission (single-attempt enforcement for non-global quizzes)
+    // A lesson quiz is repeated until it is passed (a best attempt at or above
+    // the passing score), a passed one stays as it is. Global quizzes allow
+    // any number of attempts.
     const existingSubmission = await db
       .select()
       .from(quizSubmissions)
@@ -151,9 +165,13 @@ export async function POST(
           eq(quizSubmissions.traineeId, traineeId)
         )
       );
-    if (!allowMultipleAttempts && existingSubmission.length) {
-      // Build feedback from stored answers for review-only mode
-      const [sub] = existingSubmission;
+    const passedBefore = existingSubmission.some(s => isQuizPassed(s.score));
+    if (!allowMultipleAttempts && passedBefore) {
+      // Build feedback from stored answers for review-only mode: the attempt
+      // that passed (the best one)
+      const sub = existingSubmission.reduce((best, s) =>
+        (s.score ?? 0) > (best.score ?? 0) ? s : best
+      );
       const storedAnswers = await db
         .select()
         .from(quizSubmissionAnswers)
@@ -415,6 +433,9 @@ export async function POST(
     }
 
     apiCache.invalidate('trainee_quizzes');
+    // A passed quiz moves the progress and may open the next enabler
+    apiCache.invalidate('trainee_courses');
+    apiCache.invalidate('trainee_dashboard');
     apiCache.invalidate('trainer_reviews');
     apiCache.invalidate('trainer_dashboard');
 
