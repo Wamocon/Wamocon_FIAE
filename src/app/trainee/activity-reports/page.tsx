@@ -16,7 +16,10 @@ import {
   type TrainingPhase,
 } from '@/lib/ausbildung/duration';
 import { getISOWeekDates, getISOWeekInfo } from '@/lib/date/iso-week';
-import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import {
+  componentHoursLabel,
+  normalizePlannedHours,
+} from '@/lib/ausbildung/planned-hours';
 import {
   ClipboardList,
   Plus,
@@ -2317,7 +2320,11 @@ function ComponentItem({
             {component.title}
           </p>
           <p className="text-muted-foreground text-xs">
-            {component.code} • {component.totalHours} {t('reports.hoursTotal')}
+            {componentHoursLabel(
+              component.code,
+              component.totalHours,
+              t('reports.hoursTotal')
+            )}
           </p>
         </div>
       </button>

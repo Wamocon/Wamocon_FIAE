@@ -10,8 +10,8 @@
 //    is left as it is, a second run writes nothing
 //  - nothing is deleted, nothing is overwritten. With updateExisting the named
 //    columns of tables.ts are updated, nothing else. One exception: total_weeks
-//    of an existing component that still holds 0 is set without the switch
-//    (tables.ts fillWhenEmpty), never total_hours and never to 0
+//    and total_hours of an existing component that still hold 0 are set without
+//    the switch (tables.ts fillWhenEmpty), never to 0
 //  - a structural conflict (a key exists with another meaning, a quiz exists
 //    with another number of questions) stops a writing run before the first
 //    write (a comparison without write only reports it)
@@ -448,7 +448,7 @@ export async function executePlan(
       return;
     }
     // Columns that are written without --update-existing: the ones that are
-    // still empty in the existing row (total_weeks of a component that holds 0).
+    // still empty in the existing row (total_weeks and total_hours of a component that holds 0).
     const filled = columns.filter(
       c =>
         (TABLES[table].fillWhenEmpty ?? []).includes(c) &&
@@ -491,6 +491,7 @@ export async function executePlan(
       title: c.title,
       description: c.reference,
       total_weeks: c.totalWeeks,
+      total_hours: c.totalHours,
       phase: c.phase,
       kind: c.kind,
       order_index: c.orderIndex,

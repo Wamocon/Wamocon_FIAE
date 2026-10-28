@@ -1,4 +1,7 @@
-import { buildTrainingComponentMetadata } from '@/lib/hai/componentMetadata';
+import {
+  buildTrainingComponentMetadata,
+  componentDurationText,
+} from '@/lib/hai/componentMetadata';
 import {
   buildHaiTrainingScope,
   isMetadataAllowedForTrainingScope,
@@ -116,5 +119,30 @@ describe('training scope with the new keys', () => {
         )
       )
     ).toBe(true);
+  });
+});
+
+describe('componentDurationText', () => {
+  it('names weeks and hours', () => {
+    expect(componentDurationText(11, 440)).toBe(
+      'Dauer: 11 Wochen / 440 Stunden'
+    );
+    expect(componentDurationText('22', '880')).toBe(
+      'Dauer: 22 Wochen / 880 Stunden'
+    );
+  });
+
+  it('leaves out a missing or 0 value, never writes 0 Stunden or 0 Wochen', () => {
+    expect(componentDurationText(11, 0)).toBe('Dauer: 11 Wochen');
+    expect(componentDurationText(11, null)).toBe('Dauer: 11 Wochen');
+    expect(componentDurationText(0, 120)).toBe('Dauer: 120 Stunden');
+    expect(componentDurationText(undefined, 120)).toBe('Dauer: 120 Stunden');
+  });
+
+  it('has no line without both values', () => {
+    expect(componentDurationText(0, 0)).toBeNull();
+    expect(componentDurationText(null, undefined)).toBeNull();
+    expect(componentDurationText('', 'x')).toBeNull();
+    expect(componentDurationText(-1, Number.NaN)).toBeNull();
   });
 });

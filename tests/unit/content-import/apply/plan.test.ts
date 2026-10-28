@@ -43,7 +43,7 @@ describe('buildImportPlan: structure', () => {
     expect(k1.reference).toBe('§ 4 Abs. 2 Nr. 1');
   });
 
-  it('takes the weeks from the training framework plan and leaves the hours as placeholders', () => {
+  it('takes the weeks from the training framework plan and the hours as weeks times 40', () => {
     expect(
       plan.components.map(c => [c.code, c.totalWeeks, c.weeksSource])
     ).toEqual([
@@ -54,15 +54,20 @@ describe('buildImportPlan: structure', () => {
       // the plan prints no weeks for the integrative positions
       ['K20', 0, 'none'],
     ]);
-    for (const c of plan.components) {
-      // the plan has no hours: they stay 0 until the owner decides
-      expect(c.totalHours).toBe(0);
-      expect(c.provisionalTotals).toBe(true);
-    }
+    // the plan has no hours: weeks times 40, an owner decision of 28.10.2026
+    expect(
+      plan.components.map(c => [c.code, c.totalHours, c.hoursSource])
+    ).toEqual([
+      ['K1', 440, 'weeks'],
+      ['K6.1', 240, 'weeks'],
+      ['K6.2', 440, 'weeks'],
+      ['K10', 880, 'weeks'],
+      // no weeks, so no hours
+      ['K20', 0, 'none'],
+    ]);
+    for (const c of plan.components) expect(c.provisionalTotals).toBe(false);
     const text = plan.open.join(' ');
-    expect(text).toMatch(
-      /Planned hours are placeholders \(0\) for 5 component/
-    );
+    expect(text).not.toMatch(/Planned hours are placeholders/);
     expect(text).not.toMatch(/Weeks are placeholders/);
   });
 
@@ -82,11 +87,15 @@ describe('buildImportPlan: structure', () => {
     const unknown = p.components.find(c => c.code === 'K26');
     expect(unknown).toMatchObject({
       totalWeeks: 0,
+      totalHours: 0,
       weeksSource: 'placeholder',
+      hoursSource: 'placeholder',
       provisionalTotals: true,
     });
-    expect(p.open.join(' ')).toMatch(
-      /Weeks are placeholders \(0\) for 1 component/
+    const text = p.open.join(' ');
+    expect(text).toMatch(/Weeks are placeholders \(0\) for 1 component/);
+    expect(text).toMatch(
+      /Planned hours are placeholders \(0\) for 1 component/
     );
   });
 
@@ -101,10 +110,21 @@ describe('buildImportPlan: structure', () => {
       k1.totalWeeks,
       k1.weeksSource,
       k1.totalHours,
+      k1.hoursSource,
       k1.provisionalTotals,
-    ]).toEqual([4, 'decision', 160, false]);
+    ]).toEqual([4, 'decision', 160, 'decision', false]);
     const k10 = p.components.find(c => c.code === 'K10')!;
-    expect([k10.totalWeeks, k10.provisionalTotals]).toEqual([22, true]);
+    expect([k10.totalWeeks, k10.totalHours, k10.provisionalTotals]).toEqual([
+      22,
+      880,
+      false,
+    ]);
+    // decided weeks without decided hours: the hours follow the weeks
+    const d2 = loadDecisions(raw => {
+      raw.components.totalWeeks = { K1: 4 };
+    });
+    const k1b = build(sampleTree(), d2).components.find(c => c.code === 'K1')!;
+    expect([k1b.totalHours, k1b.hoursSource]).toEqual([160, 'weeks']);
   });
 
   it('plans enablers with the code of the plan and the title of the heading', () => {
@@ -681,8 +701,8 @@ describe('renderPlanSummary', () => {
     const text = renderPlanSummary(p);
     expect(text).toMatch(/Komponenten/);
     expect(text).toMatch(/quiz:1a:medium/);
-    expect(text).toMatch(/Planned hours are placeholders/);
     expect(text).toMatch(/\| K6\.2 \| pflicht \| 2 \| 11 \|/);
+    expect(text).not.toMatch(/Planned hours are placeholders/);
     expect(text).toMatch(/\| K20 \| integrativ \| - \| 0 \|/);
     for (const secret of [
       'Erfundene Frage',

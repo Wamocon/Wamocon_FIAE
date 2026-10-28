@@ -50,7 +50,10 @@ import { createHash } from 'crypto';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
-import { buildTrainingComponentMetadata } from '../src/lib/hai/componentMetadata';
+import {
+  buildTrainingComponentMetadata,
+  componentDurationText,
+} from '../src/lib/hai/componentMetadata';
 import {
   ChunkPlan,
   checkTargetAgainstConnection,
@@ -1345,9 +1348,9 @@ async function indexTrainingComponents(db: postgres.Sql) {
     if (comp.description) parts.push(comp.description);
     if (comp.training_year)
       parts.push(`Ausbildungsjahr: ${comp.training_year}`);
-    parts.push(
-      `Dauer: ${comp.total_weeks} Wochen / ${comp.total_hours} Stunden`
-    );
+    // no "0 Stunden" or "0 Wochen" where a value is missing
+    const duration = componentDurationText(comp.total_weeks, comp.total_hours);
+    if (duration) parts.push(duration);
 
     const tucs = compUseCaseMap.get(comp.id) || [];
     if (tucs.length > 0) {

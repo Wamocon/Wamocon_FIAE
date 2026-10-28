@@ -1,7 +1,9 @@
 import {
   EXPECTED_COMPONENT_CODES,
+  HOURS_PER_WEEK,
   KFBM_COMPONENT_WEEKS,
   RAHMENPLAN_WEEK_TOTALS,
+  hoursFromWeeks,
   officialWeeksOf,
   sumWeeks,
   validateComponentWeeks,
@@ -264,5 +266,64 @@ describe('validateComponentWeeks: strict', () => {
     expect(validateComponentWeeks(entries).join(' ')).toMatch(
       /K4 names a page outside the plan/
     );
+  });
+});
+
+describe('planned hours: weeks times 40 (owner decision of 28.10.2026)', () => {
+  it('uses the factor 40', () => {
+    expect(HOURS_PER_WEEK).toBe(40);
+  });
+
+  it('gives 440, 880 and 520 hours for 11, 22 and 13 weeks', () => {
+    expect(hoursFromWeeks(11)).toBe(440);
+    expect(hoursFromWeeks(22)).toBe(880);
+    expect(hoursFromWeeks(13)).toBe(520);
+  });
+
+  it('gives 0 hours without weeks, never a negative or invalid value', () => {
+    for (const weeks of [0, null, undefined, -3, Number.NaN, Infinity]) {
+      expect(hoursFromWeeks(weeks as number | null | undefined)).toBe(0);
+    }
+  });
+
+  it('gives the hours of every component of the table', () => {
+    const hours = Object.fromEntries(
+      KFBM_COMPONENT_WEEKS.map(e => [e.code, hoursFromWeeks(e.weeks)])
+    );
+    expect(hours).toEqual({
+      K1: 440,
+      K2: 440,
+      K3: 280,
+      K4: 200,
+      K5: 280,
+      'K6.1': 240,
+      'K6.2': 440,
+      K7: 440,
+      K8: 520,
+      K9: 520,
+      K10: 880,
+      K11: 880,
+      K12: 880,
+      K13: 880,
+      K14: 880,
+      K15: 880,
+      K16: 880,
+      K17: 880,
+      K19: 880,
+      K20: 0,
+      K21: 0,
+      K22: 0,
+      K23: 0,
+      'K24.1': 160,
+      'K24.2': 80,
+      'K25.1': 80,
+      'K25.2': 360,
+    });
+  });
+
+  it('adds up to 156 weeks times 40 for a training (two electives)', () => {
+    const weeks = 58 + 37 + 6 + 11 + 2 * 22;
+    expect(weeks).toBe(156);
+    expect(hoursFromWeeks(weeks)).toBe(6240);
   });
 });
