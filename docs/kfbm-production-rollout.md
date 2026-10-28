@@ -25,7 +25,7 @@ Entscheidungen des Eigentümers vom 28.10.2026 (Auftrag RO2):
 | D1           | Die Demo am 26.11.2026 läuft auf Production. Die Preview ist nur die Rückfallebene.                                                                                                                                                                                                                                                           | entschieden            |
 | D4 (Termin)  | Der Samstagstermin 07.11.2026 ist zurückgestellt. Anvisiert ist **Montag, 02.11.2026, abends** (Fenster 18:30 bis 22:30 Uhr). Das ist ein Zieltermin und **kein Go**: Das Go gibt Niko ausdrücklich, Stufe für Stufe. Der Samstag 07.11.2026, 06:00 bis 12:00 Uhr, bleibt das Ersatzfenster. Der Name der Zweitfreigabe steht noch aus.         | anvisiert, kein Go     |
 | D3           | Importweg: nicht ausdrücklich entschieden. Die Empfehlung A1 (vorhandener Inhaltsabgleich) bleibt der Arbeitsstand. Alle Arbeitspakete setzen darauf auf.                                                                                                                                                                                      | offen, Arbeitsstand A1 |
-| D8 (Anbieter) | Der Chat-Anbieter in Production ist nicht geklärt. Die Variablen tragen nicht Sokrates im Namen (`OPENAI_COMPATIBLE_*`), Niko liefert Informationen nach. Jede Aussage über den Anbieter des Chats bleibt bis dahin eine Annahme [A]. Ob der Fallback gesperrt werden muss (WP6), lässt sich erst danach entscheiden.                          | offen                  |
+| D8 (Anbieter) | Der Chat-Anbieter in Production ist nicht geklärt. Die Variablen tragen nicht Sokrates im Namen (`OPENAI_COMPATIBLE_*`), Niko liefert Informationen nach. Jede Aussage über den Anbieter des Chats bleibt bis dahin eine Annahme [A]. Ob der Fallback gesperrt werden muss (WP6), lässt sich erst danach entscheiden.                          | Fallback entschieden 28.10.2026 (CF1) |
 
 Arbeitspakete: **WP1 und WP2 sind umgesetzt** (Pull Request des Pakets RO2, Beleg in Abschnitt 4.7). **WP3 und WP4 sind vorbereitet und beschrieben, nicht ausgeführt** (Abschnitt 1.3). WP5 und WP6 sind offen.
 
@@ -855,7 +855,7 @@ Rückweg: `--catalog KFBM --purge --apply` löscht nur die Chunks des Katalogs, 
 
 Risiken: Kosten und Quotenfehler der Gemini-Schnittstelle (der Lauf ist fortsetzbar), Teilindex (die HAI antwortet dann mit Teilwissen), Schreiblast auf einer Tabelle mit Vektorspalte. Dauer: von der Zahl der Chunks abhängig, Schätzung Minuten bis eine Stunde, der Trockenlauf liefert die Zahl.
 
-Die Sperre des Chat-Fallbacks (D8) betrifft den Chat, nicht die Einbettungen: Fällt Sokrates aus, geht der Chat heute auf jeden Anbieter mit gesetztem Schlüssel (Gemini, Claude, OpenRouter) über. Ohne Sperre gehen dann Auszüge der Inhalte an Fremdanbieter.
+Die Sperre des Chat-Fallbacks (D8) betrifft den Chat, nicht die Einbettungen: Fällt Sokrates aus, geht der Chat heute auf jeden Anbieter mit gesetztem Schlüssel (Gemini, Claude, OpenRouter) über. Ohne Sperre gehen dann Auszüge der Inhalte an Fremdanbieter. **Umgesetzt im Paket CF1 (Entscheidung des Eigentümers vom 28.10.2026):** Der Fallback des Chats ist nur noch Sokrates, und nur mit gesetztem `OPENAI_COMPATIBLE_API_KEY`. Gemini, Claude, OpenRouter und Ollama werden nie als Fallback benutzt, ohne Schlüssel gibt es einen klaren Fehler statt eines stillen Wechsels (`docs/hai-chat-anbieter.md`).
 
 ## 6. Abnahme- und Regressionsliste
 

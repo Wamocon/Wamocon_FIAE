@@ -2860,5 +2860,6 @@
   "sequenceRule.saved": "Gespeichert.",
   "sequenceRule.removed": "Ausgeschaltet.",
   "sequenceRule.failed": "Die Änderung konnte nicht gespeichert werden.",
-  "sequenceRule.invalid": "Bitte ein gültiges Datum eingeben."
+  "sequenceRule.invalid": "Bitte ein gültiges Datum eingeben.",
+  "hai.error.chatUnavailable": "HAI ist gerade nicht erreichbar. Bitte versuche es in ein paar Minuten noch einmal oder wende dich an deinen Trainer."
 }

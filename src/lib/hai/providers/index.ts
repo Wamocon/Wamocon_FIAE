@@ -9,6 +9,15 @@
  *     - 'gemini' (default) → Google Gemini Flash, fast & affordable (production)
  *     - 'openrouter' → Free Llama models for QA/testing
  *     - 'claude' → Anthropic Claude, premium quality
+ *     - 'openai-compatible' → Sokrates, the own AI
+ *   - CHAT FALLBACK (package CF1): HAI_CHAT_FALLBACK
+ *     - 'sokrates' (default) → if the primary fails, ONLY the OpenAI compatible
+ *       provider (Sokrates) is tried, and only if OPENAI_COMPATIBLE_API_KEY is set
+ *       and its address is https on the positive list of hosts
+ *     - 'none' → no fallback
+ *     Without a usable fallback the caller gets a ChatUnavailableError. There is
+ *     no value that opens Gemini, Claude, OpenRouter or Ollama as a fallback:
+ *     chat content never goes to a third party by fallback.
  *   - EMBEDDINGS: Environment-based routing via HAI_EMBEDDING_PROVIDER
  *     - 'gemini' (default) → Google Gemini API (production standard, 3072 dims)
  *     - 'ollama' → Local Ollama (local dev only, 768 dims — incompatible with production)
@@ -16,7 +25,17 @@
  * @module lib/hai/providers
  */
 
+import {
+  allowedHostsOf,
+  parseTarget,
+  type KiPolicy,
+} from '@/lib/content-upload/ki/config';
 import { ClaudeChatProvider } from './claude';
+import {
+  ChatUnavailableError,
+  describeChatFailure,
+  type FallbackState,
+} from './errors';
 import { GeminiChatProvider, GeminiEmbeddingProvider } from './gemini';
 import { OllamaEmbeddingProvider } from './ollama';
 import { OpenRouterChatProvider } from './openrouter';
@@ -25,7 +44,7 @@ import {
   loadProviderConfig,
   type ChatProvider,
   type EmbeddingProvider,
-  type ChatProviderType,
+  type ProviderConfig,
 } from './types';
 
 // Re-export types so consumers can import from '@/lib/hai/providers'
@@ -40,6 +59,14 @@ export type {
   ProviderConfig,
 } from './types';
 export { loadProviderConfig } from './types';
+export {
+  ChatProviderError,
+  ChatUnavailableError,
+  CHAT_UNAVAILABLE_CODE,
+  CHAT_UNAVAILABLE_I18N_KEY,
+  isChatUnavailableError,
+  type FallbackState,
+} from './errors';
 
 // ============================================================================
 // SINGLETON INSTANCES
@@ -108,6 +135,7 @@ function ensureInitialized(): void {
   console.log(
     `HAI.ai Providers initialized:\n` +
       `  Chat: ${chatStatus} [${config.chatProvider}]\n` +
+      `  Chat fallback: ${resolveFallback(config).state}\n` +
       `  Embedding: ${embedStatus}`
   );
 
@@ -115,18 +143,102 @@ function ensureInitialized(): void {
 }
 
 // ============================================================================
+// CHAIN: PRIMARY + SOKRATES FALLBACK
+// ============================================================================
+
+/** What a call may use, in this order. Built from the environment, never from a list of all providers. */
+export interface ChatChain {
+  /** The configured provider, or null if it is not ready (no key). */
+  primary: ChatProvider | null;
+  /** Sokrates, or null. The only fallback there is. */
+  fallback: ChatProvider | null;
+  /** Why there is no fallback (or `sokrates`). */
+  fallbackState: FallbackState;
+}
+
+/**
+ * The rules the address of the fallback is held to: https, no credentials, no
+ * port, a host of the positive list (the one list of Sokrates hosts, replaced by
+ * CONTENT_UPLOAD_KI_ALLOWED_HOSTS). Null if that list is invalid: fail closed.
+ * A test with a stand-in on localhost passes its own policy.
+ */
+function defaultFallbackPolicy(): KiPolicy | null {
+  const allowedHosts = allowedHostsOf(process.env);
+  return allowedHosts ? { requireHttps: true, allowedHosts } : null;
+}
+
+function resolveFallback(
+  config: ProviderConfig,
+  policy?: KiPolicy | null
+): { fallback: ChatProvider | null; state: FallbackState } {
+  // Sokrates is already the primary: a second try would be the same call
+  if (config.chatProvider === 'openai-compatible') {
+    return { fallback: null, state: 'primary_is_sokrates' };
+  }
+  if (config.chatFallback === 'none') {
+    return { fallback: null, state: 'disabled' };
+  }
+
+  const apiKey = (config.openaiCompatible.apiKey ?? '').trim();
+  // a key with a space or a line break cannot be a bearer token (header injection)
+  if (apiKey.length === 0 || /[\s\u0000-\u001f\u007f]/.test(apiKey)) {
+    return { fallback: null, state: 'no_key' };
+  }
+
+  const effectivePolicy =
+    policy === undefined ? defaultFallbackPolicy() : policy;
+  const baseUrl = config.openaiCompatible.baseUrl.trim();
+  if (!effectivePolicy || !parseTarget(baseUrl, effectivePolicy).ok) {
+    return { fallback: null, state: 'target_rejected' };
+  }
+
+  return {
+    fallback: new OpenAICompatibleChatProvider(
+      baseUrl,
+      apiKey,
+      config.openaiCompatible.model
+    ),
+    state: 'sokrates',
+  };
+}
+
+/**
+ * The chain of one call: the primary if it is ready, then Sokrates if it may be
+ * used. Pure apart from the construction of the Sokrates provider.
+ */
+export function resolveChatChain(
+  config: ProviderConfig,
+  primary: ChatProvider | null,
+  policy?: KiPolicy | null
+): ChatChain {
+  const { fallback, state } = resolveFallback(config, policy);
+  return {
+    primary: primary && primary.isInitialized() ? primary : null,
+    fallback,
+    fallbackState: state,
+  };
+}
+
+function currentChain(): { chain: ChatChain; config: ProviderConfig } {
+  ensureInitialized();
+  const config = loadProviderConfig();
+  return { chain: resolveChatChain(config, _chatProvider), config };
+}
+
+// ============================================================================
 // PUBLIC API
 // ============================================================================
 
 /**
- * Get the primary chat provider.
- * Falls back to secondary provider if primary fails.
+ * Get the chat provider that can answer now: the primary if it is ready,
+ * otherwise Sokrates if the fallback is usable. Throws ChatUnavailableError if
+ * nothing can answer (never returns another provider).
  */
 export function getChatProvider(): ChatProvider {
-  ensureInitialized();
+  const { chain, config } = currentChain();
+  const usable = chain.primary ?? chain.fallback;
 
-  if (!_chatProvider || !_chatProvider.isInitialized()) {
-    const config = loadProviderConfig();
+  if (!usable) {
     const keyHints: Record<string, string> = {
       gemini: 'GEMINI_API_KEY',
       claude: 'ANTHROPIC_API_KEY',
@@ -134,12 +246,14 @@ export function getChatProvider(): ChatProvider {
       'openai-compatible': 'OPENAI_COMPATIBLE_API_KEY',
     };
     const keyHint = keyHints[config.chatProvider] || 'API key';
-    throw new Error(
-      `HAI.ai: Chat provider (${config.chatProvider}) not available. Check ${keyHint}.`
+    throw new ChatUnavailableError(
+      'no_provider',
+      chain.fallbackState,
+      `Chat provider (${config.chatProvider}) not available. Check ${keyHint}.`
     );
   }
 
-  return _chatProvider;
+  return usable;
 }
 
 /**
@@ -163,89 +277,50 @@ export function getEmbeddingProvider(): EmbeddingProvider {
 }
 
 /**
- * Build all chat providers that have credentials, ordered by preference.
- * The configured provider is always first; remaining providers act as fallbacks.
+ * Run one request along a chain: the primary first, then Sokrates, and nothing
+ * else. Streaming: if the provider that failed had already sent text to
+ * `onChunk`, there is no second try (a second answer would be glued onto the
+ * first); the caller gets ChatUnavailableError('interrupted'). The log carries
+ * provider names and the kind of failure, never content.
  */
-function getAvailableChatProviders(): ChatProvider[] {
-  ensureInitialized();
-  const config = loadProviderConfig();
-
-  const providers = new Map<ChatProviderType, ChatProvider>();
-
-  if (_chatProvider && _chatProvider.isInitialized()) {
-    providers.set(config.chatProvider, _chatProvider);
-  }
-
-  const allProviders: { type: ChatProviderType; instance: ChatProvider }[] = [
-    {
-      type: 'openai-compatible',
-      instance: new OpenAICompatibleChatProvider(
-        config.openaiCompatible.baseUrl,
-        config.openaiCompatible.apiKey,
-        config.openaiCompatible.model
-      ),
-    },
-    {
-      type: 'gemini',
-      instance: new GeminiChatProvider(
-        config.gemini.apiKey,
-        config.gemini.chatModel
-      ),
-    },
-    {
-      type: 'claude',
-      instance: new ClaudeChatProvider(
-        config.claude.apiKey,
-        config.claude.model
-      ),
-    },
-    {
-      type: 'openrouter',
-      instance: new OpenRouterChatProvider(
-        config.openrouter.apiKey,
-        config.openrouter.model
-      ),
-    },
-  ];
-
-  for (const { type, instance } of allProviders) {
-    if (!providers.has(type) && instance.isInitialized()) {
-      providers.set(type, instance);
-    }
-  }
-
-  return Array.from(providers.values());
-}
-
-/**
- * Execute a chat request via the configured provider, falling back to other
- * initialized providers if the primary one fails.
- */
-export async function chatWithFallback(
+export async function runChatChain(
+  chain: ChatChain,
   systemPrompt: string,
   messages: import('./types').ChatMessage[],
   userMessage: string,
   onChunk?: (text: string) => void,
   options?: import('./types').ChatGenerateOptions
 ): Promise<import('./types').ChatResponse> {
-  const providers = getAvailableChatProviders();
+  const attempts: ChatProvider[] = [];
+  if (chain.primary) attempts.push(chain.primary);
+  if (chain.fallback) attempts.push(chain.fallback);
 
-  if (providers.length === 0) {
-    throw new Error(
-      'HAI.ai: No chat providers are initialized. Check your AI provider API keys.'
+  if (attempts.length === 0) {
+    console.warn(
+      `HAI.ai [chatWithFallback]: no chat provider is ready (fallback: ${chain.fallbackState})`
     );
+    throw new ChatUnavailableError('no_provider', chain.fallbackState);
   }
 
-  const errors: string[] = [];
+  const failures: string[] = [];
 
-  for (const provider of providers) {
+  for (let index = 0; index < attempts.length; index += 1) {
+    const provider = attempts[index];
+    let emitted = false;
+    const guardedChunk = onChunk
+      ? (text: string) => {
+          if (text) emitted = true;
+          onChunk(text);
+        }
+      : undefined;
+
     try {
-      if (onChunk) {
+      if (guardedChunk) {
         return await provider.generateResponseStream(
           systemPrompt,
           messages,
           userMessage,
-          onChunk,
+          guardedChunk,
           options
         );
       }
@@ -256,15 +331,58 @@ export async function chatWithFallback(
         options
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const reason = describeChatFailure(error);
+      failures.push(`${provider.name}: ${reason}`);
+
+      if (emitted) {
+        console.warn(
+          `HAI.ai [chatWithFallback]: provider "${provider.name}" broke off after output (${reason}), no second try`
+        );
+        throw new ChatUnavailableError(
+          'interrupted',
+          chain.fallbackState,
+          failures.join(' | ')
+        );
+      }
+
+      const next = attempts[index + 1];
       console.warn(
-        `HAI.ai [chatWithFallback]: provider "${provider.name}" failed: ${message}`
+        next
+          ? `HAI.ai [chatWithFallback]: provider "${provider.name}" failed (${reason}), trying "${next.name}"`
+          : `HAI.ai [chatWithFallback]: provider "${provider.name}" failed (${reason}), no further provider (fallback: ${chain.fallbackState})`
       );
-      errors.push(`${provider.name}: ${message}`);
     }
   }
 
-  throw new Error(`HAI.ai: All chat providers failed. ${errors.join(' | ')}`);
+  throw new ChatUnavailableError(
+    chain.fallback && attempts.includes(chain.fallback)
+      ? 'fallback_failed'
+      : 'no_fallback',
+    chain.fallbackState,
+    failures.join(' | ')
+  );
+}
+
+/**
+ * Execute a chat request via the configured provider. If it fails, ONLY Sokrates
+ * is tried (and only if OPENAI_COMPATIBLE_API_KEY is set, see HAI_CHAT_FALLBACK).
+ * Throws ChatUnavailableError if nothing could answer.
+ */
+export async function chatWithFallback(
+  systemPrompt: string,
+  messages: import('./types').ChatMessage[],
+  userMessage: string,
+  onChunk?: (text: string) => void,
+  options?: import('./types').ChatGenerateOptions
+): Promise<import('./types').ChatResponse> {
+  return runChatChain(
+    currentChain().chain,
+    systemPrompt,
+    messages,
+    userMessage,
+    onChunk,
+    options
+  );
 }
 
 /**
@@ -283,16 +401,23 @@ export function resetProviders(): void {
 export function getProviderStatus(): {
   chat: { provider: string; initialized: boolean };
   fallback: { provider: string; initialized: boolean } | null;
+  fallbackState: FallbackState;
   embedding: { provider: string; initialized: boolean; dimensions: number };
 } {
-  ensureInitialized();
+  const { chain } = currentChain();
 
   return {
     chat: {
       provider: _chatProvider?.name ?? 'none',
       initialized: _chatProvider?.isInitialized() ?? false,
     },
-    fallback: null,
+    fallback: chain.fallback
+      ? {
+          provider: chain.fallback.name,
+          initialized: chain.fallback.isInitialized(),
+        }
+      : null,
+    fallbackState: chain.fallbackState,
     embedding: {
       provider: _embeddingProvider?.name ?? 'none',
       initialized: _embeddingProvider?.isInitialized() ?? false,

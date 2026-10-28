@@ -1,18 +1,36 @@
 /**
  * HAI.ai Generic OpenAI-Compatible Provider
  *
- * Works with any OpenAI-compatible chat-completions endpoint.
+ * Works with any OpenAI-compatible chat-completions endpoint. In production it
+ * talks to Sokrates (Open WebUI in front of Ollama), the own AI, and is the only
+ * fallback of the chat (package CF1).
  * Configured via environment variables:
  *   - OPENAI_COMPATIBLE_BASE_URL (default: Sokrates test endpoint)
  *   - OPENAI_COMPATIBLE_API_KEY
- *   - OPENAI_COMPATIBLE_MODEL (default: gpt-4o-mini)
+ *   - OPENAI_COMPATIBLE_MODEL (default: gpt-4o-mini, recommended: sokrates-fast)
  *
  * No model fallback chain — the configured model is used exclusively.
  * No provider-specific headers (HTTP-Referer, X-Title) are sent.
  *
+ * Reasoning is off: every request carries `reasoning_effort: "none"`. The models
+ * behind Sokrates think by default and spend the whole token limit on it, the
+ * answer comes back empty (docs/kfbm-upload-runbook.md, 11.7). An empty answer is
+ * an error, never a blank message. The fields `reasoning` and
+ * `reasoning_content` of a response are never read.
+ *
+ * Time limits: a blocking call has one limit for the whole call. A stream is not
+ * cut by the length of the answer: the limit counts until the first byte
+ * (generous, the first call of a model that is not loaded yet takes 8 to 10
+ * seconds) and then the pause between two chunks.
+ *
+ * Nothing of the conversation is logged: errors and log lines carry the HTTP
+ * status, a short error code of the server and a kind, never a body, an address
+ * with a query, a key or a text.
+ *
  * @module lib/hai/providers/openai-compatible
  */
 
+import { ChatProviderError } from './errors';
 import type {
   ChatProvider,
   ChatMessage,
@@ -20,21 +38,90 @@ import type {
   ChatResponse,
 } from './types';
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+/** A blocking call, the whole call. */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
+/** A stream, until the first byte (the model may have to be loaded first). */
+export const DEFAULT_FIRST_BYTE_TIMEOUT_MS = 45_000;
+/** A stream, the pause between two chunks. */
+export const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
+
+/** Sent with every request: thinking models answer empty otherwise. */
+export const REASONING_EFFORT = 'none';
+
+export interface OpenAICompatibleTimeouts {
+  requestTimeoutMs: number;
+  firstByteTimeoutMs: number;
+  idleTimeoutMs: number;
+}
+
+/** One abort signal with a timer that can be moved, and a flag that says it fired. */
+class Watchdog {
+  private readonly controller = new AbortController();
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  timedOut = false;
+
+  get signal(): AbortSignal {
+    return this.controller.signal;
+  }
+
+  arm(ms: number): void {
+    this.clear();
+    this.timer = setTimeout(() => {
+      this.timedOut = true;
+      this.controller.abort();
+    }, ms);
+  }
+
+  clear(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+  }
+}
+
+/** A short code of the server (`invalid_request_error`), or null. Never free text. */
+function safeErrorCode(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: { type?: unknown; code?: unknown };
+    };
+    for (const value of [parsed?.error?.type, parsed?.error?.code]) {
+      if (typeof value === 'string' && /^[A-Za-z0-9_.-]{1,60}$/.test(value)) {
+        return value;
+      }
+    }
+  } catch {
+    // not JSON
+  }
+  return null;
+}
+
+function safeToken(value: unknown): string {
+  return typeof value === 'string' && /^[A-Za-z_]{1,30}$/.test(value)
+    ? value
+    : 'unknown';
+}
 
 export class OpenAICompatibleChatProvider implements ChatProvider {
   readonly name = 'openai-compatible';
   private apiKey: string | null = null;
   private baseUrl: string;
   private modelName: string;
+  private timeouts: OpenAICompatibleTimeouts;
 
   constructor(
     baseUrl: string,
     apiKey: string | undefined,
-    modelName: string = 'gpt-4o-mini'
+    modelName: string = 'gpt-4o-mini',
+    timeouts: Partial<OpenAICompatibleTimeouts> = {}
   ) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.modelName = modelName;
+    this.timeouts = {
+      requestTimeoutMs: timeouts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+      firstByteTimeoutMs:
+        timeouts.firstByteTimeoutMs ?? DEFAULT_FIRST_BYTE_TIMEOUT_MS,
+      idleTimeoutMs: timeouts.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
+    };
 
     if (apiKey) {
       this.apiKey = apiKey;
@@ -70,16 +157,62 @@ export class OpenAICompatibleChatProvider implements ChatProvider {
     ];
   }
 
-  private createAbortSignal(timeoutMs: number): AbortSignal {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    // Ensure the timeout is cleaned up if the request finishes quickly.
-    const originalAbort = controller.abort.bind(controller);
-    controller.abort = (reason?: unknown) => {
-      clearTimeout(timeout);
-      originalAbort(reason);
+  private buildBody(
+    systemPrompt: string,
+    messages: ChatMessage[],
+    userMessage: string,
+    options: ChatGenerateOptions,
+    stream: boolean
+  ) {
+    return {
+      model: this.modelName,
+      messages: this.buildMessages(systemPrompt, messages, userMessage),
+      max_tokens: options.maxOutputTokens ?? 2048,
+      temperature: options.temperature ?? 0.7,
+      top_p: options.topP ?? 0.9,
+      reasoning_effort: REASONING_EFFORT,
+      ...(options.stopSequences?.length ? { stop: options.stopSequences } : {}),
+      stream,
     };
-    return controller.signal;
+  }
+
+  /** A failure of the connection or of the time limit, without the message of fetch. */
+  private connectionError(watchdog: Watchdog, what: string): ChatProviderError {
+    if (watchdog.timedOut) {
+      console.error(`HAI.ai [openai-compatible]: ${what} timed out`);
+      return new ChatProviderError(
+        'timeout',
+        `OpenAI-compatible API ${what} timed out`
+      );
+    }
+    console.error(`HAI.ai [openai-compatible]: ${what} failed (network)`);
+    return new ChatProviderError(
+      'network',
+      `OpenAI-compatible API ${what} failed`
+    );
+  }
+
+  private httpError(status: number, body: string): ChatProviderError {
+    const code = safeErrorCode(body);
+    console.error(
+      `HAI.ai [openai-compatible]: API error status=${status}` +
+        (code ? ` code=${code}` : '')
+    );
+    return new ChatProviderError(
+      'http',
+      `OpenAI-compatible API error: ${status}`,
+      status
+    );
+  }
+
+  private emptyError(finishReason: unknown): ChatProviderError {
+    console.warn(
+      `HAI.ai [openai-compatible]: empty answer (finish_reason=${safeToken(finishReason)})`
+    );
+    return new ChatProviderError(
+      'empty',
+      'OpenAI-compatible API returned an empty answer'
+    );
   }
 
   private extractText(data: unknown): string {
@@ -120,89 +253,78 @@ export class OpenAICompatibleChatProvider implements ChatProvider {
       );
     }
 
-    const body = {
-      model: this.modelName,
-      messages: this.buildMessages(systemPrompt, messages, userMessage),
-      max_tokens: options.maxOutputTokens ?? 2048,
-      temperature: options.temperature ?? 0.7,
-      top_p: options.topP ?? 0.9,
-      ...(options.stopSequences?.length ? { stop: options.stopSequences } : {}),
-      stream: false,
-    };
-
-    const signal = this.createAbortSignal(DEFAULT_TIMEOUT_MS);
+    const body = this.buildBody(
+      systemPrompt,
+      messages,
+      userMessage,
+      options,
+      false
+    );
     const url = this.getApiUrl();
+    const watchdog = new Watchdog();
+    watchdog.arm(this.timeouts.requestTimeoutMs);
 
-    let response: Response;
     try {
-      response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal,
-      });
-    } catch (fetchError) {
-      const message =
-        fetchError instanceof Error ? fetchError.message : String(fetchError);
-      console.error(
-        `HAI.ai [openai-compatible]: fetch failed for ${url}:`,
-        fetchError
-      );
-      throw new Error(`OpenAI-compatible API request failed: ${message}`);
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+          signal: watchdog.signal,
+        });
+      } catch {
+        throw this.connectionError(watchdog, 'request');
+      }
+
+      let responseText = '';
+      try {
+        responseText = await response.text();
+      } catch {
+        if (watchdog.timedOut) throw this.connectionError(watchdog, 'request');
+        responseText = '';
+      }
+
+      if (!response.ok) {
+        throw this.httpError(response.status, responseText);
+      }
+
+      let data: unknown;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        console.error(
+          `HAI.ai [openai-compatible]: invalid JSON in response (${responseText.length} chars)`
+        );
+        throw new ChatProviderError(
+          'invalid',
+          'OpenAI-compatible API returned invalid JSON'
+        );
+      }
+
+      const text = this.extractText(data);
+      if (!text.trim()) {
+        throw this.emptyError(this.extractFinishReason(data));
+      }
+
+      const usage = (data as Record<string, unknown>)?.usage as
+        | Record<string, number>
+        | undefined;
+
+      return {
+        text,
+        citations: [],
+        tokenCount:
+          (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0),
+        finishReason: this.extractFinishReason(data),
+        provider: this.name,
+      };
+    } finally {
+      watchdog.clear();
     }
-
-    let responseText = '';
-    try {
-      responseText = await response.text();
-    } catch {
-      responseText = '<unreadable body>';
-    }
-
-    if (!response.ok) {
-      console.error(
-        `HAI.ai [openai-compatible]: API error ${response.status} from ${url}. Body:`,
-        responseText.slice(0, 1000)
-      );
-      throw new Error(
-        `OpenAI-compatible API error: ${response.status} - ${responseText.slice(0, 500)}`
-      );
-    }
-
-    let data: unknown;
-    try {
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error(
-        `HAI.ai [openai-compatible]: Failed to parse JSON response from ${url}. Body:`,
-        responseText.slice(0, 1000)
-      );
-      throw new Error(
-        `OpenAI-compatible API returned invalid JSON: ${responseText.slice(0, 500)}`
-      );
-    }
-
-    const text = this.extractText(data);
-    if (!text) {
-      console.warn(
-        `HAI.ai [openai-compatible]: Empty content in response from ${url}. Response:`,
-        JSON.stringify(data).slice(0, 1000)
-      );
-    }
-
-    const usage = (data as Record<string, unknown>)?.usage as
-      | Record<string, number>
-      | undefined;
-
-    return {
-      text,
-      citations: [],
-      tokenCount: (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0),
-      finishReason: this.extractFinishReason(data),
-      provider: this.name,
-    };
   }
 
   private extractFinishReason(data: unknown): string | undefined {
@@ -227,113 +349,117 @@ export class OpenAICompatibleChatProvider implements ChatProvider {
       );
     }
 
-    const signal = this.createAbortSignal(DEFAULT_TIMEOUT_MS);
     const url = this.getApiUrl();
-
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: this.modelName,
-          messages: this.buildMessages(systemPrompt, messages, userMessage),
-          max_tokens: options.maxOutputTokens ?? 2048,
-          temperature: options.temperature ?? 0.7,
-          top_p: options.topP ?? 0.9,
-          ...(options.stopSequences?.length
-            ? { stop: options.stopSequences }
-            : {}),
-          stream: true,
-        }),
-        signal,
-      });
-    } catch (fetchError) {
-      const message =
-        fetchError instanceof Error ? fetchError.message : String(fetchError);
-      console.error(
-        `HAI.ai [openai-compatible]: streaming fetch failed for ${url}:`,
-        fetchError
-      );
-      throw new Error(
-        `OpenAI-compatible API streaming request failed: ${message}`
-      );
-    }
-
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => 'Unknown error');
-      throw new Error(
-        `OpenAI-compatible API error: ${response.status} - ${errorBody}`
-      );
-    }
-
-    let fullText = '';
-    let finishReason: string | undefined;
-    let tokenCount = 0;
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error(
-        'HAI.ai [openai-compatible]: No response body for streaming'
-      );
-    }
-
-    const decoder = new TextDecoder();
-    let buffer = '';
+    const watchdog = new Watchdog();
+    // generous until the first byte, then the pause between two chunks
+    watchdog.arm(this.timeouts.firstByteTimeoutMs);
 
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(
+            this.buildBody(systemPrompt, messages, userMessage, options, true)
+          ),
+          signal: watchdog.signal,
+        });
+      } catch {
+        throw this.connectionError(watchdog, 'streaming request');
+      }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => '');
+        throw this.httpError(response.status, errorBody);
+      }
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+      let fullText = '';
+      let finishReason: string | undefined;
+      let tokenCount = 0;
 
-          const data = trimmed.slice(6);
-          if (data === '[DONE]') continue;
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new ChatProviderError(
+          'invalid',
+          'OpenAI-compatible API sent no response body for streaming'
+        );
+      }
 
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          let chunk: ReadableStreamReadResult<Uint8Array>;
           try {
-            const parsed = JSON.parse(data);
-            const delta = parsed.choices?.[0]?.delta;
-            const chunkFinishReason = parsed.choices?.[0]?.finish_reason;
-
-            if (delta?.content) {
-              fullText += delta.content;
-              onChunk(delta.content);
-            }
-
-            if (chunkFinishReason) {
-              finishReason = chunkFinishReason;
-            }
-
-            if (parsed.usage) {
-              tokenCount =
-                (parsed.usage.prompt_tokens ?? 0) +
-                (parsed.usage.completion_tokens ?? 0);
-            }
+            chunk = await reader.read();
           } catch {
-            // Skip malformed JSON lines
+            throw this.connectionError(watchdog, 'stream');
+          }
+          const { done, value } = chunk;
+          if (done) break;
+          watchdog.arm(this.timeouts.idleTimeoutMs);
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data: ')) continue;
+
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              const delta = parsed.choices?.[0]?.delta;
+              const chunkFinishReason = parsed.choices?.[0]?.finish_reason;
+
+              if (delta?.content) {
+                fullText += delta.content;
+                onChunk(delta.content);
+              }
+
+              if (chunkFinishReason) {
+                finishReason = chunkFinishReason;
+              }
+
+              if (parsed.usage) {
+                tokenCount =
+                  (parsed.usage.prompt_tokens ?? 0) +
+                  (parsed.usage.completion_tokens ?? 0);
+              }
+            } catch {
+              // Skip malformed JSON lines
+            }
           }
         }
+      } finally {
+        try {
+          reader.releaseLock();
+        } catch {
+          // a read that was cut by the time limit may still hold the lock
+        }
       }
-    } finally {
-      reader.releaseLock();
-    }
 
-    return {
-      text: fullText,
-      citations: [],
-      tokenCount,
-      finishReason,
-      provider: this.name,
-    };
+      if (!fullText.trim()) {
+        throw this.emptyError(finishReason);
+      }
+
+      return {
+        text: fullText,
+        citations: [],
+        tokenCount,
+        finishReason,
+        provider: this.name,
+      };
+    } finally {
+      watchdog.clear();
+    }
   }
 }
