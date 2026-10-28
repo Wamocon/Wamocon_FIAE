@@ -34,3 +34,26 @@ export function buildTrainingComponentMetadata(
     componentKind: component.kind ?? null,
   };
 }
+
+/**
+ * The duration line of the HAI text of a component ("Dauer: 11 Wochen / 440
+ * Stunden"). A value that is missing or 0 is left out, so the text never says
+ * "0 Stunden" or "0 Wochen"; without both there is no line (null). The reindex
+ * script adds the line only when this returns text.
+ */
+export function componentDurationText(
+  totalWeeks: number | string | null | undefined,
+  totalHours: number | string | null | undefined
+): string | null {
+  const positive = (value: unknown) => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const weeks = positive(totalWeeks);
+  const hours = positive(totalHours);
+  const parts = [
+    weeks !== null ? `${weeks} Wochen` : null,
+    hours !== null ? `${hours} Stunden` : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? `Dauer: ${parts.join(' / ')}` : null;
+}

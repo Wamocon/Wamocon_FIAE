@@ -16,7 +16,12 @@ import type {
   PathInfo,
 } from '../types';
 import { hasSolutionHeadingLine } from '../source-parsers';
-import { officialWeeksOf, validateComponentWeeks } from './component-weeks';
+import {
+  HOURS_PER_WEEK,
+  hoursFromWeeks,
+  officialWeeksOf,
+  validateComponentWeeks,
+} from './component-weeks';
 import { kindOfComponent } from './decisions';
 import {
   findSolutionLeaks,
@@ -446,11 +451,12 @@ export function buildImportPlan(
     .map(c => {
       // Weeks: a decision of the owner first, then the training framework plan
       // (component-weeks.ts, null = the plan prints none for this component),
-      // else the placeholder. The plan has no hours, so they stay placeholders
-      // until the owner names them.
+      // else the placeholder. Hours: a decision first, then weeks times 40 (a
+      // decision of the owner of 28.10.2026, not official, see
+      // component-weeks.ts), 0 without weeks, else the placeholder.
       const decided = decisions.components.totalWeeks[c.code];
       const official = officialWeeksOf(c.code);
-      const hours = decisions.components.totalHours[c.code];
+      const decidedHours = decisions.components.totalHours[c.code];
       let weeks: number;
       let weeksSource: NonNullable<PlanComponent['weeksSource']>;
       if (decided !== undefined) {
@@ -466,6 +472,21 @@ export function buildImportPlan(
         weeks = decisions.components.placeholderWeeks;
         weeksSource = 'placeholder';
       }
+      let hours: number;
+      let hoursSource: NonNullable<PlanComponent['hoursSource']>;
+      if (decidedHours !== undefined) {
+        hours = decidedHours;
+        hoursSource = 'decision';
+      } else if (weeksSource === 'placeholder') {
+        hours = decisions.components.placeholderHours;
+        hoursSource = 'placeholder';
+      } else if (weeks > 0) {
+        hours = hoursFromWeeks(weeks);
+        hoursSource = 'weeks';
+      } else {
+        hours = 0;
+        hoursSource = 'none';
+      }
       return {
         code: c.code,
         key: c.key,
@@ -478,9 +499,11 @@ export function buildImportPlan(
         phase: c.phase,
         orderIndex: componentOrder(c.number, c.split),
         totalWeeks: weeks,
-        totalHours: hours ?? decisions.components.placeholderHours,
+        totalHours: hours,
         weeksSource,
-        provisionalTotals: weeksSource === 'placeholder' || hours === undefined,
+        hoursSource,
+        provisionalTotals:
+          weeksSource === 'placeholder' || hoursSource === 'placeholder',
       };
     });
   const componentByCode = new Map(components.map(c => [c.code, c]));
@@ -989,12 +1012,10 @@ export function buildImportPlan(
   // Open questions -------------------------------------------------------------
   const open = [...decisions.open];
   const weeksOpen = components.filter(c => c.weeksSource === 'placeholder');
-  const hoursOpen = components.filter(
-    c => decisions.components.totalHours[c.code] === undefined
-  );
+  const hoursOpen = components.filter(c => c.hoursSource === 'placeholder');
   if (hoursOpen.length > 0) {
     open.unshift(
-      `Planned hours are placeholders (${decisions.components.placeholderHours}) for ${hoursOpen.length} component(s): the training framework plan names no hours, the owner decides them.`
+      `Planned hours are placeholders (${decisions.components.placeholderHours}) for ${hoursOpen.length} component(s): they have no weeks and no decision.`
     );
   }
   if (weeksOpen.length > 0) {
@@ -1161,6 +1182,25 @@ export function validatePlan(raw: unknown): string[] {
       errors.push(
         `component ${c.code} has weeks that differ from the training framework plan`
       );
+    }
+    if (
+      c.hoursSource !== undefined &&
+      !['decision', 'weeks', 'none', 'placeholder'].includes(c.hoursSource)
+    ) {
+      errors.push(`component ${c.code} has an unknown hours source`);
+    }
+    // Hours that claim to come from the weeks must be weeks times 40 (an owner
+    // decision of 28.10.2026), and without weeks there are no hours.
+    if (
+      c.hoursSource === 'weeks' &&
+      (c.totalWeeks <= 0 || c.totalHours !== c.totalWeeks * HOURS_PER_WEEK)
+    ) {
+      errors.push(
+        `component ${c.code} has hours that are not ${HOURS_PER_WEEK} times the weeks`
+      );
+    }
+    if (c.hoursSource === 'none' && (c.totalWeeks !== 0 || c.totalHours !== 0)) {
+      errors.push(`component ${c.code} has hours but names none as source`);
     }
     if (
       typeof c.totalHours !== 'number' ||

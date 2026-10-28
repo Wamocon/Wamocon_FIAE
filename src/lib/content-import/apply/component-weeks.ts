@@ -39,6 +39,25 @@
 //    weeks (the import writes 0), nobody should invent a value.
 //  - The values are gross weeks (Bruttozeiten): school, holidays and illness
 //    are not deducted (BIBB, chapter 2.2.1). The plan has no hours at all.
+//  - The planned hours (total_hours) are NOT official. They are weeks times 40
+//    (HOURS_PER_WEEK), a decision of the owner of 28.10.2026. The factor 40 is
+//    the rule the platform already used for the FIAE components (comment on
+//    total_hours in the schema: "totalWeeks * 40"). It is a gross value, the
+//    BIBB model calculation gives about three days a week in the company.
+//    Without weeks (K20 to K23) there are no hours.
+
+/**
+ * Hours per week of the planned hours of a component. Decision of the owner of
+ * 28.10.2026, not an official figure (the training framework plan has no hours).
+ */
+export const HOURS_PER_WEEK = 40;
+
+/** Planned hours of a number of weeks: weeks times 40, 0 without weeks. */
+export function hoursFromWeeks(weeks: number | null | undefined): number {
+  return typeof weeks === 'number' && Number.isFinite(weeks) && weeks > 0
+    ? weeks * HOURS_PER_WEEK
+    : 0;
+}
 
 export type WeeksPeriod = 'months-1-15' | 'months-16-36' | 'whole-training';
 

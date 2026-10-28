@@ -55,17 +55,18 @@ export const TABLES: Record<TableName, TableSpec> = {
       'kind',
       'order_index',
     ],
-    // total_weeks: only the weeks, never total_hours (the training framework
-    // plan has no hours, the owner decides them).
+    // total_weeks and total_hours: the weeks of the training framework plan and
+    // the hours the owner derived from them (weeks times 40).
     updatable: [
       'title',
       'description',
       'total_weeks',
+      'total_hours',
       'phase',
       'kind',
       'order_index',
     ],
-    fillWhenEmpty: ['total_weeks'],
+    fillWhenEmpty: ['total_weeks', 'total_hours'],
     uuid: ['id', 'training_catalog_id'],
     touch: false,
   },
