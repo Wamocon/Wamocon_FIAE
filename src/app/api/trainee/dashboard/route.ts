@@ -6,13 +6,11 @@ import {
   courses,
   enablers,
   enablerCompletions,
-  enablerQuizLinks,
   traineeAchievedSkills,
   skills,
   courseSkills,
   quizzes,
   quizSubmissions,
-  enablerSubmissions,
   useCases,
   useCaseSubmissions,
   profiles,
@@ -29,6 +27,8 @@ import {
   loadEnrollmentTerms,
   loadPhasePlan,
 } from '@/lib/catalog/phase-plan-db';
+import { loadCourseProgressions } from '@/lib/catalog/progression-db';
+import type { EnablerProgression } from '@/lib/catalog/progression';
 import {
   getPhaseDeadline,
   getPhaseMonthRange,
@@ -37,9 +37,6 @@ import {
   type ContentStage,
   type TrainingPhase,
 } from '@/lib/ausbildung/duration';
-
-// Passing score threshold for quizzes (50%)
-const PASS_THRESHOLD = 50;
 
 // The dashboard of the session user, a userId in the query is ignored.
 export async function GET(req: NextRequest) {
@@ -147,20 +144,7 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
     ]);
 
     const courseIds = memberCourses.map(c => c.id);
-    const completedSet = new Set(
-      allCompletionsRaw.map(c => String(c.enablerId))
-    );
     const achievedSet = new Set(achievedSkillsRaw.map(a => String(a.skillId)));
-
-    // Build quiz best-scores map
-    const quizBestScores = new Map<string, number>();
-    for (const s of allQuizSubs) {
-      const qid = String(s.quizId);
-      const currentBest = quizBestScores.get(qid) || 0;
-      if ((s.score || 0) > currentBest) {
-        quizBestScores.set(qid, s.score || 0);
-      }
-    }
 
     // ── Phase 2: courseId-dependent queries in PARALLEL ──
     const modules: Array<{ id: string; title: string; progress: number }> = [];
@@ -206,36 +190,26 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
           .where(inArray(courseSkills.courseId, courseIds as any)),
       ]);
 
-      // Filter to active enablers for progress; keep full set for nextItem
+      // Filter to active enablers for the next item
       const allEnablers = allEnablerData.filter(e => e.isActive);
-      const allEnablerIds = allEnablers.map(e => e.id);
       const useCaseIds = useCaseRows.map(u => u.id);
 
-      // ── Phase 3: enablerIds/useCaseIds-dependent queries in PARALLEL ──
-      const [quizLinks, enablerSubRows, useCaseSubRows] = await Promise.all([
-        allEnablerIds.length > 0
-          ? db
-              .select({
-                enablerId: enablerQuizLinks.enablerId,
-                quizId: enablerQuizLinks.quizId,
-              })
-              .from(enablerQuizLinks)
-              .where(inArray(enablerQuizLinks.enablerId, allEnablerIds as any))
-          : Promise.resolve([]),
-        allEnablerIds.length > 0
-          ? db
-              .select({ enablerId: enablerSubmissions.enablerId })
-              .from(enablerSubmissions)
-              .where(
-                and(
-                  eq(enablerSubmissions.traineeId, userId as any),
-                  inArray(enablerSubmissions.enablerId, allEnablerIds as any),
-                  eq(enablerSubmissions.status, 'APPROVED')
-                )
-              )
-          : Promise.resolve([]),
+      // The completion of every enabler, by the one definition (quizzes
+      // passed), and the state in the order of work
+      const progressions = await loadCourseProgressions(
+        userId,
+        courseIds.map(String)
+      );
+      const enablerStates = new Map<string, EnablerProgression>();
+      for (const p of progressions.values()) {
+        for (const e of p.progression.enablers) {
+          enablerStates.set(e.enablerId, e);
+        }
+      }
+
+      const useCaseSubRows =
         useCaseIds.length > 0
-          ? db
+          ? await db
               .select({ useCaseId: useCaseSubmissions.useCaseId })
               .from(useCaseSubmissions)
               .where(
@@ -245,25 +219,10 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
                   eq(useCaseSubmissions.status, 'APPROVED')
                 )
               )
-          : Promise.resolve([]),
-      ]);
-
-      const approvedEnablerSubs = new Set(
-        enablerSubRows.map(r => String(r.enablerId))
-      );
+          : [];
       const approvedUseCases = new Set(
         useCaseSubRows.map(r => String(r.useCaseId))
       );
-
-      // Build optimized Maps for O(1) access
-      // Explicitly infer element types to avoid 'never' issues with empty array unions
-      type EnablerType = (typeof allEnablers)[number];
-      const enablersByCourse = new Map<string, EnablerType[]>();
-      for (const e of allEnablers) {
-        const key = String(e.courseId);
-        if (!enablersByCourse.has(key)) enablersByCourse.set(key, []);
-        enablersByCourse.get(key)!.push(e);
-      }
 
       type UseCaseType = (typeof useCaseRows)[number];
       const useCasesByCourse = new Map<string, UseCaseType[]>();
@@ -273,19 +232,12 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         useCasesByCourse.get(key)!.push(u);
       }
 
-      type QuizLinkType = (typeof quizLinks)[number];
-      const quizzesByEnabler = new Map<string, QuizLinkType[]>();
-      for (const l of quizLinks) {
-        const key = String(l.enablerId);
-        if (!quizzesByEnabler.has(key)) quizzesByEnabler.set(key, []);
-        quizzesByEnabler.get(key)!.push(l);
-      }
-
-      // Calculate progress per course with STRICT logic
+      // Calculate progress per course
       for (const c of memberCourses) {
         const cId = String(c.id);
-        const courseEnablers = enablersByCourse.get(cId) || [];
-        const totalEnablers = courseEnablers.length;
+        const own = progressions.get(cId)?.progression;
+        const totalEnablers = own?.totalCount ?? 0;
+        const completedCount = own?.completedCount ?? 0;
 
         const courseUseCases = useCasesByCourse.get(cId) || [];
         const totalUseCases = courseUseCases.length;
@@ -294,37 +246,6 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         for (const u of courseUseCases) {
           if (approvedUseCases.has(String(u.id))) {
             approvedUseCaseCount++;
-          }
-        }
-
-        // Count completed enablers with STRICT logic
-        let completedCount = 0;
-        for (const enabler of courseEnablers) {
-          const enablerId = String(enabler.id);
-
-          // Check ALL quizzes must be passed
-          const enablerQuizzes = quizzesByEnabler.get(enablerId) || [];
-          let allQuizzesPassed = true;
-
-          if (enablerQuizzes.length > 0) {
-            for (const link of enablerQuizzes) {
-              const score = quizBestScores.get(String(link.quizId)) || 0;
-              if (score < PASS_THRESHOLD) {
-                allQuizzesPassed = false;
-                break;
-              }
-            }
-          }
-
-          // Check scenarios – must be approved
-          const hasScenarios = !!enabler.scenarioPdfUrl;
-          let scenariosApproved = true;
-          if (hasScenarios) {
-            scenariosApproved = approvedEnablerSubs.has(enablerId);
-          }
-
-          if (allQuizzesPassed && scenariosApproved) {
-            completedCount++;
           }
         }
 
@@ -350,9 +271,11 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         modules.push({ id: cId, title: c.title, progress: pct });
       }
 
-      // Next item: next uncompleted enabler
-      for (const e of allEnablerData) {
-        if (!completedSet.has(String(e.id))) {
+      // Next item: the first active enabler that is not completed and that the
+      // trainee may work on (not locked)
+      for (const e of allEnablers) {
+        const state = enablerStates.get(String(e.id));
+        if (state && !state.completed && !state.locked) {
           const dur = e.durationValue
             ? `${e.durationValue} ${e.durationUnit?.toLowerCase()}`
             : '';

@@ -76,6 +76,7 @@ describe('API: Trainer Dashboard', () => {
       useCases: [],
       // e2 needs a passed quiz: t1 passed it, t2 did not
       enablerQuizLinks: [{ enablerId: 'e2', quizId: 'q1' }],
+      quizzes: [{ id: 'q1', isActive: true }],
       quizSubmissions: {
         sequence: [
           [

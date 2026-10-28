@@ -11,9 +11,11 @@ import { findSolutionKeys } from '../../../helpers/solutionKeys';
 
 // POST and GET /api/trainee/quizzes/[quizId]/submit. The solution of a
 // question (correct or not, the correct option, the reasoning) comes back only
-// after the trainee has answered that question, and only for it. Scoring, the
-// single attempt of a lesson quiz and the repeatable global quiz stay as they
-// were.
+// after the trainee has answered that question, and only for it. Scoring and
+// the repeatable global quiz stay as they were. A lesson quiz is repeated until
+// it is passed (50 percent), a passed one is locked.
+// The order of work (locked enabler, chain LOW, MEDIUM, HIGH) is tested in
+// progression-guards.test.ts.
 
 const SECRET_1 = 'REASONING-FOR-QUESTION-ONE';
 const SECRET_2 = 'REASONING-FOR-QUESTION-TWO';
@@ -157,10 +159,10 @@ describe('POST /api/trainee/quizzes/[quizId]/submit', () => {
     expect(findSolutionKeys(await res.json())).toEqual([]);
   });
 
-  it('a lesson quiz that was submitted before is locked and only repeats the stored answers', async () => {
+  it('a lesson quiz that was passed before is locked and only repeats the stored answers', async () => {
     const { mod, mock } = await load({
       ...lessonTables(),
-      quizSubmissions: [{ id: 's1', quizId: 'q1', traineeId: 't1', score: 0 }],
+      quizSubmissions: [{ id: 's1', quizId: 'q1', traineeId: 't1', score: 80 }],
       // the trainee answered question one only
       quizSubmissionAnswers: [
         { submissionId: 's1', questionId: 'q-1', selectedOptionId: 'o-2' },
@@ -238,10 +240,100 @@ describe('POST /api/trainee/quizzes/[quizId]/submit', () => {
     expect(res.status).toBe(400);
   });
 
-  it('a stored answer without a selection or text does not count as answered', async () => {
+  it('a lesson quiz that was not passed can be repeated, the attempt counts up', async () => {
+    const { mod, mock } = await load({
+      ...lessonTables(),
+      quizSubmissions: [{ id: 's1', quizId: 'q1', traineeId: 't1', score: 30 }],
+    });
+    const res = await mod.POST(post({ answers: bothAnswers }), ctx);
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.locked).toBe(false);
+    expect(mock.writes('insert', 'quizSubmissions')[0]).toMatchObject({
+      attemptNumber: 2,
+      score: 50,
+    });
+  });
+
+  it('a failed attempt at a lesson quiz says right or wrong only, the key comes with the pass', async () => {
+    const wrong = [
+      { questionId: 'q-1', selectedOptionId: 'o-2' },
+      { questionId: 'q-2', selectedOptionId: 'o-4' },
+    ];
+    const { mod } = await load(lessonTables());
+    const res = await mod.POST(post({ answers: wrong }), ctx);
+    const body = await res.json();
+    expect(body.score).toBe(0);
+    expect(body.feedback).toHaveLength(2);
+    expect(body.feedback.every((f: any) => f.correct === false)).toBe(true);
+    expect(
+      body.feedback.every(
+        (f: any) =>
+          f.correctOptionId === null &&
+          f.explanation === null &&
+          f.correctAnswerText === null
+      )
+    ).toBe(true);
+    expect(JSON.stringify(body)).not.toContain(SECRET_1);
+    expect(JSON.stringify(body)).not.toContain(SECRET_2);
+    expect(JSON.stringify(body)).not.toContain('o-1');
+  });
+
+  it('the review of a lesson quiz that was not passed keeps the key back as well', async () => {
     const { mod } = await load({
       ...lessonTables(),
       quizSubmissions: [{ id: 's1', quizId: 'q1', traineeId: 't1', score: 0 }],
+      quizSubmissionAnswers: [
+        { submissionId: 's1', questionId: 'q-1', selectedOptionId: 'o-2' },
+        { submissionId: 's1', questionId: 'q-2', selectedOptionId: 'o-4' },
+      ],
+    });
+    const body = await (await mod.GET(get(), ctx)).json();
+    expect(body.feedback).toHaveLength(2);
+    expect(JSON.stringify(body)).not.toContain(SECRET_1);
+    expect(body.feedback[0].correctOptionId).toBeNull();
+  });
+
+  it('a failed attempt at a global quiz still shows the solution (repeatable by design)', async () => {
+    const { mod } = await load({
+      ...lessonTables(),
+      quizzes: [globalQuiz],
+      quizAssignments: [{ quizId: 'q1', traineeId: 't1' }],
+    });
+    const wrong = [
+      { questionId: 'q-1', selectedOptionId: 'o-2' },
+      { questionId: 'q-2', selectedOptionId: 'o-4' },
+    ];
+    const body = await (await mod.POST(post({ answers: wrong }), ctx)).json();
+    expect(body.score).toBe(0);
+    expect(body.feedback[0].correctOptionId).toBe('o-1');
+  });
+
+  it('a lesson quiz stays locked after a pass, whatever a later attempt scored', async () => {
+    const { mod, mock } = await load({
+      ...lessonTables(),
+      quizSubmissions: [
+        { id: 's1', quizId: 'q1', traineeId: 't1', score: 20 },
+        { id: 's2', quizId: 'q1', traineeId: 't1', score: 50 },
+      ],
+      quizSubmissionAnswers: [
+        { submissionId: 's2', questionId: 'q-1', selectedOptionId: 'o-1' },
+        { submissionId: 's2', questionId: 'q-2', selectedOptionId: 'o-3' },
+      ],
+    });
+    const res = await mod.POST(post({ answers: bothAnswers }), ctx);
+    const body = await res.json();
+    expect(body.locked).toBe(true);
+    // the review shows the attempt that passed
+    expect(body.submissionId).toBe('s2');
+    expect(body.score).toBe(50);
+    expect(mock.writes('insert', 'quizSubmissions')).toEqual([]);
+  });
+
+  it('a stored answer without a selection or text does not count as answered', async () => {
+    const { mod } = await load({
+      ...lessonTables(),
+      quizSubmissions: [{ id: 's1', quizId: 'q1', traineeId: 't1', score: 80 }],
       quizSubmissionAnswers: [
         { submissionId: 's1', questionId: 'q-1', selectedOptionId: 'o-2' },
         {
@@ -325,7 +417,7 @@ describe('GET /api/trainee/quizzes/[quizId]/submit', () => {
   it('after a submission it shows the solution of the answered questions only', async () => {
     const { mod } = await load({
       ...lessonTables(),
-      quizSubmissions: [{ id: 's1', quizId: 'q1', traineeId: 't1', score: 0 }],
+      quizSubmissions: [{ id: 's1', quizId: 'q1', traineeId: 't1', score: 80 }],
       quizSubmissionAnswers: [
         { submissionId: 's1', questionId: 'q-1', selectedOptionId: 'o-2' },
       ],

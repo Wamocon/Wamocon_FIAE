@@ -68,6 +68,7 @@ async function load(
     verifyPlatformOwner: async () => false,
     verifyTrainer: async () => true,
     getUserOrgId: async () => ORG,
+    getUserOrgIdStrict: async () => ORG,
   }));
   mockSession(fakeSession({ id: 'tr1', organizationId: ORG }));
   const mod = await import(`@/app/api/trainer/trainees/${route}`);
@@ -350,7 +351,10 @@ describe('trainee lists per occupation', () => {
         body: { itemType: 'ENABLER', itemId: 'bbbbbbb4-0000-4000-8000-000000000004', isActive: true },
       });
     // the enabler of the item lies in the occupation of the caller
-    const item = { enablers: [{ trainingCatalogId: FIAE }] };
+    const item = {
+      enablers: [{ trainingCatalogId: FIAE, courseId: 'c1' }],
+      courseMembers: [{ courseId: 'c1', userId: T1, role: 'TRAINEE' }],
+    };
 
     it('activation: a trainee of another occupation is not changed (404)', async () => {
       const { mock, mod } = await load('[traineeId]/activate/route', {
@@ -364,8 +368,9 @@ describe('trainee lists per occupation', () => {
     });
 
     it('activation: a trainee of the chosen occupation is changed', async () => {
+      // the third read of profiles is the organization of the trainee
       const { mock, mod } = await load('[traineeId]/activate/route', {
-        ...lookups(true, true),
+        ...lookups(true, true, [{ organizationId: ORG }]),
         ...item,
       });
       const res = await mod.PATCH(activate('KFBM'), params);

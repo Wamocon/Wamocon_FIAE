@@ -19,6 +19,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { getAusbildungDurationLabel } from '@/lib/ausbildung/duration';
+import { EnablerStateBadge } from '@/components/trainee/EnablerStateBadge';
 
 interface TraineeDetailProps {
   traineeId: string;
@@ -40,6 +41,14 @@ type TraineeOverview = {
     courseTitle: string;
     completed: boolean;
     isActive: boolean;
+    /** Order of work: locked, open or completed (none for an inactive enabler) */
+    state?: 'locked' | 'open' | 'completed' | null;
+    lockReason?: 'SEQUENCE' | 'MANUAL' | null;
+    lockedBy?: { id: string; title: string } | null;
+    /** true: released out of turn, false: locked, null: the order applies */
+    override?: boolean | null;
+    /** Whether the order applies to this trainee at all */
+    sequenceEnforced?: boolean;
     link: string;
   }>;
   useCases: Array<{
@@ -374,14 +383,20 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
   }, [groupedEnablers, openCourses]);
 
   // Helpers
+  // The enabler whose exception is being saved (the buttons wait)
+  const [busyEnabler, setBusyEnabler] = useState<string | null>(null);
+
+  // isActive null (only for an enabler) removes the exception to the order
   const toggleItem = async (
     itemType: 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ',
     itemId: string,
-    isActive: boolean
+    isActive: boolean | null
   ) => {
     if (!trainee?.id) return;
+    if (itemType === 'ENABLER') setBusyEnabler(itemId);
 
-    // Optimistic update
+    // Optimistic update (an enabler shows the new state after the reload: the
+    // state follows from the order of work, not from the switch alone)
     setOverview(prev => {
       if (!prev) return prev;
       const next: TraineeOverview = {
@@ -390,17 +405,13 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         useCases: prev.useCases ?? [],
         globalQuizzes: prev.globalQuizzes ?? [],
       };
-      if (itemType === 'ENABLER') {
-        next.enablers = next.enablers.map(e =>
-          e.id === itemId ? { ...e, isActive } : e
-        );
-      } else if (itemType === 'USE_CASE') {
+      if (itemType === 'USE_CASE') {
         next.useCases = next.useCases.map(u =>
-          u.id === itemId ? { ...u, isActive } : u
+          u.id === itemId ? { ...u, isActive: !!isActive } : u
         );
       } else if (itemType === 'GLOBAL_QUIZ') {
         next.globalQuizzes = next.globalQuizzes.map(q =>
-          q.quizId === itemId ? { ...q, isActive } : q
+          q.quizId === itemId ? { ...q, isActive: !!isActive } : q
         );
       }
       return next;
@@ -432,7 +443,11 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       }
     } catch (e) {
       console.error(e);
-      toast.error(t('error.unknown'));
+      toast.error(
+        itemType === 'ENABLER'
+          ? t('trainee.detail.order.failed')
+          : t('error.unknown')
+      );
       // Revert: full reload on error
       const oRes = await authFetch(
         `/api/trainer/trainees/${trainee.id}/overview`,
@@ -444,6 +459,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         const oData = await oRes.json();
         setOverview(normalizeOverview(oData));
       }
+    } finally {
+      setBusyEnabler(null);
     }
   };
 
@@ -721,6 +738,13 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                     )}
                   </div>
 
+                  <p className="text-muted-foreground mb-3 text-sm">
+                    <span className="text-foreground font-medium">
+                      {t('trainee.detail.order.title')}:
+                    </span>{' '}
+                    {t('trainee.detail.order.hint')}
+                  </p>
+
                   {Object.keys(groupedEnablers).length ? (
                     <div className="space-y-3">
                       {Object.entries(groupedEnablers).map(
@@ -798,25 +822,110 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                                           </span>
                                         </div>
                                       </div>
-                                      <div className="flex items-center gap-2">
-                                        {profile &&
-                                          isTrainerLevelRole(profile.role) && (
-                                            <button
-                                              onClick={() =>
-                                                toggleItem(
-                                                  'ENABLER',
-                                                  e.id,
-                                                  !e.isActive
-                                                )
-                                              }
-                                              className={`cursor-pointer rounded-md border px-2 py-1 text-sm transition-opacity hover:opacity-80 ${e.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
-                                            >
-                                              {e.isActive
-                                                ? t('trainee.detail.deactivate')
-                                                : t('trainee.detail.activate')}
-                                            </button>
+                                      {/* Order of work: the state of the enabler and the exception per trainee */}
+                                      {!e.isActive ? (
+                                        <p className="text-muted-foreground text-xs">
+                                          {t('trainee.detail.order.inactive')}
+                                        </p>
+                                      ) : (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          {e.state && (
+                                            <EnablerStateBadge
+                                              state={e.state}
+                                              reason={e.lockReason}
+                                              lockedByTitle={e.lockedBy?.title}
+                                            />
                                           )}
-                                      </div>
+                                          {e.override === true && (
+                                            <span className="text-foreground rounded-full border border-blue-500 px-2 py-0.5 text-xs">
+                                              {t(
+                                                'trainee.detail.order.manualReleased'
+                                              )}
+                                            </span>
+                                          )}
+                                          {e.override === false && (
+                                            <span className="text-foreground rounded-full border border-amber-600 px-2 py-0.5 text-xs">
+                                              {t(
+                                                'trainee.detail.order.manualLocked'
+                                              )}
+                                            </span>
+                                          )}
+                                          {profile &&
+                                            isTrainerLevelRole(profile.role) && (
+                                              <>
+                                                {e.override === null ||
+                                                e.override === undefined ? (
+                                                  e.state === 'locked' ? (
+                                                    <button
+                                                      type="button"
+                                                      disabled={busyEnabler === e.id}
+                                                      aria-busy={busyEnabler === e.id}
+                                                      aria-label={`${t('trainee.detail.order.releaseOut')}: ${e.title}`}
+                                                      onClick={() =>
+                                                        toggleItem(
+                                                          'ENABLER',
+                                                          e.id,
+                                                          true
+                                                        )
+                                                      }
+                                                      className="text-foreground min-h-[44px] cursor-pointer rounded-md border border-green-600 px-3 py-2 text-sm transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-50"
+                                                    >
+                                                      {t(
+                                                        'trainee.detail.order.releaseOut'
+                                                      )}
+                                                    </button>
+                                                  ) : e.state === 'open' ? (
+                                                    <button
+                                                      type="button"
+                                                      disabled={busyEnabler === e.id}
+                                                      aria-busy={busyEnabler === e.id}
+                                                      aria-label={`${t('trainee.detail.order.lock')}: ${e.title}`}
+                                                      onClick={() =>
+                                                        toggleItem(
+                                                          'ENABLER',
+                                                          e.id,
+                                                          false
+                                                        )
+                                                      }
+                                                      className="text-foreground min-h-[44px] cursor-pointer rounded-md border border-amber-600 px-3 py-2 text-sm transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-50"
+                                                    >
+                                                      {t(
+                                                        'trainee.detail.order.lock'
+                                                      )}
+                                                    </button>
+                                                  ) : null
+                                                ) : (
+                                                  <button
+                                                    type="button"
+                                                    disabled={busyEnabler === e.id}
+                                                    aria-busy={busyEnabler === e.id}
+                                                    aria-label={`${t('trainee.detail.order.reset')}: ${e.title}`}
+                                                    onClick={() =>
+                                                      toggleItem(
+                                                        'ENABLER',
+                                                        e.id,
+                                                        null
+                                                      )
+                                                    }
+                                                    className="text-foreground min-h-[44px] cursor-pointer rounded-md border border-slate-500 px-3 py-2 text-sm transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-50"
+                                                  >
+                                                    {t(
+                                                      'trainee.detail.order.reset'
+                                                    )}
+                                                  </button>
+                                                )}
+                                              </>
+                                            )}
+                                        </div>
+                                      )}
+                                      {e.isActive &&
+                                        e.sequenceEnforced === false && (
+                                          <p className="text-muted-foreground mt-2 text-xs">
+                                            {t(
+                                              'trainee.detail.order.notEnforced'
+                                            )}
+                                          </p>
+                                        )}
                                     </div>
                                   ))}
                                 </div>

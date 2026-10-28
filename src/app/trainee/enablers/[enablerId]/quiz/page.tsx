@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageLoader } from '@/components/ui/PageLoader';
 import { authFetch } from '@/lib/authFetch';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 type QuizQ = {
   id: string;
@@ -16,6 +17,7 @@ export default function TraineeEnablerQuizPage() {
   const params = useParams<{ enablerId: string }>();
   const enablerId = params?.enablerId as string;
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -42,6 +44,11 @@ export default function TraineeEnablerQuizPage() {
           `/api/trainee/enablers/${enablerId}/quiz?traineeId=${profile.id}`,
           { cache: 'no-store' }
         );
+        if (r.status === 403) {
+          const body = await r.json().catch(() => null);
+          if (body?.code === 'ENABLER_LOCKED')
+            throw new Error(t('progression.locked403'));
+        }
         if (!r.ok) throw new Error('Quiz konnte nicht geladen werden');
         const data = await r.json();
         if (!data.quiz)
@@ -71,6 +78,11 @@ export default function TraineeEnablerQuizPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      if (r.status === 403) {
+        const body = await r.json().catch(() => null);
+        if (body?.code === 'ENABLER_LOCKED')
+          throw new Error(t('progression.locked403'));
+      }
       if (!r.ok) throw new Error('Abgabe fehlgeschlagen');
       const data = await r.json();
       setResult({ score: data.score, feedback: data.feedback });

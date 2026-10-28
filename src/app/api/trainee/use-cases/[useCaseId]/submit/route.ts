@@ -3,7 +3,8 @@ import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks, notifications, courses } from '@/db/migrations/schemas/schema';
+import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks, notifications, courses, enablers } from '@/db/migrations/schemas/schema';
+import { requireEnablerOpen } from '@/lib/catalog/progression-db';
 import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId } from '@/lib/auth-helpers';
 
@@ -34,6 +35,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
       .from(courseMembers)
       .where(and(eq(courseMembers.courseId, u.courseId as any), eq(courseMembers.userId, traineeId as any)));
     if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    // Order of work: a use case that belongs to an enabler is locked while that
+    // enabler is locked (a use case without an enabler is not part of the order)
+    if (u.enablerId) {
+      const [owner] = await db
+        .select({ id: enablers.id, courseId: enablers.courseId, isActive: enablers.isActive })
+        .from(enablers)
+        .where(eq(enablers.id, u.enablerId as any));
+      if (owner && owner.isActive) {
+        const locked = await requireEnablerOpen(traineeId, {
+          id: String(owner.id),
+          courseId: String(owner.courseId),
+        });
+        if (locked) return locked;
+      }
+    }
 
     const result = await db.transaction(async (tx) => {
       // Determine next attempt number

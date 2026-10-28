@@ -11,6 +11,8 @@ import {
   useCaseSubmissions,
 } from '@/db/migrations/schemas/schema';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
+import { loadCourseProgressions } from '@/lib/catalog/progression-db';
+import type { EnablerProgression } from '@/lib/catalog/progression';
 
 // GET course details for a trainee: includes active enablers and use-cases with progress status
 // The data of the session user, a traineeId or userId in the query is ignored.
@@ -171,14 +173,32 @@ export async function GET(
       }
     }
 
+    // Order of work: every enabler is listed (the trainee sees the whole
+    // course), with its state: locked (and what to finish first), open or
+    // completed
+    const progression = (await loadCourseProgressions(traineeId, [courseId]))
+      .get(String(courseId))
+      ?.progression.enablers.reduce(
+        (map, e) => map.set(e.enablerId, e),
+        new Map<string, EnablerProgression>()
+      );
+
     return NextResponse.json({
       course: { id: c.id, title: c.title, year: c.year, chapter: c.chapter },
-      enablers: ens.map(e => ({
-        id: e.id,
-        title: e.title,
-        attemptNumber: latestEn[String(e.id)]?.attemptNumber ?? null,
-        status: latestEn[String(e.id)]?.status ?? null, // PENDING, APPROVED, REJECTED
-      })),
+      enablers: ens.map(e => {
+        const state = progression?.get(String(e.id));
+        return {
+          id: e.id,
+          title: e.title,
+          attemptNumber: latestEn[String(e.id)]?.attemptNumber ?? null,
+          status: latestEn[String(e.id)]?.status ?? null, // PENDING, APPROVED, REJECTED
+          state: state?.state ?? 'open', // locked, open, completed
+          lockReason: state?.lockReason ?? null,
+          lockedBy: state?.lockedBy
+            ? { id: state.lockedBy.enablerId, title: state.lockedBy.title }
+            : null,
+        };
+      }),
       useCases: ucs.map(u => ({
         id: u.id,
         title: u.title,

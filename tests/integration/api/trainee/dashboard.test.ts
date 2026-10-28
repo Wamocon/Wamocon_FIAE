@@ -58,7 +58,9 @@ describe('API: Trainee Dashboard', () => {
         },
       ],
       // e2 requires a quiz that was never passed, e1 has no requirements
-      enablerQuizLinks: [{ enablerId: 'e2', quizId: 'q1' }],
+      courses: [{ id: 'c1', title: 'Course 1', year: 2024 }],
+      enablerQuizLinks: [{ enablerId: 'e2', quizId: 'q1', difficulty: 'LOW' }],
+      quizzes: [{ id: 'q1', isActive: true }],
       quizSubmissions: [],
       enablerCompletions: [{ enablerId: 'e1', completedAt: new Date() }],
       courseSkills: [{ skillId: 's1', name: 'Skill 1' }],

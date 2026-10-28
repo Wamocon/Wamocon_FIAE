@@ -117,7 +117,11 @@ const cases: Case[] = [
     url: `${API}/trainees/${T1}/activate`,
     params: { traineeId: T1 },
     body: { itemType: 'ENABLER', itemId: 'aaaaaaa6-0000-4000-8000-000000000006', isActive: true },
-    tables: { enablers: [{ trainingCatalogId: FIAE }] },
+    // the enabler lies in a course the trainee works in
+    tables: {
+      enablers: [{ trainingCatalogId: FIAE, courseId: 'c1' }],
+      courseMembers: [{ courseId: 'c1', userId: T1, role: 'TRAINEE' }],
+    },
     write: { op: 'insert', table: 'trainee_enabler_overrides' },
     ok: 200,
   },

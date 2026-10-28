@@ -7,7 +7,6 @@ import {
   courseMembers,
   courses,
   enablers,
-  enablerCompletions,
   useCases,
   useCaseSubmissions,
   quizzes,
@@ -18,6 +17,8 @@ import {
   traineeUseCaseOverrides,
 } from '@/db/migrations/schemas/schema';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { loadCourseProgressions } from '@/lib/catalog/progression-db';
+import type { EnablerProgression } from '@/lib/catalog/progression';
 
 export async function GET(
   req: NextRequest,
@@ -75,21 +76,22 @@ export async function GET(
       : [];
     const enablerIds = enablerRows.map(e => e.id);
 
-    // Enabler completions for this trainee
-    const completionRows = enablerIds.length
-      ? await db
-          .select({ enablerId: enablerCompletions.enablerId })
-          .from(enablerCompletions)
-          .where(
-            and(
-              eq(enablerCompletions.traineeId, traineeId as any),
-              inArray(enablerCompletions.enablerId, enablerIds as any)
-            )
-          )
-      : [];
-    const completedSet = new Set(completionRows.map(r => String(r.enablerId)));
-    const completedEnablers = completedSet.size;
-    const totalEnablers = enablerIds.length;
+    // The state of every active enabler for this trainee in the order of work
+    // (locked, open, completed) and the one definition of "completed": all
+    // active lesson quizzes passed. Inactive enablers have no state.
+    const progressions = courseIds.length
+      ? await loadCourseProgressions(traineeId, courseIds.map(String))
+      : new Map();
+    const stateOf = new Map<string, EnablerProgression>();
+    let completedEnablers = 0;
+    let totalEnablers = 0;
+    for (const loaded of progressions.values()) {
+      completedEnablers += loaded.progression.completedCount;
+      totalEnablers += loaded.progression.totalCount;
+      for (const e of loaded.progression.enablers) {
+        stateOf.set(e.enablerId, e);
+      }
+    }
     const progressPct =
       totalEnablers > 0
         ? Math.round((completedEnablers / totalEnablers) * 100)
@@ -261,7 +263,8 @@ export async function GET(
         },
       },
       enablers: await (async () => {
-        // apply overrides for active state
+        // The exception of this trainee per enabler (also for an enabler the
+        // order does not apply to: it is shown, the effect is in the state)
         const oRows = enablerIds.length
           ? await db
               .select({
@@ -284,17 +287,28 @@ export async function GET(
           )
         );
         return enablerRows.map(e => {
-          const override = oMap.get(String(e.id));
-          const effectiveActive =
-            typeof override === 'boolean' ? override : Boolean(e.isActive);
+          const state = stateOf.get(String(e.id));
           return {
             id: e.id,
             title: e.title,
             courseId: e.courseId,
             courseTitle: courseTitleMap.get(String(e.courseId)) || '',
-            isActive: effectiveActive,
+            // the master switch of the enabler (inactive: not there for the trainee)
+            isActive: Boolean(e.isActive),
             orderIndex: e.orderIndex,
-            completed: completedSet.has(String(e.id)),
+            completed: state?.completed ?? false,
+            // order of work: locked, open or completed (none when inactive)
+            state: state?.state ?? null,
+            lockReason: state?.lockReason ?? null,
+            lockedBy: state?.lockedBy
+              ? { id: state.lockedBy.enablerId, title: state.lockedBy.title }
+              : null,
+            // true: released out of turn, false: locked, null: the order applies
+            override: oMap.get(String(e.id)) ?? null,
+            // whether the order applies to this trainee at all (cut-off date)
+            sequenceEnforced:
+              progressions.get(String(e.courseId))?.progression.enforced ??
+              false,
             link: `/trainee/enablers/${e.id}`,
           };
         });
