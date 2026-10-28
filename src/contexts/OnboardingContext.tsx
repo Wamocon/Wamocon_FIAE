@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode 
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { OCCUPATION_CHOICE_PATH } from '@/lib/catalog/choice';
+import { isAccountStopped } from '@/lib/auth/access-state';
 import {
   TourStep,
   TRAINEE_MAIN_STEPS,
@@ -123,9 +124,14 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     startTour(type);
   }, [startTour]);
 
+  // An account that is stopped (not released, deactivated) sees a notice, not
+  // the dashboard the tour points at
+  const blocked = isAccountStopped(profile ?? null);
+
   // Auto-start on first login
   useEffect(() => {
     if (!profile?.role) return;
+    if (blocked) return;
     if (isCompleted('main')) return;
     if (onOccupationChoice || isActive) return;
 
@@ -135,9 +141,10 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     }, 1200);
 
     return () => clearTimeout(timer);
-    // Only run once when profile loads (and again when the occupation choice is left)
+    // Only run once when profile loads (and again when the occupation choice is
+    // left, or the account is released)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.role, onOccupationChoice]);
+  }, [profile?.role, onOccupationChoice, blocked]);
 
   return (
     <OnboardingContext.Provider

@@ -28,6 +28,13 @@ import {
   PREVIEW_ADMIN_BLOCKED_MESSAGE,
 } from '@/lib/db-schema';
 import {
+  SignInBlockedError,
+  isAwaitingActivation,
+  loginPathWithReason,
+  type LoginReason,
+  type SessionEnd,
+} from '@/lib/auth/access-state';
+import {
   PREVIEW_ACCOUNT_REJECTED_CODE,
   PREVIEW_ACCOUNT_REJECTED_MESSAGE,
   isRejectedInProduction,
@@ -97,7 +104,16 @@ interface AuthContextType {
     password: string,
     role: 'trainee' | 'trainer'
   ) => Promise<void>;
-  signOut: () => Promise<void>;
+  /**
+   * Ends the session. Silent: nowhere to go. Otherwise to the start page, or
+   * to the login with the reason that explains why the session ended.
+   */
+  signOut: (silent?: boolean, reason?: LoginReason) => Promise<void>;
+  /**
+   * How the last session ended (null: no sign out since the sign in). The
+   * layouts send somebody who is not signed in to the place that fits it.
+   */
+  sessionEnd: SessionEnd | null;
   updateProfile: (updates: {
     full_name?: string;
     avatar_url?: string | null;
@@ -192,12 +208,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(cached.user);
   const [profile, setProfile] = useState<Profile | null>(cached.profile);
   const [loading, setLoading] = useState(!cached.user);
+  const [sessionEnd, setSessionEnd] = useState<SessionEnd | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const initRef = useRef(false);
 
   const prefetchedRef = useRef(false);
-  if (!prefetchedRef.current && cached.user && cached.profile) {
+  // (not for an account that waits for the release: the server refuses it)
+  if (
+    !prefetchedRef.current &&
+    cached.user &&
+    cached.profile &&
+    !isAwaitingActivation(cached.profile)
+  ) {
     prefetchedRef.current = true;
     const dashUrl = buildDashboardUrl(
       cached.user.id,
@@ -218,6 +241,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const p = pathname || '';
     return publicPaths.has(p) || p.startsWith('/verify') || p.startsWith('/demo');
   }, [pathname]);
+  // signIn is kept as one function for the life of the provider, so it reads
+  // the page it is called on from here and not from the render it was made in
+  // (a provider that was mounted on a protected page, and then sent the person
+  // to the login, would otherwise never navigate after the sign in)
+  const isPublicPathRef = useRef(isPublicPath);
+  isPublicPathRef.current = isPublicPath;
 
   const SESSION_MAX_MS = 4 * 60 * 60 * 1000;
   const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -433,14 +462,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             ) => {
               const newRow = payload?.new as Record<string, unknown> | null;
               if (newRow && newRow['is_active'] === false) {
-                signOut(false);
-              } else if (
-                newRow &&
-                newRow['trainer_activated'] === false &&
-                (newRow['role'] as string)?.toUpperCase() === 'TRAINEE'
-              ) {
-                signOut(false);
+                signOut(false, 'deactivated');
               } else if (newRow) {
+                // A release that is taken back is not a sign out: the profile
+                // changes and the layout shows the notice (the server already
+                // answers 403 to the account)
                 setProfile(prev => {
                   if (!prev) return prev;
                   const updated: Profile = {
@@ -596,14 +622,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         document.visibilityState === 'hidden'
       )
         return;
+      // A release that is not given (trainerActivated false) is no reason to
+      // sign out: loadProfile has put the state into the profile, and the
+      // layout shows the notice for it
       const loaded = await loadProfile(user.id);
-      if (
-        loaded &&
-        (loaded.isActive === false ||
-          loaded.trainerActivated === false ||
-          loaded.organization?.isActive === false)
-      ) {
-        signOut(false);
+      if (loaded?.isActive === false) {
+        signOut(false, 'deactivated');
+      } else if (loaded?.organization?.isActive === false) {
+        signOut(false, 'organization-deactivated');
       }
     };
 
@@ -729,6 +755,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (userId) {
       const u = { id: userId, email: userEmail || '' };
       setUser(u);
+      setSessionEnd(null);
       localStorage.setItem(CACHE_KEYS.LOGIN_AT, Date.now().toString());
 
       // The calls below need the same auth lock as the sign in itself, so a
@@ -784,7 +811,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
         clearCachedAuth();
         setLoading(false);
-        throw new Error(
+        throw new SignInBlockedError(
+          'profileUnavailable',
           'Ihr Profil konnte nicht geladen werden. Bitte wenden Sie sich an Ihren Administrator.'
         );
       }
@@ -797,7 +825,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
         clearCachedAuth();
         setLoading(false);
-        throw new Error('Ihr Konto wurde deaktiviert. Bitte kontaktieren Sie Ihren Administrator.');
+        throw new SignInBlockedError(
+          'deactivated',
+          'Ihr Konto wurde deaktiviert. Bitte kontaktieren Sie Ihren Administrator.'
+        );
       }
 
       // 2. Organization deactivated
@@ -807,32 +838,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
         clearCachedAuth();
         setLoading(false);
-        throw new Error('Ihre Organisation ist derzeit deaktiviert.');
-      }
-
-      // 3. Trainee not activated by trainer
-      if (
-        loaded &&
-        loaded.role === 'trainee' &&
-        loaded.trainerActivated === false
-      ) {
-        await supabase.auth.signOut();
-        setUser(null);
-        setProfile(null);
-        clearCachedAuth();
-        setLoading(false);
-        throw new Error(
-          'Ihr Konto wartet auf Aktivierung durch Ihren Ausbilder.'
+        throw new SignInBlockedError(
+          'organizationDeactivated',
+          'Ihre Organisation ist derzeit deaktiviert.'
         );
       }
+
+      // 3. An account that is not released yet (a new trainee waits for the
+      // release by a trainer or administrator) is NOT an error and not signed
+      // out: the sign in succeeds and the person goes to the dashboard of the
+      // role, where the layout shows the notice with a sign out button. An
+      // error here was lost on the way (the login form was left before it
+      // showed it) and the layout sent the person back to /login.
+      const awaitingRelease = isAwaitingActivation(loaded);
 
       setCachedAuth(u, loaded);
       setLoading(false);
       scheduleAutoLogout();
 
-      if (isPublicPath && loaded) {
+      if (isPublicPathRef.current && loaded) {
         let target: string | null | undefined = null;
-        if (resolveRedirect) {
+        // The notice comes before the occupation choice
+        if (resolveRedirect && !awaitingRelease) {
           try {
             target = await resolveRedirect();
           } catch {
@@ -895,7 +922,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       /* ignore */
     }
   };
-  const signOut = async (silent?: boolean) => {
+  const signOut = async (silent?: boolean, reason?: LoginReason) => {
     setLoading(true);
     clearLogoutTimer();
     try {
@@ -925,10 +952,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setProfile(null);
     clearCachedAuth();
+    // silent: somebody else ended it (the 4 hour limit), the layout says so
+    setSessionEnd(silent ? null : (reason ?? 'manual'));
     setLoading(false);
     if (!silent) {
       try {
-        router.replace('/');
+        router.replace(reason ? loginPathWithReason(reason) : '/');
       } catch (_) {
         /* ignore */
       }
@@ -1029,6 +1058,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn: stableSignIn,
       signUp: stableSignUp,
       signOut: stableSignOut,
+      sessionEnd,
       updateProfile,
       refreshProfile,
       changePassword,
@@ -1036,7 +1066,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAdmin,
       subscriptionPlan,
     }),
-    [user, profile, loading, isPlatformOwner, isAdmin, subscriptionPlan]
+    [
+      user,
+      profile,
+      loading,
+      sessionEnd,
+      isPlatformOwner,
+      isAdmin,
+      subscriptionPlan,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -17,6 +17,7 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/contexts/AuthContext';
+import { isAccountStopped } from '@/lib/auth/access-state';
 import { HaiProvider, HaiContext } from './HaiProvider';
 
 // Lazy-load the button & chat panel — keeps framer-motion out of the
@@ -35,9 +36,15 @@ interface HaiWrapperProps {
 }
 
 export function HaiWrapper({ children, context }: HaiWrapperProps) {
-  const { user, subscriptionPlan } = useAuth();
+  const { user, profile, subscriptionPlan } = useAuth();
 
   if (!user) {
+    return <>{children}</>;
+  }
+
+  // An account that is stopped (not released, deactivated) sees a notice page
+  // and nothing else, no chat either
+  if (isAccountStopped(profile ?? null)) {
     return <>{children}</>;
   }
 

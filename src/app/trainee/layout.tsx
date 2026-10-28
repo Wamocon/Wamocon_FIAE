@@ -2,9 +2,15 @@
 
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCatalog } from '@/contexts/CatalogContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
+import { AccountAccessNotice } from '@/components/auth/AccountAccessNotice';
 import { MainLayout } from '@/components/layout/MainLayout';
+import {
+  resolveAccessState,
+  signedOutTarget,
+} from '@/lib/auth/access-state';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { AlertCircle, Calendar } from 'lucide-react';
@@ -85,9 +91,10 @@ const TraineeLayoutComponent = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, sessionEnd } = useAuth();
   const { t } = useLanguage();
   const router = useRouter();
+  const { noCatalog } = useCatalog();
   const { isOpen: sidebarOpen, toggle: handleToggleSidebar } = useSidebar();
 
   // If profile is already available from cache, skip waiting entirely.
@@ -118,28 +125,31 @@ const TraineeLayoutComponent = ({
     }
   }, [loading, user, profile]);
 
-  // Memoize authentication check to prevent unnecessary re-renders
-  const isAuthenticated = useMemo(() => {
-    return user && profile && profile.role === 'trainee' && profile.trainerActivated !== false;
-  }, [user, profile]);
-
-  // Determine if we're still in a loading state
-  const isLoading = loading || (user && waitingForProfile && !profile);
-
-  // Memoize redirect logic - only redirect when we're sure auth is complete
-  const shouldRedirect = useMemo(() => {
-    if (isLoading) return false;
-    if (!user) return true;
-    if (profile && profile.role !== 'trainee') return true;
-    if (profile && profile.trainerActivated === false) return true;
-    return false;
-  }, [isLoading, user, profile]);
+  // What this person sees. Only somebody who is not signed in goes to the
+  // login (with the reason). Everybody else who is stopped (account waits for
+  // the release, deactivated, wrong area, profile not loaded, no occupation)
+  // sees a page with a message and a sign out button: no jump back to /login,
+  // which was silent and, with the login redirecting signed in people back,
+  // a loop.
+  const access = useMemo(
+    () =>
+      resolveAccessState({
+        area: 'trainee',
+        loading,
+        signedIn: !!user,
+        profile,
+        waitingForProfile,
+        noCatalog,
+      }),
+    [loading, user, profile, waitingForProfile, noCatalog]
+  );
 
   useEffect(() => {
-    if (shouldRedirect) {
-      router.push('/login');
+    if (access.kind === 'signedOut') {
+      // replace: the back button does not lead into the same redirect again
+      router.replace(signedOutTarget(sessionEnd));
     }
-  }, [shouldRedirect, router]);
+  }, [access.kind, sessionEnd, router]);
 
   const handleGoBack = useCallback(() => {
     // Use window.history.back() instead of router.back() to prevent potential loops
@@ -150,8 +160,9 @@ const TraineeLayoutComponent = ({
     }
   }, [router]);
 
-  // Show loading state while auth is initializing or waiting for profile
-  if (isLoading) {
+  // Show loading state while auth is initializing or waiting for profile.
+  // AuthContext updates `profile` in the background and this layout re-renders.
+  if (access.kind === 'loading') {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -162,8 +173,8 @@ const TraineeLayoutComponent = ({
     );
   }
 
-  // Show redirect state
-  if (shouldRedirect) {
+  // Not signed in: on the way to the login
+  if (access.kind === 'signedOut') {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -176,29 +187,15 @@ const TraineeLayoutComponent = ({
     );
   }
 
-  // User exists but profile hasn't arrived yet — keep showing a
-  // non-blocking loading state. AuthContext will update `profile` in the
-  // background and this layout will re-render automatically.
-  if (user && !profile) {
+  // Stopped with a reason: nothing of the area is mounted (no pages, no
+  // requests), the person sees the message, their name and the sign out button
+  if (access.kind === 'blocked') {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">{t('common.loading')}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // No user and no profile after auth completed — truly not authenticated
-  if (!isAuthenticated) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">{t('quiz.accessDenied')}</p>
-        </div>
-      </div>
+      <AccountAccessNotice
+        reason={access.reason}
+        area="trainee"
+        fullName={profile?.full_name}
+      />
     );
   }
 

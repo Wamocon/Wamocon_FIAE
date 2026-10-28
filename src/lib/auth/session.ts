@@ -31,6 +31,7 @@ import {
   isSuperAdmin,
   isTrainerLevel,
   normalizeRole,
+  ROLE,
   type Role,
 } from '@/lib/auth/roles';
 
@@ -62,6 +63,8 @@ type AuthFailure = {
   ok: false;
   status: 401 | 403 | 500 | 503;
   error: string;
+  /** Set for the one 403 the client can tell apart: awaiting the release. */
+  code?: 'AWAITING_ACTIVATION';
 };
 export type AuthResult = { ok: true; session: SessionUser } | AuthFailure;
 
@@ -173,6 +176,7 @@ export async function authenticate(request: RequestLike): Promise<AuthResult> {
           role: profiles.role,
           organizationId: profiles.organizationId,
           isActive: profiles.isActive,
+          trainerActivated: profiles.trainerActivated,
           orgIsActive: organizations.isActive,
           isPlatformOwner: organizations.isPlatformOwner,
         })
@@ -192,6 +196,18 @@ export async function authenticate(request: RequestLike): Promise<AuthResult> {
   }
   const role = normalizeRole(row.role);
   if (!role) return { ok: false, status: 403, error: 'Forbidden' };
+  // A new trainee works only after a trainer or administrator has released the
+  // account (trainer_activated). Until then no request of that account gets a
+  // session: no data, no writes. Only a trainee is held back, and only an
+  // explicit false (a row without the flag is not blocked).
+  if (role === ROLE.TRAINEE && row.trainerActivated === false) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'Forbidden',
+      code: 'AWAITING_ACTIVATION',
+    };
+  }
 
   const subject = { role, isPlatformOwner: row.isPlatformOwner === true };
   return {
@@ -222,7 +238,9 @@ export async function getSessionUser(
 
 function failureResponse(failure: AuthFailure) {
   return NextResponse.json(
-    { error: failure.error },
+    failure.code
+      ? { error: failure.error, code: failure.code }
+      : { error: failure.error },
     { status: failure.status }
   );
 }
