@@ -5,8 +5,9 @@
 // the docx for the converter (word.ts) -> a stand-in converter that writes a PDF with the text of
 // the docx -> the check of the PDF text -> cleaned metadata -> plan -> the engine of the PDF import
 // against a database and a storage in memory. It proves the rules of the owner end to end: the
-// scenario PDF for the trainees has no solution, the model solution is private, a second run adds
-// nothing, files are replaced only with the switch.
+// scenario PDF is the whole scenario (solution part included) and public, the task PDF of a use case
+// has no solution, the model solution is private, a second run adds nothing, files are replaced only
+// with the switch.
 import { createHash } from 'node:crypto';
 
 import { beforeEach, describe, expect, it } from '@jest/globals';
@@ -36,12 +37,14 @@ import {
 import { MemoryStorage } from '../../../helpers/memoryStorage';
 import {
   CANARY,
-  CANARY_WORDS,
   docxFromBlocks,
   enablerBlocks,
   scenarioBlocks,
   useCaseBlocks,
 } from '../../../helpers/uploadFixtures';
+
+// the solution and the knowledge text of a scenario: public now, they stay in its PDF
+const SCENARIO_WORDS = ['WOMBAT', 'LAMA'] as const;
 
 const SUPABASE = 'https://proj.supabase.co';
 const sha = (bytes: Uint8Array) =>
@@ -121,7 +124,6 @@ async function makeAll(
           sha256: sha(cleaned.bytes),
           pageCount: cleaned.pageCount,
           headText: converted.text.slice(0, 4000),
-          solutionMarker: variant.kind === 'scenario' ? false : undefined,
         },
       });
     }
@@ -221,7 +223,7 @@ describe('PDFs from Word through the engine of the PDF import', () => {
     );
   });
 
-  it('puts the files and the rows in the form of FIAE: the scenario public without the solution, the model solution private', async () => {
+  it('puts the files and the rows in the form of FIAE: the whole scenario public, the model solution of a use case private', async () => {
     const report = await run();
     expect(report.tables.content_documents.insert).toBe(4);
     expect(report.uploads).toEqual({ put: 4, replaced: 0 });
@@ -234,19 +236,19 @@ describe('PDFs from Word through the engine of the PDF import', () => {
       title: 'Szenario K4-a (PDF)',
       visibility: 'ALL',
       file_name: 'Szenario_4a.pdf',
+      order_index: 100,
     });
     const scenarioMade = made.find(m => m.scanned.rel.includes('Szenario_4a'))!;
-    // the file in the public bucket is the checked one, and its text has no solution
+    // the file in the public bucket is the whole scenario: situation, solution and knowledge
     const stored = storage.objects.get(
       `${CONTENT_BUCKET}/${scenario.storage_path}`
     )!;
     expect(sha(stored)).toBe(scenarioMade.scanned.sha256);
+    expect(scenario.storage_url).toContain(`/public/${CONTENT_BUCKET}/`);
     expect(scenarioMade.text).toContain('Beispiel Technik');
-    for (const word of CANARY_WORDS)
-      expect(scenarioMade.text).not.toContain(word);
-    expect(scenarioMade.text).not.toMatch(
-      /L(ö|oe)sungsszenario|Fachwissen zur L/
-    );
+    for (const word of SCENARIO_WORDS)
+      expect(scenarioMade.text).toContain(word);
+    expect(scenarioMade.text).toMatch(/L(ö|oe)sungsszenario|Fachwissen zur L/);
 
     const task = rowOf('TRAINEE_QUESTION');
     const taskMade = made.find(m => m.scanned.rel.endsWith('/UC_4a.pdf'))!;
@@ -336,49 +338,58 @@ describe('PDFs from Word through the engine of the PDF import', () => {
   });
 });
 
-describe('what never becomes a PDF for the trainees', () => {
-  it('drops a scenario whose converted text shows the solution although the docx was cut', async () => {
+describe('what never becomes a PDF for the trainees (use case task)', () => {
+  const context = {
+    enablerKey: '4a',
+    enablerCode: 'K4-a',
+    strongSolutions: [],
+    reviewedBareSolutionLine: false,
+  };
+
+  it('drops a task whose converted text shows the solution although the docx was cut', async () => {
     const result = await prepareWordDocument(
-      'scenario',
-      await docxFromBlocks(scenarioBlocks({ code: '4a' })),
-      {
-        enablerKey: '4a',
-        enablerCode: 'K4-a',
-        strongSolutions: [],
-        reviewedBareSolutionLine: false,
-      }
+      'usecase',
+      await docxFromBlocks(useCaseBlocks({ code: '4a' })),
+      context
     );
-    if (!result.ok) throw new Error('expected a variant');
+    if (!result.ok) throw new Error('expected variants');
+    const task = result.variants[0];
+    expect(task.kind).toBe('usecase_task');
     // a converter that adds text of its own: the second layer catches it
     for (const leak of [
-      `\n${CANARY.scenarioSolution}`,
+      `\n${CANARY.useCaseSolution}`,
+      '\nMusterlösung\nText',
       '\nLösungsszenario\nText',
-      '\nWie das Fachwissen zur Lösung beiträgt',
     ]) {
-      const converted = await standInConvert(result.variants[0].docx);
-      expect(result.variants[0].check(converted.text)).toBeNull();
-      expect(result.variants[0].check(converted.text + leak)).toBe(
-        'PDF_SOLUTION'
-      );
+      const converted = await standInConvert(task.docx);
+      expect(task.check(converted.text)).toBeNull();
+      expect(task.check(converted.text + leak)).toBe('PDF_SOLUTION');
     }
   });
 
-  it('gives no PDF at all for a scenario that cannot be cut', async () => {
+  it('gives no PDF at all for a use case that cannot be cut', async () => {
     const blocks = [
-      ...scenarioBlocks({ code: '4a' }).slice(0, 4),
-      // the solution headings are the same line as text, not alone: the parser finds no solution
-      { text: `Lösungsszenario ${CANARY.scenarioSolution}` },
+      ...useCaseBlocks({ code: '4a' }).slice(0, -2),
+      // the solution heading is no line of its own: the parser finds no solution
+      { text: `Musterlösung ${CANARY.useCaseSolution}` },
     ];
     const result = await prepareWordDocument(
-      'scenario',
+      'usecase',
       await docxFromBlocks(blocks),
-      {
-        enablerKey: '4a',
-        enablerCode: 'K4-a',
-        strongSolutions: [],
-        reviewedBareSolutionLine: false,
-      }
+      context
     );
     expect(result.ok).toBe(false);
+  });
+
+  it('the scenario is the exception: its converted text may show a solution part', async () => {
+    const result = await prepareWordDocument(
+      'scenario',
+      await docxFromBlocks(scenarioBlocks({ code: '4a' })),
+      context
+    );
+    if (!result.ok) throw new Error('expected a variant');
+    const converted = await standInConvert(result.variants[0].docx);
+    for (const word of SCENARIO_WORDS) expect(converted.text).toContain(word);
+    expect(result.variants[0].check(converted.text)).toBeNull();
   });
 });

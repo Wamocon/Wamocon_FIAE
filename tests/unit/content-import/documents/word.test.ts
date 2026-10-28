@@ -14,7 +14,6 @@ import { cleanPdfMetadata } from '@/lib/content-import/documents/pdf-clean';
 import {
   bodyBlocks,
   cutBodyXml,
-  isScenarioSolutionHeading,
   isUseCaseSolutionHeading,
   prepareDocx,
   prepareWordDocument,
@@ -27,7 +26,6 @@ import {
 } from '@/lib/content-import/documents/word';
 import {
   CANARY,
-  CANARY_WORDS,
   b,
   docxBytes,
   docxFromBlocks,
@@ -38,6 +36,9 @@ import {
   tableXml,
   useCaseBlocks,
 } from '../../../helpers/uploadFixtures';
+
+// the solution and the knowledge text of a scenario: public now, they stay in its PDF
+const SCENARIO_WORDS = ['WOMBAT', 'LAMA'] as const;
 
 const context = (over: Partial<WordContext> = {}): WordContext => ({
   enablerKey: '1b',
@@ -136,15 +137,15 @@ describe('the elements of the body', () => {
   it('cuts from the first heading that is accepted, keeps the section properties, never cuts the title', () => {
     const doc = xml(
       [
-        '<w:p><w:r><w:t>Lösung der Aufgabe</w:t></w:r></w:p>',
+        '<w:p><w:r><w:t>Musterlösung der Aufgabe</w:t></w:r></w:p>',
         '<w:p><w:r><w:t>Eins</w:t></w:r></w:p>',
-        '<w:p><w:r><w:t>Lösung</w:t></w:r></w:p>',
+        '<w:p><w:r><w:t>Musterlösung</w:t></w:r></w:p>',
         '<w:p><w:r><w:t>Geheim</w:t></w:r></w:p>',
         '<w:sectPr><w:pgSz/></w:sectPr>',
       ].join('')
     );
-    const cut = cutBodyXml(doc, isScenarioSolutionHeading) as string;
-    expect(cut).toContain('Lösung der Aufgabe');
+    const cut = cutBodyXml(doc, isUseCaseSolutionHeading) as string;
+    expect(cut).toContain('Musterlösung der Aufgabe');
     expect(cut).toContain('Eins');
     expect(cut).not.toContain('Geheim');
     expect(cut).toContain('<w:sectPr>');
@@ -155,27 +156,12 @@ describe('the elements of the body', () => {
     expect(cutBodyXml('<x/>', () => true)).toBeNull();
   });
 
-  it('knows the headings of a solution part', () => {
-    for (const text of [
-      'Lösungsszenario',
-      'Lösung:',
-      'Lösungsszenario (nur Trainer)',
-      'Wie das Fachwissen zur Lösung beiträgt',
-      'Musterlösung',
-      'Bewertungskriterien',
-    ]) {
-      expect(isScenarioSolutionHeading(text)).toBe(true);
-    }
-    // a long sentence or a sentence with an end is no heading
-    expect(
-      isScenarioSolutionHeading(
-        'Lösungen sind vorzubereiten und mit dem Team abzustimmen, bevor der Termin stattfindet.'
-      )
-    ).toBe(false);
-    expect(isScenarioSolutionHeading('Lösung folgt hier.')).toBe(false);
+  it('knows the headings of the solution part of a use case', () => {
     expect(isUseCaseSolutionHeading('Musterlösung:')).toBe(true);
     expect(isUseCaseSolutionHeading('Bewertungskriterien')).toBe(true);
     expect(isUseCaseSolutionHeading('Musterlösung der Firma')).toBe(false);
+    // a scenario heading is no cut point of a use case
+    expect(isUseCaseSolutionHeading('Lösungsszenario')).toBe(false);
   });
 });
 
@@ -266,7 +252,7 @@ describe('the docx for the converter', () => {
       code: 'NOT_A_DOCX',
     });
     const data = await docxFromBlocks([t('Titel'), t('Text ohne Lösungsteil')]);
-    expect(await prepareDocx(data, isScenarioSolutionHeading)).toEqual({
+    expect(await prepareDocx(data, isUseCaseSolutionHeading)).toEqual({
       ok: false,
       code: 'CUT_NOT_FOUND',
     });
@@ -307,8 +293,8 @@ describe('the docx for the converter', () => {
   });
 });
 
-describe('scenario: the PDF for the trainees stops before the solution', () => {
-  it('cuts the docx before the heading of the solution, no canary word is left', async () => {
+describe('scenario: the PDF holds the whole document, solution part included', () => {
+  it('keeps the whole docx, the canary words of the solution part stay in it', async () => {
     const data = await docxFromBlocks(scenarioBlocks({ code: '1b' }));
     const result = await prepareWordDocument('scenario', data, context());
     expect(result.ok).toBe(true);
@@ -320,38 +306,17 @@ describe('scenario: the PDF for the trainees stops before the solution', () => {
     const text = await textOf(variant.docx);
     expect(text).toContain('Ausgangssituation');
     expect(text).toContain('Beispiel Technik');
-    for (const word of CANARY_WORDS) {
-      expect(text).not.toContain(word);
-      expect(await rawXml(variant.docx)).not.toContain(word);
+    for (const word of SCENARIO_WORDS) {
+      expect(text).toContain(word);
     }
-    expect(text).not.toMatch(/L(ö|oe)sungsszenario/);
-    expect(text).not.toMatch(/Fachwissen zur L/);
-    // the solution texts go to the check of the enabler texts
+    expect(text).toMatch(/L(ö|oe)sungsszenario/);
+    expect(text).toMatch(/Fachwissen zur L/);
+    // the solution texts still go to the check of the enabler texts
     expect(result.solutions.join(' ')).toContain('WOMBAT');
     expect(result.solutions.join(' ')).toContain('LAMA');
   });
 
-  it('keeps a task that stands between the situation and the solution', async () => {
-    const blocks = scenarioBlocks();
-    blocks.splice(
-      4,
-      0,
-      b('Aufgabe'),
-      t('Finden Sie die Ursache und sichern Sie den Betrieb.')
-    );
-    const result = await prepareWordDocument(
-      'scenario',
-      await docxFromBlocks(blocks),
-      context()
-    );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const text = await textOf(result.variants[0].docx);
-    expect(text).toContain('Finden Sie die Ursache');
-    expect(text).not.toContain('WOMBAT');
-  });
-
-  it('cuts at the task heading when the solution stands under it (the parser reads it as the solution)', async () => {
+  it('keeps a task and a solution that stands under the task heading', async () => {
     const blocks = [
       t('Szenario 1b) Titel'),
       b('Ausgangssituation'),
@@ -370,32 +335,10 @@ describe('scenario: the PDF for the trainees stops before the solution', () => {
     if (!result.ok) return;
     const text = await textOf(result.variants[0].docx);
     expect(text).toContain('erfundene Lage');
-    for (const word of CANARY_WORDS) expect(text).not.toContain(word);
+    for (const word of SCENARIO_WORDS) expect(text).toContain(word);
   });
 
-  it('gives no PDF when the heading of the solution is not at the top level of the body', async () => {
-    const blocks = scenarioBlocks();
-    const body =
-      blocks
-        .slice(0, 4)
-        .map(block => para(block.text, block))
-        .join('') +
-      tableXml([
-        ['Lösungsszenario'],
-        [CANARY.scenarioSolution],
-        ['Wie das Fachwissen zur Lösung beiträgt'],
-        [CANARY.knowledge],
-      ]);
-    // the parser sees the headings only outside of a table, so this file has no solution at all
-    const result = await prepareWordDocument(
-      'scenario',
-      await docxBytes(body),
-      context()
-    );
-    expect(result.ok).toBe(false);
-  });
-
-  it('gives no PDF for a heading in a content control', async () => {
+  it('keeps a heading in a content control, nothing is cut', async () => {
     const blocks = scenarioBlocks();
     const body =
       blocks
@@ -411,10 +354,30 @@ describe('scenario: the PDF for the trainees stops before the solution', () => {
       await docxBytes(body),
       context()
     );
-    expect(result).toEqual({ ok: false, code: 'CUT_NOT_FOUND' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(await textOf(result.variants[0].docx)).toContain('WOMBAT');
   });
 
-  it('refuses a file with a format error, another code and a marker in the visible part', async () => {
+  it('still cleans the docx: external references and macro parts are removed', async () => {
+    const data = await docxFromBlocks(scenarioBlocks({ code: '1b' }), {
+      parts: {
+        'word/_rels/document.xml.rels':
+          '<Relationships><Relationship Id="b" Type="http://x/image" Target="http://example.invalid/b.png" TargetMode="External"/></Relationships>',
+        'word/vbaProject.bin': 'binary',
+      },
+    });
+    const result = await prepareWordDocument('scenario', data, context());
+    if (!result.ok) throw new Error('expected a variant');
+    expect(result.variants[0].removed).toBe(2);
+    const zip = await JSZip.loadAsync(result.variants[0].docx);
+    expect(zip.file('word/vbaProject.bin')).toBeNull();
+    expect(
+      await zip.file('word/_rels/document.xml.rels')!.async('string')
+    ).not.toContain('example.invalid');
+  });
+
+  it('refuses a file with a format error, another code and a file that is no docx', async () => {
     expect(
       await prepareWordDocument(
         'scenario',
@@ -429,15 +392,6 @@ describe('scenario: the PDF for the trainees stops before the solution', () => {
         context()
       )
     ).toEqual({ ok: false, code: 'CODE_MISMATCH' });
-    const blocks = scenarioBlocks();
-    blocks[2] = t(`Die Situation nennt ${CANARY.scenarioSolution} offen.`);
-    expect(
-      await prepareWordDocument(
-        'scenario',
-        await docxFromBlocks(blocks),
-        context()
-      )
-    ).toEqual({ ok: false, code: 'SOLUTION_MARKER' });
     expect(
       await prepareWordDocument(
         'scenario',
@@ -447,7 +401,18 @@ describe('scenario: the PDF for the trainees stops before the solution', () => {
     ).toEqual({ ok: false, code: 'NOT_A_DOCX' });
   });
 
-  it('the check of the finished PDF drops a text with a marker, a solution text or a heading of a solution', async () => {
+  it('takes a visible part that names the solution, the whole scenario is for the trainees', async () => {
+    const blocks = scenarioBlocks();
+    blocks[2] = t(`Die Situation nennt ${CANARY.scenarioSolution} offen.`);
+    const result = await prepareWordDocument(
+      'scenario',
+      await docxFromBlocks(blocks),
+      context()
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('the check of the finished PDF accepts the whole text, solution headings and solution texts included', async () => {
     const result = await prepareWordDocument(
       'scenario',
       await docxFromBlocks(scenarioBlocks()),
@@ -458,36 +423,28 @@ describe('scenario: the PDF for the trainees stops before the solution', () => {
     expect(
       check('Szenario 1b) Titel\nAusgangssituation\nEine erfundene Lage.')
     ).toBeNull();
-    expect(check('Szenario 1b) Titel\nLösungsszenario\nText')).toBe(
-      'PDF_SOLUTION'
-    );
-    expect(check('Szenario 1b) Titel\nLösung\nText')).toBe('PDF_SOLUTION');
-    expect(check(`Szenario 1b) Titel\n${CANARY.scenarioSolution}`)).toBe(
-      'PDF_SOLUTION'
-    );
+    expect(check('Szenario 1b) Titel\nLösungsszenario\nText')).toBeNull();
+    expect(check('Szenario 1b) Titel\nLösung\nText')).toBeNull();
+    expect(check(`Szenario 1b) Titel\n${CANARY.scenarioSolution}`)).toBeNull();
     expect(
       check('Szenario 1b) Titel\nWie das Fachwissen zur Lösung beiträgt')
-    ).toBe('PDF_SOLUTION');
-    // the title may carry the word
-    expect(
-      check('Szenario 1b) Lösungen finden\nAusgangssituation\nText.')
     ).toBeNull();
   });
 });
 
 describe('traineePdfProblem', () => {
-  it('leaves the title line out of the heading check, only for scenarios', () => {
-    expect(traineePdfProblem('scenario', 'Lösungen\nText.', [])).toBeNull();
-    expect(traineePdfProblem('scenario', 'Titel\nLösungen\nText.', [])).toBe(
+  it('only reports a marker word or a solution text, a heading line is no problem for a task', () => {
+    expect(traineePdfProblem('Titel\nLösungen\nText.', [])).toBeNull();
+    expect(traineePdfProblem('Titel\n\n   \nText.', [])).toBeNull();
+    expect(traineePdfProblem('', [])).toBeNull();
+    expect(traineePdfProblem('Titel\nMusterlösung\nText.', [])).toBe(
       'PDF_SOLUTION'
     );
     expect(
-      traineePdfProblem('usecase_task', 'Titel\nLösungen\nText.', [])
-    ).toBeNull();
-    expect(
-      traineePdfProblem('usecase_task', 'Titel\n\n   \nText.', [])
-    ).toBeNull();
-    expect(traineePdfProblem('scenario', '', [])).toBeNull();
+      traineePdfProblem(`Titel\n${CANARY.useCaseSolution}`, [
+        CANARY.useCaseSolution,
+      ])
+    ).toBe('PDF_SOLUTION');
   });
 });
 

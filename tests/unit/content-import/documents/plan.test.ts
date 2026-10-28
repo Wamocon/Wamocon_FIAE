@@ -228,8 +228,6 @@ const scanned = (
   sha256: 'a'.repeat(64),
   pageCount: 3,
   headText: heading ?? null,
-  // the check of the text of a scenario PDF found no solution
-  solutionMarker: false,
   ...over,
 });
 

@@ -541,7 +541,7 @@ test(
 );
 
 test(
-  'converts the four PDFs of a sample tree: names, plan, no solution in the files for the trainees, temp files gone',
+  'converts the four PDFs of a sample tree: names, plan, whole scenario, no solution in the task PDF, temp files gone',
   needs,
   async () => {
     const root = tmp();
@@ -579,12 +579,10 @@ test(
       );
       const scenarioText = await textOf(rels['Szenario_1a.pdf']);
       assert.match(scenarioText, /erfundene Lage/);
-      assert.doesNotMatch(
-        scenarioText,
-        new RegExp(
-          `${SOLUTION_WORD}|${KNOWLEDGE_WORD}|sungsszenario|Fachwissen`
-        )
-      );
+      // the whole scenario: solution and the text "how the knowledge helps" stay in the public PDF
+      assert.match(scenarioText, new RegExp(SOLUTION_WORD));
+      assert.match(scenarioText, new RegExp(KNOWLEDGE_WORD));
+      assert.match(scenarioText, /sungsszenario/);
       const taskText = await textOf(rels['UC_1a.pdf']);
       assert.match(taskText, /Weg zum Ziel/);
       assert.doesNotMatch(taskText, new RegExp(`${USE_CASE_WORD}|Musterl`));
@@ -639,7 +637,7 @@ test(
 );
 
 test(
-  'a PDF whose text shows the solution is dropped although the docx was cut',
+  'a PDF whose text shows the solution is dropped although the docx was cut, except the whole scenario',
   needs,
   async () => {
     const root = tmp();
@@ -649,13 +647,14 @@ test(
         root,
         standInConverter({ extra: 'Lösungsszenario' })
       );
-      // the enabler PDF carries the line too and is dropped; the solution PDF is not for the trainees
+      // the enabler PDF and the task PDF carry the line too and are dropped; the solution PDF is not for
+      // the trainees, the scenario is whole and public
       const dropped = result.skips
         .filter(s => s.code === 'PDF_SOLUTION')
         .map(s => s.kind)
         .sort();
-      assert.deepEqual(dropped, ['enabler', 'scenario', 'usecase_task']);
-      assert.ok(result.files.every(f => !/Szenario_1a/.test(f.rel)));
+      assert.deepEqual(dropped, ['enabler', 'usecase_task']);
+      assert.ok(result.files.some(f => /Szenario_1a/.test(f.rel)));
       assert.ok(result.files.some(f => /Musterl/.test(f.rel)));
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -695,7 +694,7 @@ test(
     const root = tmp();
     try {
       await sampleTree(root);
-      // the scenario of 1b has no solution part: it cannot be a scenario for the trainees
+      // the scenario of 1b has no solution part: the parser of the content import refuses it
       await put(
         root,
         `${T1}/Enablers/1b_Zweites/Szenario/Szenario_1b.docx`,
@@ -877,7 +876,7 @@ const needsOffice = {
 };
 
 test(
-  'the real LibreOffice converts an invented docx: cut scenario, clean metadata, no leftovers',
+  'the real LibreOffice converts an invented docx: whole scenario, clean metadata, no leftovers',
   needsOffice,
   async () => {
     const root = tmp();
@@ -919,12 +918,9 @@ test(
       );
       const info = await pdfInfo(bytes);
       assert.match(info.text, /erfundene Lage/);
-      assert.doesNotMatch(
-        info.text,
-        new RegExp(
-          `${SOLUTION_WORD}|${KNOWLEDGE_WORD}|sungsszenario|Fachwissen`
-        )
-      );
+      // the whole scenario: the solution part and the text "how the knowledge helps" are in it
+      assert.match(info.text, new RegExp(SOLUTION_WORD));
+      assert.match(info.text, new RegExp(KNOWLEDGE_WORD));
       // the metadata is the one of the clean step
       const document = await PDFDocument.load(bytes, { updateMetadata: false });
       assert.equal(document.getTitle(), 'Szenario K1-a');

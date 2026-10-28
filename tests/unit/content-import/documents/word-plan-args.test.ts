@@ -1,5 +1,5 @@
-// Tests of the arguments of --from-word and of the rule of the plan for scenario PDFs: a scenario PDF
-// is only taken when its text was checked on all pages and shows no solution part.
+// Tests of the arguments of --from-word and of the plan for scenario PDFs: a scenario PDF is taken
+// whole, with its solution part (the whole scenario is for the trainees).
 import { describe, expect, it } from '@jest/globals';
 
 import {
@@ -35,46 +35,43 @@ const scanned = (
   }) as ScannedPdf;
 
 describe('scenario PDFs in the plan', () => {
-  const scenario = (over: Partial<ScannedPdf>) =>
-    buildDocumentPlan([
-      scanned(`${K4}/Szenarien/Szenario_4a.pdf`, 'Szenario 4a) Titel', over),
-    ]).items[0];
+  const scenario = (heading = 'Szenario 4a) Titel') =>
+    buildDocumentPlan([scanned(`${K4}/Szenarien/Szenario_4a.pdf`, heading)])
+      .items[0];
 
-  it('takes a scenario whose text was checked and shows no solution', () => {
-    expect(scenario({ solutionMarker: false })).toMatchObject({
-      status: 'ok',
-      kind: 'scenario',
-    });
+  it('takes a scenario PDF as it is, the whole scenario is for the trainees', () => {
+    expect(scenario()).toMatchObject({ status: 'ok', kind: 'scenario' });
   });
 
-  it('does not take a scenario PDF that shows a solution part', () => {
-    const item = scenario({ solutionMarker: true });
-    expect(item.status).toBe('solution-in-pdf');
-    expect(item.reason).toMatch(/solution part/);
+  it('takes a scenario PDF whose text holds a solution part', () => {
+    // the first page is all the plan reads, a solution heading further down changes nothing
+    const item = scenario(
+      'Szenario 4a) Titel\nAusgangssituation\nLösungsszenario\nWie das Fachwissen zur Lösung beiträgt'
+    );
+    expect(item).toMatchObject({ status: 'ok', kind: 'scenario' });
   });
 
-  it('does not take a scenario PDF that was not checked (fail closed)', () => {
-    const item = scenario({});
-    expect(item.status).toBe('solution-in-pdf');
-    expect(item.reason).toMatch(/not checked/);
+  it('keeps the checks of the heading for a scenario', () => {
+    expect(scenario('Szenario 4b) Titel').status).toBe('heading-mismatch');
+    expect(scenario('Kein Kopf ohne Kennung').status).toBe('heading-missing');
   });
 
-  it('asks nothing of the other kinds, and the plan stays valid and names the file', () => {
+  it('plans all kinds, the plan stays valid and knows no solution status', () => {
     const plan = buildDocumentPlan([
       scanned(`${K4}/Enabler/4a.pdf`, '4a) Titel'),
       scanned(`${K4}/Use-Cases/UC_4a.pdf`, '4a) Titel'),
-      scanned(`${K4}/Szenarien/Szenario_4a.pdf`, 'Szenario 4a) Titel', {
-        solutionMarker: true,
-      }),
+      scanned(`${K4}/Szenarien/Szenario_4a.pdf`, 'Szenario 4a) Titel'),
     ]);
-    expect(plan.items.map(i => i.status).sort()).toEqual([
-      'ok',
-      'ok',
-      'solution-in-pdf',
-    ]);
+    expect(plan.items.map(i => i.status)).toEqual(['ok', 'ok', 'ok']);
     expect(validateDocumentPlan(plan)).toEqual([]);
-    expect(countPlan(plan).byKind.scenario).toBe(0);
-    expect(renderPlanSummary(plan)).toContain('solution-in-pdf: ');
+    expect(countPlan(plan).byKind.scenario).toBe(1);
+    expect(renderPlanSummary(plan)).not.toContain('solution-in-pdf');
+    expect(
+      validateDocumentPlan({
+        version: 1,
+        items: [{ ...plan.items[0], status: 'solution-in-pdf' as never }],
+      })
+    ).toEqual(['Item 0 has an unknown status.']);
   });
 });
 
