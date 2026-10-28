@@ -77,6 +77,7 @@ const QUIZ = {
   w3: id(507),
   fiae: id(508),
   lessonLow: id(509),
+  fiaeInactive: id(510),
 };
 const LF_K = id(601);
 const DOC_THEORY = id(701);
@@ -240,6 +241,8 @@ if (!url) {
               values (${COURSE.fiae}, ${CAT_F}, 'FIAE Kurs', ${ADMIN})`;
     await sql`insert into quizzes (id, training_catalog_id, title, quiz_type, created_by_id)
               values (${QUIZ.fiae}, ${CAT_F}, 'FIAE Global', 'GLOBAL', ${ADMIN})`;
+    await sql`insert into quizzes (id, training_catalog_id, title, quiz_type, created_by_id)
+              values (${QUIZ.fiaeInactive}, ${CAT_F}, 'FIAE Global inaktiv', 'GLOBAL', ${ADMIN})`;
 
     // Enablers, use cases, lesson quiz, learning field with a mapping
     for (const [key, courseKey, n] of [
@@ -860,6 +863,94 @@ if (!url) {
         quizAssignmentsAdded: 2,
         skippedNoOrganization: 1,
       });
+    });
+
+    it('FIAE pattern: the explicit tool assigns the active global quizzes without a component, the automatic run does not', async () => {
+      const { syncCatalogTraineeContent } =
+        await import('@/lib/catalog/trainee-content');
+      await sql`delete from quiz_assignments where trainee_id = ${TF}`;
+      await sql`update quizzes set is_active = true where id = ${QUIZ.fiae}`;
+      const base = { catalogId: CAT_F, actorId: ADMIN };
+
+      // the automatic run (enrollment, new trainee) writes nothing for FIAE
+      const auto = await syncCatalogTraineeContent(db, {
+        ...base,
+        execute: true,
+      });
+      expect(auto).toMatchObject({ quizAssignmentsMissing: 0 });
+
+      // the tool: the trial counts the quiz assignment and writes nothing
+      const trial = await syncCatalogTraineeContent(db, {
+        ...base,
+        execute: false,
+        includeUnlinkedGlobalQuizzes: true,
+      });
+      expect(trial).toMatchObject({
+        trainees: 1,
+        quizAssignmentsMissing: 1,
+        courseMembersMissing: 0,
+        quizAssignmentsAdded: 0,
+      });
+      expect(
+        await sql`select 1 from quiz_assignments where trainee_id = ${TF}`
+      ).toHaveLength(0);
+
+      // the run inserts exactly the active one, as the actor, with the organization of the trainee
+      const run = await syncCatalogTraineeContent(db, {
+        ...base,
+        execute: true,
+        includeUnlinkedGlobalQuizzes: true,
+      });
+      expect(run).toMatchObject({ quizAssignmentsAdded: 1 });
+      const rows =
+        await sql`select quiz_id, assigned_by_id, organization_id from quiz_assignments where trainee_id = ${TF}`;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        quiz_id: QUIZ.fiae,
+        assigned_by_id: ADMIN,
+        organization_id: ORG_A,
+      });
+
+      // idempotent
+      const again = await syncCatalogTraineeContent(db, {
+        ...base,
+        execute: true,
+        includeUnlinkedGlobalQuizzes: true,
+      });
+      expect(again).toMatchObject({
+        quizAssignmentsMissing: 0,
+        quizAssignmentsAdded: 0,
+      });
+
+      // the trainee sees it in the list; the inactive one stays out
+      asUser(sessionOf(TF, ORG_A));
+      const list = await GET(route.quizzes, '/api/trainee/quizzes');
+      expect(list.body.map((q: any) => q.id)).toEqual([QUIZ.fiae]);
+
+      // the route runs the tool with the option
+      await sql`delete from quiz_assignments where trainee_id = ${TF}`;
+      const mod =
+        await import('@/app/api/admin/catalogs/[catalogId]/trainee-content/route');
+      asUser(
+        sessionOf(ADMIN, ORG_PLATFORM, {
+          role: 'SUPER_ADMIN',
+          isSuperAdmin: true,
+          isAdmin: true,
+          isTrainerLevel: true,
+        })
+      );
+      const res = await mod.POST(
+        new NextRequest(
+          'http://localhost/api/admin/catalogs/x/trainee-content',
+          {
+            method: 'POST',
+            body: JSON.stringify({ execute: true }),
+            headers: { 'content-type': 'application/json' },
+          }
+        ),
+        { params: Promise.resolve({ catalogId: CAT_F }) }
+      );
+      expect((await res.json()).quizAssignmentsAdded).toBe(1);
     });
   });
 }

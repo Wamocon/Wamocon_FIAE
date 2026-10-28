@@ -67,6 +67,9 @@ export async function POST(
       actorId: session.id,
       execute,
       organizationId,
+      // The explicit tool also assigns the active global quizzes that belong
+      // to no component (FIAE), the automatic runs do not
+      includeUnlinkedGlobalQuizzes: true,
     });
     if (!result) return notFound();
 
