@@ -61,7 +61,7 @@ export function safeFileName(name: string): string {
     .normalize('NFC')
     .replace(/[äöüÄÖÜß]/g, ch => FOLD[ch])
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '');
+    .replace(/[\u0300-\u036f]/g, '');
   const clean = folded
     .replace(/[^A-Za-z0-9._-]+/g, '_')
     .replace(/_{2,}/g, '_')
@@ -162,6 +162,29 @@ export function checkStorageTarget(
   return !loopback && url.protocol === 'https:'
     ? []
     : ['The target preview needs the https address of the hosted project.'];
+}
+
+/**
+ * Problems with the confirmed storage host of a real run (empty = fine). The secret key is sent
+ * to the storage address, and Preview and Production share one project, so the person names the
+ * host that is meant (host and port of NEXT_PUBLIC_SUPABASE_URL) and the run compares it.
+ */
+export function checkConfirmStorageHost(
+  confirmed: string | null | undefined,
+  supabaseUrl: string | null | undefined
+): string[] {
+  if (!confirmed) {
+    return ['A real run needs --confirm-storage-host <host of the storage>.'];
+  }
+  let host: string;
+  try {
+    host = new URL(String(supabaseUrl)).host.toLowerCase();
+  } catch {
+    return ['NEXT_PUBLIC_SUPABASE_URL is not an address.'];
+  }
+  return confirmed.toLowerCase() === host
+    ? []
+    : ['--confirm-storage-host is not the host of the storage address.'];
 }
 
 export interface SupabaseStorageDeps {

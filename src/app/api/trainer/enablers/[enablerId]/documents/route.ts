@@ -23,6 +23,7 @@ import {
   documentStoragePath,
 } from '@/lib/document-storage';
 import { removeDocumentFile } from '@/lib/document-file-cleanup';
+import { withSignedSolutionUrls } from '@/lib/solution-storage';
 
 // GET documents for an enabler
 export async function GET(
@@ -59,7 +60,8 @@ export async function GET(
       )
       .orderBy(contentDocuments.orderIndex);
 
-    return NextResponse.json({ documents: docs });
+    // a private reference never reaches the browser (src/lib/solution-storage.ts)
+    return NextResponse.json({ documents: await withSignedSolutionUrls(docs) });
   } catch (e) {
     console.error('Get enabler documents error', e);
     return NextResponse.json(

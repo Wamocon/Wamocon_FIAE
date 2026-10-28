@@ -7,14 +7,14 @@ import {
   toggleOriginal,
 } from '@/lib/content-upload/review/originals';
 import type { ReviewRowDto } from '@/lib/content-upload/review/types';
-import { CARD } from '@/components/admin/content-upload/styles';
+import { BTN_SMALL, CARD } from '@/components/admin/content-upload/styles';
 
 type Props = {
   /** The rows of the page that is shown. */
   rows: readonly ReviewRowDto[];
   /** The ids that are marked (they stay marked while the person pages through the list). */
   selected: ReadonlySet<string>;
-  onChange: (next: Set<string>) => void;
+  onChange: (next: ReadonlySet<string>) => void;
   disabled?: boolean;
 };
 
@@ -52,6 +52,16 @@ export function OriginalsPicker({
         <p className="text-foreground mb-3 text-sm">
           {t('contentUpload.originals.limit', { max: MAX_ORIGINALS })}
         </p>
+      )}
+      {selected.size > 0 && (
+        <button
+          type="button"
+          className={`${BTN_SMALL} mb-3`}
+          disabled={disabled}
+          onClick={() => onChange(new Set())}
+        >
+          {t('contentUpload.originals.clear')}
+        </button>
       )}
       <ul className="space-y-1">
         {candidates.map(row => {

@@ -34,6 +34,7 @@ export const {
 export const { renderDocumentRunReport } = report;
 export const { runDocumentJob } = job;
 export const {
+  checkConfirmStorageHost,
   checkStorageTarget,
   createSupabaseStorage,
   SOLUTIONS_BUCKET_SETTINGS,

@@ -198,3 +198,48 @@ describe('trainee list of the use case documents', () => {
     expect(body.documents.map((d: any) => d.id)).toEqual(['d1']);
   });
 });
+
+describe('trainer list of the enabler documents', () => {
+  it('never hands a private reference or its storage path to the browser either', async () => {
+    const ENABLER = 'aaaaaaa6-0000-4000-8000-000000000006';
+    const { mod } = await loadScoped(
+      'trainer/enablers/[enablerId]/documents/route',
+      {
+        session: trainerSession(),
+        tables: {
+          enablers: [{ id: ENABLER, trainingCatalogId: FIAE }],
+          contentDocuments: [
+            row({ id: 'e1', useCaseId: null, enablerId: ENABLER }),
+            solution({ id: 'e2', useCaseId: null, enablerId: ENABLER }),
+          ],
+          organizations: [{ id: 'p', isPlatformOwner: true }],
+        },
+        setup: () =>
+          jest.doMock('@supabase/supabase-js', () => ({
+            __esModule: true,
+            createClient: () => ({
+              storage: {
+                from: () => ({
+                  createSignedUrl: async () => ({
+                    data: { signedUrl: SIGNED },
+                    error: null,
+                  }),
+                }),
+              },
+            }),
+          })),
+      }
+    );
+    const res = await mod.GET(
+      scopeReq(`http://localhost/api/trainer/enablers/${ENABLER}/documents`),
+      { params: Promise.resolve({ enablerId: ENABLER }) }
+    );
+    const body = await res.json();
+    expect(body.documents.map((d: any) => d.storageUrl)).toEqual([
+      PUBLIC,
+      SIGNED,
+    ]);
+    expect(JSON.stringify(body)).not.toContain('private://');
+    expect(body.documents[1].storagePath).toBeNull();
+  });
+});

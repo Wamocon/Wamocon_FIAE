@@ -464,3 +464,36 @@ describe('executeDocumentPlan', () => {
     ).rejects.toMatchObject({ code: 'NO_STORAGE_URL' });
   });
 });
+
+describe('executeDocumentPlan: a clean up that fails', () => {
+  it('names the objects that could not be taken out, and still throws the original error', async () => {
+    const db = new MemoryImportDb();
+    await seedTarget(db);
+    const storage = new MemoryStorage();
+    const all = sources();
+    storage.failPutAt = 3;
+    storage.failRemove = true;
+    const error = await executeDocumentPlan(
+      db,
+      storage,
+      buildDocumentPlan(all.map(s => s.scanned)),
+      {
+        createdBy: CREATOR_ID,
+        write: true,
+        upload: true,
+        overwriteFiles: false,
+        target: 'preview',
+        supabaseUrl: SUPABASE,
+        bytesOf: async item =>
+          (all.find(s => s.scanned.rel === item.rel) as Source).bytes,
+      }
+    ).catch(e => e);
+    expect(error.message).toBe('storage put failed');
+    expect(error.orphans).toHaveLength(2);
+    expect(
+      error.orphans.every((o: string) =>
+        /^content(-solutions)?\/preview\/kfbm\//.test(o)
+      )
+    ).toBe(true);
+  });
+});

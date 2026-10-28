@@ -2718,5 +2718,7 @@
   "contentUpload.code.DUPLICATE_ENTRY": "The file contains two parts with the same name.",
   "contentUpload.code.UNSUPPORTED_COMPRESSION": "The file uses a compression that is not read.",
   "contentUpload.code.TOO_MANY_RELATIONSHIP_FILES": "The file contains more relationship parts than a workbook has.",
-  "contentUpload.transfer.excluded.JSON_TOO_MANY": "JSON files above the limit of 10 per transfer (take them in the next run)"
+  "contentUpload.transfer.excluded.JSON_TOO_MANY": "JSON files above the limit of 10 per transfer (take them in the next run)",
+  "contentUpload.transfer.originals": "Originals: {published} provided, {refused} refused.",
+  "contentUpload.originals.clear": "Clear choice"
 }

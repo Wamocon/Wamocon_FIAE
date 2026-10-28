@@ -30,16 +30,30 @@ export function originalCandidates(
   );
 }
 
+/**
+ * The selection without the files of `rows` that can no longer be marked (a decision was taken
+ * back, the file is skipped). Ids of files that are not in `rows` stay: they are on another page.
+ */
+export function pruneOriginals(
+  selected: ReadonlySet<string>,
+  rows: readonly ReviewRowDto[]
+): ReadonlySet<string> {
+  const candidates = new Set(originalCandidates(rows).map(row => row.id));
+  const onPage = new Set(rows.map(row => row.id));
+  const next = [...selected].filter(
+    id => candidates.has(id) || !onPage.has(id)
+  );
+  return next.length === selected.size ? selected : new Set(next);
+}
+
 /** The selection with one file marked or unmarked. The limit is never exceeded. */
 export function toggleOriginal(
   selected: ReadonlySet<string>,
   id: string,
   on: boolean
 ): Set<string> {
-  if (on && !selected.has(id) && selected.size >= MAX_ORIGINALS) {
-    return selected as Set<string>;
-  }
   const next = new Set(selected);
+  if (on && !selected.has(id) && selected.size >= MAX_ORIGINALS) return next;
   if (on) next.add(id);
   else next.delete(id);
   return next;

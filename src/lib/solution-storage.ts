@@ -101,7 +101,12 @@ export async function withSignedSolutionUrls<
         console.warn('A solution could not be signed.');
       }
     }
-    out.push({ ...row, storageUrl: signed });
+    // the storage path of a private object is no business of the browser either
+    out.push({
+      ...row,
+      storageUrl: signed,
+      ...('storagePath' in row ? { storagePath: null } : {}),
+    });
   }
   return out;
 }

@@ -2720,5 +2720,7 @@
   "contentUpload.code.DUPLICATE_ENTRY": "Die Datei enthält zwei Teile mit demselben Namen.",
   "contentUpload.code.UNSUPPORTED_COMPRESSION": "Die Datei nutzt eine Kompression, die nicht gelesen wird.",
   "contentUpload.code.TOO_MANY_RELATIONSHIP_FILES": "Die Datei enthält mehr Verweisteile, als eine Arbeitsmappe hat.",
-  "contentUpload.transfer.excluded.JSON_TOO_MANY": "JSON-Dateien über der Grenze von 10 je Übernahme (bitte im nächsten Lauf)"
+  "contentUpload.transfer.excluded.JSON_TOO_MANY": "JSON-Dateien über der Grenze von 10 je Übernahme (bitte im nächsten Lauf)",
+  "contentUpload.transfer.originals": "Originale: {published} bereitgestellt, {refused} abgelehnt.",
+  "contentUpload.originals.clear": "Auswahl aufheben"
 }

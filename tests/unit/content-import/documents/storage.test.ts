@@ -9,6 +9,7 @@ import {
   SOLUTIONS_BUCKET_SETTINGS,
   StorageError,
   bucketOf,
+  checkConfirmStorageHost,
   checkStorageTarget,
   createSupabaseStorage,
   parsePrivateReference,
@@ -131,6 +132,22 @@ describe('checkStorageTarget', () => {
     expect(
       checkStorageTarget('preview', 'https://user:pw@proj.supabase.co')
     ).not.toEqual([]);
+  });
+});
+
+describe('checkConfirmStorageHost', () => {
+  it('wants the host of the storage address, case does not matter', () => {
+    expect(checkConfirmStorageHost('proj.supabase.co', SUPABASE)).toEqual([]);
+    expect(checkConfirmStorageHost('PROJ.supabase.co', SUPABASE)).toEqual([]);
+    expect(
+      checkConfirmStorageHost('127.0.0.1:54321', 'http://127.0.0.1:54321')
+    ).toEqual([]);
+    expect(checkConfirmStorageHost('other.supabase.co', SUPABASE)).not.toEqual(
+      []
+    );
+    expect(checkConfirmStorageHost(null, SUPABASE)).not.toEqual([]);
+    expect(checkConfirmStorageHost('', SUPABASE)).not.toEqual([]);
+    expect(checkConfirmStorageHost('proj.supabase.co', null)).not.toEqual([]);
   });
 });
 
@@ -306,12 +323,14 @@ describe('parseDocumentsArgs', () => {
         '--apply',
         '--confirm-host',
         'H.example',
+        '--confirm-storage-host=Proj.supabase.co',
         '--overwrite-files',
       ])
     ).toMatchObject({
       apply: true,
       overwriteFiles: true,
       confirmHost: 'h.example',
+      confirmStorageHost: 'proj.supabase.co',
     });
   });
 

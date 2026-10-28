@@ -26,6 +26,7 @@
 //         Compares the files with the target database in a read-only transaction.
 //   run   <source folder> --target local|preview --created-by <profile uuid> [--apply]
 //         [--overwrite-files] [--confirm-host <host of the connection>]
+//         [--confirm-storage-host <host of the storage address>] (needed with --apply)
 //         [--components ...] [--hydrate] [--report-out <file.md>]
 //         Dry run (default): the rows are written inside a transaction and rolled back, the
 //         storage is not touched. With --apply the files are copied and the transaction is
@@ -50,6 +51,7 @@
 import {
   ImportAbort,
   buildDocumentPlan,
+  checkConfirmStorageHost,
   checkStorageTarget,
   classifyPdfPath,
   countPlan,
@@ -283,7 +285,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   // check and run --------------------------------------------------------------
   const apply = args.command === 'run' && args.apply;
   if (apply) {
-    const problems = checkStorageTarget(args.target, supabaseUrl);
+    const problems = [
+      ...checkStorageTarget(args.target, supabaseUrl),
+      ...checkConfirmStorageHost(args.confirmStorageHost, supabaseUrl),
+    ];
     if (!secret.SUPABASE_SECRET_KEY) {
       problems.push('SUPABASE_SECRET_KEY is not set, files cannot be stored.');
     }
@@ -384,6 +389,13 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     } catch (error) {
       const clean = text =>
         redact(redact(text, connectionString), secret.SUPABASE_SECRET_KEY);
+      // files that a failed run could not take out again (names only)
+      const orphans = Array.isArray(error?.orphans) ? error.orphans : [];
+      if (orphans.length > 0) {
+        console.error(
+          `These files could not be removed and stay in the storage, remove them by hand: ${orphans.join(', ')}`
+        );
+      }
       if (error instanceof ImportAbort) {
         console.error(`Stopped (${error.code}): ${clean(error.message)}`);
         for (const c of error.conflicts) {
@@ -393,7 +405,11 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         return error.code === 'CONFLICTS' ? 3 : 1;
       }
       console.error(
-        `Error: ${clean(error.message)}. The transaction was rolled back, nothing was kept, files of this run were removed.`
+        `Error: ${clean(error.message)}. The transaction was rolled back, nothing was kept${
+          mode === 'apply' && orphans.length === 0
+            ? ', the files of this run were removed'
+            : ''
+        }.`
       );
       return 1;
     }

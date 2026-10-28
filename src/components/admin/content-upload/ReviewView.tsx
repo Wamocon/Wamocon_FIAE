@@ -34,6 +34,7 @@ import { AssignDialog } from '@/components/admin/content-upload/AssignDialog';
 import { BulkBar } from '@/components/admin/content-upload/BulkBar';
 import { ConfirmDialog } from '@/components/admin/content-upload/ConfirmDialog';
 import { OriginalsPicker } from '@/components/admin/content-upload/OriginalsPicker';
+import { pruneOriginals } from '@/lib/content-upload/review/originals';
 import { DuplicateDialog } from '@/components/admin/content-upload/DuplicateDialog';
 import { ProcessingPanel } from '@/components/admin/content-upload/ProcessingPanel';
 import {
@@ -135,7 +136,7 @@ export function ReviewView({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // ids of the original PDFs that go with the transfer (publishOriginals of the dry run and the
   // apply, at most 25). It stays while the person pages through the list.
-  const [originals, setOriginals] = useState<Set<string>>(new Set());
+  const [originals, setOriginals] = useState<ReadonlySet<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [focusEditorOf, setFocusEditorOf] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -206,6 +207,12 @@ export function ReviewView({
       });
     return () => controller.abort();
   }, [client, runId, runStatus, optionsTick]);
+
+  // a file that can no longer be marked (the decision was taken back) leaves the choice
+  const pageRows = data?.rows;
+  useEffect(() => {
+    if (pageRows) setOriginals(prev => pruneOriginals(prev, pageRows));
+  }, [pageRows]);
 
   const decidable = data?.run.status === 'review';
   const decidableIds = useMemo(
@@ -754,6 +761,7 @@ export function ReviewView({
           accepted={counts.accepted}
           client={client}
           onChanged={reload}
+          publishOriginals={[...originals]}
         />
       )}
 

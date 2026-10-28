@@ -5,6 +5,7 @@ import { OriginalsPicker } from '@/components/admin/content-upload/OriginalsPick
 import {
   MAX_ORIGINALS,
   originalCandidates,
+  pruneOriginals,
   toggleOriginal,
 } from '@/lib/content-upload/review/originals';
 import { rowDto } from '../../../../helpers/reviewUi';
@@ -93,7 +94,7 @@ describe('toggleOriginal', () => {
       selected = toggleOriginal(selected, `id-${i}`, true);
     }
     expect(selected.size).toBe(25);
-    expect(toggleOriginal(selected, 'one-more', true)).toBe(selected);
+    expect(toggleOriginal(selected, 'one-more', true)).toEqual(selected);
     const fewer = toggleOriginal(selected, 'id-3', false);
     expect(fewer.size).toBe(24);
     expect(fewer.has('id-3')).toBe(false);
@@ -169,5 +170,31 @@ describe('OriginalsPicker', () => {
       />
     );
     expect(screen.getByRole('checkbox', { name: /1a\.pdf/ })).toBeDisabled();
+  });
+});
+
+describe('pruneOriginals and the clear button', () => {
+  it('drops the ids of rows on the page that can no longer be marked, keeps the others', () => {
+    const keep = pdfRow('keep.pdf');
+    const gone = pdfRow('gone.pdf', { decision: null });
+    const selected = new Set([keep.id, gone.id, 'on-another-page']);
+    const next = pruneOriginals(selected, [keep, gone]);
+    expect([...next].sort()).toEqual([keep.id, 'on-another-page'].sort());
+    // nothing to drop: the same set comes back
+    expect(pruneOriginals(next, [keep, gone])).toBe(next);
+  });
+
+  it('clears the whole choice, also the ids of other pages', async () => {
+    const user = userEvent.setup();
+    const onChange = jest.fn();
+    renderWithProviders(
+      <OriginalsPicker
+        rows={[]}
+        selected={new Set(['a', 'b'])}
+        onChange={onChange}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: 'Auswahl aufheben' }));
+    expect(onChange.mock.calls[0][0].size).toBe(0);
   });
 });

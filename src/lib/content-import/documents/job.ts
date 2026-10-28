@@ -18,6 +18,7 @@ import type { Queryable } from '../apply/pg-db';
 import {
   executeDocumentPlan,
   removeCreated,
+  withOrphans,
   type DocumentReport,
 } from './engine';
 import { checkStorageTarget, type StorageAdapter } from './storage';
@@ -91,8 +92,9 @@ export async function runDocumentJob(
         })
     );
   } catch (error) {
-    // also a failed commit: the rows are not there, so the files must not stay
-    await removeCreated(storage, created);
-    throw error;
+    // also a failed commit: the rows are not there, so the files must not stay. (A commit whose
+    // answer got lost although the server committed would take files from rows that exist: a
+    // check and a new run show it, the rows then point to missing files.)
+    throw withOrphans(error, await removeCreated(storage, created));
   }
 }

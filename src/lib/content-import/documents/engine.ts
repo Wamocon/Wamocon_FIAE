@@ -128,17 +128,36 @@ interface Work {
   replace: boolean;
 }
 
+/**
+ * Removes the objects a run created. Returns the objects that could not be removed
+ * (bucket/path, no key and no address): they stay in the storage and have to be removed by hand,
+ * the next run would find them as "object without a row".
+ */
 export async function removeCreated(
   storage: StorageAdapter,
   created: Array<{ bucket: string; path: string }>
-) {
+): Promise<string[]> {
   const byBucket = new Map<string, string[]>();
   for (const { bucket, path } of created) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
+  const left: string[] = [];
   for (const [bucket, paths] of byBucket) {
-    await storage.remove(bucket, paths).catch(() => undefined);
+    try {
+      await storage.remove(bucket, paths);
+    } catch {
+      left.push(...paths.map(path => `${bucket}/${path}`));
+    }
   }
+  return left;
+}
+
+/** The error of a failed run, with the objects that stay behind (if any). */
+export function withOrphans(error: unknown, orphans: string[]): unknown {
+  if (orphans.length > 0 && error instanceof Error) {
+    (error as Error & { orphans?: string[] }).orphans = orphans;
+  }
+  return error;
 }
 
 export async function executeDocumentPlan(
@@ -399,8 +418,7 @@ export async function executeDocumentPlan(
     const rows = work.flatMap(w => (w.row ? [w.row] : []));
     if (rows.length > 0) await db.insert('content_documents', rows);
   } catch (error) {
-    await removeCreated(storage, created);
-    throw error;
+    throw withOrphans(error, await removeCreated(storage, created));
   }
   return report(true);
 }

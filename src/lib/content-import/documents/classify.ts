@@ -59,8 +59,11 @@ export function classifyPdfPath(rel: string): PathClass {
   if (!/\.pdf$/i.test(file)) {
     return empty('ignored', 'The file is no PDF.');
   }
-  if (segments.length < 3) {
-    return empty('ignored', 'The file does not lie in a component folder.');
+  if (segments.length !== 3) {
+    return empty(
+      'ignored',
+      'The file does not lie directly in a document folder of a component folder.'
+    );
   }
   const component = COMPONENT_DIR.exec(segments[0]);
   if (!component) {

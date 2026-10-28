@@ -61,6 +61,23 @@ describe('withSignedSolutionUrls', () => {
     expect(SIGNED_URL_SECONDS).toBeLessThanOrEqual(900);
   });
 
+  it('takes the storage path of a private object out of the row, signed or not', async () => {
+    const { client } = fakeClient();
+    const withPath = (over: Record<string, unknown> = {}) =>
+      solution({ storagePath: PATH, ...over });
+    const signed = await withSignedSolutionUrls([withPath()], {
+      client: () => client,
+    });
+    expect(signed[0]).toMatchObject({ storageUrl: SIGNED, storagePath: null });
+    const refused = await withSignedSolutionUrls(
+      [withPath({ visibility: 'ALL' })],
+      {
+        client: () => client,
+      }
+    );
+    expect(refused[0]).toMatchObject({ storageUrl: '', storagePath: null });
+  });
+
   it('leaves ordinary rows alone and never creates a client for them', async () => {
     let created = 0;
     const rows = [

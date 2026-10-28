@@ -224,6 +224,8 @@ test('a real run needs the storage of its target and the key, and says so before
       '--created-by',
       PROFILE,
       '--apply',
+      '--confirm-storage-host',
+      'proj.supabase.co',
     ];
     const env = {
       DB_CONNECTION_STRING: 'postgresql://postgres:geheim@127.0.0.1:1/postgres',
@@ -243,6 +245,18 @@ test('a real run needs the storage of its target and the key, and says so before
     assert.match(result.out, /target local needs a storage on this machine/);
     assert.ok(!result.out.includes('geheim'));
     assert.ok(!result.out.includes('sb-secret-key'));
+    // another host than the one that was confirmed
+    result = run(base, {
+      ...env,
+      NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
+      SUPABASE_SECRET_KEY: 'sb-secret-key',
+    });
+    assert.equal(result.code, 1, result.out);
+    assert.match(result.out, /not the host of the storage address/);
+    // no confirmed host at all is a usage error
+    result = run(base.slice(0, -2), env);
+    assert.equal(result.code, 2, result.out);
+    assert.match(result.out, /confirm-storage-host/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

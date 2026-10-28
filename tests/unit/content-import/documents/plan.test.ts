@@ -143,6 +143,10 @@ describe('classifyPdfPath', () => {
     expect(classifyPdfPath(`${K1}/Sonstiges/1a.pdf`).status).toBe('ignored');
     expect(classifyPdfPath(`${K1}/Enabler/1a.docx`).status).toBe('ignored');
     expect(classifyPdfPath('1a.pdf').status).toBe('ignored');
+    // a file deeper in the tree is no file of the folder
+    expect(classifyPdfPath(`${K1}/Enabler/Unter/1a.pdf`).status).toBe(
+      'ignored'
+    );
     expect(classifyPdfPath('Ordner ohne Nummer/Enabler/1a.pdf').status).toBe(
       'ignored'
     );
