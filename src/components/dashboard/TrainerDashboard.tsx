@@ -7,6 +7,7 @@ import { Users, TrendingUp, AlertTriangle, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { DashboardOccupation } from '@/components/catalog/DashboardOccupation';
 
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -154,6 +155,7 @@ export default function TrainerDashboard() {
       {/* Enhanced red background overlay */}
       <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25"></div>
       <div className="relative z-10">
+        <DashboardOccupation />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-8 lg:col-span-2">
             {/* Action Required Section */}
