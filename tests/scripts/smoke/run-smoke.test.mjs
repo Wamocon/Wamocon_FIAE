@@ -369,11 +369,18 @@ test('a request that runs into the time limit is reported as a failed step', asy
     }
     return json(404, {});
   };
-  const out = await runSmoke(config({ accountIsTest: false }), {
-    fetch,
-    log: () => {},
-    timeoutMs: 30,
-  });
+  // AbortSignal.timeout does not keep the event loop alive, a timer of the test does
+  const keepAlive = setInterval(() => {}, 20);
+  let out;
+  try {
+    out = await runSmoke(config({ accountIsTest: false }), {
+      fetch,
+      log: () => {},
+      timeoutMs: 30,
+    });
+  } finally {
+    clearInterval(keepAlive);
+  }
   const step = byName(out, 'Startseite erreichbar');
   assert.equal(step.result, 'FEHLER');
   assert.equal(step.note, 'Zeitüberschreitung');
