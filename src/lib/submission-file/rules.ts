@@ -290,6 +290,7 @@ const patterns = (schema: DbSchema) => {
     file: new RegExp(`^${folder}/file/(\\d{10,16})_(${NAME_PART})$`),
     incomingFolder: new RegExp(`^${folder}/incoming$`),
     fileFolder: new RegExp(`^${folder}/file$`),
+    traineeFolder: new RegExp(`^${prefix}(${UUID_PART})/(${UUID_PART})$`),
   };
 };
 
@@ -349,6 +350,36 @@ export function isSubmissionFolder(
   const p = patterns(schema);
   return p.incomingFolder.test(path) || p.fileFolder.test(path);
 }
+
+/**
+ * The folder of one trainee, `<org>/<trainee>` with the prefix of the schema, or null if
+ * an id is no uuid. It holds one sub folder per use case.
+ */
+export function traineeFolder(
+  organizationId: string,
+  traineeId: string,
+  schema: DbSchema = DB_SCHEMA
+): string | null {
+  if (![organizationId, traineeId].every(id => UUID_ONLY.test(id))) return null;
+  return withStoragePrefix(
+    `${organizationId.toLowerCase()}/${traineeId.toLowerCase()}`,
+    schema
+  );
+}
+
+/** Whether `path` is exactly the folder `<org>/<trainee>` (with the prefix of the schema). */
+export function isTraineeFolder(
+  path: string,
+  schema: DbSchema = DB_SCHEMA
+): boolean {
+  return patterns(schema).traineeFolder.test(path);
+}
+
+const UUID_LOWER = new RegExp(`^${UUID_PART}$`);
+
+/** Whether `name` is the name of an organization, trainee or use case folder (a uuid in lower case). */
+export const isUuidFolderName = (name: string): boolean =>
+  UUID_LOWER.test(name);
 
 /** The id of an upload as the browser gets it back: `<uuid>.<ext>`. */
 export function parseUploadId(

@@ -41,6 +41,20 @@ export function createMemorySubmissionStorage(
           size: bytes.length,
         }));
     },
+    async listFolders(folder): Promise<string[]> {
+      check('listFolders');
+      const prefix = `${folder}/`;
+      return [
+        ...new Set(
+          [...objects.keys()]
+            .filter(path => path.startsWith(prefix))
+            .map(path => path.slice(prefix.length))
+            // only sub folders, like the real storage (an object has no sub path)
+            .filter(rest => rest.includes('/'))
+            .map(rest => rest.split('/')[0])
+        ),
+      ];
+    },
     async download(path) {
       check('download');
       return objects.get(path) ?? null;
