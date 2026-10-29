@@ -18,6 +18,11 @@
  * @module lib/hai/indexScope
  */
 
+import {
+  parsePrivateSolutionObject,
+  type PrivateSolutionObject,
+} from './trainerSolutions';
+
 /** 'all' = may be shown to trainees, 'trainer' = trainer level only. */
 export type HaiVisibility = 'all' | 'trainer';
 
@@ -164,6 +169,7 @@ export interface DocumentIndexRow {
 
 export type DocumentSkipReason =
   | 'no training catalog'
+  | 'catalog conflict'
   | 'private reference'
   | 'word file'
   | 'not a pdf'
@@ -173,7 +179,29 @@ export type DocumentSkipReason =
 /** What the reindex does with a document row. */
 export type DocumentIndexPlan =
   | { kind: 'pdf' | 'text'; scope: IndexScope }
+  | {
+      /**
+       * A model solution in the private bucket. `enabled` is the switch
+       * HAI_TRAINER_SOLUTIONS: a run reads and embeds the file only when it is
+       * true, a dry run counts the file either way (apart from the others).
+       */
+      kind: 'private_pdf';
+      scope: IndexScope;
+      object: PrivateSolutionObject;
+      enabled: boolean;
+    }
   | { kind: 'skip'; reason: DocumentSkipReason };
+
+/** What the plan needs besides the row. */
+export interface DocumentPlanOptions {
+  /** The switch HAI_TRAINER_SOLUTIONS is on. Default: off. */
+  trainerSolutions?: boolean;
+  /**
+   * Folder in the private bucket that this run may read (privateSolutionPrefix).
+   * Without it no private reference is planned at all.
+   */
+  solutionPrefix?: string;
+}
 
 /** A text row needs at least this much text to be worth a chunk. */
 export const MIN_DOCUMENT_TEXT_CHARS = 20;
@@ -191,11 +219,19 @@ const WORD_MIME = /wordprocessingml|^application\/msword$/i;
  *  - visibility comes from documentVisibility: a solution or a trainer-only
  *    row is 'trainer' in every form (file or text), everything else follows the
  *    rule of the trainee routes.
- *  - skip: no catalog (nobody would see the chunk), a private reference (the
- *    model solutions of the private bucket are never fetched by a script), a
- *    Word file or another file that is no PDF, or a row without file and text.
+ *  - private_pdf: a model solution in the private bucket (TRAINER_SOLUTION,
+ *    TRAINER_ONLY, a reference into content-solutions inside the folder of the
+ *    target, a use case of the same occupation). Always trainer level, whatever
+ *    the switch says. It is read only by the dedicated reader with the server
+ *    key, never as an address (planPrivateSolution).
+ *  - skip: no catalog (nobody would see the chunk), every other private
+ *    reference (only the model solutions above are ever read), a Word file or
+ *    another file that is no PDF, or a row without file and text.
  */
-export function planDocumentIndexing(row: DocumentIndexRow): DocumentIndexPlan {
+export function planDocumentIndexing(
+  row: DocumentIndexRow,
+  options: DocumentPlanOptions = {}
+): DocumentIndexPlan {
   const trainingCatalogId = firstCatalogId(
     row.enablerCatalogId,
     row.useCaseCatalogId,
@@ -207,7 +243,7 @@ export function planDocumentIndexing(row: DocumentIndexRow): DocumentIndexPlan {
 
   const url = (row.storageUrl ?? '').trim();
   if (PRIVATE_REFERENCE.test(url)) {
-    return { kind: 'skip', reason: 'private reference' };
+    return planPrivateSolution(row, options);
   }
   const mime = (row.mimeType ?? '').trim();
   if (WORD_MIME.test(mime)) return { kind: 'skip', reason: 'word file' };
@@ -233,6 +269,57 @@ export function planDocumentIndexing(row: DocumentIndexRow): DocumentIndexPlan {
     return { kind: 'skip', reason: 'not a pdf' };
   }
   return { kind: 'pdf', scope };
+}
+
+/**
+ * A private reference is read only if the row is a model solution: type
+ * TRAINER_SOLUTION and visibility TRAINER_ONLY (both exactly), at a use case,
+ * all catalogs that the row names are one and the same occupation, and the
+ * reference is a PDF inside the bucket and the folder of the target. Anything
+ * else stays a skipped private reference (nothing is fetched, old chunks of the
+ * row are removed by the caller).
+ */
+function planPrivateSolution(
+  row: DocumentIndexRow,
+  options: DocumentPlanOptions
+): DocumentIndexPlan {
+  const refused: DocumentIndexPlan = {
+    kind: 'skip',
+    reason: 'private reference',
+  };
+  if (!options.solutionPrefix) return refused;
+  if (row.documentType !== 'TRAINER_SOLUTION') return refused;
+  if (row.visibility !== 'TRAINER_ONLY') return refused;
+  if (!row.useCaseCatalogId) return refused;
+
+  const mime = (row.mimeType ?? '').trim();
+  if (mime !== '' && !/^application\/pdf$/i.test(mime)) return refused;
+
+  // The text is checked as stored: no trimming, no decoding
+  const parsed = parsePrivateSolutionObject(
+    row.storageUrl,
+    options.solutionPrefix
+  );
+  if (!parsed.ok) return refused;
+
+  const catalogs = new Set(
+    [row.enablerCatalogId, row.useCaseCatalogId, row.courseCatalogId]
+      .filter((id): id is string => !!id)
+      .map(id => String(id))
+  );
+  if (catalogs.size !== 1) return { kind: 'skip', reason: 'catalog conflict' };
+
+  return {
+    kind: 'private_pdf',
+    scope: {
+      trainingCatalogId: String(row.useCaseCatalogId),
+      // a model solution is trainer level by its type and visibility
+      visibility: documentVisibility(row.documentType, row.visibility),
+      organizationId: row.organizationId ? String(row.organizationId) : null,
+    },
+    object: parsed.object,
+    enabled: options.trainerSolutions === true,
+  };
 }
 
 /** Half-open range [from, to) of the chunk indexes of the part at `offset`. */

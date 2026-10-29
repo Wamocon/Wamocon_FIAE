@@ -11,6 +11,7 @@ import { getEmbeddingProvider } from './providers';
 import haiDb from '@/db/haiDb';
 import { sql, type SQL } from 'drizzle-orm';
 import { LEARNING_TECHNIQUE_SOURCE_TYPE } from './indexScope';
+import { searchMayUseTrainerSolutions } from './trainerSolutions';
 import {
   filterSearchResultsForTrainingScope,
   type HaiTrainingScope,
@@ -50,6 +51,13 @@ export interface SearchScope {
    * user id no personal row matches.
    */
   userId?: string | null;
+  /**
+   * Chunks of the model solutions of the private bucket (metadata.trainerSolution)
+   * are returned only to the trainer audience AND only when this is true. It is
+   * set by resolveRetrievalAccess (role from the database, switch
+   * HAI_TRAINER_SOLUTIONS), never from a request. Default: excluded.
+   */
+  includeTrainerSolutions?: boolean;
 }
 
 export interface SearchOptions extends SearchScope {
@@ -133,6 +141,12 @@ export function buildScopeCondition(scope: SearchScope): SQL | null {
   ];
   if (scope.audience !== 'trainer') {
     parts.push(sql`visibility = 'all'`);
+  }
+  // Model solutions of the private bucket: trainer audience with the explicit
+  // permission only. Excluded by their marker (in addition to visibility, which
+  // is 'trainer' for them), so a mislabelled row cannot reach a trainee.
+  if (!searchMayUseTrainerSolutions(scope)) {
+    parts.push(sql`COALESCE(metadata->>'trainerSolution', '') <> 'true'`);
   }
   parts.push(
     isUuid(scope.organizationId)

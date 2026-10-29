@@ -14,6 +14,7 @@ const mockResolveAccess = jest.fn();
 const mockSearchWithContext = jest.fn();
 const mockFetchPageIndex = jest.fn();
 const mockChat = jest.fn();
+const mockSokrates = jest.fn();
 
 jest.mock('@/lib/hai/retrievalAccess', () => ({
   resolveRetrievalAccess: (userId: string) => mockResolveAccess(userId),
@@ -45,6 +46,7 @@ jest.mock('@/lib/hai/pageIndexService', () => ({
 }));
 jest.mock('@/lib/hai/providers', () => ({
   chatWithFallback: (...args: unknown[]) => mockChat(...args),
+  chatWithSokratesOnly: (...args: unknown[]) => mockSokrates(...args),
   getChatProvider: () => ({ isInitialized: () => true }),
   getEmbeddingProvider: () => ({ isInitialized: () => false }),
 }));
@@ -188,6 +190,17 @@ beforeEach(() => {
       return { text: 'Antwort', citations: [] };
     }
   );
+  mockSokrates.mockImplementation(
+    async (
+      _system: string,
+      _history: unknown,
+      _message: string,
+      onChunk?: (text: string) => void
+    ) => {
+      onChunk?.('Antwort');
+      return { text: 'Antwort', citations: [] };
+    }
+  );
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -303,6 +316,220 @@ describe('retrieveContext', () => {
     mockFetchPageIndex.mockRejectedValue(new Error('pdf down'));
     const result = await retrieveContext(QUESTION, context());
     expect(result.searchResults.length).toBeGreaterThan(0);
+  });
+});
+
+// Model solutions of the private bucket (trainer solutions, switch
+// HAI_TRAINER_SOLUTIONS): the pipeline passes the permission of the access to
+// the search, and as a second guard drops every marked chunk the access does
+// not allow. Nothing of it comes from the request.
+describe('retrieveContext: trainer solutions', () => {
+  const SOLUTION_TEXT = 'MUSTERLOESUNG KFBM Schritt 1 Fahrtkosten';
+  const markedChunk = (catalogId: string) => ({
+    id: 'private-solution',
+    sourceType: 'document',
+    sourceId: 'solution-doc',
+    chunkIndex: 0,
+    content: SOLUTION_TEXT,
+    similarity: 0.95,
+    metadata: {
+      title: 'Loesung UC 1',
+      documentType: 'TRAINER_SOLUTION',
+      trainerSolution: true,
+      catalogId,
+    },
+  });
+  const trainerWithPermission = {
+    ...trainerFiae,
+    includeTrainerSolutions: true,
+  };
+
+  /** A search that returns the marked chunk to anyone (a broken filter). */
+  function leakySearch(
+    query: string,
+    _context: unknown,
+    options: { catalogIds: string[]; audience: string }
+  ) {
+    return fakeSearch(query, _context, options).then(found => ({
+      ...found,
+      results: [...found.results, markedChunk(FIAE)],
+    }));
+  }
+
+  it('passes the permission of the access to the search, and nothing else', async () => {
+    mockResolveAccess.mockResolvedValue(trainerWithPermission);
+    await retrieveContext(QUESTION, context());
+    expect(mockSearchWithContext.mock.calls[0][2].includeTrainerSolutions).toBe(
+      true
+    );
+    mockSearchWithContext.mockClear();
+    mockResolveAccess.mockResolvedValue(trainerFiae);
+    await retrieveContext(QUESTION, context());
+    expect(
+      mockSearchWithContext.mock.calls[0][2].includeTrainerSolutions
+    ).toBeUndefined();
+  });
+
+  it('gives a trainer with the permission the solution, marked as trainer knowledge', async () => {
+    mockResolveAccess.mockResolvedValue(trainerWithPermission);
+    mockSearchWithContext.mockImplementation(leakySearch);
+    const result = await retrieveContext(QUESTION, context());
+    expect(result.usedTrainerSolutions).toBe(true);
+    expect(result.retrievedContext).toContain(SOLUTION_TEXT);
+    expect(result.retrievedContext).toMatch(/Musterlösung.*nur für Trainer/);
+    expect(result.searchResults.some(r => r.sourceId === 'solution-doc')).toBe(
+      true
+    );
+  });
+
+  it.each([
+    ['a trainee', traineeFiae],
+    ['a trainee who claims the trainer role', traineeFiae],
+    ['a trainer without the permission (switch off)', trainerFiae],
+    [
+      'a trainer with a permission that is not true',
+      { ...trainerFiae, includeTrainerSolutions: 'true' },
+    ],
+    [
+      'a trainee with the permission set by mistake',
+      { ...traineeFiae, includeTrainerSolutions: true },
+    ],
+  ])(
+    'drops a marked chunk for %s even if the search returns it',
+    async (_name, access) => {
+      mockResolveAccess.mockResolvedValue(access);
+      mockSearchWithContext.mockImplementation(leakySearch);
+      const result = await retrieveContext(
+        QUESTION,
+        context({ userRole: 'TRAINER' })
+      );
+      expect(result.usedTrainerSolutions).toBeUndefined();
+      expect(result.retrievedContext).not.toContain(SOLUTION_TEXT);
+      expect(result.retrievedContext).not.toContain('Musterlösung');
+      expect(
+        result.searchResults.some(r => r.sourceId === 'solution-doc')
+      ).toBe(false);
+    }
+  );
+
+  it('does not flag a turn without a marked chunk', async () => {
+    mockResolveAccess.mockResolvedValue(trainerWithPermission);
+    const result = await retrieveContext(QUESTION, context());
+    expect(result.usedTrainerSolutions).toBeUndefined();
+  });
+
+  it('gives no citation with an address for the solution', async () => {
+    mockResolveAccess.mockResolvedValue(trainerWithPermission);
+    mockSearchWithContext.mockImplementation(
+      async (...args: Parameters<typeof leakySearch>) => {
+        const found = await leakySearch(...args);
+        return {
+          ...found,
+          results: found.results.map(r =>
+            r.id === 'private-solution'
+              ? {
+                  ...r,
+                  metadata: {
+                    ...r.metadata,
+                    storageUrl: 'private://content-solutions/kfbm/a.pdf',
+                    url: 'https://x.supabase.co/storage/v1/object/sign/content-solutions/kfbm/a.pdf?token=abc',
+                  },
+                }
+              : r
+          ),
+        };
+      }
+    );
+    const result = await processMessage(QUESTION, context());
+    const citation = result.citations.find(c => c.sourceId === 'solution-doc');
+    expect(citation).toBeDefined();
+    expect(citation?.url).toBeUndefined();
+    expect(JSON.stringify(result.citations)).not.toMatch(
+      /private:\/\/|token=|content-solutions/
+    );
+  });
+
+  describe('HAI_TRAINER_SOLUTIONS_CHAT=sokrates', () => {
+    const saved = process.env.HAI_TRAINER_SOLUTIONS_CHAT;
+    afterEach(() => {
+      if (saved === undefined) delete process.env.HAI_TRAINER_SOLUTIONS_CHAT;
+      else process.env.HAI_TRAINER_SOLUTIONS_CHAT = saved;
+    });
+    const runs = [
+      (ctx: PipelineContext) => processMessage(QUESTION, ctx),
+      (ctx: PipelineContext) =>
+        processMessageStream(QUESTION, ctx, () => undefined),
+    ];
+
+    it('answers a turn with trainer solutions by Sokrates only, never by the normal chain', async () => {
+      process.env.HAI_TRAINER_SOLUTIONS_CHAT = 'sokrates';
+      mockResolveAccess.mockResolvedValue(trainerWithPermission);
+      mockSearchWithContext.mockImplementation(leakySearch);
+      for (const run of runs) {
+        mockChat.mockClear();
+        mockSokrates.mockClear();
+        await run(context());
+        expect(mockSokrates).toHaveBeenCalledTimes(1);
+        expect(mockChat).not.toHaveBeenCalled();
+      }
+    });
+
+    it('also does it for a turn whose history comes from a session with trainer knowledge', async () => {
+      process.env.HAI_TRAINER_SOLUTIONS_CHAT = 'sokrates';
+      mockResolveAccess.mockResolvedValue(trainerWithPermission);
+      for (const run of runs) {
+        mockChat.mockClear();
+        mockSokrates.mockClear();
+        await run(context({ holdsTrainerKnowledge: true }));
+        expect(mockSokrates).toHaveBeenCalledTimes(1);
+        expect(mockChat).not.toHaveBeenCalled();
+      }
+    });
+
+    it('leaves an ordinary turn on the normal chain', async () => {
+      process.env.HAI_TRAINER_SOLUTIONS_CHAT = 'sokrates';
+      mockResolveAccess.mockResolvedValue(trainerWithPermission);
+      for (const run of runs) {
+        mockChat.mockClear();
+        mockSokrates.mockClear();
+        await run(context());
+        expect(mockChat).toHaveBeenCalledTimes(1);
+        expect(mockSokrates).not.toHaveBeenCalled();
+      }
+    });
+
+    it('does nothing by default (the normal chain answers a turn with trainer solutions)', async () => {
+      delete process.env.HAI_TRAINER_SOLUTIONS_CHAT;
+      mockResolveAccess.mockResolvedValue(trainerWithPermission);
+      mockSearchWithContext.mockImplementation(leakySearch);
+      for (const run of runs) {
+        mockChat.mockClear();
+        mockSokrates.mockClear();
+        await run(context());
+        expect(mockChat).toHaveBeenCalledTimes(1);
+        expect(mockSokrates).not.toHaveBeenCalled();
+      }
+    });
+  });
+
+  it('marks the result of the turn so that the chat can keep it from other roles', async () => {
+    mockResolveAccess.mockResolvedValue(trainerWithPermission);
+    mockSearchWithContext.mockImplementation(leakySearch);
+    for (const run of [
+      () => processMessage(QUESTION, context()),
+      () => processMessageStream(QUESTION, context(), () => undefined),
+    ]) {
+      const result = await run();
+      expect(result.usedTrainerSolutions).toBe(true);
+    }
+    mockResolveAccess.mockResolvedValue(trainerFiae);
+    for (const run of [
+      () => processMessage(QUESTION, context()),
+      () => processMessageStream(QUESTION, context(), () => undefined),
+    ]) {
+      const result = await run();
+      expect(result.usedTrainerSolutions).toBeUndefined();
+    }
   });
 });
 
