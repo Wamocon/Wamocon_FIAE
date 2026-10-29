@@ -23,6 +23,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCatalog } from '@/contexts/CatalogContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { DashboardOccupation } from '@/components/catalog/DashboardOccupation';
 import dynamic from 'next/dynamic';
 
 // Lazy-load recharts components (~200KB) - they're not needed for initial render
@@ -246,6 +247,7 @@ export default function TraineeDashboard() {
       {/* Enhanced red background overlay */}
       <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25"></div>
       <div className="relative z-10">
+        <DashboardOccupation />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             {/* Continue Learning Card */}

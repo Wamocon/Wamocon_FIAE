@@ -33,6 +33,11 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
+import {
+  UNIVERSE_PLANETS,
+  describeUniversePlanet,
+  isExplorable,
+} from '@/lib/landing/universePlanets';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 type PlanId = 'Light' | 'Pro' | 'Enterprise';
@@ -474,6 +479,9 @@ const LF_DATA = [
 // ─── Interactive Solar System Canvas ─────────────────────────────────────────
 function SolarSystemCanvas() {
   const { t } = useLanguage();
+  // The canvas handlers are set up once, they must not keep an old language
+  const tRef = useRef(t);
+  tRef.current = t;
   const canRef = useRef<HTMLCanvasElement>(null);
   const [tip, setTip] = useState<{
     text: string;
@@ -543,48 +551,7 @@ function SolarSystemCanvas() {
     stars: [],
     comets: [],
     nextComet: 0,
-    planets: [
-      {
-        abbr: 'FIAE',
-        orbitR0: 120,
-        r0: 26,
-        speed: 0.00035,
-        angle: Math.PI * 0.25,
-        active: true,
-        _sx: 0,
-        _sy: 0,
-      },
-      {
-        abbr: 'FISI',
-        orbitR0: 200,
-        r0: 22,
-        speed: 0.00022,
-        angle: Math.PI * 1.6,
-        active: false,
-        _sx: 0,
-        _sy: 0,
-      },
-      {
-        abbr: 'IT-Kfm',
-        orbitR0: 270,
-        r0: 20,
-        speed: 0.00016,
-        angle: Math.PI * 0.9,
-        active: false,
-        _sx: 0,
-        _sy: 0,
-      },
-      {
-        abbr: 'IT-Sys',
-        orbitR0: 340,
-        r0: 20,
-        speed: 0.00011,
-        angle: Math.PI * 2.4,
-        active: false,
-        _sx: 0,
-        _sy: 0,
-      },
-    ],
+    planets: UNIVERSE_PLANETS.map(p => ({ ...p, _sx: 0, _sy: 0 })),
     lfs: LF_DATA.map((lf, i) => {
       const ring = Math.floor(i / 4);
       return {
@@ -864,7 +831,7 @@ function SolarSystemCanvas() {
             : 'rgba(255,255,255,.78)';
           ctx.fillText(p.abbr, px, py);
           ctx.shadowBlur = 0;
-          if (p.active && isHov) {
+          if (isExplorable(p) && isHov) {
             ctx.font = `${Math.max(7, Math.round(9 * st.sc))}px Inter,sans-serif`;
             ctx.fillStyle = 'rgba(255,255,255,.88)';
             ctx.fillText('Klicken →', px, py + pr + 14 * st.sc);
@@ -1044,18 +1011,11 @@ function SolarSystemCanvas() {
           const dx = mx - p._sx;
           const dy = my - p._sy;
           if (Math.sqrt(dx * dx + dy * dy) < p.r0 * st.sc + 12) {
+            const info = describeUniversePlanet(p);
             found = {
               abbr: p.abbr,
-              name: p.active
-                ? 'FIAE – Fachinformatiker Anwendungsentwicklung'
-                : p.abbr === 'FISI'
-                  ? 'FISI – Systemintegration'
-                  : p.abbr === 'IT-Kfm'
-                    ? 'IT-Kaufmann/-frau'
-                    : 'IT-Systemelektroniker/-in',
-              sub: p.active
-                ? '✦ Klicken zum Erkunden der 12 Lernfelder'
-                : 'Bald verfügbar',
+              name: tRef.current(info.nameKey),
+              sub: tRef.current(info.subKey),
               sx: p._sx,
               sy: p._sy,
             };
@@ -1069,7 +1029,7 @@ function SolarSystemCanvas() {
           if (Math.sqrt(dx * dx + dy * dy) < lf.r0 * st.sc + 8) {
             found = {
               abbr: lf.short,
-              name: `${lf.short} – ${t(lf.nameKey)}`,
+              name: `${lf.short} – ${tRef.current(lf.nameKey)}`,
               sub: `${lf.komps} Komponenten · ${lf.uc} Use Cases`,
               sx: lf._sx,
               sy: lf._sy,
@@ -1142,8 +1102,9 @@ function SolarSystemCanvas() {
 
       {mode === 'solar' && (
         <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/25 bg-black/60 px-4 py-1.5 text-xs whitespace-nowrap text-white/85 backdrop-blur-sm">
-          Klicke auf <span className="font-medium text-white">FIAE</span> ·
-          Erkunde die 12 Lernfelder
+          {t('landing.universe.hint.pre')}{' '}
+          <span className="font-medium text-white">FIAE</span>{' '}
+          {t('landing.universe.hint.post')}
         </div>
       )}
 
