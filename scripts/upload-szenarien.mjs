@@ -2,9 +2,8 @@
  * Upload Szenarien PDFs to Supabase Storage & create content_document records.
  *
  * Usage:
- *   node scripts/upload-szenarien.mjs --env qa --dry-run     # Verify mapping only
- *   node scripts/upload-szenarien.mjs --env qa               # Upload to QA
- *   node scripts/upload-szenarien.mjs --env production        # Upload to Production
+ *   node scripts/upload-szenarien.mjs --env production --dry-run  # Verify mapping only
+ *   node scripts/upload-szenarien.mjs --env production            # Upload to Production
  */
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
@@ -12,14 +11,9 @@ import path from 'path';
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
 // Credentials come from the environment only, never from source.
-// Required: QA_SUPABASE_URL, QA_SUPABASE_SERVICE_ROLE_KEY,
-//           PROD_SUPABASE_URL, PROD_SUPABASE_SERVICE_ROLE_KEY
-// Run: node --env-file=.env.local scripts/upload-szenarien.mjs --env <qa|production>
+// Required: PROD_SUPABASE_URL, PROD_SUPABASE_SERVICE_ROLE_KEY
+// Run: node --env-file=.env.local scripts/upload-szenarien.mjs --env production
 const ENVS = {
-  qa: {
-    url: process.env.QA_SUPABASE_URL,
-    serviceKey: process.env.QA_SUPABASE_SERVICE_ROLE_KEY,
-  },
   production: {
     url: process.env.PROD_SUPABASE_URL,
     serviceKey: process.env.PROD_SUPABASE_SERVICE_ROLE_KEY,
@@ -38,7 +32,7 @@ const envArg = args.includes('--env') ? args[args.indexOf('--env') + 1] : null;
 const dryRun = args.includes('--dry-run');
 
 if (!envArg || !ENVS[envArg]) {
-  console.error('Usage: node scripts/upload-szenarien.mjs --env <qa|production> [--dry-run]');
+  console.error('Usage: node scripts/upload-szenarien.mjs --env production [--dry-run]');
   process.exit(1);
 }
 

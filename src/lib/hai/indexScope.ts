@@ -22,6 +22,8 @@ import {
   parsePrivateSolutionObject,
   type PrivateSolutionObject,
 } from './trainerSolutions';
+// pure as well, a relative path so the reindex script loads it directly
+import { parseContentReference } from '../storage/contentPath';
 
 /** 'all' = may be shown to trainees, 'trainer' = trainer level only. */
 export type HaiVisibility = 'all' | 'trainer';
@@ -207,6 +209,11 @@ export interface DocumentPlanOptions {
 export const MIN_DOCUMENT_TEXT_CHARS = 20;
 
 const PRIVATE_REFERENCE = /^\s*private:\/\//i;
+const CONTENT_REFERENCE = /^private:\/\/content\//;
+
+/** A private reference of the bucket content with a path that is safe to read. */
+const isReadableContentReference = (url: string) =>
+  CONTENT_REFERENCE.test(url) && parseContentReference(url).kind === 'content';
 const WORD_MIME = /wordprocessingml|^application\/msword$/i;
 
 /**
@@ -242,7 +249,11 @@ export function planDocumentIndexing(
   }
 
   const url = (row.storageUrl ?? '').trim();
-  if (PRIVATE_REFERENCE.test(url)) {
+  // The reference of a file of the bucket content is read with the secret key
+  // (src/lib/storage/contentRead.ts), every other private reference is a model
+  // solution (planPrivateSolution)
+  const isContentReference = isReadableContentReference(url);
+  if (PRIVATE_REFERENCE.test(url) && !isContentReference) {
     return planPrivateSolution(row, options);
   }
   const mime = (row.mimeType ?? '').trim();
@@ -262,7 +273,7 @@ export function planDocumentIndexing(
   }
   // Only an http or https address is fetched (the host of a stored url is not
   // checked here: the url is written by an import or a trainer)
-  if (!/^https?:\/\//i.test(url)) {
+  if (!isContentReference && !/^https?:\/\//i.test(url)) {
     return { kind: 'skip', reason: 'not an http url' };
   }
   if (mime !== '' && !/^application\/pdf$/i.test(mime)) {

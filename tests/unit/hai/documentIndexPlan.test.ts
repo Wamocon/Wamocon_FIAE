@@ -380,7 +380,6 @@ describe('planDocumentIndexing: a model solution in the private bucket (trainer 
 
   it('is skipped for another bucket, another folder, a bad path or a file that is no pdf', () => {
     for (const storageUrl of [
-      'private://content/preview/kfbm/a.pdf',
       'private://content-solutions/kfbm/a.pdf',
       'private://content-solutions/preview/kfbm/../kfbm/a.pdf',
       'private://content-solutions/preview/kfbm/a.docx',
@@ -406,6 +405,17 @@ describe('planDocumentIndexing: a model solution in the private bucket (trainer 
         preview
       )
     ).toEqual({ kind: 'skip', reason: 'private reference' });
+  });
+
+  it('reads a solution with a private reference of the bucket content like any file of that bucket, for trainers only', () => {
+    // the bucket content is the one of the lists (signed links), the switch and
+    // the private bucket of the solutions only govern content-solutions
+    expect(
+      planDocumentIndexing(
+        solution({ storageUrl: 'private://content/preview/kfbm/a.pdf' }),
+        preview
+      )
+    ).toMatchObject({ kind: 'pdf', scope: { visibility: 'trainer' } });
   });
 
   it('reads the folder of Production only for Production', () => {

@@ -30,7 +30,7 @@ import {
   previewAccountAppMetadata,
   shouldSendCredentialsEmail,
 } from '@/lib/preview-account';
-import crypto from 'crypto';
+import { generateInitialPassword } from '@/lib/admin/initial-password';
 
 export async function GET(req: NextRequest) {
   try {
@@ -102,12 +102,6 @@ export async function GET(req: NextRequest) {
     console.error('Admin list users error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
-
-function generatePassword(length = 12): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
-  const bytes = crypto.randomBytes(length);
-  return Array.from(bytes, b => chars[b % chars.length]).join('');
 }
 
 /**
@@ -267,7 +261,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
     }
 
-    const password = generatePassword();
+    const password = generateInitialPassword();
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },

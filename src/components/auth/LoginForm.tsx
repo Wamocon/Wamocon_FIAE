@@ -12,6 +12,11 @@ import {
   isSignInBlockedError,
   type LoginReason,
 } from '@/lib/auth/access-state';
+import {
+  isEmailNotConfirmedError,
+  type ConfirmNotice,
+} from '@/lib/auth/email-confirmation';
+import ResendConfirmation from '@/components/auth/ResendConfirmation';
 import { authFetch } from '@/lib/authFetch';
 import { writePreferredCatalog } from '@/lib/catalog/selection';
 import {
@@ -32,6 +37,14 @@ const REASON_TEXT: Record<LoginReason, string> = {
   'organization-deactivated': 'auth.reason.organizationDeactivated',
 };
 
+// The text of every result of the confirmation link (?confirm=...). Only
+// "failed" is an alarm, the others are information.
+const CONFIRM_NOTICE_TEXT: Record<ConfirmNotice, string> = {
+  done: 'emailConfirm.notice.done',
+  failed: 'emailConfirm.notice.failed',
+  check: 'emailConfirm.notice.check',
+};
+
 // The check of the login link must not hold the sign in back for long: after
 // this time the sign in goes on to the dashboard, as if the check had failed.
 const LINK_CHECK_TIMEOUT_MS = 4000;
@@ -39,12 +52,15 @@ const LINK_CHECK_TIMEOUT_MS = 4000;
 // catalogCode: the occupation the visitor chose on /ausbildung (?catalog=CODE).
 // Without it the form behaves exactly as before.
 // reason: why the person was sent back here (?reason=...), the form says so.
+// confirmNotice: what the link of the confirmation e-mail led to (?confirm=...).
 export default function LoginForm({
   catalogCode,
   reason,
+  confirmNotice,
 }: {
   catalogCode?: string;
   reason?: LoginReason | null;
+  confirmNotice?: ConfirmNotice | null;
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -53,6 +69,8 @@ export default function LoginForm({
   const [error, setError] = useState('');
   // The banner of the reason goes away with the first attempt to sign in
   const [showReason, setShowReason] = useState(true);
+  // The sign in failed because the e-mail address is not confirmed yet
+  const [notConfirmed, setNotConfirmed] = useState(false);
   const [catalogTitle, setCatalogTitle] = useState<string | null>(null);
   const [catalogState, setCatalogState] = useState<CatalogState>('idle');
   // Number of active occupations of the platform, null while it is not known
@@ -146,6 +164,7 @@ export default function LoginForm({
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setNotConfirmed(false);
     setShowReason(false);
     // The sign in itself takes the person on (AuthProvider.signIn): until it
     // has decided, the profile it puts into its state must not send the person
@@ -170,13 +189,18 @@ export default function LoginForm({
     } catch (err: any) {
       holdRedirect.current = false;
       // A sign in that did not answer in time has its own, translated text
-      // and so has a sign in that was stopped (deactivated, no profile)
+      // and so has a sign in that was stopped (deactivated, no profile) and
+      // one of an address that is not confirmed yet (with the offer to send
+      // the e-mail again)
+      if (isEmailNotConfirmedError(err)) setNotConfirmed(true);
       setError(
         isSignInTimeout(err)
           ? t('auth.signInTimeout')
           : isSignInBlockedError(err)
             ? t(`auth.blocked.${err.code}`)
-            : err?.message || t('auth.loginFailed')
+            : isEmailNotConfirmedError(err)
+              ? t('emailConfirm.notConfirmed')
+              : err?.message || t('auth.loginFailed')
       );
     } finally {
       setIsLoading(false);
@@ -238,6 +262,26 @@ export default function LoginForm({
                 }
               >
                 {t(REASON_TEXT[reason])}
+              </p>
+            </div>
+          )}
+          {confirmNotice && showReason && (
+            <div
+              role={confirmNotice === 'failed' ? 'alert' : 'status'}
+              className={
+                confirmNotice === 'failed'
+                  ? 'bg-destructive/10 border-destructive/20 mb-6 rounded-xl border p-3'
+                  : 'bg-accent/10 border-accent/30 mb-6 rounded-xl border p-3'
+              }
+            >
+              <p
+                className={
+                  confirmNotice === 'failed'
+                    ? 'text-destructive text-sm'
+                    : 'text-foreground text-sm'
+                }
+              >
+                {t(CONFIRM_NOTICE_TEXT[confirmNotice])}
               </p>
             </div>
           )}
@@ -314,6 +358,7 @@ export default function LoginForm({
                 <p className="text-destructive text-sm">{error}</p>
               </div>
             )}
+            {notConfirmed && <ResendConfirmation email={email} />}
             <button
               type="submit"
               disabled={isLoading}

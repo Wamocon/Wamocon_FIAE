@@ -12,6 +12,11 @@ import { eq, and, gte, lte, isNotNull, inArray } from 'drizzle-orm';
 import { generateArbeitszeugnisPDF } from '@/lib/arbeitszeugnis/pdfGenerator';
 import QRCode from 'qrcode';
 import { getBaseUrlFromRequest } from '@/lib/url';
+import { readContentObject } from '@/lib/storage/contentRead';
+
+/** The logo of the certificate lies in the root of the bucket content. */
+const LOGO_PATH = 'WMC_Logo.png';
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
 interface SnapshotComponent {
   title: string;
@@ -322,23 +327,35 @@ export async function GET(
     // Load logo (Node.js compatible - no FileReader)
     let logoImageBase64 = '';
     try {
-      const logoResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/WMC_Logo.png`
-      );
-      console.log('Logo fetch response:', logoResponse.status, logoResponse.ok);
-      if (logoResponse.ok) {
-        const arrayBuffer = await logoResponse.arrayBuffer();
-        const base64 = Buffer.from(arrayBuffer).toString('base64');
-        const contentType =
-          logoResponse.headers.get('content-type') || 'image/png';
-        logoImageBase64 = `data:${contentType};base64,${base64}`;
-        console.log('Logo loaded, size:', base64.length, 'bytes');
+      // The logo lies in the bucket content. It is read with the secret key
+      // straight from the storage (a public and a private bucket alike), the
+      // public address is the way without a key.
+      const logoFile = await readContentObject(LOGO_PATH, MAX_LOGO_BYTES);
+      if (logoFile.status === 'ok') {
+        logoImageBase64 = `data:image/png;base64,${logoFile.buffer.toString('base64')}`;
       } else {
-        console.log(
-          'Logo fetch failed:',
-          logoResponse.status,
-          logoResponse.statusText
+        const logoResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/${LOGO_PATH}`
         );
+        console.log(
+          'Logo fetch response:',
+          logoResponse.status,
+          logoResponse.ok
+        );
+        if (logoResponse.ok) {
+          const arrayBuffer = await logoResponse.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString('base64');
+          const contentType =
+            logoResponse.headers.get('content-type') || 'image/png';
+          logoImageBase64 = `data:${contentType};base64,${base64}`;
+          console.log('Logo loaded, size:', base64.length, 'bytes');
+        } else {
+          console.log(
+            'Logo fetch failed:',
+            logoResponse.status,
+            logoResponse.statusText
+          );
+        }
       }
     } catch (e) {
       console.error('Error loading logo:', e);

@@ -27,6 +27,12 @@ const config: Config = {
     // Focus initial coverage on critical modules; expand progressively
     'src/lib/utils.ts',
     'src/app/api/trainee/enablers/[enablerId]/quiz/route.ts',
+    // The files of the bucket content: signed addresses, the path check, the access rule
+    'src/lib/storage/contentPath.ts',
+    'src/lib/storage/contentUrl.ts',
+    'src/lib/storage/contentRead.ts',
+    'src/lib/storage/documentAccess.ts',
+    'src/app/api/documents/[documentId]/file/route.ts',
   ],
   coveragePathIgnorePatterns: [
     '/node_modules/',

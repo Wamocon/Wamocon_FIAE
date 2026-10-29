@@ -1,5 +1,3 @@
-import { NextRequest } from 'next/server';
-
 /**
  * Derive the public application base URL from an incoming request.
  *
@@ -13,7 +11,9 @@ import { NextRequest } from 'next/server';
  *  3. Raw `Host` header — direct/local access.
  *  4. Production default.
  */
-export function getBaseUrlFromRequest(request: NextRequest): string {
+export function getBaseUrlFromRequest(request: {
+  headers: { get(name: string): string | null };
+}): string {
   const forwardedProto = request.headers
     .get('x-forwarded-proto')
     ?.split(',')[0]

@@ -32,7 +32,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_DB_SCHEMA: dbSchema,
   },
   images: {
-    domains: ['localhost', 'thzssnabxgchzbsnbgoh.supabase.co'],
+    domains: ['localhost'],
   },
   typescript: {
     ignoreBuildErrors: false,

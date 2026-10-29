@@ -25,7 +25,6 @@
  * Options:
  *   --dry-run    Preview changes without uploading or modifying database
  *   --hai-skip   Skip HAI ingestion (faster imports, ingest later)
- *   --qa         Use QA environment (default is production-like based on .env)
  */
 
 import * as dotenv from 'dotenv';
@@ -120,7 +119,6 @@ interface ImportSummary {
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
 const HAI_SKIP = args.includes('--hai-skip');
-const USE_QA = args.includes('--qa');
 const SCAN_ONLY = args.includes('--scan-only'); // Just scan files, no database needed
 
 // Phase/batch processing: --phase=N --batch-size=M

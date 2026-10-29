@@ -6,7 +6,7 @@
  * into the vector database using Gemini embeddings.
  *
  * This script overrides DB_CONNECTION_STRING to point at production,
- * while keeping .env.local pointed at QA for normal dev work.
+ * while keeping .env.local pointed at the development database for normal dev work.
  *
  * Run with:
  *   npx tsx scripts/index-production.ts
