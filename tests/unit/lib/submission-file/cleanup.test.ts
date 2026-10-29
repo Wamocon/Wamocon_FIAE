@@ -95,14 +95,14 @@ const plan = (
   entries: Array<{ path: string; createdAt: number | null }>,
   over: Partial<CleanupFacts> = {},
   options: {
-    keepDeactivated?: boolean;
+    includeDeactivated?: boolean;
     schema?: 'public' | 'public_preview';
   } = {}
 ) =>
   planCleanup(entries, facts(over), {
     schema: options.schema ?? 'public',
     now: NOW,
-    keepDeactivated: options.keepDeactivated ?? false,
+    includeDeactivated: options.includeDeactivated ?? false,
   });
 
 describe('planCleanup, reason (a): unfinished upload without a file', () => {
@@ -167,27 +167,33 @@ describe('planCleanup, reason (b): submission, trainee or use case deleted', () 
 });
 
 describe('planCleanup, reason (c): the training of the trainee has ended', () => {
-  it('removes the file of a deactivated trainee', () => {
-    const path = file(T_DEACTIVATED, UC_FIAE);
-    const result = plan([entry(path)]);
-    expect(result.deletions).toEqual([{ path, reason: 'ended' }]);
-    expect(result.counts.ended).toBe(1);
-  });
-
-  it('keeps the file of a deactivated trainee with --keep-deactivated', () => {
-    const result = plan(
-      [entry(file(T_DEACTIVATED, UC_FIAE))],
-      {},
-      {
-        keepDeactivated: true,
-      }
-    );
+  it('keeps the file of a deactivated trainee by default (a deactivation can be temporary)', () => {
+    const result = plan([entry(file(T_DEACTIVATED, UC_FIAE))]);
     expect(result.deletions).toEqual([]);
     expect(result.counts.keptActive).toBe(1);
   });
 
+  it('removes the file of a deactivated trainee with --include-deactivated', () => {
+    const path = file(T_DEACTIVATED, UC_FIAE);
+    const result = plan([entry(path)], {}, { includeDeactivated: true });
+    expect(result.deletions).toEqual([{ path, reason: 'ended' }]);
+    expect(result.counts.ended).toBe(1);
+  });
+
+  it('keeps a young upload of a deactivated trainee by default, and ends it with the switch', () => {
+    const path = upload(T_DEACTIVATED, UC_FIAE);
+    expect(plan([entry(path, 1)]).deletions).toEqual([]);
+    expect(
+      plan([entry(path, 1)], {}, { includeDeactivated: true }).deletions
+    ).toEqual([{ path, reason: 'ended' }]);
+  });
+
   it('does not treat an unknown flag as a deactivation', () => {
-    const result = plan([entry(file(T_UNKNOWN_FLAG, UC_FIAE))]);
+    const result = plan(
+      [entry(file(T_UNKNOWN_FLAG, UC_FIAE))],
+      {},
+      { includeDeactivated: true }
+    );
     expect(result.deletions).toEqual([]);
   });
 
@@ -216,7 +222,7 @@ describe('planCleanup, reason (c): the training of the trainee has ended', () =>
   });
 
   it('applies the end of the training to a young upload as well', () => {
-    const path = upload(T_DEACTIVATED, UC_FIAE);
+    const path = upload(T_KFBM_ONLY, UC_FIAE);
     expect(plan([entry(path, 1)]).deletions).toEqual([
       { path, reason: 'ended' },
     ]);
@@ -382,7 +388,7 @@ describe('runCleanup', () => {
       loadFacts,
       schema: 'public',
       apply,
-      keepDeactivated: false,
+      includeDeactivated: true,
       now: () => NOW,
     });
 
@@ -506,7 +512,7 @@ describe('runCleanup', () => {
         loadFacts: empty,
         schema: 'public',
         apply: true,
-        keepDeactivated: false,
+        includeDeactivated: false,
         now: () => NOW,
       })
     ).rejects.toMatchObject({ code: 'DATABASE_UNKNOWN' });
@@ -517,7 +523,7 @@ describe('runCleanup', () => {
       loadFacts: empty,
       schema: 'public',
       apply: false,
-      keepDeactivated: false,
+      includeDeactivated: false,
       now: () => NOW,
     });
     expect(counts.deleted).toBe(6);
@@ -534,7 +540,7 @@ describe('renderCleanupReport', () => {
       loadFacts: async () => facts(),
       schema: 'public',
       apply: false,
-      keepDeactivated: false,
+      includeDeactivated: false,
       now: () => NOW,
     });
     const text = renderCleanupReport(counts, {
@@ -589,7 +595,7 @@ describe('parseCleanupArgs', () => {
         apply: false,
         confirmHost: null,
         confirmStorageHost: null,
-        keepDeactivated: false,
+        includeDeactivated: false,
       },
     });
   });
@@ -614,7 +620,7 @@ describe('parseCleanupArgs', () => {
       'Project.Supabase.example',
       '--confirm-host',
       'DB.example',
-      '--keep-deactivated',
+      '--include-deactivated',
     ]);
     expect(full).toEqual({
       ok: true,
@@ -623,7 +629,7 @@ describe('parseCleanupArgs', () => {
         apply: true,
         confirmHost: 'db.example',
         confirmStorageHost: 'project.supabase.example',
-        keepDeactivated: true,
+        includeDeactivated: true,
       },
     });
   });

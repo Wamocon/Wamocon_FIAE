@@ -10,11 +10,13 @@
 //   deleted  (b) the trainee or the use case does not exist any more (the submission rows
 //                went with them, the file stayed behind)
 //   ended    (c) the training of the trainee has ended. The data model has no end date and
-//                no status, so "ended" is derived from two facts (see docs/abgabe-datei.md):
-//                the profile is deactivated (profiles.is_active = false), or the trainee
-//                has no enrollment in the occupation (training catalog) of the use case
-//                any more. A trainee without any enrollment counts as enrolled in FIAE,
-//                exactly as the catalog scope of the app does.
+//                no status, so "ended" is derived (see docs/abgabe-datei.md): the trainee has
+//                no enrollment in the occupation (training catalog) of the use case any more
+//                (removing an enrollment is a deliberate, confirmed admin action). A trainee
+//                without any enrollment counts as enrolled in FIAE, exactly as the catalog
+//                scope of the app does. A deactivated profile (profiles.is_active = false)
+//                counts only with the explicit switch --include-deactivated, because a
+//                deactivation can be temporary.
 //
 // A file in `file/` without a submission row is a draft (the trainee attached it and has
 // not submitted yet, the app allows that), so it is NOT removed for the missing row alone.
@@ -85,8 +87,11 @@ export interface CleanupPlan {
 export interface PlanOptions {
   schema: DbSchema;
   now: number;
-  /** Do not count a deactivated profile as the end of the training. */
-  keepDeactivated: boolean;
+  /**
+   * Count a deactivated profile as the end of the training. Off by default: a deactivation
+   * can be temporary, so deactivated trainees keep their files unless this is asked for.
+   */
+  includeDeactivated: boolean;
 }
 
 export function planCleanup(
@@ -131,7 +136,7 @@ export function planCleanup(
     // (c) the training has ended
     const enrolled = facts.enrollments.get(traineeId) ?? [];
     const catalogs = enrolled.length > 0 ? enrolled : [FIAE_CATALOG_ID];
-    const deactivated = profile.isActive === false && !options.keepDeactivated;
+    const deactivated = profile.isActive === false && options.includeDeactivated;
     if (deactivated || !catalogs.includes(useCase.catalogId)) {
       remove(entry.path, 'ended');
       continue;
@@ -416,7 +421,7 @@ export interface RunOptions {
   schema: DbSchema;
   /** false = dry run: count only, remove nothing. */
   apply: boolean;
-  keepDeactivated: boolean;
+  includeDeactivated: boolean;
   now?: () => number;
 }
 
@@ -446,7 +451,7 @@ export async function runCleanup(options: RunOptions): Promise<RunCounts> {
   const { deletions, counts } = planCleanup(entries, facts, {
     schema: options.schema,
     now: (options.now ?? Date.now)(),
-    keepDeactivated: options.keepDeactivated,
+    includeDeactivated: options.includeDeactivated,
   });
 
   // A database that knows none of the trainees found in the storage is most likely the wrong
@@ -529,7 +534,8 @@ export interface CleanupArgs {
   confirmHost: string | null;
   /** Host of the storage address (--apply, always). */
   confirmStorageHost: string | null;
-  keepDeactivated: boolean;
+  /** A deactivated profile counts as the end of the training (off by default). */
+  includeDeactivated: boolean;
 }
 
 export type ParsedCleanupArgs =
@@ -541,7 +547,7 @@ const PRODUCTION_MESSAGE =
 
 /**
  * --target local|preview (required), --apply, --confirm-storage-host <host> (with --apply),
- * --confirm-host <host> (with --apply and --target preview), --keep-deactivated. Without
+ * --confirm-host <host> (with --apply and --target preview), --include-deactivated. Without
  * --apply nothing is removed. Production is refused in every form.
  */
 export function parseCleanupArgs(argv: string[]): ParsedCleanupArgs {
@@ -553,7 +559,7 @@ export function parseCleanupArgs(argv: string[]): ParsedCleanupArgs {
     '--confirm-host',
     '--confirm-storage-host',
   ]);
-  const FLAGS = new Set(['--apply', '--keep-deactivated']);
+  const FLAGS = new Set(['--apply', '--include-deactivated']);
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     const eq = token.startsWith('--') ? token.indexOf('=') : -1;
@@ -626,7 +632,7 @@ export function parseCleanupArgs(argv: string[]): ParsedCleanupArgs {
       apply,
       confirmHost,
       confirmStorageHost,
-      keepDeactivated: flags.has('--keep-deactivated'),
+      includeDeactivated: flags.has('--include-deactivated'),
     },
   };
 }

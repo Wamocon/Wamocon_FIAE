@@ -56,12 +56,10 @@ Entscheidung von Niko am 29.10.2026: Die Datei einer Abgabe bleibt gespeichert, 
 
 ### Was "Ausbildung beendet" bedeutet
 
-Gemeint ist die Ausbildung des Azubis in diesem Beruf, nicht der Abschluss eines Kurses. Das Datenmodell kennt kein Ende. Der Lauf leitet es deshalb aus zwei Tatsachen ab:
+Gemeint ist die Ausbildung des Azubis in diesem Beruf, nicht der Abschluss eines Kurses. Das Datenmodell kennt kein Ende. Der Lauf leitet es deshalb ab:
 
-1. Der Azubi ist deaktiviert (`profiles.is_active = false`). Ein leerer Wert zählt nicht als Deaktivierung.
-2. Der Azubi ist nicht mehr in den Beruf eingeschrieben, zu dem der Use Case gehört (keine Zeile in `trainee_enrollments` für diesen Katalog). Ein Azubi ganz ohne Einschreibung gilt wie in der App als eingeschrieben in FIAE.
-
-Mit dem Schalter `--keep-deactivated` zählt nur die zweite Tatsache.
+1. Immer: Der Azubi ist nicht mehr in den Beruf eingeschrieben, zu dem der Use Case gehört (keine Zeile in `trainee_enrollments` für diesen Katalog). Eine Einschreibung zu entfernen ist eine bewusste, bestätigte Handlung des Administrators. Ein Azubi ganz ohne Einschreibung gilt wie in der App als eingeschrieben in FIAE.
+2. Nur mit dem Schalter `--include-deactivated`: Der Azubi ist deaktiviert (`profiles.is_active = false`). Ohne den Schalter behalten deaktivierte Azubis ihre Dateien, weil eine Deaktivierung vorübergehend sein kann (Entscheidung vom 29.10.2026). Ein leerer Wert zählt nie als Deaktivierung.
 
 ### Die Lücke im Datenmodell
 
@@ -71,7 +69,7 @@ Mit dem Schalter `--keep-deactivated` zählt nur die zweite Tatsache.
 - Das planmäßige Ende (Beginn plus Dauer) lässt sich rechnen, ist aber nicht verbindlich (Verlängerung, Wiederholung der Prüfung) und wird vom Lauf nicht benutzt.
 - `use_case_submissions` hat keine Spalte für die Datei. Die Datei hängt über ihren Pfad (Organisation, Azubi, Use Case) an der Abgabe.
 
-Folge: Wer ein Konto nur vorübergehend deaktiviert, verliert die Dateien beim nächsten Lauf mit `--apply`. Der Trockenlauf zeigt die Zahl vorher. Wer das nicht will, startet den Lauf mit `--keep-deactivated`.
+Folge: Ohne Enddatum bleibt die Datei eines Azubis, der nur über die Deaktivierung als beendet gilt, liegen, bis der Lauf bewusst mit `--include-deactivated` gestartet wird. Der Trockenlauf mit dem Schalter zeigt die Zahl vorher.
 
 Vorschlag für eine spätere Entscheidung (nicht gebaut, keine Migration in diesem Stand): eine Spalte `ended_at` (Datum) und optional `end_reason` an `trainee_enrollments`, die der Administrator setzt, wenn die Ausbildung endet oder gekündigt wird. Der Lauf würde dann `ended_at` auswerten und die beiden Ableitungen oben ersetzen. Eine Frist nach dem Ende (zum Beispiel 30 Tage zur Übergabe) ließe sich dort ebenfalls festlegen.
 
@@ -81,7 +79,7 @@ Vorschlag für eine spätere Entscheidung (nicht gebaut, keine Migration in dies
 | ------------------------ | ----------------------------------------------------------------------------------------------- | --------------- |
 | `orphan` (verwaist)      | Ein Upload im Ordner `incoming/`, der nie abgeschlossen wurde                                  | älter als 24 Stunden |
 | `deleted` (gelöscht)     | Der Azubi oder der Use Case existiert nicht mehr, die Abgabezeilen sind mit ihm gegangen       | sofort beim nächsten Lauf |
-| `ended` (beendet)        | Die Ausbildung des Azubis ist beendet (siehe oben)                                             | sofort beim nächsten Lauf |
+| `ended` (beendet)        | Keine Einschreibung mehr im Beruf des Use Cases, mit `--include-deactivated` auch ein deaktivierter Azubi | sofort beim nächsten Lauf |
 
 Was bleibt: Dateien von Azubis in laufender Ausbildung, auch Entwürfe. Eine Datei in `file/` ohne Abgabezeile ist ein Entwurf (der Azubi hat sie angehängt und noch nicht eingereicht, das erlaubt die App), sie wird deshalb nicht allein wegen der fehlenden Zeile entfernt. Ein Upload, der jünger als 24 Stunden ist, kann noch laufen und bleibt. Ist das Alter eines Uploads unbekannt, bleibt er ebenfalls.
 

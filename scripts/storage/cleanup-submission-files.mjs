@@ -5,8 +5,9 @@
 // ended. The run removes a file for exactly one of three reasons, nothing else:
 //   orphan   an unfinished upload (in incoming/) that is older than 24 hours
 //   deleted  the trainee or the use case does not exist any more (their rows are gone)
-//   ended    the training of the trainee has ended: the profile is deactivated, or the
-//            trainee has no enrollment in the occupation of the use case any more
+//   ended    the training of the trainee has ended: the trainee has no enrollment in the
+//            occupation of the use case any more (a deactivated profile counts only with
+//            --include-deactivated, a deactivation can be temporary)
 // The rules, and what "ended" means for the data model, are in
 // src/lib/submission-file/cleanup.ts and docs/abgabe-datei.md.
 //
@@ -27,8 +28,9 @@
 // Usage:
 //   node scripts/storage/cleanup-submission-files.mjs --target local|preview
 //        [--apply --confirm-storage-host <host> [--confirm-host <host>]]
-//        [--keep-deactivated]
-//   --keep-deactivated  a deactivated profile does not count as the end of the training
+//        [--include-deactivated]
+//   --include-deactivated  a deactivated profile counts as the end of the training too
+//                          (off by default: deactivated trainees keep their files)
 //
 // Environment (no .env file is read): DB_CONNECTION_STRING, NEXT_PUBLIC_SUPABASE_URL and
 // SUPABASE_SECRET_KEY. The dry run needs them too (it reads the bucket and the database).
@@ -72,7 +74,7 @@ export async function run(argv, env, deps = {}) {
   if (!parsed.ok) {
     for (const error of parsed.errors) console.error(`Error: ${error}`);
     console.error(
-      'Usage: node scripts/storage/cleanup-submission-files.mjs --target local|preview [--apply --confirm-storage-host <host> [--confirm-host <host>]] [--keep-deactivated]'
+      'Usage: node scripts/storage/cleanup-submission-files.mjs --target local|preview [--apply --confirm-storage-host <host> [--confirm-host <host>]] [--include-deactivated]'
     );
     return 2;
   }
@@ -141,7 +143,7 @@ export async function run(argv, env, deps = {}) {
         loadCleanupFacts((sql, params) => client.query(sql, params), ids),
       schema: SCHEMA_OF[args.target],
       apply: args.apply,
-      keepDeactivated: args.keepDeactivated,
+      includeDeactivated: args.includeDeactivated,
     });
     console.log(
       renderCleanupReport(counts, {
