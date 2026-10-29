@@ -675,6 +675,7 @@
   "reports.yearLabel": "Jahr",
   "reports.selectedActivities": "Ausgewählte Tätigkeiten",
   "reports.plannedHours": "Plan (Sollzeit)",
+  "reports.noPlannedHours": "ohne Vorgabe",
   "reports.actualHours": "IST-Stunden",
   "reports.optional": "Optional",
   "reports.overbooked": "Überbucht",

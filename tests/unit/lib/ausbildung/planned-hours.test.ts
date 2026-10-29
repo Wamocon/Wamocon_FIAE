@@ -1,4 +1,8 @@
-import { componentHoursLabel } from '@/lib/ausbildung/planned-hours';
+import {
+  componentHoursLabel,
+  isHoursLimited,
+} from '@/lib/ausbildung/planned-hours';
+import { TRAINING_CATALOG_IDS } from '@/db/migrations/schemas/schema';
 
 describe('componentHoursLabel', () => {
   it('shows the code and the hours when the component has hours', () => {
@@ -23,5 +27,28 @@ describe('componentHoursLabel', () => {
 
   it('never says "0 Std gesamt"', () => {
     expect(componentHoursLabel('K21', 0, 'Std gesamt')).not.toMatch(/0 Std/);
+  });
+});
+
+describe('isHoursLimited', () => {
+  it('limits every use case that has hours', () => {
+    expect(isHoursLimited(40, TRAINING_CATALOG_IDS.FIAE)).toBe(true);
+    expect(isHoursLimited(40, TRAINING_CATALOG_IDS.KFBM)).toBe(true);
+  });
+
+  it('leaves a use case without hours unlimited when the occupation is not FIAE', () => {
+    // the Rahmenplan of KfBM has no hours per use case yet (0 = no target given)
+    expect(isHoursLimited(0, TRAINING_CATALOG_IDS.KFBM)).toBe(false);
+    expect(isHoursLimited(null, TRAINING_CATALOG_IDS.KFBM)).toBe(false);
+  });
+
+  it('keeps FIAE exactly as it was: no hours means no hours to book', () => {
+    expect(isHoursLimited(0, TRAINING_CATALOG_IDS.FIAE)).toBe(true);
+    expect(isHoursLimited(undefined, TRAINING_CATALOG_IDS.FIAE)).toBe(true);
+  });
+
+  it('limits a use case of an unknown catalog (fail closed)', () => {
+    expect(isHoursLimited(0, null)).toBe(true);
+    expect(isHoursLimited(0, undefined)).toBe(true);
   });
 });

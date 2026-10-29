@@ -5,7 +5,10 @@ import {
   trainingComponents,
 } from '@/db/migrations/schemas/schema';
 import { eq } from 'drizzle-orm';
-import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import {
+  isHoursLimited,
+  normalizePlannedHours,
+} from '@/lib/ausbildung/planned-hours';
 import {
   publicCatalogHeaders,
   resolvePublicCatalog,
@@ -36,6 +39,7 @@ export async function GET(req: Request) {
         createdAt: trainingUseCases.createdAt,
         componentCode: trainingComponents.code,
         componentTitle: trainingComponents.title,
+        catalogId: trainingComponents.trainingCatalogId,
       })
       .from(trainingUseCases)
       .innerJoin(
@@ -52,6 +56,8 @@ export async function GET(req: Request) {
       letter: uc.letter,
       description: uc.description,
       plannedHours: normalizePlannedHours(uc),
+      // false: no hours are given, nothing to exhaust or overbook (see isHoursLimited)
+      hoursLimited: isHoursLimited(uc.plannedHours, uc.catalogId),
       orderIndex: uc.orderIndex,
       createdAt: uc.createdAt,
       component: {

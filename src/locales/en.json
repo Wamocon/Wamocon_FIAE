@@ -669,6 +669,7 @@
   "reports.yearLabel": "Year",
   "reports.selectedActivities": "Selected Activities",
   "reports.plannedHours": "Planned (Target)",
+  "reports.noPlannedHours": "no target",
   "reports.actualHours": "Actual Hours",
   "reports.optional": "Optional",
   "reports.overbooked": "Overbooked",
