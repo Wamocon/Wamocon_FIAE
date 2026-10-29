@@ -79,6 +79,7 @@ import {
   type QuizQuestionInput,
 } from '../src/lib/hai/quizIndexText';
 import { parseContentReference } from '../src/lib/storage/contentPath';
+import { cutAndNormalize } from '../src/lib/hai/providers/sokrates-embedding';
 // The rollout gate is read from the environment of the process only, before
 // dotenv: a value that sits in .env.local or .env must not open it silently
 const SHELL_ROLLOUT_APPROVED = process.env.KFBM_ROLLOUT_APPROVED;
@@ -90,11 +91,31 @@ dotenv.config();
 // ============================================================================
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const EMBEDDING_MODEL = 'gemini-embedding-001';
+// The model that embeds. Default: Gemini. HAI_REINDEX_PROVIDER=ollama embeds
+// with qwen3-embedding on the Sokrates server (Ollama, reached through an SSH
+// tunnel on this machine, no key): the vectors are cut to EMBEDDING_DIMS values
+// and normalized. The vectors of two models cannot be compared, so the
+// provider of the app (HAI_EMBEDDING_PROVIDER) has to match the index.
+const REINDEX_PROVIDER =
+  (process.env.HAI_REINDEX_PROVIDER || 'gemini').trim().toLowerCase() ===
+  'ollama'
+    ? 'ollama'
+    : 'gemini';
+const OLLAMA_BASE_URL = (
+  process.env.OLLAMA_BASE_URL || 'http://localhost:11434'
+).replace(/\/+$/, '');
+const OLLAMA_MODEL =
+  process.env.HAI_OLLAMA_EMBEDDING_MODEL || 'qwen3-embedding:8b';
 const EMBEDDING_DIMS = parseInt(
   process.env.HAI_EMBEDDING_DIMENSIONS || '3072',
   10
 );
+// The name that is written to the index (skip of unchanged rows, purge of
+// rows of another model)
+const EMBEDDING_MODEL =
+  REINDEX_PROVIDER === 'ollama'
+    ? `${OLLAMA_MODEL}@${EMBEDDING_DIMS}`
+    : 'gemini-embedding-001';
 const CHUNK_SIZE = 500;
 const CHUNK_OVERLAP = 50;
 
@@ -312,6 +333,10 @@ async function generateEmbedding(
 ): Promise<number[]> {
   _totalApiCalls++;
 
+  if (REINDEX_PROVIDER === 'ollama') {
+    return generateOllamaEmbedding(text, retries);
+  }
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${GEMINI_API_KEY}`;
 
   try {
@@ -357,6 +382,52 @@ async function generateEmbedding(
       await new Promise(r => setTimeout(r, 2000));
       _totalApiCalls--;
       return generateEmbedding(text, retries - 1);
+    }
+    throw e;
+  }
+}
+
+/**
+ * One embedding through Ollama on the Sokrates server (HAI_REINDEX_PROVIDER=ollama).
+ * The address has to be this machine (the SSH tunnel): the texts of the courses
+ * never go anywhere else from here.
+ */
+async function generateOllamaEmbedding(
+  text: string,
+  retries: number
+): Promise<number[]> {
+  try {
+    const res = await fetch(`${OLLAMA_BASE_URL}/api/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        input: truncateForEmbedding(text),
+        truncate: true,
+        options: { num_ctx: 2048 },
+        keep_alive: '30m',
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Ollama embed failed (${res.status}): ${body}`);
+    }
+    const data = await res.json();
+    const first = data?.embeddings?.[0];
+    if (!Array.isArray(first)) {
+      throw new Error('Ollama embed: no embedding in the response');
+    }
+    return cutAndNormalize(first, EMBEDDING_DIMS);
+  } catch (e: any) {
+    if (
+      retries > 0 &&
+      (e.name === 'TimeoutError' || e.message?.includes('fetch failed'))
+    ) {
+      warn(`Connection issue, retrying... (${retries} left)`);
+      await new Promise(r => setTimeout(r, 2000));
+      _totalApiCalls--;
+      return generateOllamaEmbedding(text, retries - 1);
     }
     throw e;
   }
@@ -2055,13 +2126,29 @@ async function main() {
   // 5. A real run needs the API key and a working model call. A dry run makes
   //    no model call at all.
   if (!IS_DRY_RUN) {
-    if (!GEMINI_API_KEY) {
+    if (REINDEX_PROVIDER === 'ollama') {
+      let host = '';
+      try {
+        host = new URL(OLLAMA_BASE_URL).hostname;
+      } catch {
+        // an unreadable address is refused below
+      }
+      if (host !== 'localhost' && host !== '127.0.0.1') {
+        fail(
+          'OLLAMA_BASE_URL has to be this machine (localhost, the SSH tunnel to the Sokrates server). Nothing was done.'
+        );
+        await db.end();
+        process.exit(1);
+      }
+      ok(`Embeddings by ${OLLAMA_MODEL} through ${OLLAMA_BASE_URL}`);
+    } else if (!GEMINI_API_KEY) {
       fail('GEMINI_API_KEY not set. Add it to .env.local');
       await db.end();
       process.exit(1);
+    } else {
+      ok('Gemini API key found');
     }
-    ok('Gemini API key found');
-    log('Testing Gemini embedding...');
+    log(`Testing ${REINDEX_PROVIDER} embedding...`);
     try {
       const testEmb = await generateEmbedding(
         'Test embedding für HAI.ai Reindex'
