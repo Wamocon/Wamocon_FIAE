@@ -1,8 +1,13 @@
-import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
+import { getSupabasePublicKey } from '@/lib/env';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { DB_OPTION } from '@/lib/db-schema';
 import { blockInPreview } from '@/lib/preview-guard';
+import { passwordProblem } from '@/lib/auth/password-policy';
+import {
+  confirmationRedirectUrl,
+  isEmailRateLimitError,
+} from '@/lib/auth/email-confirmation';
 import db from '@/db';
 import { profiles, notifications } from '@/db/migrations/schemas/schema';
 import { and, eq } from 'drizzle-orm';
@@ -12,7 +17,62 @@ import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 // Public endpoint: at most 5 registrations per client address per hour
 const REGISTER_LIMIT = { limit: 5, windowMs: 60 * 60 * 1000 };
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MIN_PASSWORD_LENGTH = 6;
+
+const ALREADY_REGISTERED_MESSAGE =
+  'Diese E-Mail-Adresse ist bereits registriert. Bitte melden Sie sich an.';
+
+type SignUpFailure = { status: number; message: string };
+
+/**
+ * Maps the error of auth.signUp to a status and a German message. The raw
+ * message of Supabase never reaches the client.
+ */
+function signUpFailure(error: unknown): SignUpFailure {
+  const { status, code, message } = (error ?? {}) as {
+    status?: number;
+    code?: string;
+    message?: string;
+  };
+  if (
+    code === 'user_already_exists' ||
+    code === 'email_exists' ||
+    /already.*(registered|exists)/i.test(message || '')
+  ) {
+    return { status: 409, message: ALREADY_REGISTERED_MESSAGE };
+  }
+  if (code === 'weak_password') {
+    return {
+      status: 400,
+      message:
+        'Das Passwort wird nicht akzeptiert. Bitte wählen Sie ein anderes, längeres Passwort.',
+    };
+  }
+  if (isEmailRateLimitError(error)) {
+    return {
+      status: 429,
+      message:
+        'Zurzeit können keine weiteren E-Mails verschickt werden. Bitte versuchen Sie es in einigen Minuten erneut.',
+    };
+  }
+  if (code === 'signup_disabled') {
+    return {
+      status: 503,
+      message:
+        'Die Selbstregistrierung ist zurzeit nicht möglich. Bitte wenden Sie sich an Ihren Ausbilder.',
+    };
+  }
+  if (code === 'email_address_invalid') {
+    return {
+      status: 400,
+      message: 'Bitte geben Sie eine gültige E-Mail-Adresse ein.',
+    };
+  }
+  return {
+    status: status && status >= 400 && status < 500 ? status : 400,
+    message:
+      'Die Registrierung ist fehlgeschlagen. Bitte versuchen Sie es erneut.',
+  };
+}
 
 function deriveNameFromEmail(email: string) {
   const local = (email || '').split('@')[0] || '';
@@ -26,7 +86,7 @@ function deriveNameFromEmail(email: string) {
 
 export async function POST(request: Request) {
   try {
-    // auth.admin.createUser would create an account in the shared Production auth
+    // A sign up in Preview would create an account in the shared Production auth
     const blocked = blockInPreview();
     if (blocked) return blocked;
 
@@ -67,13 +127,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      return NextResponse.json(
-        {
-          error: `Das Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein.`,
-        },
-        { status: 400 }
-      );
+    const problem = passwordProblem(password);
+    if (problem) {
+      return NextResponse.json({ error: `${problem}.` }, { status: 400 });
     }
 
     const supabaseUrl =
@@ -99,10 +155,7 @@ export async function POST(request: Request) {
       .limit(1);
     if (existingProfile.length > 0) {
       return NextResponse.json(
-        {
-          error:
-            'Diese E-Mail-Adresse ist bereits registriert. Bitte melden Sie sich an.',
-        },
+        { error: ALREADY_REGISTERED_MESSAGE },
         { status: 409 }
       );
     }
@@ -112,47 +165,37 @@ export async function POST(request: Request) {
     const role = 'TRAINEE';
     const full_name = deriveNameFromEmail(email);
 
-    // Use service role to create user WITHOUT email confirmation
-    const serviceRoleKey = getSupabaseSecretKey();
-    if (!serviceRoleKey) {
-      return NextResponse.json(
-        { error: 'Server misconfigured: missing service role key' },
-        { status: 500 }
-      );
-    }
-
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false },
+    // A normal sign up with the public key (no auth.admin): whether the person
+    // has to confirm the address is decided by the "Confirm email" setting of
+    // Supabase Auth. With it on, Supabase sends the confirmation e-mail and
+    // answers without a session; with it off, the account is confirmed at once
+    // and the answer carries a session. The session is not used, the person
+    // signs in on the login page in both cases.
+    const authClient = createClient(supabaseUrl, anonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
       db: DB_OPTION,
     });
 
-    // Create user with admin API (no email confirmation required)
-    const { data: signedUp, error: signUpError } =
-      await admin.auth.admin.createUser({
+    const { data: signedUp, error: signUpError } = await authClient.auth.signUp(
+      {
         email,
         password,
-        email_confirm: true, // Auto-confirm email
-        user_metadata: { full_name },
-      });
+        options: {
+          data: { full_name },
+          emailRedirectTo: confirmationRedirectUrl(request.headers),
+        },
+      }
+    );
 
     if (signUpError) {
-      const status = (signUpError as { status?: number })?.status;
-      const msg = (signUpError as { message?: string })?.message || '';
-      if (status === 422 || /already.*(registered|exists)/i.test(msg)) {
-        return NextResponse.json(
-          {
-            error:
-              'Diese E-Mail-Adresse ist bereits registriert. Bitte melden Sie sich an.',
-          },
-          { status: 409 }
-        );
-      }
+      const failure = signUpFailure(signUpError);
       return NextResponse.json(
-        {
-          error:
-            'Die Registrierung ist fehlgeschlagen. Bitte versuchen Sie es erneut.',
-        },
-        { status: status && status >= 400 && status < 500 ? status : 400 }
+        { error: failure.message },
+        { status: failure.status }
       );
     }
 
@@ -163,6 +206,19 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    // With "Confirm email" on, Supabase does not report an address that is
+    // already confirmed as an error. It answers with a made-up user without
+    // identities instead, which must not get a profile.
+    if (Array.isArray(user.identities) && user.identities.length === 0) {
+      return NextResponse.json(
+        { error: ALREADY_REGISTERED_MESSAGE },
+        { status: 409 }
+      );
+    }
+
+    // No session and no confirmation yet: the person has to click the link
+    const confirmationRequired = !signedUp.session && !user.email_confirmed_at;
 
     // Determine trainer assignment for trainees
     let assignedTrainerId: string | null = null;
@@ -227,7 +283,9 @@ export async function POST(request: Request) {
         actorId: user.id,
         type: 'TRAINEE_REGISTERED',
         title: 'Neue Azubi-Registrierung',
-        message: `${full_name} (${email}) hat sich registriert und wartet auf Freischaltung.`,
+        message: confirmationRequired
+          ? `${full_name} (${email}) hat sich registriert und wartet auf Freischaltung. Die E-Mail-Adresse ist noch nicht bestätigt.`
+          : `${full_name} (${email}) hat sich registriert und wartet auf Freischaltung.`,
         linkUrl: '/trainer/trainees',
         isRead: false,
         organizationId,
@@ -238,6 +296,7 @@ export async function POST(request: Request) {
       {
         success: true,
         role,
+        confirmationRequired,
         user: { id: user.id, email: user.email, fullName: full_name },
       },
       { status: 200 }

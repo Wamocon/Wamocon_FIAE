@@ -164,9 +164,12 @@ describe('browser access to the database', () => {
     expect(creators).toEqual([
       'src/app/api/admin/users/[userId]/route.ts',
       'src/app/api/admin/users/route.ts',
+      'src/app/api/auth/resend-confirmation/route.ts',
       'src/app/api/auth/sync-profile/route.ts',
       'src/app/api/register/route.ts',
       'src/app/api/trainer/courses/[courseId]/members/route.ts',
+      // the confirmation of the e-mail address: public key only, no session kept
+      'src/app/auth/callback/route.ts',
       'src/lib/auth-helpers.ts',
       'src/lib/auth/session.ts',
       'src/lib/content-upload/staging/storage.ts',

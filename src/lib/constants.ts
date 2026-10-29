@@ -197,6 +197,10 @@ export const LOCALIZATION = {
   },
 };
 
+// Shortest password the platform accepts. The Supabase Auth setting of the
+// project has the same minimum, see src/lib/auth/password-policy.ts.
+export const MIN_PASSWORD_LENGTH = 8;
+
 // Validation Rules
 export const VALIDATION = {
   email: {
@@ -205,7 +209,7 @@ export const VALIDATION = {
   },
   password: {
     required: 'Passwort ist erforderlich',
-    minLength: 'Passwort muss mindestens 8 Zeichen lang sein',
+    minLength: `Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein`,
   },
   name: {
     required: 'Name ist erforderlich',
