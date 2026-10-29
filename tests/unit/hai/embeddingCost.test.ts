@@ -12,6 +12,7 @@ import {
   parsePricingConfig,
   type PricingConfig,
 } from '@/lib/hai/embeddingCost';
+import { TRAINER_SOLUTION_SOURCE_LABEL } from '@/lib/hai/trainerSolutions';
 
 // Cost estimate of an embedding run (no network, no database, no model call).
 // The prices are configuration: scripts/config/hai-embedding-pricing.json.
@@ -499,5 +500,95 @@ describe('formatCostReport', () => {
     expect(report).toContain('estimate');
     expect(report).toContain('chars per chunk');
     expect(report).toMatch(/no model call/i);
+  });
+});
+
+// The model solutions of the private bucket go to the model provider only by a
+// decision of the owner. The estimate shows what they cost on their own.
+describe('trainer solutions in the estimate', () => {
+  const quiz = {
+    label: 'quiz KFBM all',
+    sourceType: 'quiz',
+    catalog: 'KFBM',
+    visibility: 'all',
+    unit: 'chunks' as const,
+    count: 10,
+    chars: 4000,
+    pages: 0,
+  };
+  const solutions = {
+    label: 'trainer solutions KFBM',
+    sourceType: TRAINER_SOLUTION_SOURCE_LABEL,
+    catalog: 'KFBM',
+    visibility: 'trainer',
+    unit: 'files' as const,
+    count: 10,
+    chars: 0,
+    pages: 40,
+  };
+
+  it('shows their share apart, with the same runs', () => {
+    const est = estimateEmbeddingCost([quiz, solutions], PRICING, { runs: 2 });
+    const only = estimateEmbeddingCost([solutions], PRICING, { runs: 2 });
+    expect(est.trainerSolutions).toBeDefined();
+    expect(est.trainerSolutions?.totals).toEqual(only.totals);
+    expect(est.trainerSolutions?.costs).toEqual(only.costs);
+    expect(est.trainerSolutions?.runs).toBe(2);
+    // 40 pages * 2000 chars at 2 chars per token (base), two runs
+    expect(est.trainerSolutions?.totals.tokens.base).toBe(80000);
+    // the total still holds everything
+    expect(est.totals.tokens.base).toBeGreaterThan(
+      est.trainerSolutions?.totals.tokens.base ?? 0
+    );
+  });
+
+  it('has no share when the inventory holds none', () => {
+    expect(estimateEmbeddingCost([quiz], PRICING).trainerSolutions).toBe(
+      undefined
+    );
+  });
+
+  it('names them in the report with the transfer to the provider', () => {
+    const report = formatCostReport(
+      estimateEmbeddingCost([quiz, solutions], PRICING),
+      PRICING
+    );
+    expect(report).toMatch(/trainer solutions/i);
+    expect(report).toContain('HAI_TRAINER_SOLUTIONS');
+    expect(report).toMatch(/provider/i);
+    const without = formatCostReport(
+      estimateEmbeddingCost([quiz], PRICING),
+      PRICING
+    );
+    expect(without).not.toContain('HAI_TRAINER_SOLUTIONS');
+  });
+
+  it('reads the separate count of a dry run (plan.trainerSolutions)', () => {
+    const row = {
+      sourceType: TRAINER_SOLUTION_SOURCE_LABEL,
+      catalog: 'KFBM',
+      visibility: 'trainer',
+      unit: 'files',
+      chunks: 12,
+      chars: 0,
+      pages: 60,
+    };
+    const log = {
+      plan: { inventory: [], changes: [], trainerSolutions: [row] },
+    };
+    const [group] = parseInventory(log, 'trainerSolutions');
+    expect(group).toMatchObject({
+      unit: 'files',
+      count: 12,
+      pages: 60,
+      sourceType: TRAINER_SOLUTION_SOURCE_LABEL,
+    });
+    // an old log without the part is no inventory of solutions
+    expect(() =>
+      parseInventory(
+        { plan: { inventory: [row], changes: [row] } },
+        'trainerSolutions'
+      )
+    ).toThrow();
   });
 });

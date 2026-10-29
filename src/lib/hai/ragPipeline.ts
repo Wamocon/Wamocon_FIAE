@@ -20,6 +20,7 @@
 import { ChatMessage } from './client';
 import {
   chatWithFallback,
+  chatWithSokratesOnly,
   getChatProvider,
   getEmbeddingProvider,
 } from './providers';
@@ -35,6 +36,11 @@ import { searchWithContext, SearchResult } from './vectorSearch';
 import { fetchPageIndexContext } from './pageIndexService';
 import { resolveRetrievalAccess } from './retrievalAccess';
 import { citationUrl } from './citationUrl';
+import {
+  isTrainerSolutionChunk,
+  searchMayUseTrainerSolutions,
+  trainerSolutionsChatSokratesOnly,
+} from './trainerSolutions';
 import type { RetrievalAccess } from './retrievalAccess';
 import {
   FIAE_PERSONA,
@@ -99,6 +105,23 @@ export interface PipelineContext {
   crossSessionMemory?: string;
   /** Duration-aware content scope for trainee-facing answers */
   trainingScope?: HaiTrainingScope;
+  /**
+   * Server source only: the history or summary handed to this turn comes from a
+   * session that holds trainer knowledge. With HAI_TRAINER_SOLUTIONS_CHAT=sokrates
+   * such a turn is answered by Sokrates only.
+   */
+  holdsTrainerKnowledge?: boolean;
+}
+
+/**
+ * The chat function of a turn: normally the provider chain (Gemini, with
+ * Sokrates as the only fallback). A turn that holds trainer knowledge goes to
+ * Sokrates only when the owner chose that (HAI_TRAINER_SOLUTIONS_CHAT=sokrates).
+ */
+function chatProviderFor(holdsTrainerKnowledge: boolean) {
+  return holdsTrainerKnowledge && trainerSolutionsChatSokratesOnly()
+    ? chatWithSokratesOnly
+    : chatWithFallback;
 }
 
 export interface QuizState {
@@ -123,6 +146,13 @@ export interface PipelineResult {
   /** A proposed write for the confirmation card, never executed here */
   pendingAction?: PendingAction;
   error?: string;
+  /**
+   * Set (true) only when the answer was built with text of a model solution of
+   * the private bucket (trainer solutions). The chat route stores it with the
+   * message and the session so that no other role gets it back as context or
+   * history.
+   */
+  usedTrainerSolutions?: boolean;
   /**
    * i18n key of a message for the user, set when no chat provider could answer
    * (hai.error.chatUnavailable). Then `response` is empty: the caller shows the
@@ -418,7 +448,17 @@ export interface RetrievedContext {
   searchResults: SearchResult[];
   /** Text block for the system prompt */
   retrievedContext: string;
+  /**
+   * Set (true) only when the context holds text of a model solution of the
+   * private bucket. The chat route marks the answer and the session with it, so
+   * that this text never comes back as context for a role that may not have it.
+   */
+  usedTrainerSolutions?: boolean;
 }
+
+/** Heading note of a chunk that holds a model solution (trainer knowledge). */
+const TRAINER_SOLUTION_NOTE =
+  'Hinweis: Auszüge mit der Kennzeichnung Musterlösung sind Trainerwissen und nur für Trainer. Gib sie nur im Gespräch mit dieser Person weiter.';
 
 /**
  * Retrieve the context for one message: vector search and PageIndex, limited
@@ -468,6 +508,9 @@ export async function retrieveContext(
         organizationId: access.organizationId,
         userId: access.userId,
         trainingScope: context.trainingScope,
+        // model solutions of the private bucket: only with this permission,
+        // which comes from the role in the database and the server switch
+        includeTrainerSolutions: access.includeTrainerSolutions,
       }
     );
     searchResults = searchContext.results;
@@ -479,6 +522,18 @@ export async function retrieveContext(
     searchResults = [];
   }
 
+  // Second guard behind the SQL filter: a chunk of a model solution of the
+  // private bucket stays out unless this access may have it
+  const mayUseSolutions = searchMayUseTrainerSolutions(access);
+  if (!mayUseSolutions) {
+    searchResults = searchResults.filter(
+      r => !isTrainerSolutionChunk(r.metadata)
+    );
+  }
+  const usedTrainerSolutions =
+    mayUseSolutions &&
+    searchResults.some(r => isTrainerSolutionChunk(r.metadata));
+
   let retrievedContext = buildRetrievedContext(
     searchResults.map(r => ({
       content: r.content,
@@ -486,6 +541,9 @@ export async function retrieveContext(
       metadata: r.metadata,
     }))
   );
+  if (usedTrainerSolutions) {
+    retrievedContext = `${TRAINER_SOLUTION_NOTE}\n\n${retrievedContext}`;
+  }
 
   // PageIndex — fetch relevant PDF pages at query time (non-fatal)
   try {
@@ -530,7 +588,11 @@ export async function retrieveContext(
     console.warn('HAI.ai: PageIndex fetch failed (non-fatal):', pageIndexError);
   }
 
-  return { searchResults, retrievedContext };
+  return {
+    searchResults,
+    retrievedContext,
+    ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
+  };
 }
 
 // ============================================================================
@@ -659,15 +721,13 @@ export async function processMessage(
     // Step 3: Retrieve relevant context (skip for quiz answers)
     let searchResults: SearchResult[] = [];
     let retrievedContext = '';
+    let usedTrainerSolutions: boolean | undefined;
 
     if (intent !== 'quiz_answer' && !enableWebSearch) {
       // Vector search and PageIndex, limited to the occupation, audience and
       // organization of the user (one function for both pipelines)
-      ({ searchResults, retrievedContext } = await retrieveContext(
-        userMessage,
-        context,
-        access
-      ));
+      ({ searchResults, retrievedContext, usedTrainerSolutions } =
+        await retrieveContext(userMessage, context, access));
     }
 
     // If web search is enabled, switch to general mode to allow external knowledge
@@ -733,7 +793,9 @@ export async function processMessage(
       enableWebSearch,
     };
 
-    const responseData = await chatWithFallback(
+    const responseData = await chatProviderFor(
+      !!usedTrainerSolutions || !!context.holdsTrainerKnowledge
+    )(
       systemPrompt,
       providerMessages,
       userMessage,
@@ -800,6 +862,7 @@ export async function processMessage(
       intent,
       citations,
       quizState: newQuizState,
+      ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
     };
   } catch (error) {
     if (isChatUnavailableError(error)) return chatUnavailableResult();
@@ -877,14 +940,12 @@ export async function processMessageStream(
     // Retrieve context
     let searchResults: SearchResult[] = [];
     let retrievedContext = '';
+    let usedTrainerSolutions: boolean | undefined;
 
     if (intent !== 'quiz_answer' && !enableWebSearch) {
       // Same retrieval as processMessage: scoped to the user
-      ({ searchResults, retrievedContext } = await retrieveContext(
-        userMessage,
-        context,
-        access
-      ));
+      ({ searchResults, retrievedContext, usedTrainerSolutions } =
+        await retrieveContext(userMessage, context, access));
     }
 
     let mode = determineMode(intent, context);
@@ -946,7 +1007,9 @@ export async function processMessageStream(
       enableWebSearch,
     };
 
-    const response = await chatWithFallback(
+    const response = await chatProviderFor(
+      !!usedTrainerSolutions || !!context.holdsTrainerKnowledge
+    )(
       systemPrompt,
       providerMessages,
       userMessage,
@@ -994,6 +1057,7 @@ export async function processMessageStream(
       response: response.text,
       intent,
       citations,
+      ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
     };
   } catch (error) {
     if (isChatUnavailableError(error)) return chatUnavailableResult();

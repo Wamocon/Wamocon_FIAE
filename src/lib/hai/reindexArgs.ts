@@ -29,6 +29,12 @@ export interface ReindexOptions {
   target: ReindexTarget | null;
   /** Host named by --confirm-production, must equal the host of the run. */
   confirmProductionHost: string | null;
+  /**
+   * Host of the storage named by --confirm-storage-host. Only a real run that
+   * reads the model solutions of the private bucket needs it: the secret key
+   * is sent to the storage address, so the person names the host that is meant.
+   */
+  confirmStorageHost: string | null;
 }
 
 export type ParsedReindexArgs =
@@ -60,6 +66,7 @@ const VALUE_OPTIONS = new Set([
   '--catalog',
   '--target',
   '--confirm-production',
+  '--confirm-storage-host',
 ]);
 
 /** Splits "--name=value" into name and value, otherwise leaves the token. */
@@ -155,6 +162,8 @@ export function parseReindexArgs(argv: string[]): ParsedReindexArgs {
       catalogCode,
       target,
       confirmProductionHost,
+      confirmStorageHost:
+        values.get('--confirm-storage-host')?.toLowerCase() ?? null,
     },
   };
 }

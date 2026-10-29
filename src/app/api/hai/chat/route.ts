@@ -47,6 +47,13 @@ import {
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
 import { badRequestUnlessUuid } from '@/lib/uuid';
+import {
+  markTrainerKnowledge,
+  mayReadTrainerKnowledgeHistory,
+  mayUseTrainerKnowledgeInPrompt,
+  sessionVisibilityCondition,
+} from '@/lib/hai/chatHistoryAccess';
+import { hasTrainerKnowledge } from '@/lib/hai/trainerSolutions';
 
 // ============================================================================
 // TYPES
@@ -136,14 +143,26 @@ async function getOrCreateSession(
  */
 async function getPreviousMessages(
   sessionId: string,
-  limit: number = 10
-): Promise<{ messages: ChatMessage[]; summary?: string }> {
+  limit: number = 10,
+  // false = a session that holds trainer knowledge (answers built with model
+  // solutions) gives no messages and no summary: it is no context for this turn
+  allowTrainerKnowledge: boolean = true
+): Promise<{
+  messages: ChatMessage[];
+  summary?: string;
+  /** The history handed back comes from a session with trainer knowledge. */
+  holdsTrainerKnowledge?: boolean;
+}> {
   // Check if session has a stored summary
   const session = await db
     .select({ metadata: haiChatSessions.metadata })
     .from(haiChatSessions)
     .where(eq(haiChatSessions.id, sessionId))
     .limit(1);
+
+  if (!allowTrainerKnowledge && hasTrainerKnowledge(session[0]?.metadata)) {
+    return { messages: [] };
+  }
 
   const storedSummary =
     session.length > 0 &&
@@ -171,6 +190,9 @@ async function getPreviousMessages(
       parts: [{ text: m.content }],
     })),
     summary: storedSummary,
+    ...(hasTrainerKnowledge(session[0]?.metadata)
+      ? { holdsTrainerKnowledge: true }
+      : {}),
   };
 }
 
@@ -277,7 +299,9 @@ function extractKeyFacts(userMessages: string[]): string[] {
  */
 async function loadUserMemory(
   userId: string,
-  currentSessionId: string
+  currentSessionId: string,
+  // false = sessions that hold trainer knowledge are not part of the memory
+  allowTrainerKnowledge: boolean = false
 ): Promise<string | undefined> {
   try {
     // Get recent sessions with their metadata (last 15 sessions, excluding current)
@@ -293,7 +317,8 @@ async function loadUserMemory(
         and(
           eq(haiChatSessions.userId, userId),
           eq(haiChatSessions.isActive, true),
-          sql`${haiChatSessions.id} != ${currentSessionId}`
+          sql`${haiChatSessions.id} != ${currentSessionId}`,
+          sessionVisibilityCondition(allowTrainerKnowledge)
         )
       )
       .orderBy(desc(haiChatSessions.lastMessageAt))
@@ -305,6 +330,10 @@ async function loadUserMemory(
 
     for (const session of recentSessions) {
       if (!session.metadata || typeof session.metadata !== 'object') continue;
+      // the SQL condition above does this already, the check is the second guard
+      if (!allowTrainerKnowledge && hasTrainerKnowledge(session.metadata)) {
+        continue;
+      }
 
       const meta = session.metadata as Record<string, unknown>;
       const summary = meta.conversationSummary as string | undefined;
@@ -364,6 +393,29 @@ async function saveSessionSummary(
   } catch (error) {
     console.warn('Failed to save session summary:', error);
   }
+}
+
+/**
+ * Mark a session as one that holds trainer knowledge (an answer was built with
+ * text of a model solution of the private bucket). Such a session is hidden
+ * from every role that is not trainer level, and is no context for the model
+ * unless the switch HAI_TRAINER_SOLUTIONS is on (see chatHistoryAccess.ts).
+ * Awaited by the caller: a failure must not pass silently, the marker is the
+ * protection of the history.
+ */
+async function markSessionTrainerKnowledge(sessionId: string): Promise<void> {
+  const session = await db
+    .select({ metadata: haiChatSessions.metadata })
+    .from(haiChatSessions)
+    .where(eq(haiChatSessions.id, sessionId))
+    .limit(1);
+  await db
+    .update(haiChatSessions)
+    .set({
+      metadata: markTrainerKnowledge(session[0]?.metadata),
+      updatedAt: new Date(),
+    })
+    .where(eq(haiChatSessions.id, sessionId));
 }
 
 /**
@@ -845,9 +897,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Trainer knowledge (answers built with model solutions of the private
+    // bucket) is context only for a trainer level role with the switch on. The
+    // role is the one of the database, never one from the request.
+    const allowTrainerKnowledge = mayUseTrainerKnowledgeInPrompt(user[0].role);
+
     // Get previous messages for context (with stored summary if available)
-    const { messages: previousMessages, summary: storedSummary } =
-      await getPreviousMessages(sessionId);
+    const {
+      messages: previousMessages,
+      summary: storedSummary,
+      holdsTrainerKnowledge,
+    } = await getPreviousMessages(sessionId, 10, allowTrainerKnowledge);
 
     // NOTE: Conversation summary is NO LONGER fetched here.
     // It was making an OpenRouter API call on every message (even "Hi"),
@@ -856,7 +916,11 @@ export async function POST(req: NextRequest) {
     // the pipeline only when the intent requires an actual LLM call.
 
     // Load cross-session memory (key facts + summaries from other chats)
-    const crossSessionMemory = await loadUserMemory(userId, sessionId);
+    const crossSessionMemory = await loadUserMemory(
+      userId,
+      sessionId,
+      allowTrainerKnowledge
+    );
 
     // Get context titles (only for an enabler or course of the user's occupation)
     const catalogScope = await getCatalogScopeForUserId(userId);
@@ -888,6 +952,9 @@ export async function POST(req: NextRequest) {
       userRole,
       conversationSummary: storedSummary,
       crossSessionMemory,
+      // history from a session with trainer knowledge (allowed above): with
+      // HAI_TRAINER_SOLUTIONS_CHAT=sokrates the turn goes to Sokrates only
+      ...(holdsTrainerKnowledge ? { holdsTrainerKnowledge: true } : {}),
       trainingScope: buildHaiTrainingScope({
         role: userRole,
         startOfTrainingDate: user[0].startOfTrainingDate,
@@ -941,13 +1008,24 @@ export async function POST(req: NextRequest) {
               return;
             }
 
-            // Save assistant response — UPDATE existing or INSERT new
+            // Save assistant response — UPDATE existing or INSERT new. An
+            // answer built with trainer solutions is marked, and so is the
+            // session (before anything else is sent to the client).
+            const answerMeta = {
+              intent: result.intent,
+              ...(result.usedTrainerSolutions
+                ? { trainerKnowledge: true }
+                : {}),
+            };
+            if (result.usedTrainerSolutions) {
+              await markSessionTrainerKnowledge(sessionId);
+            }
             if (validEditMessageId && existingAssistantId) {
               await updateAssistantMessage(
                 existingAssistantId,
                 result.response,
                 result.citations,
-                { intent: result.intent }
+                answerMeta
               );
             } else {
               await saveMessage(
@@ -955,7 +1033,7 @@ export async function POST(req: NextRequest) {
                 'assistant',
                 result.response,
                 result.citations,
-                { intent: result.intent }
+                answerMeta
               );
             }
 
@@ -1063,13 +1141,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Save assistant response — UPDATE existing or INSERT new
+    // Save assistant response — UPDATE existing or INSERT new. An answer built
+    // with trainer solutions is marked, and so is the session.
+    const answerMeta = {
+      intent: result.intent,
+      ...(result.usedTrainerSolutions ? { trainerKnowledge: true } : {}),
+    };
+    if (result.usedTrainerSolutions) {
+      await markSessionTrainerKnowledge(sessionId);
+    }
     if (validEditMessageId && existingAssistantId) {
       await updateAssistantMessage(
         existingAssistantId,
         result.response,
         result.citations,
-        { intent: result.intent }
+        answerMeta
       );
     } else {
       await saveMessage(
@@ -1077,7 +1163,7 @@ export async function POST(req: NextRequest) {
         'assistant',
         result.response,
         result.citations,
-        { intent: result.intent }
+        answerMeta
       );
     }
 
@@ -1144,7 +1230,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: errorMsg,
-        errorKey: 'hai.error.somethingWrong'
+        errorKey: 'hai.error.somethingWrong',
       },
       { status: 500 }
     );
@@ -1272,7 +1358,13 @@ export async function GET(req: NextRequest) {
         createdAt: haiChatSessions.createdAt,
       })
       .from(haiChatSessions)
-      .where(eq(haiChatSessions.userId, userId))
+      .where(
+        and(
+          eq(haiChatSessions.userId, userId),
+          // chats with trainer knowledge belong to trainer level roles only
+          sessionVisibilityCondition(mayReadTrainerKnowledgeHistory(me.role))
+        )
+      )
       .orderBy(desc(haiChatSessions.lastMessageAt))
       .limit(20);
 

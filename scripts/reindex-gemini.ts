@@ -28,6 +28,20 @@
  *   5. Lernfelder       (code, title, description, linked content)
  *   6. Training Components (IHK Rahmenplan: code, title, use cases)
  *   7. PDF Documents    (text extraction from content_documents)  ← NEW
+ *   8. Trainer solutions (model solution PDFs of the PRIVATE bucket, trainer
+ *      level only, OFF by default): see below
+ *
+ * Trainer solutions. The KfBM model solutions lie in the private bucket
+ * content-solutions (storage_url private://...). They are read ONLY with
+ * HAI_TRAINER_SOLUTIONS=on in the shell of the process (never from a file), in
+ * a real run, with the secret key, one object at a time, inside the folder of
+ * the target, and need --confirm-storage-host <host of the storage>. Their
+ * chunks are visibility 'trainer' with metadata.trainerSolution = true. A dry
+ * run never reads the bucket: it counts the files and pages apart (plan
+ * "trainerSolutions" in the log; price them with
+ * scripts/hai-embedding-cost.ts --which trainer-solutions). With the switch off
+ * their old chunks are removed. The text goes to the embedding model (Gemini):
+ * a transfer of the solutions to the provider, decided by the owner.
  *
  * Usage (every call needs --target):
  *   npx tsx scripts/reindex-gemini.ts --target local                 # Dry run (default)
@@ -78,9 +92,23 @@ import {
   buildQuizTexts,
   type QuizQuestionInput,
 } from '../src/lib/hai/quizIndexText';
+import {
+  TRAINER_SOLUTION_CHUNK_KEY,
+  TRAINER_SOLUTION_SOURCE_LABEL,
+  isTrainerSolutionsEnabled,
+  privateSolutionPrefix,
+} from '../src/lib/hai/trainerSolutions';
+import {
+  readPrivateSolutionText,
+  solutionStorageProblems,
+} from '../src/lib/hai/privateSolutionReader';
 // The rollout gate is read from the environment of the process only, before
 // dotenv: a value that sits in .env.local or .env must not open it silently
 const SHELL_ROLLOUT_APPROVED = process.env.KFBM_ROLLOUT_APPROVED;
+// The same for the switch of the trainer solutions: reading the private bucket
+// and sending the text of the model solutions to the model provider is a
+// decision, so it is never opened by a file
+const TRAINER_SOLUTIONS_ON = isTrainerSolutionsEnabled(process.env);
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
@@ -127,6 +155,9 @@ const CATALOG_CODES = new Map<string, string>();
 const PLAN_INVENTORY = new ChunkPlan(); // everything the index holds afterwards
 const PLAN_CHANGES = new ChunkPlan(); // what a real run would embed now
 const PLAN_RESCOPE = new ChunkPlan(); // chunks that only change their scope
+// Model solution PDFs of the private bucket, counted apart in every dry run
+// (the switch on or off), for the cost estimate of turning it on
+const PLAN_TRAINER_SOLUTIONS = new ChunkPlan();
 
 // ============================================================================
 // STYLING
@@ -1525,6 +1556,9 @@ async function indexPDFDocuments(db: postgres.Sql) {
     totalPages = 0;
   // Why a document was not indexed (reason of planDocumentIndexing → count)
   const skippedByReason = new Map<string, number>();
+  // Check of the storage access for the model solutions, once per run
+  let solutionStorageIssues: string[] | undefined;
+  let solutionStorageReported = false;
 
   for (let di = 0; di < docs.length; di++) {
     const doc = docs[di];
@@ -1536,23 +1570,35 @@ async function indexPDFDocuments(db: postgres.Sql) {
     // or course. A solution or a trainer-only row is trainer level in every
     // form (file or text). A private reference (the model solutions of the private
     // bucket) is never fetched.
-    const plan = planDocumentIndexing({
-      documentType: doc.document_type,
-      visibility: doc.visibility,
-      storageUrl: doc.storage_url,
-      mimeType: doc.mime_type,
-      description: doc.description,
-      organizationId: doc.organization_id ? String(doc.organization_id) : null,
-      enablerCatalogId: doc.enabler_catalog_id
-        ? String(doc.enabler_catalog_id)
-        : null,
-      useCaseCatalogId: doc.use_case_catalog_id
-        ? String(doc.use_case_catalog_id)
-        : null,
-      courseCatalogId: doc.course_catalog_id
-        ? String(doc.course_catalog_id)
-        : null,
-    });
+    const plan = planDocumentIndexing(
+      {
+          documentType: doc.document_type,
+          visibility: doc.visibility,
+          storageUrl: doc.storage_url,
+          mimeType: doc.mime_type,
+          description: doc.description,
+          organizationId: doc.organization_id
+            ? String(doc.organization_id)
+            : null,
+          enablerCatalogId: doc.enabler_catalog_id
+            ? String(doc.enabler_catalog_id)
+            : null,
+          useCaseCatalogId: doc.use_case_catalog_id
+            ? String(doc.use_case_catalog_id)
+            : null,
+          courseCatalogId: doc.course_catalog_id
+            ? String(doc.course_catalog_id)
+            : null,
+      },
+      // the private bucket: a model solution is planned only inside the folder
+      // of the target, and read only with the switch on (see below)
+      {
+        trainerSolutions: TRAINER_SOLUTIONS_ON,
+        solutionPrefix: OPTIONS.target
+          ? privateSolutionPrefix(OPTIONS.target)
+          : undefined,
+      }
+    );
     if (plan.kind === 'skip') {
       warn(`Document not indexed (${plan.reason}): ${docLabel}`);
       skippedByReason.set(
@@ -1613,6 +1659,133 @@ async function indexPDFDocuments(db: postgres.Sql) {
         scope,
         WHOLE_SOURCE,
         'document (text row)'
+      );
+    } else if (plan.kind === 'private_pdf') {
+      // A model solution of the private bucket: trainer level only, counted
+      // apart in every dry run, read and embedded only with the switch on
+      const measure = {
+        unit: 'files' as const,
+        pages: Number(doc.page_count ?? 0),
+      };
+      PLAN_TRAINER_SOLUTIONS.add(
+        TRAINER_SOLUTION_SOURCE_LABEL,
+        catalogLabel(scope),
+        scope.visibility,
+        1,
+        measure
+      );
+
+      if (!plan.enabled) {
+        warn(
+          `Document not indexed (trainer solutions off, HAI_TRAINER_SOLUTIONS): ${docLabel}`
+        );
+        skippedByReason.set(
+          'trainer solutions off',
+          (skippedByReason.get('trainer solutions off') ?? 0) + 1
+        );
+        // with the switch off no chunk of a solution stays in the index
+        if (!IS_DRY_RUN) {
+          await db`
+            DELETE FROM hai_embeddings
+            WHERE source_type = 'document'
+              AND source_id = ${doc.id}::uuid
+          `.catch((e: any) => warn(`Old chunks not removed: ${e.message}`));
+        }
+        skipped++;
+        continue;
+      }
+
+      if (IS_DRY_RUN) {
+        // nothing is read, nothing is sent: the file and its pages are counted
+        for (const counted of [PLAN_INVENTORY, PLAN_CHANGES]) {
+          counted.add(
+            TRAINER_SOLUTION_SOURCE_LABEL,
+            catalogLabel(scope),
+            scope.visibility,
+            1,
+            measure
+          );
+        }
+        skipped++;
+        continue;
+      }
+
+      // Real run. Trainer level and the marker are the whole point of this
+      // branch: a plan with another visibility is a bug, nothing is written
+      if (scope.visibility !== 'trainer') {
+        fail(
+          `Trainer solution with a visibility other than trainer: ${docLabel}`
+        );
+        failed++;
+        continue;
+      }
+      solutionStorageIssues ??= solutionStorageProblems({
+        target: OPTIONS.target ?? 'preview',
+        supabaseUrl:
+          process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
+        secretKey:
+          process.env.SUPABASE_SECRET_KEY ||
+          process.env.SUPABASE_SERVICE_ROLE_KEY,
+        confirmedHost: OPTIONS.confirmStorageHost,
+      });
+      if (solutionStorageIssues.length > 0) {
+        if (!solutionStorageReported) {
+          solutionStorageReported = true;
+          for (const issue of solutionStorageIssues) fail(issue);
+          fail(
+            'The model solutions of the private bucket are not read (see above).'
+          );
+        }
+        failed++;
+        continue;
+      }
+      const read = await readPrivateSolutionText(plan.object, {
+        supabaseUrl:
+          process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
+        secretKey:
+          process.env.SUPABASE_SECRET_KEY ||
+          process.env.SUPABASE_SERVICE_ROLE_KEY,
+        prefix: privateSolutionPrefix(OPTIONS.target ?? 'preview'),
+        allowLoopback: OPTIONS.target === 'local',
+      });
+      if (!read.ok) {
+        fail(`Trainer solution not read (${read.error}): ${docLabel}`);
+        failed++;
+        addLogEntry({
+          timestamp: new Date().toISOString(),
+          sourceType: 'document',
+          sourceId: doc.id,
+          title: docLabel,
+          status: 'failed',
+          chunks: 0,
+          pages: 0,
+        });
+        continue;
+      }
+      if (read.text.length < 20) {
+        warn(`No usable text from the trainer solution: ${docLabel}`);
+        skipped++;
+        continue;
+      }
+
+      totalPages += read.pageCount;
+      pageCount = read.pageCount;
+      metadata.pageCount = read.pageCount;
+      // The marker the search and the chat history rely on. Never the path,
+      // the bucket or any address of the file.
+      metadata[TRAINER_SOLUTION_CHUNK_KEY] = true;
+
+      const fullContent = contextParts.join('\n') + '\n\n' + read.text;
+      result = await indexSource(
+        db,
+        'document',
+        doc.id,
+        doc.title,
+        fullContent,
+        { ...metadata, contentFormat: 'pdf' },
+        scope,
+        WHOLE_SOURCE,
+        'document (trainer solution)'
       );
     } else {
       // A dry run does not download the PDF: it counts the file and its pages
@@ -1909,6 +2082,9 @@ async function main() {
   console.log(
     `${ANSI.dim}  Target: ${OPTIONS.target}  Catalog: ${OPTIONS.catalogCode ?? 'all'}${ANSI.reset}`
   );
+  console.log(
+    `${ANSI.dim}  Trainer solutions (private bucket): ${TRAINER_SOLUTIONS_ON ? 'ON (HAI_TRAINER_SOLUTIONS=on in the shell)' : 'off'}${ANSI.reset}`
+  );
   if (IS_DRY_RUN)
     console.log(
       `${ANSI.yellow}  *** DRY RUN — no changes, no model call (add --apply for a real run) ***${ANSI.reset}`
@@ -2203,6 +2379,14 @@ async function main() {
       PLAN_RESCOPE
     );
     console.log();
+    printPlan(
+      `Trainer solutions (model solution PDFs of the private bucket), counted apart; HAI_TRAINER_SOLUTIONS is ${TRAINER_SOLUTIONS_ON ? 'ON, they are part of the plans above' : 'OFF, they are NOT part of the plans above and nothing of them is read or sent'}:`,
+      PLAN_TRAINER_SOLUTIONS
+    );
+    console.log(
+      '    Price only them: npx tsx scripts/hai-embedding-cost.ts --inventory logs/reindex-<time>.json --which trainer-solutions'
+    );
+    console.log();
     console.log(
       '  Cost estimate from the log of this run (no model call, no network):'
     );
@@ -2256,6 +2440,7 @@ async function main() {
           inventory: PLAN_INVENTORY.rows(),
           changes: PLAN_CHANGES.rows(),
           rescope: PLAN_RESCOPE.rows(),
+          trainerSolutions: PLAN_TRAINER_SOLUTIONS.rows(),
         }
       : undefined,
     model: EMBEDDING_MODEL,

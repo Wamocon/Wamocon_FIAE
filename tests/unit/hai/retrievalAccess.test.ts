@@ -124,3 +124,70 @@ describe('resolveRetrievalAccess', () => {
     expect(console.error).toHaveBeenCalled();
   });
 });
+
+// Trainer solutions (model solutions of the private bucket): the permission is
+// derived from the role in the database and the switch of the server, nothing
+// else. The default is off.
+describe('resolveRetrievalAccess: trainer solutions', () => {
+  const saved = process.env.HAI_TRAINER_SOLUTIONS;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.HAI_TRAINER_SOLUTIONS;
+    else process.env.HAI_TRAINER_SOLUTIONS = saved;
+  });
+
+  it('gives nobody the permission while the switch is off (the default)', async () => {
+    delete process.env.HAI_TRAINER_SOLUTIONS;
+    for (const role of ['TRAINEE', 'TRAINER', 'ADMIN', 'SUPER_ADMIN']) {
+      mockProfileRows.mockResolvedValue([{ role, organizationId: ORG }]);
+      const access = await resolveRetrievalAccess(USER);
+      expect(access?.includeTrainerSolutions).toBeUndefined();
+    }
+  });
+
+  it.each(['true', '1', 'yes', 'off', ''])(
+    'gives nobody the permission for the value %p (only "on" counts)',
+    async value => {
+      process.env.HAI_TRAINER_SOLUTIONS = value;
+      mockProfileRows.mockResolvedValue([
+        { role: 'TRAINER', organizationId: ORG },
+      ]);
+      const access = await resolveRetrievalAccess(USER);
+      expect(access?.includeTrainerSolutions).toBeUndefined();
+    }
+  );
+
+  it.each(['TRAINER', 'TEMP_ADMIN', 'ADMIN', 'SUPER_ADMIN'])(
+    'gives the role %s the permission with the switch on',
+    async role => {
+      process.env.HAI_TRAINER_SOLUTIONS = 'on';
+      mockProfileRows.mockResolvedValue([{ role, organizationId: ORG }]);
+      const access = await resolveRetrievalAccess(USER);
+      expect(access).toMatchObject({
+        audience: 'trainer',
+        includeTrainerSolutions: true,
+      });
+    }
+  );
+
+  it.each(['TRAINEE', null, '', 'UNKNOWN'])(
+    'never gives the role %p the permission, with the switch on',
+    async role => {
+      process.env.HAI_TRAINER_SOLUTIONS = 'on';
+      mockProfileRows.mockResolvedValue([{ role, organizationId: ORG }]);
+      const access = await resolveRetrievalAccess(USER);
+      expect(access?.audience).toBe('trainee');
+      expect(access?.includeTrainerSolutions).toBeUndefined();
+    }
+  );
+
+  it('keeps the catalogs of the trainer: the permission opens no other occupation', async () => {
+    process.env.HAI_TRAINER_SOLUTIONS = 'on';
+    mockProfileRows.mockResolvedValue([
+      { role: 'TRAINER', organizationId: ORG },
+    ]);
+    mockScope.mockResolvedValue(scopeOf([FIAE]));
+    const access = await resolveRetrievalAccess(USER);
+    expect(access?.catalogIds).toEqual([FIAE]);
+    expect(access?.includeTrainerSolutions).toBe(true);
+  });
+});
