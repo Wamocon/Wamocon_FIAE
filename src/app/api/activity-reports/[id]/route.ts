@@ -10,7 +10,10 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
-import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import {
+  isHoursLimited,
+  normalizePlannedHours,
+} from '@/lib/ausbildung/planned-hours';
 import { getISOWeekDates } from '@/lib/date/iso-week';
 import {
   isErrorResponse,
@@ -245,6 +248,7 @@ export async function PUT(
           id: trainingUseCases.id,
           description: trainingUseCases.description,
           plannedHours: trainingUseCases.plannedHours,
+          catalogId: trainingComponents.trainingCatalogId,
         })
         .from(trainingUseCases)
         .innerJoin(
@@ -262,6 +266,12 @@ export async function PUT(
         );
       plannedMap = new Map(
         masterUseCases.map((uc: any) => [uc.id, normalizePlannedHours(uc)])
+      );
+      // A use case without hours (not FIAE) has no limit, see isHoursLimited
+      const unlimitedIds = new Set<string>(
+        masterUseCases
+          .filter((uc: any) => !isHoursLimited(uc.plannedHours, uc.catalogId))
+          .map((uc: any) => uc.id)
       );
       if (entryUseCaseIds.some((id: string) => !plannedMap.has(id))) {
         return NextResponse.json(
@@ -310,6 +320,7 @@ export async function PUT(
       // Validate each entry
       const violations: string[] = [];
       for (const entry of entries) {
+        if (unlimitedIds.has(entry.useCaseId)) continue;
         const totalHours = plannedMap.get(entry.useCaseId) ?? 0;
         const usedHours = usedMap.get(entry.useCaseId) ?? 0;
         const remaining = totalHours - usedHours;

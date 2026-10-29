@@ -16,6 +16,7 @@ import {
   type TrainingPhase,
 } from '@/lib/ausbildung/duration';
 import { getISOWeekDates, getISOWeekInfo } from '@/lib/date/iso-week';
+import { componentPhase } from '@/lib/ausbildung/component-phase';
 import {
   componentHoursLabel,
   normalizePlannedHours,
@@ -48,6 +49,8 @@ interface TrainingComponent {
   totalWeeks: number;
   totalHours: number;
   trainingYear: number | null;
+  /** Phase of a catalog component (KfBM has no training year). */
+  phase?: number | null;
   orderIndex: number;
 }
 
@@ -57,6 +60,8 @@ interface TrainingUseCase {
   letter: string;
   description: string;
   plannedHours: number;
+  /** false: no hours are given, there is nothing to exhaust or overbook. */
+  hoursLimited?: boolean;
   orderIndex: number;
 }
 
@@ -938,7 +943,9 @@ function CreateReportModal({
   // Check for overbooking
   const checkOverbooked = (useCaseId: string, actualHours: number) => {
     const useCase = getUseCaseById(useCaseId);
-    return useCase && actualHours > useCase.plannedHours;
+    return (
+      useCase && useCase.hoursLimited !== false && actualHours > useCase.plannedHours
+    );
   };
 
   // Calculate totals
@@ -1216,7 +1223,9 @@ function CreateReportModal({
                           {t('reports.plannedHours')}
                         </label>
                         <p className="text-foreground font-medium">
-                          {useCase?.plannedHours} {t('reports.hours')}
+                          {useCase?.plannedHours
+                            ? `${useCase.plannedHours} ${t('reports.hours')}`
+                            : t('reports.noPlannedHours')}
                         </p>
                         {/* Remaining hours indicator */}
                         {(() => {
@@ -1575,7 +1584,7 @@ function CreateReportModal({
                   {formatModalPhaseLabel(1)}
                 </h4>
                 {components
-                  .filter(c => c.trainingYear === 1)
+                  .filter(c => componentPhase(c) === 1)
                   .sort((a, b) => a.orderIndex - b.orderIndex)
                   .map(component => (
                     <ComponentItem
@@ -1597,7 +1606,7 @@ function CreateReportModal({
                   {formatModalPhaseLabel(2)}
                 </h4>
                 {components
-                  .filter(c => c.trainingYear === 2)
+                  .filter(c => componentPhase(c) === 2)
                   .sort((a, b) => a.orderIndex - b.orderIndex)
                   .map(component => (
                     <ComponentItem
@@ -1619,7 +1628,7 @@ function CreateReportModal({
                   {t('reports.integrativePhase')}
                 </h4>
                 {components
-                  .filter(c => c.trainingYear === 3 || !c.trainingYear) // Fallback for any others
+                  .filter(c => componentPhase(c) === 3)
                   .sort((a, b) => a.orderIndex - b.orderIndex)
                   .map(component => (
                     <ComponentItem
@@ -1973,7 +1982,9 @@ function ReportDetailModal({
                           {t('reports.plannedHours')}
                         </p>
                         <p className="text-foreground font-medium">
-                          {entry.plannedHours} {t('reports.hours')}
+                          {entry.plannedHours
+                            ? `${entry.plannedHours} ${t('reports.hours')}`
+                            : t('reports.noPlannedHours')}
                         </p>
                       </div>
                       <div>
@@ -2391,7 +2402,9 @@ function ComponentItem({
                         </span>
                       ) : (
                         <span className="text-muted-foreground text-xs whitespace-nowrap">
-                          ({useCase.plannedHours} {t('reports.hours')})
+                          {useCase.plannedHours
+                            ? `(${useCase.plannedHours} ${t('reports.hours')})`
+                            : `(${t('reports.noPlannedHours')})`}
                         </span>
                       )}
                     </span>
