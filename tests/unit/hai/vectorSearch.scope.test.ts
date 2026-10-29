@@ -108,6 +108,68 @@ describe('buildScopeCondition', () => {
     );
   });
 
+  // The model solutions of the private bucket (metadata.trainerSolution) are
+  // returned only to a trainer whose access carries the permission
+  // (HAI_TRAINER_SOLUTIONS on). Every other access excludes them in the SQL.
+  describe('chunks of trainer solutions (private bucket)', () => {
+    const EXCLUDED = "COALESCE(metadata->>'trainerSolution', '') <> 'true'";
+
+    it('excludes them for a trainee, with or without the permission', () => {
+      expect(render(trainee())!.text).toContain(EXCLUDED);
+      expect(
+        render(trainee({ includeTrainerSolutions: true }))!.text
+      ).toContain(EXCLUDED);
+    });
+
+    it('excludes them for a trainer without the permission (the default)', () => {
+      expect(render(trainee({ audience: 'trainer' }))!.text).toContain(
+        EXCLUDED
+      );
+      expect(
+        render(
+          trainee({ audience: 'trainer', includeTrainerSolutions: false })
+        )!.text
+      ).toContain(EXCLUDED);
+    });
+
+    it('lets them through only for a trainer with the permission', () => {
+      const out = render(
+        trainee({ audience: 'trainer', includeTrainerSolutions: true })
+      );
+      expect(out!.text).not.toContain('trainerSolution');
+      // the catalog and organization limits stay
+      expect(out!.text).toContain('training_catalog_id IN');
+      expect(out!.text).toContain('organization_id');
+    });
+
+    it('does not trust an odd audience or a value that is not true', () => {
+      for (const scope of [
+        trainee({
+          audience: 'TRAINER' as unknown as 'trainer',
+          includeTrainerSolutions: true,
+        }),
+        trainee({
+          audience: 'trainer',
+          includeTrainerSolutions: 'true' as unknown as boolean,
+        }),
+        trainee({
+          audience: 'trainer',
+          includeTrainerSolutions: 1 as unknown as boolean,
+        }),
+      ]) {
+        expect(render(scope)!.text).toContain(EXCLUDED);
+      }
+    });
+
+    it('adds no parameter (the numbering of the filter stays)', () => {
+      const closed = render(trainee({ audience: 'trainer' }))!;
+      const open = render(
+        trainee({ audience: 'trainer', includeTrainerSolutions: true })
+      )!;
+      expect(closed.params).toEqual(open.params);
+    });
+  });
+
   it('treats anything but the exact value trainer as a trainee', () => {
     const odd = { ...trainee(), audience: 'TRAINER' as unknown as 'trainer' };
     expect(render(odd)!.text).toContain("visibility = 'all'");

@@ -12,6 +12,7 @@ import {
   formatCostReport,
   parseInventory,
   parsePricingConfig,
+  type InventoryPart,
 } from './embeddingCost';
 
 export const DEFAULT_PRICING_FILE = 'scripts/config/hai-embedding-pricing.json';
@@ -30,7 +31,9 @@ Usage:
   --inventory <file>     numbers to price: { "groups": [...] } typed by hand, or the
                          log of a dry run of scripts/reindex-gemini.ts (logs/reindex-*.json)
   --which <part>         of a dry run log: "changes" (default, what a real run embeds
-                         now) or "inventory" (everything the index holds afterwards)
+                         now), "inventory" (everything the index holds afterwards) or
+                         "trainer-solutions" (only the model solution PDFs of the private
+                         bucket: what HAI_TRAINER_SOLUTIONS=on would add)
   --pricing <file>       price configuration (default ${DEFAULT_PRICING_FILE})
   --runs <n>             how often the inventory is embedded (Preview and Production = 2)
   --eur-per-usd <rate>   also show euro (overrides eurPerUsd of the configuration)
@@ -77,10 +80,16 @@ export function runCostCli(
   const inventoryFile = values.get('--inventory');
   if (!inventoryFile) return refuse('--inventory <file> is required');
 
-  const which = values.get('--which') ?? 'changes';
-  if (which !== 'changes' && which !== 'inventory') {
-    return refuse('--which must be changes or inventory');
+  const whichRaw = values.get('--which') ?? 'changes';
+  if (
+    whichRaw !== 'changes' &&
+    whichRaw !== 'inventory' &&
+    whichRaw !== 'trainer-solutions'
+  ) {
+    return refuse('--which must be changes, inventory or trainer-solutions');
   }
+  const which: InventoryPart =
+    whichRaw === 'trainer-solutions' ? 'trainerSolutions' : whichRaw;
 
   const runs = values.has('--runs') ? Number(values.get('--runs')) : 1;
   if (!Number.isInteger(runs) || runs < 1) {

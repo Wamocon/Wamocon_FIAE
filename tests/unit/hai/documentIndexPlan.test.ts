@@ -258,3 +258,182 @@ describe('planDocumentIndexing: solutions never reach trainees', () => {
     }
   });
 });
+
+// A model solution in the private bucket may be used by trainers (decision of
+// the owner, off by default). It is planned as private_pdf, always trainer
+// level, and only for a row that is a model solution in the folder of the
+// target. Every other private reference stays skipped.
+describe('planDocumentIndexing: a model solution in the private bucket (trainer solutions)', () => {
+  const PRIVATE_PREVIEW =
+    'private://content-solutions/preview/kfbm/UC-01/musterloesung/loesung.pdf';
+  const solution = (extra: Partial<DocumentIndexRow> = {}) =>
+    row({
+      documentType: 'TRAINER_SOLUTION',
+      visibility: 'TRAINER_ONLY',
+      storageUrl: PRIVATE_PREVIEW,
+      mimeType: 'application/pdf',
+      enablerCatalogId: null,
+      useCaseCatalogId: KFBM,
+      ...extra,
+    });
+  const preview = { solutionPrefix: 'preview/kfbm/', trainerSolutions: true };
+
+  it('is planned as a private pdf, trainer level, in the catalog of its use case', () => {
+    expect(planDocumentIndexing(solution(), preview)).toEqual({
+      kind: 'private_pdf',
+      scope: {
+        trainingCatalogId: KFBM,
+        visibility: 'trainer',
+        organizationId: null,
+      },
+      object: {
+        bucket: 'content-solutions',
+        path: 'preview/kfbm/UC-01/musterloesung/loesung.pdf',
+      },
+      enabled: true,
+    });
+  });
+
+  it('is planned as not enabled while the switch is off (counted, never read)', () => {
+    for (const options of [
+      { solutionPrefix: 'preview/kfbm/' },
+      { solutionPrefix: 'preview/kfbm/', trainerSolutions: false },
+    ]) {
+      expect(planDocumentIndexing(solution(), options)).toMatchObject({
+        kind: 'private_pdf',
+        enabled: false,
+        scope: { visibility: 'trainer' },
+      });
+    }
+  });
+
+  it('is skipped as before without the options of a run (no folder, no plan)', () => {
+    for (const options of [undefined, {}, { trainerSolutions: true }]) {
+      expect(planDocumentIndexing(solution(), options)).toEqual({
+        kind: 'skip',
+        reason: 'private reference',
+      });
+    }
+  });
+
+  it('keeps the organization of the document', () => {
+    expect(
+      planDocumentIndexing(solution({ organizationId: ORG }), preview)
+    ).toMatchObject({ scope: { organizationId: ORG, visibility: 'trainer' } });
+  });
+
+  it('is skipped when the row is no model solution (type and visibility must both fit)', () => {
+    for (const type of TYPES) {
+      for (const visibility of VISIBILITIES) {
+        const plan = planDocumentIndexing(
+          solution({ documentType: type, visibility }),
+          preview
+        );
+        if (type === 'TRAINER_SOLUTION' && visibility === 'TRAINER_ONLY') {
+          expect(plan.kind).toBe('private_pdf');
+        } else {
+          expect(plan).toEqual({ kind: 'skip', reason: 'private reference' });
+        }
+      }
+    }
+  });
+
+  it('is skipped without a use case (a solution belongs to a use case)', () => {
+    expect(
+      planDocumentIndexing(
+        solution({ useCaseCatalogId: null, enablerCatalogId: KFBM }),
+        preview
+      )
+    ).toEqual({ kind: 'skip', reason: 'private reference' });
+    expect(
+      planDocumentIndexing(
+        solution({ useCaseCatalogId: null, courseCatalogId: KFBM }),
+        preview
+      )
+    ).toEqual({ kind: 'skip', reason: 'private reference' });
+  });
+
+  it('is skipped when the catalogs of enabler, use case and course disagree', () => {
+    expect(
+      planDocumentIndexing(solution({ enablerCatalogId: FIAE }), preview)
+    ).toEqual({ kind: 'skip', reason: 'catalog conflict' });
+    expect(
+      planDocumentIndexing(solution({ courseCatalogId: FIAE }), preview)
+    ).toEqual({ kind: 'skip', reason: 'catalog conflict' });
+    // the same catalog everywhere is fine
+    expect(
+      planDocumentIndexing(
+        solution({ enablerCatalogId: KFBM, courseCatalogId: KFBM }),
+        preview
+      )
+    ).toMatchObject({ kind: 'private_pdf' });
+  });
+
+  it('is skipped without any catalog (nobody would see it)', () => {
+    expect(
+      planDocumentIndexing(
+        solution({ useCaseCatalogId: null, enablerCatalogId: null }),
+        preview
+      )
+    ).toEqual({ kind: 'skip', reason: 'no training catalog' });
+  });
+
+  it('is skipped for another bucket, another folder, a bad path or a file that is no pdf', () => {
+    for (const storageUrl of [
+      'private://content/preview/kfbm/a.pdf',
+      'private://content-solutions/kfbm/a.pdf',
+      'private://content-solutions/preview/kfbm/../kfbm/a.pdf',
+      'private://content-solutions/preview/kfbm/a.docx',
+      'private://content-solutions/preview/kfbm/a%2e.pdf',
+      '  private://content-solutions/preview/kfbm/a.pdf',
+      'PRIVATE://content-solutions/preview/kfbm/a.pdf',
+      'private://content-solutions/',
+    ]) {
+      expect(planDocumentIndexing(solution({ storageUrl }), preview)).toEqual({
+        kind: 'skip',
+        reason: 'private reference',
+      });
+    }
+    expect(
+      planDocumentIndexing(solution({ mimeType: 'image/png' }), preview)
+    ).toEqual({ kind: 'skip', reason: 'private reference' });
+    expect(
+      planDocumentIndexing(
+        solution({
+          mimeType:
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        }),
+        preview
+      )
+    ).toEqual({ kind: 'skip', reason: 'private reference' });
+  });
+
+  it('reads the folder of Production only for Production', () => {
+    const production = { solutionPrefix: 'kfbm/', trainerSolutions: true };
+    expect(planDocumentIndexing(solution(), production)).toEqual({
+      kind: 'skip',
+      reason: 'private reference',
+    });
+    expect(
+      planDocumentIndexing(
+        solution({
+          storageUrl: 'private://content-solutions/kfbm/UC-01/a.pdf',
+        }),
+        production
+      )
+    ).toMatchObject({ kind: 'private_pdf' });
+  });
+
+  it('never plans an address as a private solution (a public pdf stays a pdf plan)', () => {
+    expect(
+      planDocumentIndexing(
+        solution({
+          storageUrl: PDF,
+          documentType: 'TRAINER_SOLUTION',
+          visibility: 'TRAINER_ONLY',
+        }),
+        preview
+      )
+    ).toMatchObject({ kind: 'pdf', scope: { visibility: 'trainer' } });
+  });
+});

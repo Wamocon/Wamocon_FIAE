@@ -19,5 +19,12 @@ export function citationUrl(result: CitationSource): string | undefined {
   if (!isPageIndexHit) return undefined;
   const url = result.metadata?.storageUrl;
   // only a web address: no javascript: or data: URL reaches a link
-  return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : undefined;
+  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return undefined;
+  // never a signed address, a query that carries a signature or token, or an
+  // address into the private bucket of the model solutions
+  if (SECRET_ADDRESS.test(url)) return undefined;
+  return url;
 }
+
+const SECRET_ADDRESS =
+  /\/object\/(?:sign|authenticated)\/|content-solutions|[?&](?:token|signature|x-amz-[a-z-]+|x-goog-[a-z-]+|sig|jwt|apikey|key)=/i;

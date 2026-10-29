@@ -89,6 +89,36 @@ describe('parseReindexArgs: --target', () => {
   });
 });
 
+describe('parseReindexArgs: --confirm-storage-host (trainer solutions)', () => {
+  it('is null by default and lowercased when given', () => {
+    expect(ok('--target', 'preview').confirmStorageHost).toBeNull();
+    expect(
+      ok('--target', 'preview', '--confirm-storage-host', 'ABC.supabase.co')
+        .confirmStorageHost
+    ).toBe('abc.supabase.co');
+    expect(
+      ok('--target', 'local', '--confirm-storage-host=localhost:54321')
+        .confirmStorageHost
+    ).toBe('localhost:54321');
+  });
+
+  it('needs a value and is not given twice', () => {
+    expect(errors('--target', 'preview', '--confirm-storage-host')).toEqual([
+      '--confirm-storage-host needs a value',
+    ]);
+    expect(
+      errors(
+        '--target',
+        'preview',
+        '--confirm-storage-host',
+        'a.co',
+        '--confirm-storage-host',
+        'b.co'
+      )
+    ).toEqual(['--confirm-storage-host is given twice']);
+  });
+});
+
 describe('parseReindexArgs: --catalog and the purges', () => {
   it('reads the catalog code in upper case', () => {
     expect(ok('--target', 'local', '--catalog', 'kfbm').catalogCode).toBe(

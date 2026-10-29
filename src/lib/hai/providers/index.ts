@@ -30,6 +30,7 @@ import {
   parseTarget,
   type KiPolicy,
 } from '@/lib/content-upload/ki/config';
+import { sokratesOnlyChain } from './sokratesOnly';
 import { ClaudeChatProvider } from './claude';
 import {
   ChatUnavailableError,
@@ -380,6 +381,29 @@ export async function chatWithFallback(
 ): Promise<import('./types').ChatResponse> {
   return runChatChain(
     currentChain().chain,
+    systemPrompt,
+    messages,
+    userMessage,
+    onChunk,
+    options
+  );
+}
+
+/**
+ * Like chatWithFallback, but only Sokrates answers (the primary provider is not
+ * used). For a turn that holds trainer knowledge when the owner chose
+ * HAI_TRAINER_SOLUTIONS_CHAT=sokrates. Without Sokrates it throws
+ * ChatUnavailableError, it never falls back to another provider.
+ */
+export async function chatWithSokratesOnly(
+  systemPrompt: string,
+  messages: import('./types').ChatMessage[],
+  userMessage: string,
+  onChunk?: (text: string) => void,
+  options?: import('./types').ChatGenerateOptions
+): Promise<import('./types').ChatResponse> {
+  return runChatChain(
+    sokratesOnlyChain(currentChain().chain),
     systemPrompt,
     messages,
     userMessage,

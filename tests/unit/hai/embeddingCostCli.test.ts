@@ -105,6 +105,30 @@ describe('runCostCli', () => {
     ).toBe(9);
   });
 
+  it('prices only the trainer solutions of a dry run with --which trainer-solutions', () => {
+    const row = {
+      sourceType: 'document (trainer solution PDFs, not chunks)',
+      catalog: 'KFBM',
+      visibility: 'trainer',
+      unit: 'files',
+      chunks: 8,
+      chars: 0,
+      pages: 40,
+    };
+    const log = JSON.stringify({
+      plan: { inventory: [], changes: [], trainerSolutions: [row] },
+    });
+    const both = files({ 'log.json': log, [DEFAULT_PRICING]: PRICING });
+    const out = runCostCli(
+      ['--inventory', 'log.json', '--which', 'trainer-solutions', '--json'],
+      both
+    );
+    expect(out.exitCode).toBe(0);
+    const parsed = JSON.parse(out.stdout);
+    expect(parsed.totals.files).toBe(8);
+    expect(parsed.groups[0].sourceType).toContain('trainer solution');
+  });
+
   it.each([
     [[], /--inventory/],
     [['--inventory'], /needs a value/],

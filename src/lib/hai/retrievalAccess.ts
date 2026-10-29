@@ -10,6 +10,9 @@
  *  - audience: 'trainer' for TRAINER, TEMP_ADMIN, ADMIN, SUPER_ADMIN,
  *    otherwise 'trainee' (an unknown role is treated as a trainee)
  *  - organization: profiles.organization_id
+ *  - includeTrainerSolutions: only for the trainer audience and only while the
+ *    switch HAI_TRAINER_SOLUTIONS is on (model solutions of the private
+ *    bucket, see trainerSolutions.ts); absent otherwise
  *
  * Fail closed: if the profile or the scope cannot be determined the function
  * returns null and the caller must use no index content at all.
@@ -24,6 +27,7 @@ import { withDbRetry } from '@/lib/db-retry';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { getCatalogScopeForUserId, readCatalogIds } from '@/lib/catalog/scope';
 import type { SearchScope } from './vectorSearch';
+import { isTrainerSolutionsEnabled } from './trainerSolutions';
 
 /** Access of one user to the index; always has at least one catalog. */
 export interface RetrievalAccess extends SearchScope {
@@ -59,13 +63,19 @@ export async function resolveRetrievalAccess(
     const catalogIds = readCatalogIds(scope);
     if (catalogIds.length === 0) return null;
 
+    const audience = isTrainerLevelRole(profile.role) ? 'trainer' : 'trainee';
     return {
       catalogIds,
-      audience: isTrainerLevelRole(profile.role) ? 'trainer' : 'trainee',
+      audience,
       organizationId: profile.organizationId
         ? String(profile.organizationId)
         : null,
       userId,
+      // Model solutions of the private bucket: trainer level in the database
+      // AND the switch of the server. The key is left out otherwise.
+      ...(audience === 'trainer' && isTrainerSolutionsEnabled()
+        ? { includeTrainerSolutions: true }
+        : {}),
     };
   } catch (error) {
     console.error(

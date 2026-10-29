@@ -289,8 +289,23 @@ describe('the in-memory index follows the real SQL filter', () => {
       } else {
         expect(text).not.toContain('visibility');
       }
+      // model solutions of the private bucket: open only for a trainer with the
+      // permission, closed in the SQL for everyone else
+      const open =
+        access.audience === 'trainer' && !!access.includeTrainerSolutions;
+      expect(text.includes("metadata->>'trainerSolution'")).toBe(!open);
     }
   );
+
+  it('closes the model solutions in the SQL for a trainer while the switch is off', () => {
+    const trainerCase = set.cases.find(c => c.id === 'SP-34') as GoldenCase;
+    goldenState.trainerSolutionsOn = false;
+    const off = rendered(accessFor(trainerCase));
+    expect(off.text).toContain("metadata->>'trainerSolution'");
+    goldenState.trainerSolutionsOn = true;
+    const on = rendered(accessFor(trainerCase));
+    expect(on.text).not.toContain("metadata->>'trainerSolution'");
+  });
 
   it('uses the audience of the database, an unknown audience is a trainee', () => {
     const odd = { ...accessFor(set.cases[0]), audience: 'TRAINER' as never };
@@ -317,6 +332,125 @@ describe('the in-memory index follows the real SQL filter', () => {
         .map(chunk => chunk.id);
       expect(goldenState.returnedIds.sort()).toEqual(expected.sort());
     }
+  });
+});
+
+// ============================================================================
+// Trainer solutions: model solutions of the private bucket
+// ============================================================================
+
+describe('trainer solutions (model solutions of the private bucket)', () => {
+  const PDF_ID = 'kfbm-pdf-solution';
+  const pdfChunk = chunkById.get(PDF_ID) as GoldenChunk;
+  const trainerAnswers = set.cases.filter(c =>
+    c.requiredSources?.includes(PDF_ID)
+  );
+
+  it('is in the index as a private solution at trainer level', () => {
+    expect(pdfChunk.privateSolution).toBe(true);
+    expect(pdfChunk.visibility).toBe('trainer');
+    expect(pdfChunk.catalog).toBe('KFBM');
+    expect(trainerAnswers.length).toBeGreaterThanOrEqual(3);
+  });
+
+  describe.each(pipelines)('through %s', (_name, run) => {
+    it.each(trainerAnswers.map(c => [c.id, c] as const))(
+      '%s: a trainer of the occupation gets it, and the result is marked',
+      async (_id, goldenCase) => {
+        goldenState.access = accessFor(goldenCase);
+        const result = await run(goldenCase.question, contextFor(goldenCase));
+        expect(goldenState.systemPrompts.at(-1)).toContain(pdfChunk.canary);
+        expect(result.usedTrainerSolutions).toBe(true);
+        // the note that it is trainer knowledge is in the context
+        expect(goldenState.systemPrompts.at(-1)).toMatch(
+          /Musterlösung, nur für Trainer/
+        );
+      }
+    );
+
+    it.each(trainerAnswers.map(c => [c.id, c] as const))(
+      '%s: with the switch off nobody gets it, not even the trainer',
+      async (_id, goldenCase) => {
+        goldenState.trainerSolutionsOn = false;
+        goldenState.access = accessFor(goldenCase);
+        const result = await run(goldenCase.question, contextFor(goldenCase));
+        expect(goldenState.systemPrompts.at(-1)).not.toContain(pdfChunk.canary);
+        expect(result.response).not.toContain(pdfChunk.canary);
+        expect(result.usedTrainerSolutions).toBeUndefined();
+        expect(goldenState.returnedIds).not.toContain(PDF_ID);
+      }
+    );
+
+    it('never gives it to a trainee, whatever the request claims, switch on', async () => {
+      const claims: Array<GoldenCase['claimedRole']> = ['TRAINER', 'TRAINEE'];
+      for (const goldenCase of set.cases.filter(
+        c => c.role === 'TRAINEE' && c.occupations.includes('KFBM')
+      )) {
+        for (const claimedRole of claims) {
+          goldenState.reset();
+          goldenState.access = accessFor(goldenCase);
+          const result = await run(goldenCase.question, {
+            ...contextFor(goldenCase),
+            userRole: claimedRole,
+          });
+          for (const prompt of goldenState.systemPrompts) {
+            expect(prompt).not.toContain(pdfChunk.canary);
+            expect(prompt).not.toContain('PDFSOL');
+          }
+          expect(result.response).not.toContain('PDFSOL');
+          expect(JSON.stringify(result.citations)).not.toContain(PDF_ID);
+          expect(result.usedTrainerSolutions).toBeUndefined();
+          expect(goldenState.returnedIds).not.toContain(PDF_ID);
+        }
+      }
+    });
+
+    it('never gives it to a trainer of another occupation', async () => {
+      for (const goldenCase of set.cases.filter(
+        c => c.role === 'TRAINER' && !c.occupations.includes('KFBM')
+      )) {
+        goldenState.reset();
+        goldenState.access = accessFor(goldenCase);
+        const result = await run(goldenCase.question, contextFor(goldenCase));
+        for (const prompt of goldenState.systemPrompts) {
+          expect(prompt).not.toContain(pdfChunk.canary);
+        }
+        expect(result.usedTrainerSolutions).toBeUndefined();
+        expect(goldenState.returnedIds).not.toContain(PDF_ID);
+      }
+    });
+
+    it('survives a search that returns it to the wrong person (second guard of the pipeline)', async () => {
+      const trainee = set.cases.find(c => c.id === 'SP-26') as GoldenCase;
+      goldenState.access = accessFor(trainee);
+      // a broken filter: the search hands the chunk to a trainee
+      const leaky = jest.requireActual('./golden/goldenHarness');
+      const spy = jest
+        .spyOn(leaky, 'fakeSearchWithContext')
+        .mockImplementation(async (query: unknown) => ({
+          results: [
+            {
+              id: PDF_ID,
+              sourceType: 'document',
+              sourceId: PDF_ID,
+              chunkIndex: 0,
+              content: pdfChunk.text,
+              similarity: 0.99,
+              metadata: { title: PDF_ID, trainerSolution: true },
+            },
+          ],
+          query,
+          totalResults: 1,
+        }));
+      try {
+        const result = await run(trainee.question, contextFor(trainee));
+        expect(goldenState.systemPrompts.at(-1)).not.toContain(pdfChunk.canary);
+        expect(result.response).not.toContain(pdfChunk.canary);
+        expect(JSON.stringify(result.citations)).not.toContain(PDF_ID);
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 });
 
