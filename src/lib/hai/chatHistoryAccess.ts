@@ -56,15 +56,18 @@ export function sessionVisibilityCondition(
   return sql`COALESCE(${haiChatSessions.metadata}->>${sql.raw(`'${TRAINER_KNOWLEDGE_KEY}'`)}, '') <> 'true'`;
 }
 
-/** The metadata of a session or message with the marker of trainer knowledge. */
-export function markTrainerKnowledge(
-  metadata: unknown
-): Record<string, unknown> {
-  const base =
-    metadata !== null &&
-    typeof metadata === 'object' &&
-    !Array.isArray(metadata)
-      ? (metadata as Record<string, unknown>)
-      : {};
-  return { ...base, [TRAINER_KNOWLEDGE_KEY]: true };
+/**
+ * New value of hai_chat_sessions.metadata: the stored object merged with
+ * `patch` in ONE statement (jsonb concatenation). Two overlapping requests of a
+ * session (a summary write and the marker of trainer knowledge) can not
+ * overwrite each other's keys, as a read and write back of the whole object
+ * could. Only the keys of the patch travel.
+ */
+export function mergeSessionMetadata(patch: Record<string, unknown>): SQL {
+  return sql`COALESCE(${haiChatSessions.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`;
 }
+
+/** The patch that marks a session as one that holds trainer knowledge. */
+export const TRAINER_KNOWLEDGE_PATCH: Record<string, unknown> = {
+  [TRAINER_KNOWLEDGE_KEY]: true,
+};

@@ -9,7 +9,7 @@ import {
   afterEach,
   jest,
 } from '@jest/globals';
-import { createTableDb } from '../../../helpers/mockDb';
+import { createTableDb, renderCondition } from '../../../helpers/mockDb';
 import {
   FIAE_CATALOG_ID,
   fakeSession,
@@ -191,6 +191,17 @@ describe('chat route: a session with trainer knowledge as context', () => {
     expect(ctx.holdsTrainerKnowledge).toBe(true);
   });
 
+  it('marks the turn when only the memory of another chat holds trainer knowledge', async () => {
+    const { mod, processMessage } = await load({
+      role: 'TRAINER',
+      switchOn: true,
+      sessionMetadata: {},
+      otherSessions: MEMORY,
+    });
+    await mod.POST(post());
+    expect(contextOf(processMessage as never).holdsTrainerKnowledge).toBe(true);
+  });
+
   it('does not mark the turn of a trainee or of an ordinary session', async () => {
     for (const options of [
       { role: 'TRAINEE' as Role, switchOn: true, sessionMetadata: FLAGGED },
@@ -274,10 +285,13 @@ describe('chat route: marking an answer that used trainer solutions', () => {
     (rec.writes('insert', 'hai_chat_messages') as any[]).find(
       v => v.role === 'assistant'
     );
+  // the metadata of a session is written as an atomic jsonb merge (SQL), so
+  // read it back by rendering it
   const sessionMarks = (rec: any) =>
-    (rec.writes('update', 'hai_chat_sessions') as any[]).filter(
-      v => v?.metadata?.trainerKnowledge === true
-    );
+    (rec.writes('update', 'hai_chat_sessions') as any[])
+      .filter(v => v?.metadata)
+      .map(v => renderCondition(v.metadata))
+      .filter(q => q.params.some(p => String(p).includes('trainerKnowledge')));
 
   it('marks the answer and the session', async () => {
     const { mod, rec } = await load({
@@ -294,8 +308,12 @@ describe('chat route: marking an answer that used trainer solutions', () => {
     });
     const marks = sessionMarks(rec);
     expect(marks).toHaveLength(1);
-    // the rest of the metadata stays
-    expect(marks[0].metadata.conversationSummary).toBe('bleibt');
+    // one atomic merge of the marker only: the rest of the metadata (the
+    // summary of a concurrent write among it) is neither read nor written back
+    expect(marks[0].sql).toContain('||');
+    expect(JSON.parse(marks[0].params[0] as string)).toEqual({
+      trainerKnowledge: true,
+    });
   });
 
   it('marks nothing for an answer without trainer solutions', async () => {

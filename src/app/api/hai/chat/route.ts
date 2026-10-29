@@ -48,7 +48,8 @@ import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
 import { badRequestUnlessUuid } from '@/lib/uuid';
 import {
-  markTrainerKnowledge,
+  TRAINER_KNOWLEDGE_PATCH,
+  mergeSessionMetadata,
   mayReadTrainerKnowledgeHistory,
   mayUseTrainerKnowledgeInPrompt,
   sessionVisibilityCondition,
@@ -144,9 +145,9 @@ async function getOrCreateSession(
 async function getPreviousMessages(
   sessionId: string,
   limit: number = 10,
-  // false = a session that holds trainer knowledge (answers built with model
-  // solutions) gives no messages and no summary: it is no context for this turn
-  allowTrainerKnowledge: boolean = true
+  // false (the default) = a session that holds trainer knowledge (answers built
+  // with model solutions) gives no messages and no summary: it is no context
+  allowTrainerKnowledge: boolean = false
 ): Promise<{
   messages: ChatMessage[];
   summary?: string;
@@ -302,7 +303,7 @@ async function loadUserMemory(
   currentSessionId: string,
   // false = sessions that hold trainer knowledge are not part of the memory
   allowTrainerKnowledge: boolean = false
-): Promise<string | undefined> {
+): Promise<{ memory?: string; holdsTrainerKnowledge?: boolean }> {
   try {
     // Get recent sessions with their metadata (last 15 sessions, excluding current)
     const recentSessions = await db
@@ -324,9 +325,11 @@ async function loadUserMemory(
       .orderBy(desc(haiChatSessions.lastMessageAt))
       .limit(15);
 
-    if (recentSessions.length === 0) return undefined;
+    if (recentSessions.length === 0) return {};
 
     const memoryParts: string[] = [];
+    // a summary of a session with trainer knowledge is part of the memory
+    let holdsTrainerKnowledge = false;
 
     for (const session of recentSessions) {
       if (!session.metadata || typeof session.metadata !== 'object') continue;
@@ -339,19 +342,23 @@ async function loadUserMemory(
       const summary = meta.conversationSummary as string | undefined;
 
       if (!summary) continue;
+      if (hasTrainerKnowledge(session.metadata)) holdsTrainerKnowledge = true;
 
       const sessionTitle = session.title || 'Untitled';
       const date = new Date(session.createdAt).toLocaleDateString('de-DE');
       memoryParts.push(`[${date} — "${sessionTitle}"]: ${summary}`);
     }
 
-    if (memoryParts.length === 0) return undefined;
+    if (memoryParts.length === 0) return {};
 
     // Cap total memory to avoid bloating the prompt
-    return memoryParts.join('\n').slice(0, 1500);
+    return {
+      memory: memoryParts.join('\n').slice(0, 1500),
+      ...(holdsTrainerKnowledge ? { holdsTrainerKnowledge: true } : {}),
+    };
   } catch (error) {
     console.warn('Failed to load user memory:', error);
-    return undefined;
+    return {};
   }
 }
 
@@ -366,27 +373,16 @@ async function saveSessionSummary(
   keyFacts?: string[]
 ): Promise<void> {
   try {
-    // Get existing metadata
-    const session = await db
-      .select({ metadata: haiChatSessions.metadata })
-      .from(haiChatSessions)
-      .where(eq(haiChatSessions.id, sessionId))
-      .limit(1);
-
-    const existingMetadata =
-      session.length > 0 && session[0].metadata
-        ? (session[0].metadata as Record<string, unknown>)
-        : {};
-
+    // One atomic merge of the keys of the summary: the rest of the metadata
+    // (the marker of trainer knowledge among it) is never read and written back
     await db
       .update(haiChatSessions)
       .set({
-        metadata: {
-          ...existingMetadata,
+        metadata: mergeSessionMetadata({
           conversationSummary: summary,
           summaryUpdatedAt: new Date().toISOString(),
           ...(keyFacts && keyFacts.length > 0 ? { keyFacts } : {}),
-        },
+        }),
         updatedAt: new Date(),
       })
       .where(eq(haiChatSessions.id, sessionId));
@@ -404,15 +400,11 @@ async function saveSessionSummary(
  * protection of the history.
  */
 async function markSessionTrainerKnowledge(sessionId: string): Promise<void> {
-  const session = await db
-    .select({ metadata: haiChatSessions.metadata })
-    .from(haiChatSessions)
-    .where(eq(haiChatSessions.id, sessionId))
-    .limit(1);
+  // atomic merge, a concurrent summary write can not drop the marker
   await db
     .update(haiChatSessions)
     .set({
-      metadata: markTrainerKnowledge(session[0]?.metadata),
+      metadata: mergeSessionMetadata(TRAINER_KNOWLEDGE_PATCH),
       updatedAt: new Date(),
     })
     .where(eq(haiChatSessions.id, sessionId));
@@ -916,11 +908,8 @@ export async function POST(req: NextRequest) {
     // the pipeline only when the intent requires an actual LLM call.
 
     // Load cross-session memory (key facts + summaries from other chats)
-    const crossSessionMemory = await loadUserMemory(
-      userId,
-      sessionId,
-      allowTrainerKnowledge
-    );
+    const { memory: crossSessionMemory, holdsTrainerKnowledge: memoryHolds } =
+      await loadUserMemory(userId, sessionId, allowTrainerKnowledge);
 
     // Get context titles (only for an enabler or course of the user's occupation)
     const catalogScope = await getCatalogScopeForUserId(userId);
@@ -954,7 +943,9 @@ export async function POST(req: NextRequest) {
       crossSessionMemory,
       // history from a session with trainer knowledge (allowed above): with
       // HAI_TRAINER_SOLUTIONS_CHAT=sokrates the turn goes to Sokrates only
-      ...(holdsTrainerKnowledge ? { holdsTrainerKnowledge: true } : {}),
+      ...(holdsTrainerKnowledge || memoryHolds
+        ? { holdsTrainerKnowledge: true }
+        : {}),
       trainingScope: buildHaiTrainingScope({
         role: userRole,
         startOfTrainingDate: user[0].startOfTrainingDate,
@@ -1055,7 +1046,7 @@ export async function POST(req: NextRequest) {
             // Periodically generate and save conversation summary (every 10 messages)
             const msgCount = await getMessageCount(sessionId);
             if (msgCount > 0 && msgCount % 10 === 0) {
-              const allMsgs = await getPreviousMessages(sessionId, 20);
+              const allMsgs = await getPreviousMessages(sessionId, 20, true);
               const allUserTexts = allMsgs.messages
                 .filter(m => m.role === 'user')
                 .map(m => m.parts[0]?.text || '')
@@ -1069,7 +1060,7 @@ export async function POST(req: NextRequest) {
             } else if (msgCount <= 4) {
               // Early fact extraction for new sessions — save key facts
               // immediately so cross-session memory works from the start
-              const earlyMsgs = await getPreviousMessages(sessionId, 10);
+              const earlyMsgs = await getPreviousMessages(sessionId, 10, true);
               const earlyTexts = earlyMsgs.messages
                 .filter(m => m.role === 'user')
                 .map(m => m.parts[0]?.text || '')
@@ -1184,7 +1175,7 @@ export async function POST(req: NextRequest) {
     // Periodically generate and save conversation summary (every 10 messages)
     const msgCountNonStream = await getMessageCount(sessionId);
     if (msgCountNonStream > 0 && msgCountNonStream % 10 === 0) {
-      const allMsgsNonStream = await getPreviousMessages(sessionId, 20);
+      const allMsgsNonStream = await getPreviousMessages(sessionId, 20, true);
       const allUserTextsNS = allMsgsNonStream.messages
         .filter(m => m.role === 'user')
         .map(m => m.parts[0]?.text || '')
@@ -1197,7 +1188,7 @@ export async function POST(req: NextRequest) {
       saveSessionSummary(sessionId, summaryNonStream, factsNS).catch(() => { });
     } else if (msgCountNonStream <= 4) {
       // Early fact extraction for new sessions
-      const earlyMsgsNS = await getPreviousMessages(sessionId, 10);
+      const earlyMsgsNS = await getPreviousMessages(sessionId, 10, true);
       const earlyTextsNS = earlyMsgsNS.messages
         .filter(m => m.role === 'user')
         .map(m => m.parts[0]?.text || '')
@@ -1230,7 +1221,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: errorMsg,
-        errorKey: 'hai.error.somethingWrong',
+        errorKey: 'hai.error.somethingWrong'
       },
       { status: 500 }
     );

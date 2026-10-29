@@ -1572,23 +1572,23 @@ async function indexPDFDocuments(db: postgres.Sql) {
     // bucket) is never fetched.
     const plan = planDocumentIndexing(
       {
-          documentType: doc.document_type,
-          visibility: doc.visibility,
-          storageUrl: doc.storage_url,
-          mimeType: doc.mime_type,
-          description: doc.description,
-          organizationId: doc.organization_id
-            ? String(doc.organization_id)
-            : null,
-          enablerCatalogId: doc.enabler_catalog_id
-            ? String(doc.enabler_catalog_id)
-            : null,
-          useCaseCatalogId: doc.use_case_catalog_id
-            ? String(doc.use_case_catalog_id)
-            : null,
-          courseCatalogId: doc.course_catalog_id
-            ? String(doc.course_catalog_id)
-            : null,
+        documentType: doc.document_type,
+        visibility: doc.visibility,
+        storageUrl: doc.storage_url,
+        mimeType: doc.mime_type,
+        description: doc.description,
+        organizationId: doc.organization_id
+          ? String(doc.organization_id)
+          : null,
+        enablerCatalogId: doc.enabler_catalog_id
+          ? String(doc.enabler_catalog_id)
+          : null,
+        useCaseCatalogId: doc.use_case_catalog_id
+          ? String(doc.use_case_catalog_id)
+          : null,
+        courseCatalogId: doc.course_catalog_id
+          ? String(doc.course_catalog_id)
+          : null,
       },
       // the private bucket: a model solution is planned only inside the folder
       // of the target, and read only with the switch on (see below)
@@ -1764,6 +1764,12 @@ async function indexPDFDocuments(db: postgres.Sql) {
       }
       if (read.text.length < 20) {
         warn(`No usable text from the trainer solution: ${docLabel}`);
+        // an old chunk of a file that has no text any more must not stay
+        await db`
+          DELETE FROM hai_embeddings
+          WHERE source_type = 'document'
+            AND source_id = ${doc.id}::uuid
+        `.catch((e: any) => warn(`Old chunks not removed: ${e.message}`));
         skipped++;
         continue;
       }

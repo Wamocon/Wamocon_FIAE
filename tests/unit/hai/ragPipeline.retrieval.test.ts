@@ -457,7 +457,8 @@ describe('retrieveContext: trainer solutions', () => {
     });
     const runs = [
       (ctx: PipelineContext) => processMessage(QUESTION, ctx),
-      (ctx: PipelineContext) => processMessageStream(QUESTION, ctx, () => undefined),
+      (ctx: PipelineContext) =>
+        processMessageStream(QUESTION, ctx, () => undefined),
     ];
 
     it('answers a turn with trainer solutions by Sokrates only, never by the normal chain', async () => {

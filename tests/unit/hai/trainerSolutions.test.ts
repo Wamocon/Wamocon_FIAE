@@ -132,6 +132,14 @@ describe('parsePrivateSolutionObject', () => {
     ).toMatchObject({ ok: false });
   });
 
+  it('refuses an empty prefix or one that is no folder (the folder is the check)', () => {
+    for (const prefix of ['', 'kfbm', '/', 'kfbm/..', undefined]) {
+      expect(
+        parsePrivateSolutionObject(ref('kfbm/a.pdf'), prefix as never)
+      ).toMatchObject({ ok: false });
+    }
+  });
+
   it('refuses every other bucket', () => {
     for (const bucket of [
       'content',

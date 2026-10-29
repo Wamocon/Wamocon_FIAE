@@ -20,6 +20,7 @@ import {
 import { requireProPlan } from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { badRequestUnlessUuid, isUuid } from '@/lib/uuid';
+import { TRAINER_KNOWLEDGE_KEY } from '@/lib/hai/trainerSolutions';
 import {
   mayReadTrainerKnowledgeHistory,
   sessionVisibilityCondition,
@@ -71,7 +72,7 @@ export async function GET(req: NextRequest) {
     // the same rule for the search over the sessions table with alias s
     const hiddenFilter = mayReadHidden
       ? sql`TRUE`
-      : sql`COALESCE(s.metadata->>'trainerKnowledge', '') <> 'true'`;
+      : sql`COALESCE(s.metadata->>${sql.raw(`'${TRAINER_KNOWLEDGE_KEY}'`)}, '') <> 'true'`;
 
     // Phase 2C: Search across sessions and messages
     if (search && search.length >= 2) {

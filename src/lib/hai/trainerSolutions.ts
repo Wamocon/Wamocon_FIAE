@@ -145,6 +145,15 @@ export function parsePrivateSolutionObject(
   storageUrl: unknown,
   prefix: string
 ): PrivateSolutionParse {
+  // The folder is the check: no folder, no read. It must be a safe path that
+  // ends in a separator (preview/kfbm/), never empty.
+  if (
+    typeof prefix !== 'string' ||
+    !prefix.endsWith('/') ||
+    !SAFE_PATH.test(prefix.slice(0, -1))
+  ) {
+    return { ok: false, reason: 'the folder of the target is not valid' };
+  }
   const reference = parsePrivateReference(storageUrl);
   if (!reference) return { ok: false, reason: 'not a private reference' };
   if (reference.bucket !== SOLUTIONS_BUCKET) {

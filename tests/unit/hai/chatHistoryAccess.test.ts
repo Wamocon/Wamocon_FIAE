@@ -4,7 +4,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import {
-  markTrainerKnowledge,
+  mergeSessionMetadata,
   mayReadTrainerKnowledgeHistory,
   mayUseTrainerKnowledgeInPrompt,
   sessionVisibilityCondition,
@@ -71,20 +71,28 @@ describe('sessionVisibilityCondition', () => {
   });
 });
 
-describe('markTrainerKnowledge', () => {
-  it('adds the marker and keeps the rest of the metadata', () => {
-    expect(markTrainerKnowledge({ conversationSummary: 's', a: 1 })).toEqual({
-      conversationSummary: 's',
-      a: 1,
+describe('mergeSessionMetadata (atomic, never a read and write back)', () => {
+  const dialect = new PgDialect();
+  const render = (patch: Record<string, unknown>) => {
+    const q = dialect.sqlToQuery(mergeSessionMetadata(patch));
+    return { text: q.sql.replace(/\s+/g, ' '), params: q.params };
+  };
+
+  it('merges the patch into the stored metadata in one statement', () => {
+    const out = render({ trainerKnowledge: true });
+    expect(out.text).toContain('COALESCE(');
+    expect(out.text).toContain("'{}'::jsonb");
+    expect(out.text).toContain('|| $1::jsonb');
+    expect(JSON.parse(out.params[0] as string)).toEqual({
       trainerKnowledge: true,
     });
   });
 
-  it('starts from an empty object for missing or odd metadata', () => {
-    for (const metadata of [null, undefined, 'x', 5, []]) {
-      expect(markTrainerKnowledge(metadata)).toEqual({
-        trainerKnowledge: true,
-      });
-    }
+  it('carries only the keys of the patch (the rest stays in the database)', () => {
+    const out = render({ conversationSummary: 's', keyFacts: ['a'] });
+    expect(JSON.parse(out.params[0] as string)).toEqual({
+      conversationSummary: 's',
+      keyFacts: ['a'],
+    });
   });
 });
