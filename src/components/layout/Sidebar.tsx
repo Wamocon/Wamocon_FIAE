@@ -97,9 +97,6 @@ export function Sidebar({
         case 'trainees':
           router.push('/trainer/trainees');
           break;
-        case 'modules':
-          router.push('/trainee/modules');
-          break;
         case 'courses':
           router.push('/trainee/courses');
           break;
@@ -388,10 +385,10 @@ export function Sidebar({
                   : normalizeRole(profile.role) === 'SUPER_ADMIN'
                     ? t('roles.superAdmin')
                     : profile.role === 'admin'
-                    ? t('roles.admin')
-                    : profile.role === 'temp_admin'
-                      ? t('roles.tempAdmin')
-                      : t('roles.trainer')}
+                      ? t('roles.admin')
+                      : profile.role === 'temp_admin'
+                        ? t('roles.tempAdmin')
+                        : t('roles.trainer')}
               </p>
             </div>
           </div>

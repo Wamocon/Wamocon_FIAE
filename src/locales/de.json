@@ -1113,7 +1113,6 @@
   "enablerPage.viewOnly": "Nur ansehen (gesperrt)",
   "enablerPage.quizAlreadySubmitted": "Dieses Quiz wurde bereits abgegeben. Hier siehst du deine gespeicherten Antworten.",
   "enablerPage.backToQuizzes": "Zurück zur Übersicht",
-  "enablerPage.backToModules": "Zurück zu meinen Modulen",
   "enablerPage.approved": "Genehmigt",
   "enablerPage.approvedDesc": "Diese Abgabe wurde vom Ausbilder genehmigt.",
   "enablerPage.pending": "Wird geprüft",
@@ -2905,5 +2904,7 @@
   "emailConfirm.notice.done": "Ihre E-Mail-Adresse ist bestätigt. Sie können sich jetzt anmelden. Nach einer Selbstregistrierung schaltet Ihr Ausbilder Ihr Konto frei.",
   "emailConfirm.notice.failed": "Der Bestätigungslink ist abgelaufen oder wurde schon benutzt. Melden Sie sich an, dann können Sie einen neuen Link anfordern.",
   "emailConfirm.notice.check": "Wenn Sie Ihre E-Mail-Adresse gerade bestätigt haben, können Sie sich jetzt anmelden. Andernfalls melden Sie sich an und fordern bei Bedarf einen neuen Link an.",
-  "emailConfirm.changeAddress": "Andere E-Mail-Adresse verwenden"
+  "emailConfirm.changeAddress": "Andere E-Mail-Adresse verwenden",
+  "enablerPage.backToThemes": "Zurück zu den Themenkreisen",
+  "enablerPage.keyAfterPass": "Die richtige Antwort sehen Sie nach dem Bestehen des Quiz. Wiederholen Sie es, bis Sie bestanden haben."
 }
