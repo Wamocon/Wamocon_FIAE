@@ -958,7 +958,7 @@ Add to: `.claude/settings.local.json` (already exists in your project)
       "command": "npx",
       "args": ["-y", "@supabase/mcp-server"],
       "env": {
-        "SUPABASE_URL": "https://yxzaflchsqbzhomfwyjh.supabase.co",
+        "SUPABASE_URL": "https://<project-ref>.supabase.co",
         "SUPABASE_SERVICE_ROLE_KEY": "your-service-role-key"
       }
     }
