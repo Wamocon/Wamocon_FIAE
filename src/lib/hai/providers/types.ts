@@ -108,7 +108,7 @@ export type ChatProviderType =
   | 'openrouter'
   | 'claude'
   | 'openai-compatible';
-export type EmbeddingProviderType = 'gemini' | 'ollama';
+export type EmbeddingProviderType = 'gemini' | 'ollama' | 'openai-compatible';
 
 /**
  * What happens when the primary chat provider fails (HAI_CHAT_FALLBACK):
@@ -127,8 +127,18 @@ export interface ProviderConfig {
   /** Fallback of the chat — set via HAI_CHAT_FALLBACK env var */
   chatFallback: ChatFallbackMode;
 
-  /** Which provider to use for embeddings ('ollama' or 'gemini') */
+  /** Which provider to use for embeddings ('gemini', 'ollama' or 'openai-compatible') */
   embeddingProvider: EmbeddingProviderType;
+
+  /**
+   * Embeddings through Sokrates (HAI_EMBEDDING_PROVIDER=openai-compatible): the
+   * address and the key are the ones of Sokrates (OPENAI_COMPATIBLE_*), the
+   * model and the dimensions are set here
+   */
+  sokratesEmbedding: {
+    model: string;
+    dimensions: number;
+  };
 
   /** Gemini-specific config (chat + embeddings — production standard) */
   gemini: {
@@ -193,6 +203,9 @@ export function parseChatFallback(raw: string | undefined): ChatFallbackMode {
  * HAI_EMBEDDING_PROVIDER controls which embedding backend is used:
  *   - 'gemini' (default) → Google Gemini API (production standard)
  *   - 'ollama' → Local Ollama, for local dev only (768 dims — incompatible with production)
+ *   - 'openai-compatible' → Sokrates (qwen3-embedding, cut to 3072 dims). The
+ *     vectors differ from those of Gemini: an index has to be built with the
+ *     same provider that answers the questions.
  */
 export function loadProviderConfig(): ProviderConfig {
   // Prefer openai-compatible when available; fall back to gemini for legacy setups.
@@ -250,7 +263,16 @@ export function loadProviderConfig(): ProviderConfig {
   return {
     chatProvider,
     chatFallback: parseChatFallback(process.env.HAI_CHAT_FALLBACK),
-    embeddingProvider: embeddingProvider === 'ollama' ? 'ollama' : 'gemini',
+    embeddingProvider:
+      embeddingProvider === 'ollama' ||
+      embeddingProvider === 'openai-compatible'
+        ? embeddingProvider
+        : 'gemini',
+
+    sokratesEmbedding: {
+      model: process.env.HAI_SOKRATES_EMBEDDING_MODEL || 'qwen3-embedding:8b',
+      dimensions: parseInt(process.env.HAI_EMBEDDING_DIMENSIONS || '3072', 10),
+    },
 
     gemini: {
       apiKey: process.env.GEMINI_API_KEY,
