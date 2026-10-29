@@ -52,6 +52,7 @@ Zwei Begrenzungen beim Push auf einen Branch: Der Lauf startet nur, wenn sich `s
 | `supabase/preview-setup/05-demo-bootstrap.sql`                 | SQL-Vorlage von Hand: Plattform-Organisation, Demo-Betrieb, drei Testkonten (Demo-Bootstrap)    |
 | `supabase/preview-setup/06-copy-content-from-production.sql`  | SQL-Vorlage von Hand: Ausbildungsinhalt von Production in die Preview kopieren (bis zum Rollout)  |
 | `supabase/preview-setup/07-copy-users-from-production.sql`    | SQL-Vorlage von Hand: Profile der Plattform-Organisation von Production in die Preview kopieren  |
+| `supabase/preview-setup/08-demo-occupations.sql`              | SQL-Vorlage von Hand: je Beruf ein Demo-Azubi und ein Demo-Ausbilder (example.invalid), Probelauf zuerst, siehe docs/abgabe-datei.md |
 | `src/lib/db-schema.ts`                                         | Zentrale Schema-Auswahl der App                                                                 |
 
 Das alte `deploy.yml` (Aufruf des Remote-Workflows `Wamocon/github_workflow`) ist ersetzt.

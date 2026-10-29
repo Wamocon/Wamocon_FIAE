@@ -10,6 +10,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { PageLoader } from '@/components/ui/PageLoader';
 import { authFetch } from '@/lib/authFetch';
+import { SubmissionFileField } from '@/components/trainee/SubmissionFileField';
 
 export default function TraineeUseCaseDetailPage() {
   const params = useParams<{ useCaseId: string }>();
@@ -354,6 +355,7 @@ export default function TraineeUseCaseDetailPage() {
             </div>
           )}
         </div>
+        <SubmissionFileField useCaseId={useCaseId} canEdit={canEdit} />
         {canEdit && (
           <div className="flex justify-end">
             <button
