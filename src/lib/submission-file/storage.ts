@@ -12,6 +12,7 @@ import { getSupabaseSecretKey } from '@/lib/env';
 import {
   SUBMISSION_BUCKET,
   isSubmissionFolder,
+  isTraineeFolder,
   parseSubmissionPath,
 } from '@/lib/submission-file/rules';
 
@@ -44,6 +45,8 @@ export interface SubmissionFileStorage {
   createSignedUploadUrl(path: string): Promise<SignedUpload>;
   /** The objects directly inside one folder (`…/incoming` or `…/file`). */
   list(folder: string): Promise<StoredObject[]>;
+  /** The names of the sub folders of one trainee folder (`<org>/<trainee>`): the use cases. */
+  listFolders(traineeFolder: string): Promise<string[]>;
   /** The whole object, or null if there is no such object. */
   download(path: string): Promise<Uint8Array | null>;
   /** Moves an object, the target must not exist. */
@@ -84,6 +87,15 @@ export function guardSubmissionStorage(
       }
       return inner.list(folder);
     },
+    listFolders(folder) {
+      if (!isTraineeFolder(folder, schema)) {
+        throw new SubmissionStorageError(
+          'INVALID_PATH',
+          'The storage folder is not a trainee folder of the submission bucket.'
+        );
+      }
+      return inner.listFolders(folder);
+    },
     download(value) {
       path(value);
       return inner.download(value);
@@ -112,6 +124,8 @@ export interface SupabaseSubmissionStorageDeps {
 }
 
 const LIST_LIMIT = 100;
+/** More use case folders than this under one trainee do not exist. */
+const MAX_FOLDERS = 5000;
 const NOT_FOUND = /not.?found|does not exist|no such/i;
 const ALREADY_EXISTS = /already exists|duplicate/i;
 
@@ -177,6 +191,35 @@ class SupabaseSubmissionStorage implements SubmissionFileStorage {
       });
     }
     return objects;
+  }
+
+  async listFolders(traineeFolder: string): Promise<string[]> {
+    const names: string[] = [];
+    // one folder per use case the trainee ever touched, so read page after page
+    for (let offset = 0; offset < MAX_FOLDERS; offset += LIST_LIMIT) {
+      const { data, error } = await this.bucket().list(traineeFolder, {
+        limit: LIST_LIMIT,
+        offset,
+      });
+      if (error) {
+        throw new SubmissionStorageError(
+          'STORAGE_ERROR',
+          'The folder could not be listed.'
+        );
+      }
+      const page = data ?? [];
+      // a folder has no id, an object does
+      for (const entry of page) {
+        if (entry.id === null || entry.id === undefined) {
+          names.push(entry.name);
+        }
+      }
+      if (page.length < LIST_LIMIT) return names;
+    }
+    throw new SubmissionStorageError(
+      'STORAGE_ERROR',
+      'The folder has more entries than expected.'
+    );
   }
 
   async download(path: string): Promise<Uint8Array | null> {

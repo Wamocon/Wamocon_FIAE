@@ -36,6 +36,7 @@ describe('guardSubmissionStorage', () => {
         token: 't',
       })),
       list: jest.fn(async () => []),
+      listFolders: jest.fn(async () => []),
       download: jest.fn(async () => null),
       move: jest.fn(async () => undefined),
       remove: jest.fn(async () => undefined),
@@ -50,6 +51,9 @@ describe('guardSubmissionStorage', () => {
     await guarded.createSignedUploadUrl(goodIncoming);
     await guarded.list(fileFolder(folder));
     await guarded.list(incomingFolder(folder));
+    await guarded.listFolders(
+      `${scope.organizationId}/${scope.traineeId}`
+    );
     await guarded.download(goodFile);
     await guarded.move(goodIncoming, goodFile);
     await guarded.remove([goodFile, goodIncoming]);
@@ -73,6 +77,8 @@ describe('guardSubmissionStorage', () => {
     };
     expectInvalid(() => guarded.createSignedUploadUrl(bad));
     expectInvalid(() => guarded.list(folder));
+    expectInvalid(() => guarded.listFolders(folder));
+    expectInvalid(() => guarded.listFolders(fileFolder(folder)));
     expectInvalid(() => guarded.download(bad));
     expectInvalid(() => guarded.move(goodIncoming, bad));
     expectInvalid(() => guarded.move(bad, goodFile));
@@ -174,6 +180,70 @@ describe('createSubmissionStorage (Supabase)', () => {
       { name: 'a.pdf', size: 10 },
       { name: 'b.pdf', size: null },
     ]);
+  });
+
+  it('lists the use case folders of a trainee page by page and skips objects', async () => {
+    const full = Array.from({ length: 100 }, (_, i) => ({
+      name: `folder-${i}`,
+      id: null,
+    }));
+    const pages = [
+      { data: full, error: null },
+      {
+        data: [
+          { name: 'last', id: null },
+          { name: 'stray.pdf', id: 'x' },
+        ],
+        error: null,
+      },
+    ];
+    const bucket: Bucket = { list: jest.fn(async () => pages.shift()) };
+    const storage = createSubmissionStorage(
+      deps(fakeClient(bucket).createClientImpl)
+    );
+    const names = await storage.listFolders(
+      `${scope.organizationId}/${scope.traineeId}`
+    );
+    expect(names).toHaveLength(101);
+    expect(names.at(-1)).toBe('last');
+    expect(bucket.list).toHaveBeenNthCalledWith(
+      2,
+      `${scope.organizationId}/${scope.traineeId}`,
+      { limit: 100, offset: 100 }
+    );
+  });
+
+  it('fails instead of returning a partial list when a trainee has too many folders', async () => {
+    const full = Array.from({ length: 100 }, (_, i) => ({
+      name: `f${i}`,
+      id: null,
+    }));
+    const bucket: Bucket = {
+      list: jest.fn(async () => ({ data: full, error: null })),
+    };
+    const storage = createSubmissionStorage(
+      deps(fakeClient(bucket).createClientImpl)
+    );
+    await expect(
+      storage.listFolders(`${scope.organizationId}/${scope.traineeId}`)
+    ).rejects.toMatchObject({ code: 'STORAGE_ERROR' });
+  });
+
+  it('handles an empty folder list and fails with STORAGE_ERROR', async () => {
+    const answers: any[] = [
+      { data: null, error: null },
+      { data: null, error: { message: 'secret detail' } },
+    ];
+    const bucket: Bucket = { list: jest.fn(async () => answers.shift()) };
+    const storage = createSubmissionStorage(
+      deps(fakeClient(bucket).createClientImpl)
+    );
+    const parent = `${scope.organizationId}/${scope.traineeId}`;
+    expect(await storage.listFolders(parent)).toEqual([]);
+    await expect(storage.listFolders(parent)).rejects.toMatchObject({
+      code: 'STORAGE_ERROR',
+      message: 'The folder could not be listed.',
+    });
   });
 
   it('fails the listing with STORAGE_ERROR and gives nothing of the cause', async () => {

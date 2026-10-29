@@ -11,6 +11,10 @@ import { apiCache } from '@/lib/api-cache';
 import { requireContentScope } from '@/lib/catalog/scope';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import {
+  removeSubmissionFiles,
+  submissionFileTargetsOfCourse,
+} from '@/lib/submission-file/on-delete';
+import {
   courses,
   courseMembers,
   courseSkills,
@@ -262,6 +266,10 @@ export async function DELETE(
       .where(eq(courseMembers.courseId, courseId as any));
     const courseName = courseRow.title || 'Kurs';
 
+    // The use cases of the course and their submissions go with it (cascade), the files of
+    // the submissions in the bucket do not: find them first, remove them after the delete
+    const fileTargets = await submissionFileTargetsOfCourse(courseId);
+
     // Import trainee_achieved_skills for cascade delete
     const { traineeAchievedSkills } =
       await import('@/db/migrations/schemas/schema');
@@ -300,6 +308,9 @@ export async function DELETE(
     } catch (notifyErr) {
       console.warn('Failed to notify members for course deletion', notifyErr);
     }
+
+    // Last, so that a slow storage can not keep the notifications back. Never throws.
+    await removeSubmissionFiles(fileTargets);
 
     return NextResponse.json({ ok: true });
   } catch (e) {
