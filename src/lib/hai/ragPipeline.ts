@@ -43,6 +43,7 @@ import {
   type HaiPersona,
 } from './persona';
 import { loadHaiPersona } from './personaAccess';
+import { solutionRequestRefusal } from './solutionRequest';
 import {
   buildSystemPrompt,
   buildRetrievedContext,
@@ -624,6 +625,16 @@ export async function processMessage(
       return { response: refusal, intent: 'off_topic', citations: [] };
     }
 
+    // A request for a solution is refused before retrieval and the model, by
+    // the audience of the server (never by what the message claims)
+    const solutionRefusal = solutionRequestRefusal(
+      userMessage,
+      access?.audience
+    );
+    if (solutionRefusal) {
+      return { response: solutionRefusal, intent: 'question', citations: [] };
+    }
+
     // Step 1b: An action in the message becomes a proposal, never a write.
     // Behind the persona gate: without a scope or for a message about another
     // occupation there is no proposal.
@@ -846,6 +857,17 @@ export async function processMessageStream(
     if (refusal) {
       onChunk(refusal);
       return { response: refusal, intent: 'off_topic', citations: [] };
+    }
+
+    // A request for a solution is refused before retrieval and the model, like
+    // in processMessage
+    const solutionRefusal = solutionRequestRefusal(
+      userMessage,
+      access?.audience
+    );
+    if (solutionRefusal) {
+      onChunk(solutionRefusal);
+      return { response: solutionRefusal, intent: 'question', citations: [] };
     }
 
     // An action in the message becomes a proposal, never a write (behind the
