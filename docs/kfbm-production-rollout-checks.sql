@@ -133,9 +133,9 @@ where o.is_platform_owner
 group by o.name, p.role
 order by o.name, p.role;
 
--- V07. Row counts of the tables the rollout touches (measured 23.10.2026: 26 courses,
--- 189 enablers, 88 use cases, 6 profiles). Keep the output: it is the reference for the
--- comparison after the rollout.
+-- V07. Row counts of the tables the rollout touches (measured 28.10.2026 in production:
+-- 25 courses, 186 enablers, 85 use cases, 6 profiles; the earlier values 26, 189 and 88
+-- are those of the preview). Keep the output: it is the reference for the comparison after the rollout.
 select 'courses' as table_name, count(*) as row_count from public.courses
 union all select 'enablers', count(*) from public.enablers
 union all select 'use_cases', count(*) from public.use_cases
