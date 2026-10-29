@@ -1114,7 +1114,6 @@
   "enablerPage.viewOnly": "Nur ansehen (gesperrt)",
   "enablerPage.quizAlreadySubmitted": "Dieses Quiz wurde bereits abgegeben. Hier siehst du deine gespeicherten Antworten.",
   "enablerPage.backToQuizzes": "Zurück zur Übersicht",
-  "enablerPage.backToModules": "Zurück zu meinen Modulen",
   "enablerPage.approved": "Genehmigt",
   "enablerPage.approvedDesc": "Diese Abgabe wurde vom Ausbilder genehmigt.",
   "enablerPage.pending": "Wird geprüft",
@@ -2917,5 +2916,7 @@
   "landing.universe.planet.itsys": "IT-Systemelektroniker/-in",
   "landing.universe.planet.soon": "Bald verfügbar",
   "landing.universe.hint.pre": "Klicke auf",
-  "landing.universe.hint.post": "und erkunde die 12 Lernfelder"
+  "landing.universe.hint.post": "und erkunde die 12 Lernfelder",
+  "enablerPage.backToThemes": "Zurück zu den Themenkreisen",
+  "enablerPage.keyAfterPass": "Die richtige Antwort sehen Sie nach dem Bestehen des Quiz. Wiederholen Sie es, bis Sie bestanden haben."
 }
