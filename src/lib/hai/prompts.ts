@@ -351,17 +351,17 @@ Es konnten KEINE Live-Daten aus der Plattform geladen werden.
 Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, antworte: "Dazu liegen mir aktuell keine Daten vor. Bitte pruefe es direkt in der Plattform unter dem entsprechenden Menuepunkt."`);
   }
 
+  // Borderline rules, for every occupation. For FIAE this changes the prompt
+  // that persona.fiae-baseline.test.ts holds: the owner decided on 30.10.2026
+  // that FIAE gets them too, and the baseline was recorded again for this
+  // change only. They come before the learning technique section, which stays
+  // the last part when it applies.
+  parts.push(buildBoundaryRules(context.userRole));
+
   // Learning technique section (package B): limits and rules for tips on
   // learning and memorizing, for both pipelines, only when it applies
   if (context.learningTechniques) {
     parts.push(buildLearningTechniquePrompt(persona));
-  }
-
-  // Borderline rules at the end (the last words weigh most), not for FIAE: its
-  // prompt is fixed byte by byte (see persona.fiae-baseline.test.ts) and changes
-  // only by a decision of the owner
-  if (persona.catalogCode !== 'FIAE') {
-    parts.push(buildBoundaryRules(context.userRole));
   }
 
   return parts.join('\n\n');
