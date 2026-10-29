@@ -159,7 +159,9 @@ describe('browser access to the database', () => {
     // path form of document-storage.ts, upsert off, and only for files that a person
     // named in the apply; solution-storage.ts signs the model solutions of the private
     // bucket content-solutions for the trainer list, server side, ten minutes, only for
-    // trainer-only rows)
+    // trainer-only rows; submission-file/storage.ts uses it for the private bucket
+    // submission-files only, on the server, paths of one exact form built from the session,
+    // upsert off, read links of two minutes)
     // (a new one needs a look at the key it uses)
     expect(creators).toEqual([
       'src/app/api/admin/users/[userId]/route.ts',
@@ -173,6 +175,7 @@ describe('browser access to the database', () => {
       'src/lib/content-upload/transfer/content-bucket.ts',
       'src/lib/document-file-cleanup.ts',
       'src/lib/solution-storage.ts',
+      'src/lib/submission-file/storage.ts',
       'src/lib/supabase.ts',
       'src/utils/supabase/server.ts',
     ]);
