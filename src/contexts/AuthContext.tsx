@@ -34,6 +34,8 @@ import {
   type LoginReason,
   type SessionEnd,
 } from '@/lib/auth/access-state';
+import { passwordProblem } from '@/lib/auth/password-policy';
+import { EmailNotConfirmedError } from '@/lib/auth/email-confirmation';
 import {
   PREVIEW_ACCOUNT_REJECTED_CODE,
   PREVIEW_ACCOUNT_REJECTED_MESSAGE,
@@ -703,7 +705,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               /email/i.test(text) &&
               /confirm/i.test(text)
             ) {
-              throw new Error('E-Mail ist noch nicht bestätigt.');
+              throw new EmailNotConfirmedError();
             }
             if (resp.status === 400)
               throw new Error('E-Mail oder Passwort ist falsch.');
@@ -1020,9 +1022,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const changePassword = useCallback(async (newPassword: string) => {
-    if (!newPassword || newPassword.length < 8) {
-      throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
-    }
+    const problem = passwordProblem(newPassword);
+    if (problem) throw new Error(problem);
 
     const timeoutPromise = new Promise<{ data: any; error: null }>(resolve => {
       setTimeout(() => resolve({ data: null, error: null }), 3000);

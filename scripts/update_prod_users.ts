@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
+import { assertValidPassword } from '../src/lib/auth/password-policy';
 
 type TargetUser = {
   email: string;
@@ -16,6 +17,10 @@ if (!usersFile) {
   );
 }
 const targets: TargetUser[] = JSON.parse(readFileSync(usersFile, 'utf8'));
+// Stop before the first account is touched if one password breaks the rule
+for (const target of targets) {
+  assertValidPassword(target.password, `Passwort von ${target.email}`);
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

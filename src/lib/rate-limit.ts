@@ -29,7 +29,16 @@ export function checkRateLimit(
     for (const [k, b] of buckets) {
       if (b.resetAt <= now) buckets.delete(k);
     }
-    if (buckets.size >= MAX_TRACKED_KEYS) buckets.clear();
+    // Still full of live keys: drop the oldest tenth (a Map keeps insertion
+    // order) instead of everything, so one client that floods the map with
+    // made-up keys cannot reset the counters of everybody else.
+    if (buckets.size >= MAX_TRACKED_KEYS) {
+      let drop = Math.ceil(MAX_TRACKED_KEYS / 10);
+      for (const k of buckets.keys()) {
+        if (drop-- <= 0) break;
+        buckets.delete(k);
+      }
+    }
   }
 
   const existing = buckets.get(key);

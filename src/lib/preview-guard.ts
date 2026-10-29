@@ -24,10 +24,12 @@ export { PREVIEW_ADMIN_BLOCKED_MESSAGE };
  *    an account created in Preview carries app_metadata.preview_only, Production
  *    rejects flagged accounts, and a delete in Preview removes an auth account
  *    only when it carries the flag. They never call blockInPreview().
- *  - Every other route that uses auth.admin.* (today POST /api/register) is
- *    switched off in Preview with a clear 403 by blockInPreview(). A new route
- *    with auth.admin.* needs this call or its own check of the flag, and a
- *    review.
+ *  - Every other route that uses auth.admin.* is switched off in Preview with a
+ *    clear 403 by blockInPreview(). A new route with auth.admin.* needs this
+ *    call or its own check of the flag, and a review. The routes that create
+ *    an account or send an e-mail with the public key (POST /api/register,
+ *    POST /api/auth/resend-confirmation) use no auth.admin.*, but they act on
+ *    the shared Auth of Production too and call blockInPreview() as well.
  *
  * Remaining risk and the robust way: docs/release-prozess.md, section
  * "Einschränkungen". A separate Supabase project for Preview is the robust
