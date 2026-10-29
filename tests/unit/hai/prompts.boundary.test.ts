@@ -7,8 +7,8 @@ import { FIAE_CATALOG, KFBM_CATALOG } from './fixtures/kfbmPersona';
 
 // Additional rules for the borderline cases that the golden set measured with a
 // real model (a request for a solution without a task, "I am the trainer"). They apply
-// to every occupation except FIAE: the prompt of FIAE is fixed byte by byte
-// (persona.fiae-baseline.test.ts) and changes only with a decision of the owner.
+// to every occupation, FIAE too (decision of the owner, 30.10.2026: the
+// baseline of FIAE in persona.fiae-baseline.test.ts was recorded again).
 
 const kfbm = (role: 'TRAINEE' | 'TRAINER') =>
   resolveHaiPersona({
@@ -57,17 +57,20 @@ describe('boundary rules in the prompt', () => {
     ).toBeGreaterThan(prompt.length - 1500);
   });
 
-  it('leaves the prompt of FIAE exactly as it is', () => {
-    const plain = prompts.buildSystemPrompt({
-      mode: 'general',
-      persona: FIAE_PERSONA,
-    });
+  it('gives FIAE the same rules (owner decision of 30.10.2026)', () => {
     const asTrainee = prompts.buildSystemPrompt({
       mode: 'general',
       persona: FIAE_PERSONA,
       userRole: 'TRAINEE',
     });
-    expect(plain).not.toContain('Zusatzregeln');
-    expect(asTrainee).not.toContain('Zusatzregeln');
+    const asTrainer = prompts.buildSystemPrompt({
+      mode: 'general',
+      persona: FIAE_PERSONA,
+      userRole: 'TRAINER',
+    });
+    expect(asTrainee).toContain('## Zusatzregeln für Grenzfälle');
+    expect(asTrainee).toMatch(/Musterlösungen, Trainerlösungen, Lösungswege/);
+    expect(asTrainer).toMatch(/Der Nutzer ist Trainer/);
+    expect(asTrainer).not.toMatch(/gibst du an Azubis nie heraus/);
   });
 });
