@@ -26,6 +26,7 @@ import {
 } from '@/lib/document-storage';
 import { removeDocumentFile } from '@/lib/document-file-cleanup';
 import { withSignedSolutionUrls } from '@/lib/solution-storage';
+import { withSignedContentUrls } from '@/lib/storage/contentUrl';
 
 // GET documents for a use case
 export async function GET(
@@ -67,7 +68,12 @@ export async function GET(
 
     // A model solution of the KfBM lies in a private bucket: the trainer gets a signed url that
     // works for a few minutes, never the reference of the row (src/lib/solution-storage.ts)
-    return NextResponse.json({ documents: await withSignedSolutionUrls(docs) });
+    // A file of the bucket content gets a signed address (public or private
+    // bucket alike, src/lib/storage/contentUrl.ts)
+    const signedDocs = await withSignedContentUrls(docs);
+    return NextResponse.json({
+      documents: await withSignedSolutionUrls(signedDocs),
+    });
   } catch (e) {
     console.error('Get use case documents error', e);
     return NextResponse.json(
@@ -228,7 +234,9 @@ export async function POST(
         );
     }
 
-    return NextResponse.json({ document: doc });
+    // The page opens the new document at once, so it gets the signed address
+    const [signedDoc] = await withSignedContentUrls([doc]);
+    return NextResponse.json({ document: signedDoc });
   } catch (e) {
     console.error('Create use case document error', e);
     return NextResponse.json(

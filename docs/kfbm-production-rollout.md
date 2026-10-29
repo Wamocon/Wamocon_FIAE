@@ -76,6 +76,7 @@ Frist für D2 bis D5 ist **Donnerstag, 29.10.2026**, für D18 bis D20 **Freitag,
 7. **Neu: Reihenfolge-Sperre SQ2 vor oder nach dem Release-Kandidaten (D19).** SQ2 ist nicht gemergt. Wird sie bis Freitag, 30.10.2026, 12:00 Uhr gemergt, gehört sie in den Release-Kandidaten und in die Abnahme. Sonst kommt sie als normaler Release nach dem Rollout (dann nach WP3, Abschnitt 1.3).
 8. **Neu: Azubis mit `trainer_activated = false` (D20).** Vorcheck V14 zeigt, wie viele Azubis der Server nach dem App-Release sperrt (B12). Entscheidung je Gruppe: freischalten, warten lassen, Nutzer informieren.
 
+9. **Neu: Bucket `content` privat schalten (D21).** Entschieden am 29.10.2026: erst bei der Produktivschaltung, nicht jetzt. Die App funktioniert mit öffentlichem und privatem Bucket (signierte Adressen, Abschnitt 4.9). Reihenfolge: erst App-Release, dann Bucket privat, danach Smoketest. Preview und Production teilen den Bucket, das Umschalten wirkt auf beide gleichzeitig.
 
 ### 0.4 Zeitplan in einer Tabelle
 
@@ -830,6 +831,16 @@ Befunde im Einzelnen:
 - **Nie abgeglichen, richtig so:** `organization_catalogs` (Freigabe je Organisation), `trainee_enrollments`, `trainee_elective_choices`, `course_members`, `quiz_assignments`, `hai_embeddings`, Profile. Das sind Konfigurations- und Nutzerdaten, in Production setzt sie Niko über die Werkzeuge (Abschnitt 4.6).
 - **Ersteller und Organisation:** `created_by_id` (Kurse, Quizze) wird über die E-Mail des Profils übersetzt und fällt sonst auf das Profil aus `CONTENT_SYNC_OWNER_EMAIL` zurück (H3, B13). `content_documents.organization_id` wird über den Slug übersetzt, sonst leer, `uploaded_by_id` über die E-Mail, sonst leer. Die Kopie nimmt nie Organisationen oder Profile mit.
 
+
+### 4.9 Bucket `content` privat schalten (nach dem App-Release)
+
+Der Bucket `content` ist heute öffentlich und wird bei der Produktivschaltung privat (der Bucket `avatar` bleibt öffentlich). Die App ist darauf vorbereitet: Listen und Routen geben signierte Adressen aus, die Server-Leser (HAI, Zeugnis-Logo, Reindex) lesen mit dem Server-Schlüssel. Ein öffentlicher Bucket funktioniert unverändert weiter, das Umschalten ist deshalb ohne Auswirkung auf die Nutzer. Einzelheiten, Inventur und Vorcheck: `docs/content-bucket-privat.md`.
+
+1. **App-Release** mit dem Paket (E9). Der Bucket bleibt öffentlich. Voraussetzung: `SUPABASE_SECRET_KEY` (oder `SUPABASE_SERVICE_ROLE_KEY`) ist in Production gesetzt. Auch die Preview braucht den neuen Stand, weil der Bucket gemeinsam genutzt wird.
+2. **Vorcheck** aus `docs/content-bucket-privat.md`, Abschnitt 5: Zeilen mit Sonderzeichen im Pfad oder fremdem Host. Ergebnis muss leer sein oder jede Zeile begründet.
+3. **Bucket privat stellen** (Supabase, Storage, `content`, Public aus). Das macht der Eigentümer selbst, keine Migration, kein Workflow. Preview und Production sind im selben Moment betroffen.
+4. **Smoketest** sofort danach in Production und Preview: Lehrtext als Azubi öffnen (Reader, neuer Tab, Download), Szenario-PDF, Aufgaben-PDF, Zeugnis-PDF mit Logo, Quelle im HAI-Chat, Trainer-Vorschau und Upload, Gegenprobe mit der alten öffentlichen Adresse (muss 400 oder 404 geben).
+5. **Rückweg:** Bucket wieder öffentlich stellen. Die gespeicherten Zeilen sind unverändert, signierte und öffentliche Adressen funktionieren danach nebeneinander.
 
 ## 5. HAI: Neuindexierung nur mit gesondertem Go
 

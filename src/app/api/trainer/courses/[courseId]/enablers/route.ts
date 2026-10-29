@@ -14,6 +14,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
+import { canonicalStoredAddress } from '@/lib/storage/contentPath';
 
 export async function GET(
   _req: NextRequest,
@@ -89,10 +90,13 @@ export async function POST(
     const durationUnitVal: 'DAYS' | 'WEEKS' | undefined =
       body?.durationUnit ||
       (typeof durationValue === 'number' ? 'DAYS' : undefined);
-    const pptUrl: string | undefined = body?.pptUrl;
-    const videoUrl: string | undefined = body?.videoUrl;
+    // A signed link taken from a page never ends up in a row
+    const stored = (value: unknown): string | undefined =>
+      typeof value === 'string' ? canonicalStoredAddress(value) : undefined;
+    const pptUrl: string | undefined = stored(body?.pptUrl);
+    const videoUrl: string | undefined = stored(body?.videoUrl);
     const descriptionText: string | undefined = body?.descriptionText;
-    const scenarioPdfUrl: string | undefined = body?.scenarioPdfUrl;
+    const scenarioPdfUrl: string | undefined = stored(body?.scenarioPdfUrl);
     const isActive: boolean | undefined =
       typeof body?.isActive === 'boolean' ? body.isActive : undefined;
 

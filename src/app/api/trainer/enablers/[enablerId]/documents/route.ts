@@ -24,6 +24,7 @@ import {
 } from '@/lib/document-storage';
 import { removeDocumentFile } from '@/lib/document-file-cleanup';
 import { withSignedSolutionUrls } from '@/lib/solution-storage';
+import { withSignedContentUrls } from '@/lib/storage/contentUrl';
 
 // GET documents for an enabler
 export async function GET(
@@ -60,8 +61,13 @@ export async function GET(
       )
       .orderBy(contentDocuments.orderIndex);
 
-    // a private reference never reaches the browser (src/lib/solution-storage.ts)
-    return NextResponse.json({ documents: await withSignedSolutionUrls(docs) });
+    // A file of the bucket content gets a signed address (public or private
+    // bucket alike, src/lib/storage/contentUrl.ts). A private reference never
+    // reaches the browser (src/lib/solution-storage.ts).
+    const signedDocs = await withSignedContentUrls(docs);
+    return NextResponse.json({
+      documents: await withSignedSolutionUrls(signedDocs),
+    });
   } catch (e) {
     console.error('Get enabler documents error', e);
     return NextResponse.json(
@@ -185,7 +191,9 @@ export async function POST(
       })
       .returning();
 
-    return NextResponse.json({ document: doc });
+    // The page opens the new document at once, so it gets the signed address
+    const [signedDoc] = await withSignedContentUrls([doc]);
+    return NextResponse.json({ document: signedDoc });
   } catch (e) {
     console.error('Create enabler document error', e);
     return NextResponse.json(

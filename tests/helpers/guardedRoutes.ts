@@ -1219,4 +1219,11 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   { route: 'hai/sync', method: 'POST', guard: 'haiIndex', params: [] },
   { route: 'hai/sync', method: 'GET', guard: 'haiIndex', params: [] },
   { route: 'hai/verify-pin', method: 'POST', guard: 'haiIndex', params: [] },
+  // the signed address of the file of one document (bucket content)
+  {
+    route: 'documents/[documentId]/file',
+    method: 'GET',
+    guard: 'user',
+    params: ['documentId'],
+  },
 ];

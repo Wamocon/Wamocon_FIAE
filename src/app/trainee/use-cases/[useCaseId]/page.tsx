@@ -75,7 +75,12 @@ export default function TraineeUseCaseDetailPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null);
+  // The open document: its id decides the highlight, the url of the click stays
+  // in the frame (a list that is loaded again carries a new signed url)
+  const [selectedPdf, setSelectedPdf] = useState<{
+    id: string;
+    url: string;
+  } | null>(null);
 
   // Sync form fields when server data loads/changes
   useEffect(() => {
@@ -157,14 +162,16 @@ export default function TraineeUseCaseDetailPage() {
               <button
                 key={doc.id}
                 onClick={() =>
-                  setSelectedPdfUrl(prev =>
-                    prev === doc.storageUrl ? null : doc.storageUrl
+                  setSelectedPdf(prev =>
+                    prev?.id === doc.id
+                      ? null
+                      : { id: doc.id, url: doc.storageUrl }
                   )
                 }
-                className={`inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 ${selectedPdfUrl === doc.storageUrl ? 'bg-accent/15 text-accent border-accent/40 border' : 'bg-primary text-primary-foreground shadow-primary/20 shadow-md hover:scale-[1.02] hover:shadow-lg'}`}
+                className={`inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 ${selectedPdf?.id === doc.id ? 'bg-accent/15 text-accent border-accent/40 border' : 'bg-primary text-primary-foreground shadow-primary/20 shadow-md hover:scale-[1.02] hover:shadow-lg'}`}
               >
                 <ChevronLeft
-                  className={`h-4 w-4 shrink-0 transition-transform duration-200 ${selectedPdfUrl === doc.storageUrl ? 'rotate-[-90deg]' : 'rotate-90'}`}
+                  className={`h-4 w-4 shrink-0 transition-transform duration-200 ${selectedPdf?.id === doc.id ? 'rotate-[-90deg]' : 'rotate-90'}`}
                 />
                 <span className="truncate">{doc.title}</span>
               </button>
@@ -173,11 +180,11 @@ export default function TraineeUseCaseDetailPage() {
         )}
 
         {/* Inline PDF Viewer */}
-        {selectedPdfUrl && (
+        {selectedPdf && (
           <div className="animate-in fade-in slide-in-from-top-4 mt-4 duration-300">
             <div className="border-accent/30 bg-card relative h-[80vh] w-full overflow-hidden rounded-xl border shadow-2xl">
               <iframe
-                src={`${selectedPdfUrl}#toolbar=1&navpanes=0&view=FitH`}
+                src={`${selectedPdf.url}#toolbar=1&navpanes=0&view=FitH`}
                 className="h-full w-full"
                 title="PDF Viewer"
               />

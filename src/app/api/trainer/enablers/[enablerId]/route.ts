@@ -14,6 +14,11 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
+import { canonicalStoredAddress } from '@/lib/storage/contentPath';
+import { withSignedContentFields } from '@/lib/storage/contentUrl';
+
+// The fields of an enabler that hold the address of a file
+const ADDRESS_KEYS = new Set(['pptUrl', 'videoUrl', 'scenarioPdfUrl']);
 
 export async function GET(
   _req: NextRequest,
@@ -31,7 +36,20 @@ export async function GET(
       .from(enablers)
       .where(eq(enablers.id, enablerId as any));
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json({ enabler: row });
+    // `enabler` keeps the stored addresses (the edit form writes them back).
+    // `signedLinks` are for opening the files: signed addresses that work for
+    // a public and for a private bucket.
+    const [signedLinks] = await withSignedContentFields(
+      [
+        {
+          scenarioPdfUrl: row.scenarioPdfUrl,
+          pptUrl: row.pptUrl,
+          videoUrl: row.videoUrl,
+        },
+      ],
+      ['scenarioPdfUrl', 'pptUrl', 'videoUrl']
+    );
+    return NextResponse.json({ enabler: row, signedLinks });
   } catch (e) {
     console.error('Get enabler error', e);
     return NextResponse.json(
@@ -88,7 +106,13 @@ export async function PATCH(
       'scenarioPdfUrl',
       'isActive',
     ]) {
-      if (typeof body?.[key] !== 'undefined') updates[key] = body[key];
+      if (typeof body?.[key] !== 'undefined') {
+        // A signed link taken from a page never ends up in a row
+        updates[key] =
+          ADDRESS_KEYS.has(key) && typeof body[key] === 'string'
+            ? canonicalStoredAddress(body[key])
+            : body[key];
+      }
     }
 
     if (

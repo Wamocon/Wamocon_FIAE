@@ -105,6 +105,7 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
             route.startsWith('activity-reports') ||
             route.startsWith('weekly-evaluations') ||
             route.startsWith('grade-edit-history') ||
+            route.startsWith('documents/') ||
             route.startsWith('breadcrumb/')
           ) {
             const source = readFileSync(full, 'utf8');
