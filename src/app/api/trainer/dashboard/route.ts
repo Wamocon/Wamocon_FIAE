@@ -1,7 +1,7 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { and, countDistinct, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import {
   profiles,
   courses,
@@ -26,6 +26,11 @@ import {
 } from '@/lib/catalog/scope';
 import { bestScoresOf, isEnablerCompleted } from '@/lib/catalog/progression';
 import { loadGradableQuizIds } from '@/lib/catalog/progression-db';
+import {
+  enablerSubmissionsWhere,
+  quizSubmissionsWhere,
+  submissionsOfUseCasesWhere,
+} from '@/lib/trainer/pending-reviews';
 
 async function fetchTrainerDashboardData(
   trainerId: string,
@@ -182,57 +187,47 @@ async function fetchTrainerDashboardData(
               )
             )
         : Promise.resolve([]),
+      // The pending reviews are counted with the filter of the lists behind
+      // the card (src/lib/trainer/pending-reviews.ts), so the number on the
+      // card is the number of rows the trainer finds there
       hasTrainees
         ? db
-            .select({ c: count() })
+            .select({ c: countDistinct(quizSubmissions.id) })
             .from(quizSubmissions)
-            .where(
-              and(
-                eq(quizSubmissions.isReviewed, false),
-                inArray(quizSubmissions.traineeId, traineeIds)
-              )
-            )
+            .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
+            .where(quizSubmissionsWhere(scope, traineeCondition, true))
         : Promise.resolve([{ c: 0 }]),
       hasTrainees
         ? db
-            .select({ c: count() })
+            .select({ c: countDistinct(quizSubmissions.id) })
             .from(quizSubmissions)
+            .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
             .innerJoin(
               enablerQuizLinks,
               eq(quizSubmissions.quizId, enablerQuizLinks.quizId)
             )
-            .where(
-              and(
-                eq(quizSubmissions.isReviewed, false),
-                inArray(quizSubmissions.traineeId, traineeIds)
-              )
-            )
+            .where(quizSubmissionsWhere(scope, traineeCondition, true))
         : Promise.resolve([{ c: 0 }]),
-      hasTrainees
+      hasTrainees && courseIds.length > 0
         ? db
-            .select({ c: count() })
+            .select({ c: countDistinct(useCaseSubmissions.id) })
             .from(useCaseSubmissions)
-            .where(
-              and(
-                eq(useCaseSubmissions.status, 'PENDING'),
-                inArray(useCaseSubmissions.traineeId, traineeIds)
-              )
+            .innerJoin(
+              useCases,
+              eq(useCases.id, useCaseSubmissions.useCaseId)
             )
+            .where(submissionsOfUseCasesWhere(courseIds, traineeCondition, true))
         : Promise.resolve([{ c: 0 }]),
-      hasTrainees
+      hasTrainees && courseIds.length > 0
         ? db
-            .select({ c: count() })
+            .select({ c: countDistinct(enablerSubmissions.id) })
             .from(enablerSubmissions)
-            .where(
-              and(
-                eq(enablerSubmissions.status, 'PENDING'),
-                inArray(enablerSubmissions.traineeId, traineeIds)
-              )
-            )
+            .innerJoin(enablers, eq(enablers.id, enablerSubmissions.enablerId))
+            .where(enablerSubmissionsWhere(courseIds, traineeCondition, true))
         : Promise.resolve([{ c: 0 }]),
       hasTrainees
         ? db
-            .select({ c: count() })
+            .select({ c: countDistinct(activityReports.id) })
             .from(activityReports)
             .where(
               and(

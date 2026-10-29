@@ -2903,5 +2903,6 @@
   "emailConfirm.notice.done": "Your e-mail address is confirmed. You can sign in now. After a self-registration your trainer activates your account.",
   "emailConfirm.notice.failed": "The confirmation link has expired or was already used. Sign in to request a new link.",
   "emailConfirm.notice.check": "If you have just confirmed your e-mail address, you can sign in now. Otherwise sign in and request a new link if needed.",
-  "emailConfirm.changeAddress": "Use another e-mail address"
+  "emailConfirm.changeAddress": "Use another e-mail address",
+  "dashboard.openCalendar": "Open calendar"
 }

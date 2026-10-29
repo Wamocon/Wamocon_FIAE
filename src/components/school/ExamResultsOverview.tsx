@@ -44,7 +44,7 @@ export function ExamResultsOverview() {
       setLoading(true);
       try {
         const res = await authFetch(
-          `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=false`,
+          `/api/trainee/school/exams?traineeId=${profile.id}`,
           { cache: 'no-store' }
         );
         if (!res.ok) throw new Error(t('exams.results.loading'));

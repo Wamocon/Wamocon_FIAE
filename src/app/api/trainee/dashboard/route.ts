@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, ne } from 'drizzle-orm';
 import {
+  ausbildungBlocks,
+  schoolExams,
   courseMembers,
   courses,
   enablers,
@@ -28,6 +30,7 @@ import {
   loadPhasePlan,
 } from '@/lib/catalog/phase-plan-db';
 import { loadCourseProgressions } from '@/lib/catalog/progression-db';
+import { startOfToday } from '@/lib/school/day';
 import type { EnablerProgression } from '@/lib/catalog/progression';
 import {
   getPhaseDeadline,
@@ -460,6 +463,17 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       console.error('Dashboard deadlines computation error', deadlineErr);
     }
 
+    // Next appointments of the calendar (blocks and exams of the trainee), the
+    // card "Anstehende Termine" shows them next to the phase deadlines and
+    // opens the calendar. Counted from the start of today, so an appointment
+    // of today is still upcoming.
+    let appointments: Appointment[] = [];
+    try {
+      appointments = await loadNextAppointments(userId);
+    } catch (appointmentErr) {
+      console.error('Dashboard appointments error', appointmentErr);
+    }
+
     // Skill radar fallback
     if (skillRadar.length === 0 && modules.length > 0) {
       skillRadar = modules
@@ -474,9 +488,98 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       skillRadar,
       achievements,
       deadlines,
+      appointments,
     };
   } catch (e) {
     console.error('Dashboard API data fetch error', e);
     throw e;
   }
+}
+
+const APPOINTMENT_LIMIT = 5;
+
+type Appointment = {
+  id: string;
+  /** Free text of the entry, null for a block without one (the page names it by kind). */
+  label: string | null;
+  /** EXAM, or the block type (SCHOOL, HOLIDAY, PERSONAL, ...). */
+  kind: string;
+  source: 'block' | 'exam';
+  startDate: string;
+  endDate: string | null;
+};
+
+/**
+ * The next appointments of the calendar of a trainee: school blocks, exams and
+ * personal entries that have not ended before today. The long phases in the
+ * company are no appointment and stay out.
+ */
+async function loadNextAppointments(userId: string): Promise<Appointment[]> {
+  const todayStart = startOfToday();
+  const [blockRows, examRows] = await Promise.all([
+    db
+      .select({
+        id: ausbildungBlocks.id,
+        blockType: ausbildungBlocks.blockType,
+        title: ausbildungBlocks.title,
+        description: ausbildungBlocks.description,
+        notes: ausbildungBlocks.notes,
+        startDate: ausbildungBlocks.startDate,
+        endDate: ausbildungBlocks.endDate,
+      })
+      .from(ausbildungBlocks)
+      .where(
+        and(
+          eq(ausbildungBlocks.traineeId, userId as any),
+          ne(ausbildungBlocks.blockType, 'COMPANY' as any),
+          gte(ausbildungBlocks.endDate, todayStart)
+        )
+      )
+      .orderBy(asc(ausbildungBlocks.startDate))
+      .limit(APPOINTMENT_LIMIT),
+    db
+      .select({
+        id: schoolExams.id,
+        subject: schoolExams.subject,
+        examDate: schoolExams.examDate,
+      })
+      .from(schoolExams)
+      .where(
+        and(
+          eq(schoolExams.traineeId, userId as any),
+          gte(schoolExams.examDate, todayStart)
+        )
+      )
+      .orderBy(asc(schoolExams.examDate))
+      .limit(APPOINTMENT_LIMIT),
+  ]);
+
+  const day = (date: Date) => new Date(date).toISOString().slice(0, 10);
+  // An exam entered in the calendar and in the exam list is one appointment
+  const examDays = new Set(examRows.map(e => day(e.examDate as Date)));
+
+  const fromBlocks: Appointment[] = blockRows
+    .filter(
+      b => !(b.blockType === 'EXAM' && examDays.has(day(b.startDate as Date)))
+    )
+    .map(b => ({
+      id: String(b.id),
+      label: b.title || b.description || b.notes || null,
+      kind: String(b.blockType),
+      source: 'block' as const,
+      startDate: new Date(b.startDate as Date).toISOString(),
+      endDate: new Date(b.endDate as Date).toISOString(),
+    }));
+  const fromExams: Appointment[] = examRows.map(e => ({
+    id: String(e.id),
+    label: e.subject ? String(e.subject) : null,
+    kind: 'EXAM',
+    source: 'exam' as const,
+    startDate: new Date(e.examDate as Date).toISOString(),
+    endDate: null,
+  }));
+
+  return [...fromBlocks, ...fromExams]
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+    .slice(0, APPOINTMENT_LIMIT);
 }

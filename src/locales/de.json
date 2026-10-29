@@ -2905,5 +2905,6 @@
   "emailConfirm.notice.done": "Ihre E-Mail-Adresse ist bestätigt. Sie können sich jetzt anmelden. Nach einer Selbstregistrierung schaltet Ihr Ausbilder Ihr Konto frei.",
   "emailConfirm.notice.failed": "Der Bestätigungslink ist abgelaufen oder wurde schon benutzt. Melden Sie sich an, dann können Sie einen neuen Link anfordern.",
   "emailConfirm.notice.check": "Wenn Sie Ihre E-Mail-Adresse gerade bestätigt haben, können Sie sich jetzt anmelden. Andernfalls melden Sie sich an und fordern bei Bedarf einen neuen Link an.",
-  "emailConfirm.changeAddress": "Andere E-Mail-Adresse verwenden"
+  "emailConfirm.changeAddress": "Andere E-Mail-Adresse verwenden",
+  "dashboard.openCalendar": "Zum Kalender"
 }
