@@ -14,6 +14,7 @@ import { HaiMessage as MessageType, useHai } from './HaiProvider';
 import { HaiActionCard } from './HaiActionCard';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { MarkdownText } from '@/components/ui/MarkdownText';
+import { isDocumentId, openDocumentFile } from '@/lib/documentFileLink';
 import { motion } from 'framer-motion';
 import {
   User,
@@ -225,6 +226,18 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
                   href={citation.url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={event => {
+                    // A stored link cannot carry a signed address: the click
+                    // asks for a fresh one (only for a document of the app)
+                    if (
+                      citation.sourceType !== 'document' ||
+                      !isDocumentId(citation.sourceId)
+                    ) {
+                      return;
+                    }
+                    event.preventDefault();
+                    void openDocumentFile(citation.sourceId, citation.url);
+                  }}
                   className="flex cursor-pointer items-center gap-1 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-400 transition-colors hover:bg-cyan-500/20 hover:text-cyan-300"
                   title={t('hai.message.openPdf')}
                 >

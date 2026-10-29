@@ -10,6 +10,8 @@ import { isErrorResponse } from '@/lib/auth/session';
 import { requireTraineeSession } from '@/lib/auth/activity-report-access';
 import { documentVisibilityCondition } from '@/lib/auth/document-scope';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
+import { isTraineeFileReference } from '@/lib/storage/contentPath';
+import { withSignedContentUrls } from '@/lib/storage/contentUrl';
 
 // GET the documents of an enabler for the trainee (teaching texts, scenarios).
 //
@@ -28,7 +30,8 @@ import { requireContentScopeForUser } from '@/lib/catalog/scope';
 //    original of an enabler text (kept for trainers) is not listed.
 // The answer names the fields the page needs. The uploader, the storage path,
 // the index state and the organization ids stay behind. The file itself is
-// reached through storageUrl as before, this route does not change that.
+// reached through storageUrl: a signed address of the bucket content that works
+// for an hour (src/lib/storage/contentUrl.ts), the stored address of any other file.
 // The data of the session user, a traineeId or userId in the query is ignored.
 const TRAINEE_VISIBILITIES = ['ALL', 'TRAINEE_ONLY'] as const;
 
@@ -114,7 +117,9 @@ export async function GET(
             ne(contentDocuments.documentType, 'TRAINER_SOLUTION')
           ),
           sql`btrim(${contentDocuments.storageUrl}) <> ''`,
-          sql`${contentDocuments.storageUrl} not like 'private://%'`,
+          // a private reference is trainer material, except the one of the
+          // bucket content (teaching material, signed below)
+          sql`(${contentDocuments.storageUrl} not like 'private://%' or ${contentDocuments.storageUrl} like 'private://content/%')`,
           sql`(${contentDocuments.mimeType} is null or (lower(${contentDocuments.mimeType}) not like ${WORD_MIME_PATTERN} and lower(${contentDocuments.mimeType}) <> ${WORD_MIME_LEGACY}))`,
           // The shared curriculum, the platform and the own organization
           documentVisibilityCondition(contentDocuments.organizationId, session)
@@ -132,7 +137,7 @@ export async function GET(
           d.documentType !== 'TRAINER_SOLUTION' &&
           !isWordMime(d.mimeType) &&
           typeof d.storageUrl === 'string' &&
-          !d.storageUrl.startsWith('private://') &&
+          isTraineeFileReference(d.storageUrl) &&
           d.storageUrl.trim() !== ''
       )
       .map(d => ({
@@ -151,7 +156,13 @@ export async function GET(
           String(d.organizationId) === session.organizationId,
       }));
 
-    return NextResponse.json({ documents });
+    // The file of the bucket content is handed out as a signed address that
+    // works for an hour, for a public and for a private bucket alike
+    return NextResponse.json({
+      documents: await withSignedContentUrls(documents, {
+        hideOtherPrivate: true,
+      }),
+    });
   } catch (e) {
     console.error('Trainee enabler documents GET error', e);
     return NextResponse.json(

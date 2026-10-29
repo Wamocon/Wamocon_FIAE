@@ -12,6 +12,7 @@
 // This file should only be used in API routes, not client components
 
 import { readableStorageUrl } from '@/lib/document-storage';
+import { readContentObject } from '@/lib/storage/contentRead';
 
 // ============================================================================
 // TYPES
@@ -83,6 +84,15 @@ type PdfBuffer =
  * so a batch can skip it and go on.
  */
 async function fetchPdfBuffer(storageUrl: unknown): Promise<PdfBuffer> {
+  // A file of the bucket content is read with the secret key straight from the
+  // storage, which works for a public and for a private bucket. Without a key
+  // (or for any other address) the checked public address is fetched as before.
+  const direct = await readContentObject(storageUrl, MAX_PDF_BYTES);
+  if (direct.status === 'ok') return { ok: true, buffer: direct.buffer };
+  if (direct.status === 'failed') {
+    return { ok: false, error: `Failed to read PDF: ${direct.reason}` };
+  }
+
   const readable = readableStorageUrl(storageUrl);
   if (!readable.ok) {
     console.warn(`[PDF Warning] Storage url rejected: ${readable.reason}`);

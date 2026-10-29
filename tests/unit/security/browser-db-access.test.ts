@@ -159,7 +159,10 @@ describe('browser access to the database', () => {
     // path form of document-storage.ts, upsert off, and only for files that a person
     // named in the apply; solution-storage.ts signs the model solutions of the private
     // bucket content-solutions for the trainer list, server side, ten minutes, only for
-    // trainer-only rows)
+    // trainer-only rows; storage/contentUrl.ts signs the files of the bucket content for
+    // the lists, server side, 15 to 60 minutes, only objects of that bucket with a strict
+    // path from a row the person may see; storage/contentRead.ts reads such a file for the
+    // PDF extraction and the certificate logo, server side, never sent to a browser)
     // (a new one needs a look at the key it uses)
     expect(creators).toEqual([
       'src/app/api/admin/users/[userId]/route.ts',
@@ -176,6 +179,8 @@ describe('browser access to the database', () => {
       'src/lib/content-upload/transfer/content-bucket.ts',
       'src/lib/document-file-cleanup.ts',
       'src/lib/solution-storage.ts',
+      'src/lib/storage/contentRead.ts',
+      'src/lib/storage/contentUrl.ts',
       'src/lib/supabase.ts',
       'src/utils/supabase/server.ts',
     ]);

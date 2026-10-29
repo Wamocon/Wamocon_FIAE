@@ -71,6 +71,9 @@ export default function EditCoursePage() {
   const [enablerTitle, setEnablerTitle] = useState('');
   const [enablerDescription, setEnablerDescription] = useState('');
   const [enablerScenarioPdf, setEnablerScenarioPdf] = useState('');
+  // The signed address that opens the stored scenario PDF (the stored address
+  // itself stays in the field above, it is what the form writes back)
+  const [enablerScenarioPdfLink, setEnablerScenarioPdfLink] = useState('');
   const [enablerPpt, setEnablerPpt] = useState('');
   const [enablerVideo, setEnablerVideo] = useState('');
   const [enablerDuration, setEnablerDuration] = useState<string>('');
@@ -731,6 +734,9 @@ export default function EditCoursePage() {
                             setEnablerTitle(en.title || '');
                             setEnablerDescription(en.descriptionText || '');
                             setEnablerScenarioPdf(en.scenarioPdfUrl || '');
+                            setEnablerScenarioPdfLink(
+                              ej.signedLinks?.scenarioPdfUrl || ''
+                            );
                           }
                           const ql = await authFetch(
                             `/api/trainer/enablers/${e.id}/quizzes`,
@@ -2173,7 +2179,7 @@ export default function EditCoursePage() {
                       onClick={() =>
                         setPreviewPdf({
                           title: 'Scenario',
-                          url: enablerScenarioPdf,
+                          url: enablerScenarioPdfLink || enablerScenarioPdf,
                         })
                       }
                       className="text-muted cursor-pointer rounded p-0.5 transition-colors hover:bg-green-500/20 hover:text-green-400"
