@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
 import { useLanguage } from '@/contexts/LanguageContext';
+import ResendConfirmation from '@/components/auth/ResendConfirmation';
+import { isValidPassword } from '@/lib/auth/password-policy';
 
 export default function RegisterPage() {
   const { t } = useLanguage();
@@ -17,6 +19,11 @@ export default function RegisterPage() {
   const [successMessage, setSuccessMessage] = useState<{
     type: 'trainer' | 'trainee' | null;
   }>({ type: null });
+  // Set when Supabase wants the e-mail address confirmed before the first
+  // sign in: the person is told to check the mailbox instead of being sent on
+  const [confirmation, setConfirmation] = useState<{ email: string } | null>(
+    null
+  );
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -28,7 +35,7 @@ export default function RegisterPage() {
       setError(t('register.emailPasswordRequired'));
       return;
     }
-    if (formData.password.length < 6) {
+    if (!isValidPassword(formData.password)) {
       setError(t('register.passwordMinLength'));
       return;
     }
@@ -48,6 +55,13 @@ export default function RegisterPage() {
       if (!resp.ok) {
         console.error('Server registration failed', body);
         setError(body?.error || t('register.failed'));
+        return;
+      }
+
+      // The address still has to be confirmed: no redirect, the person needs
+      // the page with the hint and the button for a new e-mail
+      if (body.confirmationRequired === true) {
+        setConfirmation({ email: formData.email.trim() });
         return;
       }
 
@@ -230,9 +244,38 @@ export default function RegisterPage() {
               </div>
             )}
 
+            {confirmation && (
+              <div
+                role="status"
+                className="space-y-3 rounded-xl border border-blue-500/20 bg-blue-500/10 p-4"
+              >
+                <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                  {t('emailConfirm.title')}
+                </p>
+                <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
+                  {t('emailConfirm.intro', { email: confirmation.email })}
+                </p>
+                <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
+                  {t('emailConfirm.afterConfirm')}
+                </p>
+                <ResendConfirmation email={confirmation.email} />
+                <button
+                  type="button"
+                  onClick={() => setConfirmation(null)}
+                  className="text-accent hover:text-accent/80 text-xs underline"
+                >
+                  {t('emailConfirm.changeAddress')}
+                </button>
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={isLoading || successMessage.type !== null}
+              disabled={
+                isLoading ||
+                successMessage.type !== null ||
+                confirmation !== null
+              }
               className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-primary/50 focus:ring-offset-background focus:ring-accent w-full rounded-xl py-3 font-semibold shadow-lg transition-colors duration-300 hover:shadow-xl focus:ring-2 focus:ring-offset-2 focus:outline-none"
             >
               {isLoading ? (

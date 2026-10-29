@@ -34,6 +34,19 @@ describe('rate-limit', () => {
     expect(checkRateLimit('b', options, 0).allowed).toBe(true);
   });
 
+  it('a flood of new keys drops the oldest ones, not the counters of everybody', () => {
+    const strict = { limit: 1, windowMs: 1_000_000 };
+    // a victim whose counter is the newest of all
+    for (let i = 0; i < 4999; i++) checkRateLimit(`old-${i}`, strict, 0);
+    checkRateLimit('victim', strict, 0);
+    expect(checkRateLimit('victim', strict, 1).allowed).toBe(false);
+    // an attacker adds keys until the map overflows
+    for (let i = 0; i < 600; i++) checkRateLimit(`flood-${i}`, strict, 2);
+    // the oldest keys went, the victim is still counted
+    expect(checkRateLimit('old-0', strict, 3).allowed).toBe(true);
+    expect(checkRateLimit('victim', strict, 3).allowed).toBe(false);
+  });
+
   it('reads the client address from proxy headers', () => {
     const headers = (map: Record<string, string>) => ({
       get: (name: string) => map[name] ?? null,

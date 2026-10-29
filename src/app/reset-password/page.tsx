@@ -9,6 +9,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { DB_OPTION } from '@/lib/db-schema';
+import { isValidPassword } from '@/lib/auth/password-policy';
 
 export default function ResetPasswordPage() {
   const { t } = useLanguage();
@@ -71,14 +72,14 @@ export default function ResetPasswordPage() {
   const canSubmit = useMemo(() => {
     if (status.type === 'loading') return false;
 
-    if (password.length < 6) return false;
+    if (!isValidPassword(password)) return false;
     if (password !== confirm) return false;
     return true;
   }, [status.type, password, confirm]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 6) {
+    if (!isValidPassword(password)) {
       setStatus({
         type: 'error',
         message: t('resetPassword.passwordMinLength'),

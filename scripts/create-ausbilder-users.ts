@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { assertValidPassword } from '../src/lib/auth/password-policy';
 
 const testPassword = (() => {
   const value = process.env.TEST_USER_PASSWORD;
@@ -8,6 +9,7 @@ const testPassword = (() => {
       'Missing TEST_USER_PASSWORD (set it in .env.local, never commit it)'
     );
   }
+  assertValidPassword(value, 'TEST_USER_PASSWORD');
   return value;
 })();
 

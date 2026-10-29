@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
+import { isValidPassword } from '@/lib/auth/password-policy';
 import {
   fakeSession,
   makeRequest,
@@ -594,6 +595,26 @@ describe('POST /api/admin/users: after the account exists', () => {
     const off = await load();
     await off.mod.POST(post(body({ sendEmail: false })));
     expect(off.sendCredentialsEmail).not.toHaveBeenCalled();
+  });
+
+  it('an account of an administrator is confirmed and released at once, with a password that satisfies the rule', async () => {
+    // Created by an administrator: no e-mail confirmation to wait for (the
+    // "Confirm email" setting of Supabase does not apply to auth.admin) and no
+    // release by a trainer
+    for (const role of ['TRAINEE', 'TRAINER']) {
+      const { mod, mock, createUser } = await load();
+      const res = await mod.POST(post(body({ role })));
+      const json = await res.json();
+      const args = createUser.mock.calls[0][0] as any;
+
+      expect(args.email_confirm).toBe(true);
+      expect(args.password).toBe(json.credentials.password);
+      expect(isValidPassword(args.password)).toBe(true);
+      expect(mock.writes('insert', 'profiles')[0]).toMatchObject({
+        trainerActivated: true,
+        isActive: true,
+      });
+    }
   });
 
   it('notifies the trainers of the organization about a new trainee only', async () => {

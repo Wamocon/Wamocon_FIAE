@@ -102,6 +102,7 @@ import {
   readPrivateSolutionText,
   solutionStorageProblems,
 } from '../src/lib/hai/privateSolutionReader';
+import { parseContentReference } from '../src/lib/storage/contentPath';
 // The rollout gate is read from the environment of the process only, before
 // dotenv: a value that sits in .env.local or .env must not open it silently
 const SHELL_ROLLOUT_APPROVED = process.env.KFBM_ROLLOUT_APPROVED;
@@ -1488,6 +1489,41 @@ function cleanPDFText(text: string): string {
 }
 
 /**
+ * The bytes of the file of a document row. A file of the bucket content is read
+ * with the secret key straight from the storage, which works for a public and
+ * for a private bucket (the bucket becomes private at the go-live). Without the
+ * key, or for any other address, the stored address is fetched as before.
+ * The key is read from the environment only and never logged.
+ */
+async function readPdfBytes(url: string): Promise<Buffer | null> {
+  const ref = parseContentReference(url);
+  const key =
+    process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (ref.kind === 'content' && key && base) {
+    const response = await fetch(
+      `${new URL(base).origin}/storage/v1/object/content/${ref.path}`,
+      {
+        headers: { Authorization: `Bearer ${key}`, apikey: key },
+        redirect: 'error',
+      }
+    );
+    if (!response.ok) {
+      warn(`Failed to read PDF from the storage: ${response.status} ${ref.path}`);
+      return null;
+    }
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    warn(`Failed to fetch PDF: ${response.status} ${url}`);
+    return null;
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
+
+/**
  * Extract text from a PDF URL
  */
 async function extractPDFText(
@@ -1496,14 +1532,8 @@ async function extractPDFText(
   try {
     const pdfParse = require('pdf-parse/lib/pdf-parse');
 
-    const response = await fetch(url);
-    if (!response.ok) {
-      warn(`Failed to fetch PDF: ${response.status} ${url}`);
-      return null;
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = await readPdfBytes(url);
+    if (!buffer) return null;
     const data = await pdfParse(buffer);
 
     const cleaned = cleanPDFText(data.text || '');

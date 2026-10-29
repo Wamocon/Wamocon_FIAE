@@ -38,6 +38,23 @@ export function documentVisibilityCondition(
   return sql`(${column} is null or ${column} = ${scope.organizationId} or ${column} in (select ${organizations.id} from ${organizations} where ${organizations.isPlatformOwner} = true))`;
 }
 
+/**
+ * The rule of documentVisibilityCondition for one document: whether the
+ * session sees a document of `organizationId`. `platformOrgIds` comes from
+ * loadPlatformOrgIds.
+ */
+export function isDocumentOrgVisible(
+  session: SessionUser,
+  organizationId: string | null | undefined,
+  platformOrgIds: ReadonlySet<string>
+): boolean {
+  const scope = scopeOrg(session);
+  if (scope.organizationId === null) return true;
+  if (organizationId === null || organizationId === undefined) return true;
+  const id = String(organizationId);
+  return id === scope.organizationId || platformOrgIds.has(id);
+}
+
 /** Ids of the organizations that carry the platform flag. */
 export async function loadPlatformOrgIds(): Promise<Set<string>> {
   const rows = await withDbRetry(() =>

@@ -26,6 +26,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { withStoragePrefix } from '@/lib/db-schema';
 import { FILE_UPLOAD } from '@/lib/constants';
+import { isValidPassword } from '@/lib/auth/password-policy';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { getAusbildungDurationLabel } from '@/lib/ausbildung/duration';
@@ -155,7 +156,7 @@ export function Profile() {
 
   const handlePasswordChange = async () => {
     setPwMsg(null);
-    if (!pw1 || pw1.length < 8) {
+    if (!isValidPassword(pw1)) {
       setPwMsg(t('profile.passwordMinLength'));
       return;
     }

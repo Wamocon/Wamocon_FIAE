@@ -159,22 +159,31 @@ describe('browser access to the database', () => {
     // path form of document-storage.ts, upsert off, and only for files that a person
     // named in the apply; solution-storage.ts signs the model solutions of the private
     // bucket content-solutions for the trainer list, server side, ten minutes, only for
-    // trainer-only rows; submission-file/storage.ts uses it for the private bucket
-    // submission-files only, on the server, paths of one exact form built from the session,
-    // upsert off, read links of two minutes)
+    // trainer-only rows; storage/contentUrl.ts signs the files of the bucket content for
+    // the lists, server side, 15 to 60 minutes, only objects of that bucket with a strict
+    // path from a row the person may see; storage/contentRead.ts reads such a file for the
+    // PDF extraction and the certificate logo, server side, never sent to a browser;
+    // submission-file/storage.ts uses it for the private bucket submission-files only,
+    // on the server, paths of one exact form built from the session, upsert off, read
+    // links of two minutes)
     // (a new one needs a look at the key it uses)
     expect(creators).toEqual([
       'src/app/api/admin/users/[userId]/route.ts',
       'src/app/api/admin/users/route.ts',
+      'src/app/api/auth/resend-confirmation/route.ts',
       'src/app/api/auth/sync-profile/route.ts',
       'src/app/api/register/route.ts',
       'src/app/api/trainer/courses/[courseId]/members/route.ts',
+      // the confirmation of the e-mail address: public key only, no session kept
+      'src/app/auth/callback/route.ts',
       'src/lib/auth-helpers.ts',
       'src/lib/auth/session.ts',
       'src/lib/content-upload/staging/storage.ts',
       'src/lib/content-upload/transfer/content-bucket.ts',
       'src/lib/document-file-cleanup.ts',
       'src/lib/solution-storage.ts',
+      'src/lib/storage/contentRead.ts',
+      'src/lib/storage/contentUrl.ts',
       'src/lib/submission-file/storage.ts',
       'src/lib/supabase.ts',
       'src/utils/supabase/server.ts',

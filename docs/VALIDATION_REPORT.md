@@ -126,14 +126,14 @@ OPENAI_COMPATIBLE_MODEL=sokrates-fast
 
 ### Database
 
-`.env.production` was updated from an invalid Supabase tenant (`postgres.ngpsgwwlnlliphfgtrya`) to the working QA Supabase credentials, resolving the previous `tenant/user not found` connection error.
+`.env.production` was updated from an invalid Supabase tenant (`postgres.ngpsgwwlnlliphfgtrya`) to the working Supabase credentials, resolving the previous `tenant/user not found` connection error.
 
 ---
 
 ## 5. Known Issues / Notes
 
 - **Pre-existing lint warning:** `ArbeitszeugnisGenerator.tsx` uses a native `<img>` tag instead of Next.js `<Image />`. This warning existed before the current changes and does not affect functionality.
-- **E2E auth state:** `playwright/.auth/trainer.json` contains the authenticated session for `***ENTFERNT***`. It was regenerated against the QA Supabase instance and is valid for local E2E runs. Run `npx playwright test tests/e2e/auth.setup.ts` to refresh it.
+- **E2E auth state:** `playwright/.auth/trainer.json` contains the authenticated session for `***ENTFERNT***`. It was regenerated against the Supabase instance and is valid for local E2E runs. Run `npx playwright test tests/e2e/auth.setup.ts` to refresh it.
 - **Local production server:** `npm run build` completes successfully, but `npm start` on the local Windows workstation occasionally fails to resolve a generated webpack chunk (`./vendor-chunks/framer-motion.js` / `./4985.js`). This appears to be a local Next.js runtime/Windows artifact; the dev server runs the same code without issues and all E2E tests pass. It should not affect a Vercel/CI deployment where the build is produced and served in the same environment.
 
 ---

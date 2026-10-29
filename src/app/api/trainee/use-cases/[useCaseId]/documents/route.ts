@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import { documentVisibilityCondition } from '@/lib/auth/document-scope';
+import { isTraineeFileReference } from '@/lib/storage/contentPath';
+import { withSignedContentUrls } from '@/lib/storage/contentUrl';
 import db from '@/db';
 import { eq, and, or, ne, sql } from 'drizzle-orm';
 import { contentDocuments, useCases, courseMembers, profiles } from '@/db/migrations/schemas/schema';
@@ -98,7 +100,7 @@ export async function GET(
                     // A row without a file is no link (the text rows of the import), a private
                     // reference is no link for a trainee, and the reader opens PDF files only
                     sql`btrim(${contentDocuments.storageUrl}) <> ''`,
-                    sql`${contentDocuments.storageUrl} not like 'private://%'`,
+                    sql`(${contentDocuments.storageUrl} not like 'private://%' or ${contentDocuments.storageUrl} like 'private://content/%')`,
                     sql`(${contentDocuments.mimeType} is null or (lower(${contentDocuments.mimeType}) not like '%wordprocessingml%' and lower(${contentDocuments.mimeType}) <> 'application/msword'))`,
                     // The shared curriculum, the platform and the own organization
                     documentVisibilityCondition(contentDocuments.organizationId, session)
@@ -114,13 +116,15 @@ export async function GET(
                     d.documentType !== 'TRAINER_SOLUTION' &&
                     typeof d.storageUrl === 'string' &&
                     d.storageUrl.trim() !== '' &&
-                    !d.storageUrl.startsWith('private://') &&
+                    isTraineeFileReference(d.storageUrl) &&
                     !/wordprocessingml|^application\/msword$/i.test(d.mimeType ?? '')
             )
             .map(({ mimeType: _mimeType, ...rest }) => rest);
 
+        // The file of the bucket content is handed out as a signed address that
+        // works for an hour, for a public and for a private bucket alike
         return NextResponse.json({ 
-            documents,
+            documents: await withSignedContentUrls(documents, { hideOtherPrivate: true }),
             useCaseTitle: useCase.title 
         });
     } catch (e) {

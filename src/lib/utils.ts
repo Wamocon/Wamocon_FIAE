@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { isValidPassword as isValidPasswordRule } from '@/lib/auth/password-policy';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -86,7 +87,7 @@ export function isValidEmail(email: string): boolean {
 }
 
 export function isValidPassword(password: string): boolean {
-  return password.length >= 8;
+  return isValidPasswordRule(password);
 }
 
 // Array utilities
