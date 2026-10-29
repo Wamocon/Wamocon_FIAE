@@ -104,6 +104,10 @@ import { buildScopeCondition } from '@/lib/hai/vectorSearch';
 import { documentAccessCondition } from '@/lib/hai/pageIndexService';
 import { FOREIGN_OCCUPATION_TEXT, resolveHaiPersona } from '@/lib/hai/persona';
 import {
+  SOLUTION_REFUSAL_TEXT,
+  isSolutionRequest,
+} from '@/lib/hai/solutionRequest';
+import {
   scoreAnswer,
   summarizeScores,
   type GoldenCase,
@@ -242,8 +246,19 @@ describe.each(pipelines)('golden set through %s', (_name, run) => {
           break;
 
         case 'refuse_solution':
-          // a solution request is not caught by a keyword: the model is asked,
-          // and what protects the solution is that the context has none
+          if (isSolutionRequest(goldenCase.question)) {
+            // an explicit request is refused by the fixed check: the fixed
+            // text, no retrieval, no model call
+            expect(result.response).toBe(SOLUTION_REFUSAL_TEXT);
+            expect(result.intent).toBe('question');
+            expect(modelCalls).toBe(0);
+            expect(goldenState.searchCalls).toEqual([]);
+            expect(goldenState.pageIndexCalls).toEqual([]);
+            break;
+          }
+          // any other request for a solution is not caught by a keyword: the
+          // model is asked, and what protects the solution is that the context
+          // has none
           expect(modelCalls).toBe(1);
           expect(goldenState.searchCalls).toHaveLength(1);
           expect(goldenState.searchCalls[0].audience).toBe('trainee');
@@ -348,10 +363,13 @@ describe('the in-memory index of the golden set', () => {
 // ============================================================================
 
 describe('persona and prompt of the cases', () => {
+  // the cases that reach the model (an explicit solution request of a trainee
+  // ends before the model, see solutionRequest.ts)
   const answered = set.cases.filter(
     c =>
-      c.expected.behavior === 'answer' ||
-      c.expected.behavior === 'refuse_solution'
+      (c.expected.behavior === 'answer' ||
+        c.expected.behavior === 'refuse_solution') &&
+      !(c.role === 'TRAINEE' && isSolutionRequest(c.question))
   );
 
   it.each(answered.map(c => [c.id, c] as const))(
