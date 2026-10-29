@@ -136,7 +136,7 @@ export function ModuleBarChart({ data }: ModuleBarChartProps) {
           strokeOpacity={0.2}
         />
         <XAxis
-          dataKey="name"
+          dataKey="shortName"
           stroke="currentColor"
           fontSize={10}
           angle={-45}
@@ -149,7 +149,13 @@ export function ModuleBarChart({ data }: ModuleBarChartProps) {
           fontSize={10}
           tick={{ fill: 'currentColor' }}
         />
-        <Tooltip contentStyle={tooltipStyle} />
+        <Tooltip
+          contentStyle={tooltipStyle}
+          // the axis shows a short name, the tooltip the whole one
+          labelFormatter={(label, payload) =>
+            payload?.[0]?.payload?.name ?? label
+          }
+        />
         <Bar
           dataKey="progress"
           fill="#ff1a1a"

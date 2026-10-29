@@ -278,6 +278,9 @@ export default function TraineeEnablerPage() {
 
   const handleTileClick = async (g: GatedQuizInfo) => {
     if (!g.quizId) return;
+    // The difficulty that is open already: a second click must not start over
+    // (the answers given so far, or the result on screen, stay)
+    if (quizContent && selectedDifficulty === g.difficulty) return;
     // A passed quiz is shown as it was answered, one that was not passed is
     // taken again
     setReviewMode(!!g.passed);
@@ -963,6 +966,9 @@ export default function TraineeEnablerPage() {
                   onClick={() => !disabled && handleTileClick(g)}
                   className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'border-accent/20 bg-muted/20 cursor-not-allowed opacity-60' : 'border-accent/30 hover:bg-accent/15 hover:border-accent/60 hover:shadow-accent/20 bg-muted/30 cursor-pointer hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]'}`}
                   aria-disabled={disabled}
+                  aria-pressed={
+                    !!quizContent && selectedDifficulty === g.difficulty
+                  }
                 >
                   <div className="text-muted-foreground text-sm">
                     {t('enablerPage.difficulty')}
@@ -1210,6 +1216,12 @@ export default function TraineeEnablerPage() {
                     const correctOption = q.options.find(
                       o => String(o.id) === String(fb?.correctOptionId || '')
                     );
+                    // A choice question names the option, a free text question
+                    // the expected text (both only once the server sends them)
+                    const correctText =
+                      q.questionType === 'TEXT' || q.options.length === 0
+                        ? fb?.correctAnswerText || ''
+                        : correctOption?.optionText || '';
                     const explanation = fb?.explanation;
                     // No solution to grade against: neither right nor wrong
                     const notGraded = fb?.graded === false;
@@ -1242,12 +1254,23 @@ export default function TraineeEnablerPage() {
                                 o => String(o.id) === String(chosen)
                               )?.optionText || '-'}
                         </div>
-                        {q.questionType !== 'TEXT' && !fb?.correct && (
-                          <div className="mt-1 text-sm text-green-400">
-                            {t('enablerPage.correct')}{' '}
-                            {correctOption?.optionText || '-'}
-                          </div>
-                        )}
+                        {!notGraded &&
+                          fb &&
+                          !fb.correct &&
+                          (correctText ? (
+                            <div className="mt-1 text-sm text-green-400">
+                              {t('enablerPage.correct')} {correctText}
+                            </div>
+                          ) : (
+                            // The key comes with the pass (the server holds it
+                            // back until then), say so instead of showing "-"
+                            <div
+                              data-testid="key-after-pass"
+                              className="text-muted-foreground mt-1 text-sm"
+                            >
+                              {t('enablerPage.keyAfterPass')}
+                            </div>
+                          ))}
                         {explanation && (
                           <div className="border-accent/20 text-muted-foreground bg-muted/30 mt-2 rounded-md border p-2 text-xs">
                             {t('enablerPage.explanationLabel')} {explanation}
@@ -1289,8 +1312,15 @@ export default function TraineeEnablerPage() {
       </div>
 
       <div>
-        <Link href="/trainee/modules" className="text-sm underline">
-          {t('enablerPage.backToModules')}
+        <Link
+          href={
+            enabler?.courseId
+              ? `/trainee/modules/${enabler.courseId}`
+              : '/trainee/courses'
+          }
+          className="text-sm underline"
+        >
+          {t('enablerPage.backToThemes')}
         </Link>
       </div>
     </div>
