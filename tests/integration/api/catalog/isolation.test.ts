@@ -3,7 +3,11 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
-import { fakeSession, mockSession } from '../../../helpers/mockNext';
+import {
+  fakeSession,
+  mockSession,
+  mockTraineeSession,
+} from '../../../helpers/mockNext';
 
 // Catalog isolation per route family. These tests run the real catalog scope
 // (src/lib/catalog/scope.ts) against a table mock. The mock ignores where()
@@ -493,6 +497,11 @@ describe('catalog isolation', () => {
   });
 
   describe('trainee routes', () => {
+    // The trainee routes work for the signed-in trainee. Register that session
+    // here, a registration left over from a trainer test would make these cases
+    // depend on the order of the file.
+    beforeEach(() => mockTraineeSession('t1'));
+
     it('course list: a KfBM trainee only gets KFBM courses', async () => {
       const { mock, mod } = await load('trainee/courses', {
         profiles: [traineeProfile],
@@ -688,6 +697,7 @@ describe('catalog isolation', () => {
     });
 
     it('lernfelder without a session fall back to the public catalog', async () => {
+      mockSession(null);
       const { mock, mod } = await load('trainee/lernfelder', {
         trainingCatalogLearningFields: [],
       });
