@@ -566,6 +566,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   },
   { route: 'trainer/reviews', method: 'GET', guard: 'trainer', params: [] },
   {
+    route: 'trainer/reviews/use-cases/[submissionId]/file',
+    method: 'GET',
+    guard: 'trainer',
+    params: ['submissionId'],
+  },
+  {
     route: 'trainer/reviews/use-cases/[submissionId]',
     method: 'PATCH',
     guard: 'trainer',
@@ -1125,6 +1131,31 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     guard: 'user',
     params: ['useCaseId'],
   },
+  {
+    route: 'trainee/use-cases/[useCaseId]/submission-file',
+    method: 'GET',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  {
+    route: 'trainee/use-cases/[useCaseId]/submission-file',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  {
+    route: 'trainee/use-cases/[useCaseId]/submission-file/upload-url',
+    method: 'POST',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  {
+    route: 'trainee/use-cases/[useCaseId]/submission-file/complete',
+    method: 'POST',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  { route: 'me/submission-file', method: 'GET', guard: 'user', params: [] },
   {
     route: 'activity-reports',
     method: 'GET',
