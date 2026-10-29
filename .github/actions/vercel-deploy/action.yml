@@ -41,6 +41,13 @@ inputs:
     description: Pinned Vercel CLI version
     required: false
     default: '64.7.0'
+  alias:
+    description: >-
+      Optional domain that is pointed at the new deployment (preview only), for example the
+      domain of the branch preview. Needed because the git linkage is removed on purpose, so
+      Vercel never sees a branch and a domain bound to a git branch is never assigned.
+    required: false
+    default: ''
 outputs:
   url:
     description: Deployment URL
@@ -136,6 +143,7 @@ runs:
         VERCEL_TOKEN: ${{ inputs.vercel-token }}
         VERCEL_ORG_ID: ${{ inputs.vercel-org-id }}
         VERCEL_PROJECT_ID: ${{ inputs.vercel-project-id }}
+        ALIAS: ${{ inputs.alias }}
       run: |
         export GITHUB_ACTIONS="" GITHUB_REPOSITORY=""
         set -euo pipefail
@@ -168,3 +176,18 @@ runs:
           [ -n "$DEPLOY_URL" ] && echo "**URL:** ${DEPLOY_URL}"
         } >> "$GITHUB_STEP_SUMMARY"
         echo "url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+
+        # Optional domain for the deployment (never for production).
+        if [ -n "$ALIAS" ]; then
+          if [ "$TARGET" != "preview" ]; then
+            echo "::error::An alias is only allowed for the preview target."
+            exit 1
+          fi
+          if ! printf '%s' "$ALIAS" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$'; then
+            echo "::error::Invalid alias."
+            exit 1
+          fi
+          [ -n "$DEPLOY_URL" ] || { echo "::error::No deployment URL, alias not set."; exit 1; }
+          vercel alias set "$DEPLOY_URL" "$ALIAS" --token="$VERCEL_TOKEN"
+          echo "**Domain:** ${ALIAS}" >> "$GITHUB_STEP_SUMMARY"
+        fi

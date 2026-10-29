@@ -33,6 +33,7 @@ on:
   push:
     branches-ignore:
       - master
+      - preview
     paths:
       - 'supabase/migrations/**'
       - 'scripts/db/preview-*.mjs'
