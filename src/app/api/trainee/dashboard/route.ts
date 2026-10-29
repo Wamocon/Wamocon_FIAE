@@ -32,6 +32,7 @@ import {
 import { loadCourseProgressions } from '@/lib/catalog/progression-db';
 import { startOfToday } from '@/lib/school/day';
 import type { EnablerProgression } from '@/lib/catalog/progression';
+import { sortCourses } from '@/lib/catalog/course-order';
 import {
   getPhaseDeadline,
   getPhaseMonthRange,
@@ -89,6 +90,8 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
           id: courses.id,
           title: courses.title,
           year: courses.year,
+          chapter: courses.chapter,
+          code: courses.code,
         })
         .from(courseMembers)
         .innerJoin(courses, eq(courseMembers.courseId, courses.id))
@@ -236,7 +239,8 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       }
 
       // Calculate progress per course
-      for (const c of memberCourses) {
+      // In the order of the training plan, not as the database returns them
+      for (const c of sortCourses(memberCourses)) {
         const cId = String(c.id);
         const own = progressions.get(cId)?.progression;
         const totalEnablers = own?.totalCount ?? 0;

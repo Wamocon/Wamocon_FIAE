@@ -194,7 +194,9 @@ export default function TraineeDashboard() {
   // Derived module progress for charts
 
   const moduleProgress = modules.map((module: any) => ({
-    name:
+    // The whole name for the lists, a short one only for the axis of the chart
+    name: module.title,
+    shortName:
       module.title.length > 20
         ? module.title.substring(0, 20) + '...'
         : module.title,
@@ -242,7 +244,7 @@ export default function TraineeDashboard() {
         if (data?.moduleId) {
           router.push(`/trainee/modules/${data.moduleId}`);
         } else {
-          router.push('/trainee/modules');
+          router.push('/trainee/courses');
         }
         break;
       case 'lessons':
@@ -366,7 +368,7 @@ export default function TraineeDashboard() {
                       onClick={() => handleModuleClick(module.id)}
                     >
                       <div className="mb-3 flex items-center justify-between">
-                        <h3 className="text-foreground group-hover:text-accent min-w-0 truncate text-lg font-bold transition-colors">
+                        <h3 className="text-foreground group-hover:text-accent min-w-0 text-lg font-bold break-words transition-colors">
                           {module.title}
                         </h3>
                         <ArrowRight className="text-accent/60 group-hover:text-accent h-5 w-5 transition-colors" />
@@ -619,7 +621,7 @@ export default function TraineeDashboard() {
                         exit={{ opacity: 0, height: 0 }}
                         className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-2"
                       >
-                        <span className="text-foreground mr-2 flex-1 truncate text-xs font-medium">
+                        <span className="text-foreground mr-2 min-w-0 flex-1 text-xs font-medium break-words">
                           {item.name}
                         </span>
                         <div className="flex items-center space-x-2">

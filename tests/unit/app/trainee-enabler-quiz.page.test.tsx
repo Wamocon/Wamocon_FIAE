@@ -52,7 +52,12 @@ type Quizzes = Array<{
 function mockQueries(quizzes: Quizzes) {
   // stable objects: the page syncs its form state in an effect on the data
   const enablerData = {
-    enabler: { id: 'e1', title: 'Enabler One', isActive: false },
+    enabler: {
+      id: 'e1',
+      title: 'Enabler One',
+      isActive: false,
+      courseId: 'c1',
+    },
     submission: null,
   };
   const quizzesData = { quizzes };
@@ -378,5 +383,230 @@ describe('lesson quiz on the enabler page: questions without a solution', () => 
     renderWithProviders(<TraineeEnablerPage />);
     expect(tile()).toHaveTextContent('Nicht automatisch bewertet');
     expect(tile()).not.toHaveTextContent('Wiederholung möglich');
+  });
+});
+
+describe('lesson quiz on the enabler page: the active difficulty (KFB-1156)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockQueries([
+      {
+        difficulty: 'LOW',
+        quizId: 'q1',
+        title: 'Lesson quiz',
+        unlocked: true,
+        isActive: true,
+        completed: false,
+      },
+    ]);
+  });
+
+  it('a click on the active difficulty keeps the answers and does not load the quiz again', async () => {
+    await startQuiz();
+    fireEvent.click(screen.getAllByRole('radio')[1]);
+    expect(screen.getAllByRole('radio')[1]).toBeChecked();
+    const loads = () =>
+      authFetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('/quizzes/LOW')
+      ).length;
+    expect(loads()).toBe(1);
+
+    fireEvent.click(tile());
+    fireEvent.click(tile());
+
+    expect(loads()).toBe(1);
+    expect(screen.getAllByRole('radio')[1]).toBeChecked();
+  });
+
+  it('a click on the active difficulty does not close the result either', async () => {
+    await startQuiz();
+    fireEvent.click(screen.getAllByRole('radio')[1]);
+    fireEvent.click(screen.getByRole('button', { name: /Quiz abgeben/ }));
+    await waitFor(() => expect(screen.getByText(/Score:/)).toBeInTheDocument());
+    fireEvent.click(tile());
+    expect(screen.getByText(/Score:/)).toBeInTheDocument();
+  });
+
+  it('marks the active difficulty for assistive technology', async () => {
+    await startQuiz();
+    expect(tile()).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe('lesson quiz on the enabler page: the right answer (KFB-1161)', () => {
+  const questions = {
+    quiz: {
+      id: 'q1',
+      title: 'Lesson quiz',
+      difficulty: 'LOW',
+      questions: [
+        {
+          id: 'q-1',
+          questionText: 'Which one?',
+          questionType: 'MCQ',
+          options: [
+            { id: 'o-1', optionText: 'Right' },
+            { id: 'o-2', optionText: 'Wrong' },
+          ],
+        },
+        {
+          id: 'q-2',
+          questionText: 'Explain it',
+          questionType: 'TEXT',
+          options: [],
+        },
+      ],
+    },
+  };
+
+  const answerAll = async (submit: unknown) => {
+    authFetchMock.mockImplementation(async (input: any, init?: any) => {
+      const url = String(input);
+      if (init?.method === 'POST') return json(submit);
+      if (url.includes('/quizzes/LOW')) return json(questions);
+      return json({});
+    });
+    renderWithProviders(<TraineeEnablerPage />);
+    fireEvent.click(tile());
+    await waitFor(() => expect(screen.getAllByRole('radio')).toHaveLength(2));
+    fireEvent.click(screen.getAllByRole('radio')[1]);
+    fireEvent.click(screen.getByRole('button', { name: /Weiter|Next/ }));
+    fireEvent.change(screen.getByPlaceholderText('Antwort eingeben...'), {
+      target: { value: 'my text' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Quiz abgeben/ }));
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockQueries([
+      {
+        difficulty: 'LOW',
+        quizId: 'q1',
+        title: 'Lesson quiz',
+        unlocked: true,
+        isActive: true,
+        completed: false,
+      },
+    ]);
+  });
+
+  it('shows the right option and the expected text of a question answered wrong, once the attempt is passed', async () => {
+    await answerAll({
+      submissionId: 's1',
+      score: 50,
+      locked: false,
+      autoGraded: true,
+      ungradedCount: 0,
+      feedback: [
+        {
+          questionId: 'q-1',
+          graded: true,
+          correct: false,
+          correctOptionId: 'o-1',
+          explanation: null,
+          selectedOptionId: 'o-2',
+        },
+        {
+          questionId: 'q-2',
+          graded: true,
+          correct: false,
+          correctOptionId: null,
+          explanation: null,
+          selectedOptionId: null,
+          selectedText: 'my text',
+          correctAnswerText: 'THE-EXPECTED-TEXT',
+        },
+      ],
+    });
+    await screen.findByText(/Score:/);
+    expect(screen.getByText(/Richtig:\s*Right/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Richtig:\s*THE-EXPECTED-TEXT/)
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('key-after-pass')).toBeNull();
+  });
+
+  it('a failed attempt says right or wrong only and tells when the right answer comes, no "Richtig: -"', async () => {
+    await answerAll({
+      submissionId: 's1',
+      score: 0,
+      locked: false,
+      autoGraded: true,
+      ungradedCount: 0,
+      feedback: [
+        {
+          questionId: 'q-1',
+          graded: true,
+          correct: false,
+          correctOptionId: null,
+          explanation: null,
+          selectedOptionId: 'o-2',
+        },
+        {
+          questionId: 'q-2',
+          graded: true,
+          correct: false,
+          correctOptionId: null,
+          explanation: null,
+          selectedOptionId: null,
+          selectedText: 'my text',
+          correctAnswerText: null,
+        },
+      ],
+    });
+    await screen.findByText(/Score:/);
+    expect(screen.queryByText(/Richtig:/)).toBeNull();
+    expect(screen.getAllByTestId('key-after-pass')).toHaveLength(2);
+    expect(screen.getAllByTestId('key-after-pass')[0]).toHaveTextContent(
+      'nach dem Bestehen'
+    );
+  });
+
+  it('a right answer needs no "Richtig" line and no hint', async () => {
+    await answerAll({
+      submissionId: 's1',
+      score: 100,
+      locked: false,
+      autoGraded: true,
+      ungradedCount: 0,
+      feedback: [
+        {
+          questionId: 'q-1',
+          graded: true,
+          correct: true,
+          correctOptionId: 'o-2',
+          explanation: null,
+          selectedOptionId: 'o-2',
+        },
+        {
+          questionId: 'q-2',
+          graded: true,
+          correct: true,
+          correctOptionId: null,
+          explanation: null,
+          selectedOptionId: null,
+          selectedText: 'my text',
+          correctAnswerText: 'my text',
+        },
+      ],
+    });
+    await screen.findByText(/Score:/);
+    expect(screen.queryByText(/Richtig:/)).toBeNull();
+    expect(screen.queryByTestId('key-after-pass')).toBeNull();
+  });
+});
+
+describe('enabler page: the way back (KFB-1158)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockQueries([]);
+  });
+
+  it('leads to the themes of the component, not to a list of all modules', () => {
+    renderWithProviders(<TraineeEnablerPage />);
+    const back = screen.getByRole('link', { name: /Zurück zu/ });
+    expect(back).toHaveAttribute('href', '/trainee/modules/c1');
+    expect(back).not.toHaveTextContent('meinen Modulen');
   });
 });

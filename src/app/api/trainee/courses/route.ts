@@ -15,6 +15,7 @@ import {
   requireCatalogScopeForUser,
 } from '@/lib/catalog/scope';
 import { loadCourseProgressions } from '@/lib/catalog/progression-db';
+import { sortCourses } from '@/lib/catalog/course-order';
 
 // GET courses for a trainee with progress calculation
 // An enabler is complete when every active lesson quiz is passed (score >= 50%).
@@ -57,10 +58,11 @@ export async function GET(req: NextRequest) {
           : [];
         if (!courseIds.length) return { courses: [] };
 
-        const rows = await db
-          .select()
-          .from(courses)
-          .where(inArray(courses.id, courseIds));
+        // In the order of the training plan (component number, numeric), the
+        // database returns the rows in no particular order
+        const rows = sortCourses(
+          await db.select().from(courses).where(inArray(courses.id, courseIds))
+        );
         // The completion of every enabler, by the one definition
         const progressions = await loadCourseProgressions(traineeId, courseIds);
         const anyEnabler = Array.from(progressions.values()).some(
