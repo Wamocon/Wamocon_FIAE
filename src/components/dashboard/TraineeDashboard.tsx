@@ -74,6 +74,14 @@ type DashboardData = {
   skillRadar: any[];
   achievements: any[];
   deadlines: any[];
+  appointments?: {
+    id: string;
+    label: string | null;
+    kind: string;
+    source: 'block' | 'exam';
+    startDate: string;
+    endDate: string | null;
+  }[];
 };
 
 // Cache helpers for instant dashboard loading (used as placeholderData)
@@ -152,6 +160,7 @@ export default function TraineeDashboard() {
   const skillRadar = data?.skillRadar ?? [];
   const achievements = data?.achievements ?? [];
   const deadlines = data?.deadlines ?? [];
+  const appointments = data?.appointments ?? [];
   const nextLesson = data?.nextItem
     ? {
         id: data.nextItem.lessonId,
@@ -208,6 +217,26 @@ export default function TraineeDashboard() {
   const handleLessonClick = (lessonId: string) => {
     // Redirect to enabler detail for ongoing item
     router.push(`/trainee/enablers/${lessonId}`);
+  };
+
+  // Kind of a calendar entry (block type or exam) as the label of an entry
+  // without a text of its own
+  const kindLabel = (kind: string) => {
+    const key: Record<string, string> = {
+      SCHOOL: 'block.type.school',
+      COMPANY: 'block.type.company',
+      HOLIDAY: 'block.type.holiday',
+      EXAM: 'block.type.exam',
+      PERSONAL: 'block.type.personal',
+      SONSTIGES: 'block.type.other',
+      TRAINER_BLOCKER: 'block.type.trainer',
+    };
+    return key[kind] ? t(key[kind]) : kind;
+  };
+  const dateRange = (start: string, end: string | null) => {
+    const from = new Date(start).toLocaleDateString();
+    const to = end ? new Date(end).toLocaleDateString() : from;
+    return from === to ? from : `${from} - ${to}`;
   };
 
   const handleNavigation = (view: string, data?: any) => {
@@ -455,19 +484,50 @@ export default function TraineeDashboard() {
             </div>
 
             {/* Upcoming Deadlines Section - Textual Information Above Charts */}
-            <div className="glass-effect border-accent/20 rounded-2xl border p-6 shadow-lg">
-              <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
-                <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-pink-500">
-                  <Calendar className="text-foreground h-4 w-4" />
-                </div>
-                {t('dashboard.upcomingDeadlines')}
-              </h3>
+            <div
+              role="link"
+              tabIndex={0}
+              onClick={() => router.push('/trainee/school?tab=calendar')}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  router.push('/trainee/school?tab=calendar');
+                }
+              }}
+              className="glass-effect border-accent/20 hover:border-accent/50 cursor-pointer rounded-2xl border p-6 shadow-lg transition-colors"
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-foreground flex items-center text-lg font-bold">
+                  <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-pink-500">
+                    <Calendar className="text-foreground h-4 w-4" />
+                  </div>
+                  {t('dashboard.upcomingDeadlines')}
+                </h3>
+                <span className="text-accent flex items-center text-sm font-medium">
+                  {t('dashboard.openCalendar')}
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </span>
+              </div>
               <div className="space-y-3">
-                {deadlines.length === 0 && (
+                {deadlines.length === 0 && appointments.length === 0 && (
                   <div className="text-muted-foreground">
                     {t('dashboard.noDeadlines')}
                   </div>
                 )}
+                {appointments.map(a => (
+                  <div
+                    key={`${a.source}-${a.id}`}
+                    className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors"
+                  >
+                    <span className="text-foreground font-medium">
+                      {a.label || kindLabel(a.kind)}:{' '}
+                      {dateRange(a.startDate, a.endDate)}
+                    </span>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-500/20">
+                      <Calendar className="h-4 w-4 text-purple-400" />
+                    </div>
+                  </div>
+                ))}
                 {deadlines.map((d, idx) => (
                   <div
                     key={idx}

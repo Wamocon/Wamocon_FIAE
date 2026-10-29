@@ -7,6 +7,7 @@ import { Users, TrendingUp, AlertTriangle, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { reviewViewFor } from '@/lib/trainer/review-view';
 import { DashboardOccupation } from '@/components/catalog/DashboardOccupation';
 
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -202,7 +203,9 @@ export default function TrainerDashboard() {
                   </p>
                   <button
                     onClick={() =>
-                      router.push('/trainer/reviews?onlyPending=true')
+                      router.push(
+                        `/trainer/reviews?onlyPending=true&view=${reviewViewFor(data?.counts ?? {})}`
+                      )
                     }
                     className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 w-full rounded-xl px-4 py-2 text-sm transition-colors"
                   >

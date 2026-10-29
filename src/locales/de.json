@@ -2918,5 +2918,6 @@
   "landing.universe.hint.pre": "Klicke auf",
   "landing.universe.hint.post": "und erkunde die 12 Lernfelder",
   "enablerPage.backToThemes": "Zurück zu den Themenkreisen",
-  "enablerPage.keyAfterPass": "Die richtige Antwort sehen Sie nach dem Bestehen des Quiz. Wiederholen Sie es, bis Sie bestanden haben."
+  "enablerPage.keyAfterPass": "Die richtige Antwort sehen Sie nach dem Bestehen des Quiz. Wiederholen Sie es, bis Sie bestanden haben.",
+  "dashboard.openCalendar": "Zum Kalender"
 }

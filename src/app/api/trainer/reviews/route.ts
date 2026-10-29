@@ -11,11 +11,12 @@ import {
   useCases,
   useCaseSubmissions,
 } from '@/db/migrations/schemas/schema';
-import {
-  requireTraineeScopeCondition,
-  traineeIdInScope,
-} from '@/lib/auth/trainee-scope-conditions';
+import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
 import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
+import {
+  enablerSubmissionsWhere,
+  submissionsOfUseCasesWhere,
+} from '@/lib/trainer/pending-reviews';
 
 export async function GET(req: NextRequest) {
   try {
@@ -76,11 +77,6 @@ export async function GET(req: NextRequest) {
         useCaseSubmissions: [],
       });
 
-    // Build status filter conditions for SQL WHERE
-    const statusFilter = onlyPending
-      ? eq(enablerSubmissions.status, 'PENDING')
-      : undefined;
-
     let enablerRows: Array<{
       id: string;
       enablerId: string;
@@ -108,10 +104,11 @@ export async function GET(req: NextRequest) {
     }> = [];
     if (!type || type === 'enabler') {
       // Get enabler submissions for trainer's courses
-      const esWhere = and(
-        inArray(enablers.courseId, courseIds),
-        traineeIdInScope(enablerSubmissions.traineeId, traineeScope.condition),
-        statusFilter ? eq(enablerSubmissions.status, 'PENDING') : undefined
+      // The same filter the dashboard counts the pending reviews with
+      const esWhere = enablerSubmissionsWhere(
+        courseIds,
+        traineeScope.condition,
+        onlyPending
       );
       const es = await db
         .select({
@@ -163,10 +160,10 @@ export async function GET(req: NextRequest) {
     }
 
     if (!type || type === 'usecase') {
-      const usWhere = and(
-        inArray(useCases.courseId, courseIds),
-        traineeIdInScope(useCaseSubmissions.traineeId, traineeScope.condition),
-        onlyPending ? eq(useCaseSubmissions.status, 'PENDING') : undefined
+      const usWhere = submissionsOfUseCasesWhere(
+        courseIds,
+        traineeScope.condition,
+        onlyPending
       );
       const us = await db
         .select({

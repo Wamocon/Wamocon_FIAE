@@ -2916,5 +2916,6 @@
   "landing.universe.hint.pre": "Click on",
   "landing.universe.hint.post": "to explore the 12 learning fields",
   "enablerPage.backToThemes": "Back to the topics",
-  "enablerPage.keyAfterPass": "You see the right answer once you have passed the quiz. Repeat it until you pass."
+  "enablerPage.keyAfterPass": "You see the right answer once you have passed the quiz. Repeat it until you pass.",
+  "dashboard.openCalendar": "Open calendar"
 }

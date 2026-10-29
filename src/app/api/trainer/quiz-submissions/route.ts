@@ -1,13 +1,11 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, desc, eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { profiles, quizzes, quizSubmissions, enablerQuizLinks, enablers } from '@/db/migrations/schemas/schema';
-import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
-import {
-  requireTraineeScopeCondition,
-  traineeIdInScope,
-} from '@/lib/auth/trainee-scope-conditions';
+import { requireCatalogScope } from '@/lib/catalog/scope';
+import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
+import { quizSubmissionsWhere } from '@/lib/trainer/pending-reviews';
 
 // GET /api/trainer/quiz-submissions?trainerProfileId=...&onlyPending=true
 export async function GET(req: NextRequest) {
@@ -49,17 +47,23 @@ export async function GET(req: NextRequest) {
       .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
       .leftJoin(enablerQuizLinks, eq(enablerQuizLinks.quizId, quizSubmissions.quizId))
       .leftJoin(enablers, eq(enablers.id, enablerQuizLinks.enablerId))
+      // The same filter the dashboard counts the pending reviews with
       .where(
-        and(
-          traineeIdInScope(quizSubmissions.traineeId, traineeScope.condition),
-          catalogCondition(quizzes.trainingCatalogId, catalogScope),
-          onlyPending ? eq(quizSubmissions.isReviewed, false as any) : undefined
-        )
+        quizSubmissionsWhere(catalogScope, traineeScope.condition, onlyPending)
       )
       .orderBy(desc(quizSubmissions.submittedAt))
       .limit(200);
 
-    return NextResponse.json({ submissions: rows });
+    // A quiz linked to several enablers joins to several rows per submission
+    const seen = new Set<string>();
+    const submissions = rows.filter(r => {
+      const id = String(r.id);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+
+    return NextResponse.json({ submissions });
   } catch (e) {
     console.error('Trainer quiz submissions GET error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

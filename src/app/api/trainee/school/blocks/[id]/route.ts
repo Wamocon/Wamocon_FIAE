@@ -13,6 +13,7 @@ import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { refreshTraineeDashboard } from '@/lib/school/dashboard-cache';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -149,6 +150,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
             .delete(ausbildungBlocks)
             .where(and(eq(ausbildungBlocks.id, id as any), eq(ausbildungBlocks.traineeId, session.id as any)));
 
+        refreshTraineeDashboard();
         return NextResponse.json({ success: true, deleted: id });
     } catch (e) {
         console.error('Delete block error:', e);

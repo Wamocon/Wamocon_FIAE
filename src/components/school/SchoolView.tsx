@@ -66,7 +66,9 @@ export function SchoolView() {
     const searchParams = useSearchParams();
 
     // Get tab from URL or default to calendar
-    const tabParam = searchParams.get('tab') as TabId | null;
+    // (notifications created before the tab was renamed link to "blocks")
+    const rawTab = searchParams.get('tab');
+    const tabParam = (rawTab === 'blocks' ? 'calendar' : rawTab) as TabId | null;
     const [activeTab, setActiveTab] = useState<TabId>(
         tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'lernfelder'
     );
