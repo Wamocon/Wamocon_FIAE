@@ -360,7 +360,7 @@
       "question": "K f B M Lernfeld 3 erklären",
       "expected": {
         "behavior": "refuse_other_occupation",
-        "layer": "context_isolation"
+        "layer": "pre_model"
       },
       "forbidden": {
         "sources": [
@@ -376,7 +376,7 @@
         ],
         "words": []
       },
-      "note": "Auseinandergezogener Name: die Erkennung greift nicht, der Zugriffsfilter schon"
+      "note": "Auseinandergezogener Name: die Erkennung setzt die Buchstaben zusammen (K f B M ist KfBM), vor dem Modell"
     },
     {
       "id": "OS-10",

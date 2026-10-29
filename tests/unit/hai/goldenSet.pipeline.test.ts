@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { PgDialect } from 'drizzle-orm/pg-core';
+import { writeFileSync } from 'node:fs';
 
 // Golden set of the HAI, deterministic part (package KI5.4, docs/hai-golden-set.md).
 //
@@ -431,7 +432,17 @@ const RUN_MODEL = process.env.HAI_GOLDEN_MODEL_RUN === 'yes';
         // with the approval of the owner.
         const providers = jest.requireActual('@/lib/hai/providers');
         const scores: CaseScore[] = [];
+        // Optional: HAI_GOLDEN_CASES=SP-09,EX-01 runs only these cases and
+        // HAI_GOLDEN_DUMP=<file> writes question, answer and issues of every case
+        // run to that file (the texts of the set are invented, nothing real).
+        // Without both the run is the full measurement and prints ids only.
+        const only = (process.env.HAI_GOLDEN_CASES ?? '')
+          .split(',')
+          .map(id => id.trim())
+          .filter(Boolean);
+        const dump: Record<string, unknown> = {};
         for (const goldenCase of set.cases) {
+          if (only.length > 0 && !only.includes(goldenCase.id)) continue;
           goldenState.reset();
           goldenState.access = accessFor(goldenCase);
           goldenState.model = async systemPrompt => {
@@ -448,12 +459,28 @@ const RUN_MODEL = process.env.HAI_GOLDEN_MODEL_RUN === 'yes';
             goldenCase.question,
             contextFor(goldenCase)
           );
-          scores.push(scoreAnswer(goldenCase, result.response, canaries));
+          const score = scoreAnswer(goldenCase, result.response, canaries);
+          scores.push(score);
+          dump[goldenCase.id] = {
+            question: goldenCase.question,
+            expected: goldenCase.expected.behavior,
+            pass: score.pass,
+            issues: score.issues,
+            answer: result.response,
+          };
+        }
+        if (process.env.HAI_GOLDEN_DUMP) {
+          writeFileSync(
+            process.env.HAI_GOLDEN_DUMP,
+            JSON.stringify(dump, null, 2),
+            'utf8'
+          );
         }
         const summary = summarizeScores(scores);
         // numbers and case ids only, never an answer text
         process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
-        expect(summary.violations).toEqual([]);
+        // a run of selected cases is a diagnosis, the thresholds are for the full set
+        if (only.length === 0) expect(summary.violations).toEqual([]);
       },
       15 * 60 * 1000
     );
