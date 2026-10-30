@@ -11,9 +11,15 @@ function makeGet(url: string) {
   return { url } as any;
 }
 
-async function importHandlerWithDb(mockDb: any) {
+async function importHandlerWithDb(mockDb: any, progression?: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  if (progression) {
+    jest.doMock('@/lib/catalog/progression-db', () => ({
+      __esModule: true,
+      getEnablerProgression: jest.fn(async () => progression),
+    }));
+  }
   mockTraineeSession();
   mockCatalogScope();
   const mod = await import('@/app/api/trainee/use-cases/[useCaseId]/route');
@@ -72,11 +78,9 @@ describe('API: GET /api/trainee/use-cases/[useCaseId]', () => {
     ];
     let idx = 0;
     const mockDb = {
-      select: jest
-        .fn()
-        .mockImplementation(() => ({
-          from: () => ({ where: () => sequence[idx++] }),
-        })),
+      select: jest.fn().mockImplementation(() => ({
+        from: () => ({ where: () => sequence[idx++] }),
+      })),
     };
     const GET = await importHandlerWithDb(mockDb);
     const res = await GET(
@@ -100,6 +104,60 @@ describe('API: GET /api/trainee/use-cases/[useCaseId]', () => {
     expect(body.submission.links).toHaveLength(2);
   });
 
+  // use case, member, no submission, course, enabler of the use case
+  const lockSequence = (): any[] => [
+    [
+      {
+        id: 'u1',
+        title: 'UC',
+        isActive: true,
+        courseId: 'c1',
+        enablerId: 'e4',
+      },
+    ],
+    [{ userId: 't1', courseId: 'c1' }],
+    [],
+    [{ id: 'c1', title: 'Course One' }],
+    [{ id: 'e4', courseId: 'c1', isActive: true }],
+  ];
+  const dbOf = (sequence: any[]) => {
+    let idx = 0;
+    return {
+      select: jest.fn().mockImplementation(() => ({
+        from: () => ({ where: () => sequence[idx++] }),
+      })),
+    };
+  };
+  const callGet = (GET: any) =>
+    GET(makeGet('http://localhost/api/trainee/use-cases/u1'), {
+      params: Promise.resolve({ useCaseId: 'u1' }),
+    });
+
+  it('reports the lock of the enabler so the page can explain it', async () => {
+    const GET = await importHandlerWithDb(dbOf(lockSequence()), {
+      enabler: {
+        locked: true,
+        lockReason: 'SEQUENCE',
+        lockedBy: { enablerId: 'e3', title: 'Enabler drei' },
+      },
+    });
+    const res = await callGet(GET);
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.lock).toEqual({
+      reason: 'SEQUENCE',
+      lockedBy: { title: 'Enabler drei' },
+    });
+  });
+
+  it('has no lock when the enabler is open', async () => {
+    const GET = await importHandlerWithDb(dbOf(lockSequence()), {
+      enabler: { locked: false, lockReason: null, lockedBy: null },
+    });
+    const res = await callGet(GET);
+    expect((await res.json()).lock).toBeNull();
+  });
+
   it('403 forbidden if not member', async () => {
     const sequence: any[] = [
       [{ id: 'u1', title: 'UC', isActive: true, courseId: 'c1' }],
@@ -107,11 +165,9 @@ describe('API: GET /api/trainee/use-cases/[useCaseId]', () => {
     ];
     let idx = 0;
     const mockDb = {
-      select: jest
-        .fn()
-        .mockImplementation(() => ({
-          from: () => ({ where: () => sequence[idx++] }),
-        })),
+      select: jest.fn().mockImplementation(() => ({
+        from: () => ({ where: () => sequence[idx++] }),
+      })),
     };
     const GET = await importHandlerWithDb(mockDb);
     const res = await GET(
@@ -127,11 +183,9 @@ describe('API: GET /api/trainee/use-cases/[useCaseId]', () => {
     const sequence: any[] = [[]];
     let idx = 0;
     const mockDb = {
-      select: jest
-        .fn()
-        .mockImplementation(() => ({
-          from: () => ({ where: () => sequence[idx++] }),
-        })),
+      select: jest.fn().mockImplementation(() => ({
+        from: () => ({ where: () => sequence[idx++] }),
+      })),
     };
     const GET = await importHandlerWithDb(mockDb);
     const res = await GET(

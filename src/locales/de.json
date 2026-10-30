@@ -767,6 +767,7 @@
   "useCase.loadError": "Use Case konnte nicht geladen werden",
   "useCase.profileMissing": "Profil fehlt",
   "useCase.submitFailed": "Abgabe fehlgeschlagen",
+  "useCase.locked": "Dieser Use Case ist noch gesperrt.",
   "useCase.submitSuccess": "Abgabe gespeichert. Status: Ausstehend",
   "useCase.submission": "Deine Lösung",
   "useCase.links": "Links (optional)",
