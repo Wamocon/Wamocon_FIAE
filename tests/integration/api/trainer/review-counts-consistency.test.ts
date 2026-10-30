@@ -125,6 +125,31 @@ describe('pending reviews: the count and the list use the same filter', () => {
   });
 });
 
+// WMCNL-2876: a trainer who neither created a course nor is a TRAINER member of it saw
+// 0 reviews and could review nothing. The owner decided for the whole organization: the
+// courses are those of the catalog scope, and the trainee condition limits whose
+// submissions show up.
+describe('whole organization: the courses do not depend on the trainer', () => {
+  it('the list reads the courses by catalog only, not by creator or membership', async () => {
+    const list = await reviews();
+    const where = rendered(list, 'courses');
+    expect(where).toHaveLength(1);
+    expect(where[0]).toContain('"courses"."training_catalog_id"');
+    expect(where[0]).not.toContain('created_by_id');
+    expect(selectsFrom(list, 'course_members')).toHaveLength(0);
+  });
+
+  it('the dashboard counts the reviews over the same courses, not over those of the trainer', async () => {
+    const { mock: dash } = await dashboard();
+    const where = rendered(dash, 'enabler_submissions');
+    expect(where).toHaveLength(1);
+    expect(where[0]).toContain('"enablers"."course_id" in');
+    // the list of a trainer who has no course at all is not empty any more
+    const list = await reviews();
+    expect(rendered(list, 'enabler_submissions')).toHaveLength(1);
+  });
+});
+
 describe('dashboard counts', () => {
   it('reports the pending reviews per kind and their sum', async () => {
     const { body } = await dashboard();
