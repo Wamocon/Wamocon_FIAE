@@ -29,6 +29,7 @@ import { loadGradableQuizIds } from '@/lib/catalog/progression-db';
 import {
   enablerSubmissionsWhere,
   quizSubmissionsWhere,
+  reviewableCourseIds,
   submissionsOfUseCasesWhere,
 } from '@/lib/trainer/pending-reviews';
 
@@ -87,6 +88,9 @@ async function fetchTrainerDashboardData(
       .where(traineeCondition);
     const traineeIds = traineeRows.map(t => String(t.id));
     const hasTrainees = traineeIds.length > 0;
+
+    // The courses whose submissions are reviewed: all of the catalog scope
+    const reviewCourseIds = await reviewableCourseIds(scope);
 
     // ── Phase 2: courseId-dependent (2 queries, was 4) ──
     const [trainerEnablers, useCaseRows] = await Promise.all([
@@ -208,22 +212,29 @@ async function fetchTrainerDashboardData(
             )
             .where(quizSubmissionsWhere(scope, traineeCondition, true))
         : Promise.resolve([{ c: 0 }]),
-      hasTrainees && courseIds.length > 0
+      // Reviews are counted over every course of the catalog scope, like the
+      // list: the whole organization is reviewed (WMCNL-2876)
+      hasTrainees && reviewCourseIds.length > 0
         ? db
             .select({ c: countDistinct(useCaseSubmissions.id) })
             .from(useCaseSubmissions)
-            .innerJoin(
-              useCases,
-              eq(useCases.id, useCaseSubmissions.useCaseId)
+            .innerJoin(useCases, eq(useCases.id, useCaseSubmissions.useCaseId))
+            .where(
+              submissionsOfUseCasesWhere(
+                reviewCourseIds,
+                traineeCondition,
+                true
+              )
             )
-            .where(submissionsOfUseCasesWhere(courseIds, traineeCondition, true))
         : Promise.resolve([{ c: 0 }]),
-      hasTrainees && courseIds.length > 0
+      hasTrainees && reviewCourseIds.length > 0
         ? db
             .select({ c: countDistinct(enablerSubmissions.id) })
             .from(enablerSubmissions)
             .innerJoin(enablers, eq(enablers.id, enablerSubmissions.enablerId))
-            .where(enablerSubmissionsWhere(courseIds, traineeCondition, true))
+            .where(
+              enablerSubmissionsWhere(reviewCourseIds, traineeCondition, true)
+            )
         : Promise.resolve([{ c: 0 }]),
       hasTrainees
         ? db

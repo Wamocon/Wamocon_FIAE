@@ -9,14 +9,19 @@
  * Three rules apply together:
  *  - Trainees: the trainees inside the scope of the caller (organization,
  *    chosen occupation, role), see src/lib/auth/trainee-scope-conditions.ts.
- *  - Content: enabler and use case submissions of the courses of the trainer
- *    (created or TRAINER member) inside the catalog scope, quiz submissions of
- *    quizzes of the catalog scope.
+ *  - Content: enabler and use case submissions of every course inside the
+ *    catalog scope (reviewableCourseIds), quiz submissions of quizzes of the
+ *    catalog scope. A trainer does not need to have created a course or to be
+ *    a member of it: the whole organization is reviewed (decision of the
+ *    owner, WMCNL-2876). Before, a trainer who was neither creator nor TRAINER
+ *    member of a course saw no submission of it and could not review.
  *  - Status: PENDING for enablers and use cases, not reviewed for quizzes.
  */
 
 import { and, eq, inArray, type SQL } from 'drizzle-orm';
+import db from '@/db';
 import {
+  courses,
   enablers,
   enablerSubmissions,
   quizSubmissions,
@@ -26,6 +31,21 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { traineeIdInScope } from '@/lib/auth/trainee-scope-conditions';
 import { catalogCondition, type CatalogScope } from '@/lib/catalog/scope';
+
+/**
+ * The courses whose submissions a trainer may review: every course inside the
+ * catalog scope. Which submissions that really shows is decided by the trainee
+ * condition (organization, occupation, role), not by who created the course.
+ */
+export async function reviewableCourseIds(
+  scope: CatalogScope
+): Promise<string[]> {
+  const rows = await db
+    .select({ id: courses.id })
+    .from(courses)
+    .where(catalogCondition(courses.trainingCatalogId, scope));
+  return rows.map(r => String(r.id));
+}
 
 /**
  * where() for enabler submissions. The query has to join `enablers` (the
