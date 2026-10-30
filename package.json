@@ -45,6 +45,8 @@
     "test:scripts": "node --test \"tests/scripts/**/*.test.mjs\"",
     "db:migrations:check": "node scripts/db/migration-check.mjs",
     "db:preview:check": "node scripts/db/preview-migrate.mjs check",
+    "preview:seed-progress": "tsx scripts/preview/seed-test-progress.ts",
+    "preview:reset-progress": "tsx scripts/preview/reset-test-progress.ts",
     "db:content:dry-run": "node scripts/db/content-sync.mjs --linked",
     "import:kfbm:inventory": "node scripts/import/kfbm-inventory.mjs",
     "import:kfbm:parse-check": "node scripts/import/kfbm-parse-check.mjs",
