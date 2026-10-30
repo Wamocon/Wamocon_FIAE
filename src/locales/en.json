@@ -761,6 +761,7 @@
   "useCase.loadError": "Could not load use case",
   "useCase.profileMissing": "Profile missing",
   "useCase.submitFailed": "Submission failed",
+  "useCase.locked": "This use case is still locked.",
   "useCase.submitSuccess": "Submission saved. Status: Pending",
   "useCase.submission": "Your Solution",
   "useCase.links": "Links (optional)",
