@@ -759,6 +759,8 @@ async function execute(args, client, origin, env) {
       console.log(
         `Component ${key}: ${ready.length} written of ${items.length}, failed so far ${log.failed.length}`
       );
+      // the report after every component: a stopped run still leaves the old values for the rollback
+      if (args.out) writeFileSync(args.out, JSON.stringify(log, null, 1));
     }
   } finally {
     workspace.cleanup();
