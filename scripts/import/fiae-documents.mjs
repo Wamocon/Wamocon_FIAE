@@ -133,7 +133,7 @@ export function parseArgs(argv) {
     );
   if (out.apply && out.command === 'plan')
     out.errors.push('--apply belongs to run and rollback.');
-  if (out.apply && !out.confirmStorageHost)
+  if (out.apply && out.command === 'run' && !out.confirmStorageHost)
     out.errors.push('A real run needs --confirm-storage-host.');
   return out;
 }
@@ -290,17 +290,20 @@ export function readSource(root) {
       const parts = listDir(path.join(edir, 'Szenario parts'))
         .filter(x => x.isFile() && /\.docx$/i.test(x.name))
         .map(x => {
-          const pm = /^Part\s*(\d+)[_ -]*(.*)\.docx$/i.exec(x.name);
+          const pm = /^Part\s*(\d+)([a-z]?)(?![a-z])[_ -]*(.*)\.docx$/i.exec(
+            x.name
+          );
           return pm
             ? {
                 n: Number(pm[1]),
-                slug: pm[2],
+                sfx: pm[2].toLowerCase(),
+                slug: pm[3],
                 file: path.join(edir, 'Szenario parts', x.name),
               }
             : null;
         })
         .filter(Boolean)
-        .sort((a, b) => a.n - b.n);
+        .sort((a, b) => a.n - b.n || a.sfx.localeCompare(b.sfx));
       comp.enablers.push({
         nr: mm ? Number(mm[1]) : 0,
         key: mm ? mm[1].padStart(2, '0') : '00',
@@ -350,7 +353,7 @@ export async function main(argv, env = process.env) {
   const origin = env.NEXT_PUBLIC_SUPABASE_URL
     ? new URL(env.NEXT_PUBLIC_SUPABASE_URL).origin
     : null;
-  if (args.apply) {
+  if (args.apply && args.command === 'run') {
     const problems = [
       ...checkStorageTarget('preview', env.NEXT_PUBLIC_SUPABASE_URL),
       ...checkConfirmStorageHost(
@@ -516,22 +519,25 @@ async function execute(args, client, origin, env) {
             d =>
               d.enabler_id === e.id &&
               d.document_type === 'EXERCISE' &&
-              new RegExp(`Part\\s*${part.n}\\b`, 'i').test(d.title)
+              (part.sfx === '' || part.sfx === 'a'
+                ? new RegExp(`Part\\s*${part.n}[a-z]?\\b`, 'i')
+                : new RegExp(`Part\\s*${part.n}${part.sfx}\\b`, 'i')
+              ).test(d.title)
           ) ?? null;
         const title =
           row?.title ??
-          `Szenario: Part ${part.n}: ${part.slug.replace(/_/g, ' ').trim()}`.slice(
+          `Szenario: Part ${part.n}${part.sfx}: ${part.slug.replace(/_/g, ' ').trim()}`.slice(
             0,
             160
           );
         work.push({
           comp,
           kind: 'EXERCISE',
-          label: `${comp.key}/${fe.key} Part ${part.n}`,
+          label: `${comp.key}/${fe.key} Part ${part.n}${part.sfx}`,
           title,
           file: part.file,
           bucket: CONTENT_BUCKET,
-          path: `${base}/part${part.n}_${ascii(part.slug)}.pdf`,
+          path: `${base}/part${part.n}${part.sfx}_${ascii(part.slug)}.pdf`,
           row,
           enabler: e,
           order: part.n,

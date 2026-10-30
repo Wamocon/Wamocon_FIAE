@@ -225,3 +225,49 @@ test('the storage path of a file has no umlaut, no space and no soft hyphen', ()
   assert.match(p, /^[A-Za-z0-9_]+$/);
   assert.ok(p.includes('Massnahmen'.slice(0, 3)));
 });
+
+test('Part5a and Part5b are two scenario parts, not twice part 5', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'fiae-src-'));
+  try {
+    const enabler = path.join(
+      root,
+      '04_Entwickeln',
+      'Enablers',
+      '01_IT-Systeme konzeptionieren'
+    );
+    mkdirSync(path.join(enabler, 'Szenario parts'), { recursive: true });
+    writeFileSync(
+      path.join(enabler, '01_IT-Systeme konzeptionieren.docx'),
+      'x'
+    );
+    for (const name of [
+      'Part5b_Netzzugang_KORR.docx',
+      'Part5a_Datenanalyse_KORR.docx',
+      'Part4_Hardware_KORR.docx',
+    ]) {
+      writeFileSync(path.join(enabler, 'Szenario parts', name), 'x');
+    }
+    const [c] = readSource(root);
+    const parts = c.enablers[0].parts;
+    assert.deepEqual(
+      parts.map(p => `${p.n}${p.sfx}`),
+      ['4', '5a', '5b']
+    );
+    assert.equal(parts[1].slug, 'Datenanalyse_KORR');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a rollback needs no storage host, a real run does', () => {
+  const rollback = parseArgs([
+    'rollback',
+    'report.json',
+    '--target',
+    'preview',
+    '--apply',
+  ]);
+  assert.equal(rollback.errors.length, 0);
+  const run = parseArgs(['run', 'src', '--target', 'preview', '--apply']);
+  assert.ok(run.errors.some(e => /confirm-storage-host/.test(e)));
+});
