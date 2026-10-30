@@ -55,7 +55,7 @@ describe('loadProviderConfig for the embeddings', () => {
     const config = loadProviderConfig();
     expect(config.embeddingProvider).toBe('openai-compatible');
     expect(config.sokratesEmbedding).toEqual({
-      model: 'qwen3-embedding:8b',
+      model: 'qwen3-embedding',
       dimensions: 3072,
     });
   });
