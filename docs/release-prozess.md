@@ -185,6 +185,10 @@ Die Auth-Konten sind zwischen Production und Preview geteilt, ein Profil in `pub
 - **Probelauf zuerst:** `v_dry_run` steht auf `true`, das Skript rollt dann alles mit einer Meldung zurück, die die Zahlen zeigt. Ein zweiter Lauf fügt nichts mehr ein.
 - **Geprüft:** statisch (`tests/unit/preview-setup/user-copy.test.ts`, mit Mutationsprüfung), Probelauf und echter Lauf gegen die Preview am 26.10.2026 (6 Profile in Production, 5 eingefügt, das eigene Profil war schon da).
 
+### Testdaten mit Fortschritt
+
+Für Abnahmetests gibt es zwei Skripte: eines legt den Azubis der Preview einen Arbeitsstand an (erledigte Enabler, Quiz-Ergebnisse, Abgaben in allen Zuständen, Tätigkeitsnachweise), das andere setzt nach einem Test alles zurück. Beide arbeiten nur in `public_preview` und sind ein Probelauf, solange `--apply` fehlt. Anleitung, Umfang und Schutz: `docs/preview-testdaten.md`.
+
 ### Vercel-Region
 
 `vercel.json` setzt `regions` auf `dub1` (Dublin). Die Funktionen liefen bisher in `iad1` (US-Ost), die Datenbank liegt in `eu-west-1` (Irland). Jede Abfrage einer API-Route überquerte den Atlantik, bei mehreren Abfragen je Anfrage summiert sich das auf spürbare Wartezeit. Dublin liegt im selben Rechenzentrumsraum wie die Datenbank. Die Einstellung ist optional und steht in einem eigenen Commit, sie lässt sich ohne Nebenwirkung zurücknehmen. Sie wirkt nur auf Deployments dieses Repositories (Production und Preview).
