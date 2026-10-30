@@ -1414,7 +1414,7 @@
   "landing.faq.title": "Frequently Asked Questions",
   "landing.faq.subtitle": "Everything you need to know before getting started.",
   "landing.faq.q1.q": "Who is LFA for?",
-  "landing.faq.q1.a": "LFA is designed for training companies that train in two occupations: IT specialists for application development (FIAE) and office management clerks (KfBM). The platform serves both trainers and trainees and supports the full training process, from learning management to exam preparation.",
+  "landing.faq.q1.a": "LFA is designed for training companies that train IT specialists for application development (FIAE) or office management clerks (KfBM), in one of the two occupations or in both. The platform serves both trainers and trainees and supports the full training process, from learning management to exam preparation.",
   "landing.faq.q2.q": "What is the difference between Light and Pro?",
   "landing.faq.q2.a": "Light does not include learning content directly in the platform; it only provides source references (book title + page number). Trainees learn with their own textbooks. Pro includes extensive, IHK-compliant learning content directly in LFA — exam-oriented, thematically structured, and without external books.",
   "landing.faq.q3.q": "What does Enterprise add?",
