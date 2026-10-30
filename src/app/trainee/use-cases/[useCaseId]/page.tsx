@@ -206,7 +206,7 @@ export default function TraineeUseCaseDetailPage() {
           <div className="animate-in fade-in slide-in-from-top-4 mt-4 duration-300">
             <div className="border-accent/30 bg-card relative h-[80vh] w-full overflow-hidden rounded-xl border shadow-2xl">
               <iframe
-                src={`${selectedPdf.url}#toolbar=1&navpanes=0&view=FitH`}
+                src={`${selectedPdf.url}#toolbar=0&navpanes=0&view=FitH`}
                 className="h-full w-full"
                 title="PDF Viewer"
               />

@@ -19,6 +19,9 @@ interface FlipbookViewerProps {
   title: string;
   isOpen: boolean;
   onClose: () => void;
+  // false for trainees: no download, no new tab with the raw file, and no toolbar of the
+  // PDF viewer (it has its own download and print buttons)
+  allowDownload?: boolean;
 }
 
 export function FlipbookViewer({
@@ -26,6 +29,7 @@ export function FlipbookViewer({
   title,
   isOpen,
   onClose,
+  allowDownload = true,
 }: FlipbookViewerProps) {
   const { t } = useLanguage();
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -122,25 +126,29 @@ export function FlipbookViewer({
             <div className="mx-1 h-6 w-px bg-white/10" />
 
             {/* Actions */}
-            <a
-              href={pdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-foreground rounded-xl border border-transparent p-2 text-gray-400 transition-colors hover:border-white/10 hover:bg-white/10"
-              title={t('flipbook.openNewTab')}
-            >
-              <ExternalLink className="h-4 w-4" />
-            </a>
-            <a
-              href={pdfUrl}
-              download
-              className="hover:text-foreground rounded-xl border border-transparent p-2 text-gray-400 transition-colors hover:border-white/10 hover:bg-white/10"
-              title={t('flipbook.download')}
-            >
-              <Download className="h-4 w-4" />
-            </a>
+            {allowDownload && (
+              <>
+                <a
+                  href={pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-foreground rounded-xl border border-transparent p-2 text-gray-400 transition-colors hover:border-white/10 hover:bg-white/10"
+                  title={t('flipbook.openNewTab')}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+                <a
+                  href={pdfUrl}
+                  download
+                  className="hover:text-foreground rounded-xl border border-transparent p-2 text-gray-400 transition-colors hover:border-white/10 hover:bg-white/10"
+                  title={t('flipbook.download')}
+                >
+                  <Download className="h-4 w-4" />
+                </a>
 
-            <div className="mx-1 h-6 w-px bg-white/10" />
+                <div className="mx-1 h-6 w-px bg-white/10" />
+              </>
+            )}
 
             <button
               onClick={() => setIsFullscreen(!isFullscreen)}
@@ -188,7 +196,7 @@ export function FlipbookViewer({
           >
             <div className="h-full w-full overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/10">
               <iframe
-                src={`${pdfUrl}#toolbar=1&navpanes=1&view=FitH`}
+                src={`${pdfUrl}#toolbar=${allowDownload ? 1 : 0}&navpanes=${allowDownload ? 1 : 0}&view=FitH`}
                 className="h-full w-full border-0 bg-white"
                 title={title}
                 onLoad={() => setIsLoading(false)}

@@ -655,6 +655,7 @@ export default function TraineeEnablerPage() {
           pdfUrl={flipbook.pdfUrl}
           isOpen={flipbook.isOpen}
           onClose={flipbook.closePdf}
+          allowDownload={false}
         />
       </div>
 
