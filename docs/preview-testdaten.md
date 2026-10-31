@@ -21,6 +21,7 @@ npm run preview:reset-progress -- --target preview --apply --confirm-host <Host 
 Weitere Schalter:
 
 - `--email <a>,<b>` nur diese Konten (der Arbeitsstand eines Kontos bleibt derselbe, auch wenn nur es gewählt wird)
+- `--level weit|mittel|bereit|anfang` (braucht `--email`) gibt den gewählten Konten diesen Stand statt des Standes ihrer Position. Das Anlegen ergänzt nur, ein höherer Stand erweitert den vorhandenen. Für einen niedrigeren Stand zuerst zurücksetzen (`preview:reset-progress` mit demselben `--email` und `--level`).
 - `--clear-only` (nur Zurücksetzen) entfernt nur, legt nichts neu an
 - `--keep-files` (nur Zurücksetzen) lässt hochgeladene Dateien liegen
 - `--db-url-env <NAME>` Name der Variablen mit der Verbindung, Standard `PREVIEW_IMPORT_DB_URL`
