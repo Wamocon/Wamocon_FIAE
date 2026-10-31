@@ -451,7 +451,7 @@ export function QuizManagement() {
     if (!profile) return;
     setLoading(true);
     try {
-      const res = await authFetch(`/api/trainer/quizzes`, { cache: 'no-store' });
+      const res = await authFetch(`/api/trainer/quizzes?type=big`, { cache: 'no-store' });
       if (!res.ok) throw new Error(t('quiz.managementLoadQuizzesError'));
       const data = await res.json();
       const items: QuizListItem[] = (data.quizzes || []).filter(

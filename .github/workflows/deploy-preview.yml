@@ -58,7 +58,11 @@ permissions:
 jobs:
   migrate:
     name: Migrate public_preview
+    # Not for Dependabot: it gets the secrets of its own store, not those of the environment Preview,
+    # so this job could only fail there. A Dependabot pull request changes dependencies or workflow
+    # versions, never the database.
     if: >-
+      github.actor != 'dependabot[bot]' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
       (github.event_name != 'workflow_dispatch' || inputs.run_migration == true)
     runs-on: ubuntu-latest
@@ -96,7 +100,7 @@ jobs:
     # Also when the migration was skipped on purpose (manual start without migration),
     # but never after a failed or cancelled migration and never for forks.
     if: >-
-      always() && !cancelled() &&
+      always() && !cancelled() && github.actor != 'dependabot[bot]' &&
       (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest

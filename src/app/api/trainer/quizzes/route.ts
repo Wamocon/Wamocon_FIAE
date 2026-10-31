@@ -53,8 +53,12 @@ export async function GET(req: NextRequest) {
     const trainerId = session.id;
     const q = searchParams.get('q')?.trim();
     const year = searchParams.get('year');
+    // ?type=big lists only the global quizzes. The list is cut after 200
+    // rows, and an occupation has hundreds of lesson quizzes, so a caller that
+    // wants the global quizzes must ask for them, not filter afterwards.
+    const globalOnly = searchParams.get('type') === 'big';
 
-    const cacheKey = `trainer_quizzes_${trainerId}_${q || ''}_${year || ''}_${catalogCacheKey(scope)}`;
+    const cacheKey = `trainer_quizzes_${trainerId}_${q || ''}_${year || ''}_${globalOnly ? 'big' : 'all'}_${catalogCacheKey(scope)}`;
     const cached = await apiCache.getOrFetch(
       cacheKey,
       async () => {
@@ -91,6 +95,9 @@ export async function GET(req: NextRequest) {
             return and(
               textFilter,
               yearFilter,
+              globalOnly
+                ? eq(quizzes.quizType, 'GLOBAL' as any)
+                : (sql`true` as any),
               catalogCondition(quizzes.trainingCatalogId, scope)
             );
           })
