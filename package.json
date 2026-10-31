@@ -54,7 +54,9 @@
     "import:kfbm:learning-fields": "node scripts/import/kfbm-learning-fields.mjs",
     "import:kfbm:use-cases": "node scripts/import/kfbm-use-cases.mjs",
     "import:kfbm:documents": "node scripts/import/kfbm-documents.mjs",
-    "import:fiae:documents": "node scripts/import/fiae-documents.mjs"
+    "import:fiae:documents": "node scripts/import/fiae-documents.mjs",
+    "import:fiae:quizzes": "node scripts/import/fiae-quizzes.mjs",
+    "import:kfbm:planned-hours": "node scripts/import/kfbm-planned-hours.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",

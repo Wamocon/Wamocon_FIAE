@@ -275,6 +275,22 @@ describe('catalog isolation', () => {
       expect(filter.params).not.toContain(FIAE);
     });
 
+    it('?type=big asks only for global quizzes, so the 200 row limit cannot cut them off', async () => {
+      const { mock, mod } = await load(
+        'trainer/quizzes',
+        { organizationCatalogs: kfbmOnly, quizzes: [] },
+        { session: trainer() }
+      );
+      const all = await mod.GET(req('http://localhost/api/trainer/quizzes'));
+      expect(all.status).toBe(200);
+      expect(mock.filters('select', 'quizzes').params).not.toContain('GLOBAL');
+      const big = await mod.GET(
+        req('http://localhost/api/trainer/quizzes?type=big')
+      );
+      expect(big.status).toBe(200);
+      expect(mock.filters('select', 'quizzes').params).toContain('GLOBAL');
+    });
+
     it('a new global quiz gets the active catalog', async () => {
       const { mock, mod } = await load(
         'trainer/quizzes',
