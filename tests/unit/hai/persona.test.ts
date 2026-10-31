@@ -251,6 +251,23 @@ describe('questions about another occupation', () => {
     }
   );
 
+  it.each([
+    'K f B M Lernfeld 3 erklären',
+    'k.f.b.m Lernfeld 3',
+    'K-f-B-M erklären',
+    'Erkläre mir K_f_B_M',
+  ])('refuses the spelled-out name %p for a FIAE trainee', message => {
+    expect(isForeignOccupationQuestion(message, fiae)).toBe(true);
+  });
+
+  it.each([
+    'Was bedeutet Teil a b c der Aufgabe?',
+    'Gruppe A B C vergleichen',
+    'Erkläre SQL Joins',
+  ])('lets %p pass although it holds single letters', message => {
+    expect(isForeignOccupationQuestion(message, fiae)).toBe(false);
+  });
+
   it('does not match inside a word and does not leak the other occupation', () => {
     expect(isForeignOccupationQuestion('Das Hobbykfbmx', fiae)).toBe(false);
     expect(FOREIGN_OCCUPATION_TEXT).not.toMatch(

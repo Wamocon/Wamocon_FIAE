@@ -21,6 +21,8 @@
  *   - EMBEDDINGS: Environment-based routing via HAI_EMBEDDING_PROVIDER
  *     - 'gemini' (default) → Google Gemini API (production standard, 3072 dims)
  *     - 'ollama' → Local Ollama (local dev only, 768 dims — incompatible with production)
+ *     - 'openai-compatible' → Sokrates (qwen3-embedding cut to 3072 dims, same
+ *       address and key as the chat of Sokrates)
  *
  * @module lib/hai/providers
  */
@@ -39,6 +41,7 @@ import {
 } from './errors';
 import { GeminiChatProvider, GeminiEmbeddingProvider } from './gemini';
 import { OllamaEmbeddingProvider } from './ollama';
+import { SokratesEmbeddingProvider } from './sokrates-embedding';
 import { OpenRouterChatProvider } from './openrouter';
 import { OpenAICompatibleChatProvider } from './openai-compatible';
 import {
@@ -86,8 +89,10 @@ function ensureInitialized(): void {
 
   const config = loadProviderConfig();
 
-  // --- EMBEDDING PROVIDER (Ollama or Gemini) ---
-  if (config.embeddingProvider === 'ollama') {
+  // --- EMBEDDING PROVIDER (Ollama, Sokrates or Gemini) ---
+  if (config.embeddingProvider === 'openai-compatible') {
+    _embeddingProvider = buildSokratesEmbedding(config);
+  } else if (config.embeddingProvider === 'ollama') {
     _embeddingProvider = new OllamaEmbeddingProvider(
       config.ollama.baseUrl,
       config.ollama.embeddingModel,
@@ -141,6 +146,31 @@ function ensureInitialized(): void {
   );
 
   _initialized = true;
+}
+
+/**
+ * The embeddings of Sokrates. The address is held to the same rules as the
+ * fallback of the chat (https, no credentials, a host of the positive list): the
+ * key goes only there. An address that does not pass gives a provider without a
+ * key, which is not initialized.
+ */
+function buildSokratesEmbedding(
+  config: ProviderConfig
+): SokratesEmbeddingProvider {
+  const policy = defaultFallbackPolicy();
+  const parsed = policy
+    ? parseTarget(config.openaiCompatible.baseUrl, policy)
+    : null;
+  const baseUrl =
+    parsed && parsed.ok
+      ? parsed.target.url.replace(/\/chat\/completions$/, '')
+      : '';
+  return new SokratesEmbeddingProvider(
+    baseUrl,
+    parsed && parsed.ok ? config.openaiCompatible.apiKey : undefined,
+    config.sokratesEmbedding.model,
+    config.sokratesEmbedding.dimensions
+  );
 }
 
 // ============================================================================
@@ -261,7 +291,7 @@ export function getChatProvider(): ChatProvider {
 }
 
 /**
- * Get the embedding provider (Ollama or Gemini).
+ * Get the embedding provider (Ollama, Sokrates or Gemini).
  */
 export function getEmbeddingProvider(): EmbeddingProvider {
   ensureInitialized();
@@ -271,7 +301,9 @@ export function getEmbeddingProvider(): EmbeddingProvider {
     const hint =
       config.embeddingProvider === 'ollama'
         ? 'Ollama server (ollama serve)'
-        : 'GEMINI_API_KEY';
+        : config.embeddingProvider === 'openai-compatible'
+          ? 'OPENAI_COMPATIBLE_API_KEY and an address of the Sokrates hosts'
+          : 'GEMINI_API_KEY';
     throw new Error(
       `HAI.ai: Embedding provider (${config.embeddingProvider}) not available. Check ${hint}.`
     );
