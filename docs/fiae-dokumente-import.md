@@ -17,7 +17,7 @@ Stand: 30.10.2026. Das Skript `scripts/import/fiae-documents.mjs` (`npm run impo
 **Nicht hochgeladen werden:**
 
 - die Komponente `22_Sicherstellen der Qualität von Softwareanwendungen (Vertiefung)` (kommt nach, Entscheidung vom 30.10.2026),
-- die Use Cases im Unterordner "Ohne Musterlösung" (kommen nach),
+- die Dateien im Unterordner "Ohne Musterlösung": Das sind die Aufgabenfassungen der Use Cases ohne Lösungsteil (am Inhalt geprüft am 30.10.2026, 51 Dateien). Die Musterlösung liegt im Hauptordner Use_Cases. Ob die Aufgabenfassung als Aufgabe für Azubis hochgeladen wird, ist noch nicht entschieden,
 - Quizze (nicht Teil der Lieferung, die vorhandenen bleiben den Enablern zugeordnet),
 - Dateien, die zwei Use Cases gleichzeitig treffen würden oder deren Name nicht lesbar ist (werden gemeldet).
 
