@@ -280,6 +280,17 @@ Behoben (Paket RO2, WP1): Nach der Katalog-Migration sind `lernfelder` und `lern
 
 Nicht aufgenommen, weil nicht in der Vorgabe genannt: `skills`, `course_skills`, `mes_softskill_criteria`, `certificate_text_templates`, `modules`, `lessons`.
 
+### FIAE-Inhalt nach Production (`scripts/db/fiae-content-promote.mjs`)
+
+Stand 31.10.2026. Der Inhaltsabgleich oben fügt nur Zeilen ein und findet sie über Titelschlüssel, die für FIAE in Production nicht eindeutig sind. Die FIAE-Lieferung vom 30.10.2026 hat in der Preview Dokumente, Quizze und Szenario-Teile **ersetzt**. Dafür gibt es ein eigenes Skript. Die Zeilen der Preview tragen die Ids von Production (die Preview wurde von dort kopiert), deshalb arbeitet es über die Id.
+
+- **Dokumente:** Eine Zeile mit derselben Id bekommt die neuen Dateidaten (Titel, Dateiname und -größe, Adresse, Pfad, Seiten, Reihenfolge, Sichtbarkeit). Eine fehlende Zeile wird eingefügt. Die Dateien liegen im geteilten Bucket schon unter `preview/`.
+- **Quizze:** Je Enabler und Stufe werden die Fragen der Preview mit denen von Production verglichen (Fragetext und richtige Antworten). Gleich: nichts. Kein Quiz: neu anlegen und verknüpfen (inaktiv, wie jeder neue Inhalt). Anders: die Fragen werden an Ort und Stelle ersetzt, **nur** wenn kein Azubi eine Abgabe darauf hat und kein anderer Enabler das Quiz teilt. Sonst bleibt das Quiz unverändert und steht als Konflikt im Bericht, denn das Ersetzen der Fragen würde die Antworten der Azubis löschen (Kaskade). Konflikte werden einzeln entschieden.
+- **Nie:** Löschen von Dokumenten oder Quizzen, Aktivierungsstand, Nutzer, Fortschritt, Abgaben, HAI-Index (der wird für Production gesondert neu aufgebaut).
+- **Lauf:** Standard ist ein Trockenlauf (Transaktion mit Rollback, mit Zahlen). Ein echter Lauf braucht `--apply`, `--confirm-host` und `FIAE_PROMOTE_APPROVED=yes`, also das Go für den Rollout. Mit `--out` entsteht ein Bericht, `rollback <Bericht>` stellt die alten Werte wieder her.
+- **Reihenfolge im Rollout:** nach den Migrationen des Katalogmodells (neue Quizze brauchen `training_catalog_id`), vor der Freigabe der Inhalte. Zuerst ein Trockenlauf gegen einen Klon von Production, dann gegen Production.
+- **Test:** `tests/scripts/db/fiae-content-promote.test.mjs` (der Teil gegen eine Datenbank läuft nur mit `PROMOTE_TEST_URL` auf einen lokalen Wegwerf-Postgres, Aufruf im Kopf der Datei).
+
 ## 9. Migrationen schreiben
 
 - Datei `supabase/migrations/<14 Ziffern>_<name>.sql`, Name in Kleinbuchstaben. Zwei Altdateien mit 12 Ziffern stehen in `supabase/legacy-migrations.txt`.
