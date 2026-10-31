@@ -270,7 +270,8 @@ export function loadProviderConfig(): ProviderConfig {
         : 'gemini',
 
     sokratesEmbedding: {
-      model: process.env.HAI_SOKRATES_EMBEDDING_MODEL || 'qwen3-embedding:8b',
+      // the name in the LiteLLM gateway of Sokrates (it serves qwen3-embedding:8b of Ollama)
+      model: process.env.HAI_SOKRATES_EMBEDDING_MODEL || 'qwen3-embedding',
       dimensions: parseInt(process.env.HAI_EMBEDDING_DIMENSIONS || '3072', 10),
     },
 
