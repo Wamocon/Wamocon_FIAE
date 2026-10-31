@@ -32,7 +32,7 @@ test('the same questions in any order with the same right answers are the same q
   assert.equal(sameQuiz(a, [a[0], q('Was ist Scrum?', ['z'])]), false);
 });
 
-test('a quiz is replaced only when nobody shares it and no trainee has answered it', () => {
+test('a quiz is replaced in place only when nobody shares it and split when it is shared, never with answers', () => {
   const src = [q('Frage eins', ['a'])];
   const other = [q('Frage zwei', ['b'])];
   assert.equal(decideQuiz(src, null), 'insert');
@@ -50,7 +50,11 @@ test('a quiz is replaced only when nobody shares it and no trainee has answered 
   );
   assert.equal(
     decideQuiz(src, { questions: other, shared: true, submissions: 0 }),
-    'conflict-shared'
+    'split'
+  );
+  assert.equal(
+    decideQuiz(src, { questions: other, shared: true, submissions: 1 }),
+    'conflict-submissions'
   );
 });
 
@@ -218,6 +222,7 @@ describe(
       await addQuiz('public_preview', id(204), [id(2)], 'LOW', [['Neu E', 'e']]);
       await db.query(`insert into public.quiz_submissions (quiz_id) values ($1)`, [id(204)]);
       await addQuiz('public', id(205), [id(2), id(3)], 'MEDIUM', [['Alt F', 'f']]);
+      await db.query(`update public.quizzes set is_active = true where id = $1`, [id(205)]);
       await addQuiz('public_preview', id(205), [id(2), id(3)], 'MEDIUM', [['Neu F', 'f']]);
     });
 
@@ -247,7 +252,7 @@ describe(
       assert.deepEqual(await text(id(202)), ['Alt B']);
     });
 
-    test('the promotion replaces, inserts and lists the conflicts, never touching answered or shared quizzes', async () => {
+    test('the promotion replaces, inserts, splits shared quizzes and lists the quizzes with answers', async () => {
       await db.query('begin');
       report = await promote(db);
       await db.query('commit');
@@ -263,11 +268,18 @@ describe(
       assert.equal(report.quizzes.same, 1);
       assert.equal(report.quizzes.replaced.length, 1);
       assert.equal(report.quizzes.inserted.length, 1);
-      assert.deepEqual(report.quizzes.conflicts.map(c => c.why).sort(), [
-        'shared',
-        'shared',
-        'submissions',
-      ]);
+      assert.deepEqual(report.quizzes.conflicts.map(c => c.why), ['submissions']);
+      // the quiz of enablers 2 and 3 was shared: both get ONE new quiz, as active as the old one, the old one stays
+      assert.equal(report.quizzes.split.length, 1);
+      assert.equal(report.quizzes.split[0].links.length, 2);
+      const newQuiz = report.quizzes.split[0].quiz;
+      assert.deepEqual(await text(newQuiz), ['Neu F']);
+      assert.equal(
+        (await db.query(`select is_active from public.quizzes where id = $1`, [newQuiz])).rows[0].is_active,
+        true
+      );
+      assert.equal(await count(`select count(*) n from public.enabler_quiz_links where quiz_id = $1`, [newQuiz]), 2);
+      assert.equal(await count(`select count(*) n from public.enabler_quiz_links where quiz_id = $1`, [id(205)]), 0);
       assert.equal(
         (await db.query(`select file_name from public.content_documents where id = $1`, [id(101)])).rows[0].file_name,
         'neu.pdf'
@@ -289,7 +301,8 @@ describe(
       await db.query('rollback');
       assert.equal(again.documents.updated.length + again.documents.inserted.length, 0);
       assert.equal(again.quizzes.replaced.length + again.quizzes.inserted.length, 0);
-      assert.equal(again.quizzes.conflicts.length, 3);
+      assert.equal(again.quizzes.conflicts.length, 1);
+      assert.equal(again.quizzes.split.length, 0);
     });
 
     test('the report turns the promotion back', async () => {
@@ -302,6 +315,8 @@ describe(
       );
       assert.equal(await count(`select count(*) n from public.content_documents`), 2);
       assert.equal(await count(`select count(*) n from public.quizzes where id = $1`, [id(203)]), 0);
+      assert.equal(await count(`select count(*) n from public.enabler_quiz_links where quiz_id = $1`, [id(205)]), 2);
+      assert.equal(await count(`select count(*) n from public.quizzes`), 4);
       assert.deepEqual(await text(id(202)), ['Alt B']);
     });
   }

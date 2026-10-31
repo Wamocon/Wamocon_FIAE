@@ -15,9 +15,14 @@
 //                 no quiz        the quiz is inserted with its questions and options and linked
 //                                (inactive, as every new content in Production, see the release
 //                                document, section 8)
-//                 different      the questions of the quiz are replaced IN PLACE, but only when no
-//                                trainee has a submission on it and no other enabler shares it.
-//                                Otherwise the quiz is left as it is and listed as a conflict:
+//                 different      only when no trainee has a submission on the quiz:
+//                                  not shared  its questions are replaced IN PLACE
+//                                  shared      (a Vertiefung course shares the quiz of its base course) the
+//                                              enabler gets a quiz of its own with the questions of the
+//                                              Preview and its link is moved. The old quiz stays for the
+//                                              other enabler, nothing is deleted. The new quiz is as active
+//                                              as the old one.
+//                                With submissions the quiz is left as it is and listed as a conflict:
 //                                replacing its questions would delete the answers of the trainees.
 // What it never does: delete a document or a quiz, change an activation state, touch users, progress,
 // submissions or the HAI index (the index of Production is rebuilt separately).
@@ -87,8 +92,8 @@ export function sameQuiz(a, b) {
 export function decideQuiz(sourceQuestions, target) {
   if (!target) return 'insert';
   if (sameQuiz(sourceQuestions, target.questions)) return 'same';
-  if (target.shared) return 'conflict-shared';
   if (target.submissions > 0) return 'conflict-submissions';
+  if (target.shared) return 'split';
   return 'replace';
 }
 
@@ -138,11 +143,14 @@ const column = (rows, key) => rows.map(r => r[key]);
  * The whole promotion inside the transaction the caller has opened. Returns the report.
  * It writes (the caller decides commit or rollback).
  */
-export async function promote(client) {
+export async function promote(client, { readOnly = false } = {}) {
   const q = async (sql, p) => (await client.query(sql, p)).rows;
+  // every write goes through w: in a read only run nothing is sent to the database, the report is the same
+  const w = (sql, p) =>
+    readOnly ? Promise.resolve({ rows: [{ id: '(dry run)' }] }) : client.query(sql, p);
   const report = {
     documents: { unchanged: 0, updated: [], inserted: [], skippedNoParent: 0 },
-    quizzes: { same: 0, replaced: [], inserted: [], conflicts: [] },
+    quizzes: { same: 0, replaced: [], split: [], inserted: [], conflicts: [] },
   };
 
   const srcEnablers = column(
@@ -220,7 +228,7 @@ export async function promote(client) {
         report.documents.unchanged++;
         continue;
       }
-      await client.query(
+      await w(
         `update ${DST}.content_documents
             set title = $2, file_name = $3, file_size = $4, mime_type = $5, storage_url = $6, storage_path = $7,
                 order_index = $8, visibility = $9::text::${DST}.document_visibility, page_count = $10, updated_at = now()
@@ -247,7 +255,7 @@ export async function promote(client) {
         report.documents.skippedNoParent++;
         continue;
       }
-      await client.query(
+      await w(
         `insert into ${DST}.content_documents
            (id, enabler_id, use_case_id, course_id, title, document_type, file_name, file_size, mime_type,
             storage_url, storage_path, order_index, uploaded_by_id, visibility, page_count)
@@ -272,9 +280,18 @@ export async function promote(client) {
          from ${schema}.questions where quiz_id = any($1::uuid[]) order by quiz_id, order_index`,
       [ids]
     );
+    // options.order_index came with a later migration: before it the options keep their natural order
+    const hasOrder =
+      (
+        await q(
+          `select 1 from information_schema.columns
+            where table_schema = $1 and table_name = 'options' and column_name = 'order_index'`,
+          [schema]
+        )
+      ).length > 0;
     const os = await q(
-      `select question_id, option_text, is_correct, explanation, order_index
-         from ${schema}.options where question_id = any($1::uuid[]) order by question_id, order_index`,
+      `select question_id, option_text, is_correct, explanation, ${hasOrder ? 'order_index' : 'null::int as order_index'}
+         from ${schema}.options where question_id = any($1::uuid[]) order by question_id${hasOrder ? ', order_index' : ''}`,
       [qs.map(x => x.id)]
     );
     const optionsOf = new Map();
@@ -317,6 +334,15 @@ export async function promote(client) {
       'quiz_id'
     )
   );
+  const activeOf = new Map(
+    (
+      await q(
+        `select id, coalesce(is_active, false) a from ${DST}.quizzes where id = any($1::uuid[])`,
+        [dstQuizIds]
+      )
+    ).map(r => [r.id, r.a])
+  );
+  const splitTo = new Map(); // quiz of the Preview -> the quiz made for the enablers that shared the old one
   const creator =
     (
       await q(
@@ -324,26 +350,35 @@ export async function promote(client) {
         [dstQuizIds]
       )
     )[0]?.created_by_id ?? null;
-  const catalogId =
+  // before the migrations of the catalog model there is no such column: a new quiz then needs none
+  const hasCatalogColumn =
     (
       await q(
-        `select training_catalog_id from ${DST}.courses
-          where id = any($1::uuid[]) and training_catalog_id is not null limit 1`,
-        [[...new Set([...enablers.values()])]]
+        `select 1 from information_schema.columns
+          where table_schema = 'public' and table_name = 'courses' and column_name = 'training_catalog_id'`
       )
-    )[0]?.training_catalog_id ?? null;
+    ).length > 0;
+  const catalogId = hasCatalogColumn
+    ? ((
+        await q(
+          `select training_catalog_id from ${DST}.courses
+            where id = any($1::uuid[]) and training_catalog_id is not null limit 1`,
+          [[...new Set([...enablers.values()])]]
+        )
+      )[0]?.training_catalog_id ?? null)
+    : null;
 
   const writeQuestions = async (quizId, sourceQuizId) => {
     for (const x of src.byQuiz.get(sourceQuizId) ?? []) {
       const qid = (
-        await client.query(
+        await w(
           `insert into ${DST}.questions (quiz_id, question_text, order_index, question_type, expected_answer)
            values ($1, $2, $3, $4::text::${DST}.question_type, $5) returning id`,
           [quizId, x.question_text, x.order_index, x.qt, x.expected_answer]
         )
       ).rows[0].id;
       for (const o of src.optionsOf.get(x.id) ?? [])
-        await client.query(
+        await w(
           `insert into ${DST}.options (question_id, option_text, is_correct, explanation, order_index)
            values ($1, $2, $3, $4, $5)`,
           [qid, o.option_text, o.is_correct, o.explanation, o.order_index]
@@ -376,7 +411,26 @@ export async function promote(client) {
         quiz: target.quizId,
         why: what.slice('conflict-'.length),
       });
-    else if (what === 'replace') {
+    else if (what === 'split') {
+      let quizId = splitTo.get(l.quiz_id);
+      if (!quizId) {
+        if (!readOnly && (!creator || !catalogId))
+          throw new Error('no creator or catalog found for a new quiz: run the migrations of the rollout first');
+        const sq = srcQuizzes.get(l.quiz_id);
+        quizId = (
+          await w(
+            `insert into ${DST}.quizzes (title, quiz_type, created_by_id, training_catalog_id, is_active)
+             values ($1, $2::text::${DST}.quiz_type, $3, $4, $5) returning id`,
+            [sq.title, sq.qt, creator, catalogId, activeOf.get(link.quiz_id) ?? false]
+          )
+        ).rows[0].id;
+        splitTo.set(l.quiz_id, quizId);
+        await writeQuestions(quizId, l.quiz_id);
+        report.quizzes.split.push({ quiz: quizId, from: link.quiz_id, links: [] });
+      }
+      await w(`update ${DST}.enabler_quiz_links set quiz_id = $1 where id = $2`, [quizId, link.id]);
+      report.quizzes.split.find(x => x.quiz === quizId).links.push({ link: link.id, enabler: l.enabler_id, level: l.d });
+    } else if (what === 'replace') {
       const old = (dst.byQuiz.get(target.quizId) ?? []).map(x => ({
         question_text: x.question_text,
         order_index: x.order_index,
@@ -389,32 +443,32 @@ export async function promote(client) {
           order_index: o.order_index,
         })),
       }));
-      await client.query(`delete from ${DST}.questions where quiz_id = $1`, [target.quizId]);
+      await w(`delete from ${DST}.questions where quiz_id = $1`, [target.quizId]);
       await writeQuestions(target.quizId, l.quiz_id);
       report.quizzes.replaced.push({ enabler: l.enabler_id, level: l.d, quiz: target.quizId, old });
     } else {
       // a new quiz: with the id it has in the Preview when that is free. It is inactive (default).
       // created_by_id and training_catalog_id must not be empty: they come from the existing FIAE quizzes
-      if (!creator || !catalogId)
+      if (!readOnly && (!creator || !catalogId))
         throw new Error('no creator or catalog found for a new quiz: run the migrations of the rollout first');
       const sq = srcQuizzes.get(l.quiz_id);
       const free = (await q(`select 1 from ${DST}.quizzes where id = $1`, [l.quiz_id])).length === 0;
       const quizId = free
         ? (
-            await client.query(
+            await w(
               `insert into ${DST}.quizzes (id, title, quiz_type, created_by_id, training_catalog_id)
                values ($1, $2, $3::text::${DST}.quiz_type, $4, $5) returning id`,
               [l.quiz_id, sq.title, sq.qt, creator, catalogId]
             )
           ).rows[0].id
         : (
-            await client.query(
+            await w(
               `insert into ${DST}.quizzes (title, quiz_type, created_by_id, training_catalog_id)
                values ($1, $2::text::${DST}.quiz_type, $3, $4) returning id`,
               [sq.title, sq.qt, creator, catalogId]
             )
           ).rows[0].id;
-      await client.query(
+      await w(
         `insert into ${DST}.enabler_quiz_links (enabler_id, quiz_id, difficulty)
          values ($1, $2, $3::text::${DST}.quiz_difficulty)`,
         [l.enabler_id, quizId, l.d]
@@ -431,7 +485,7 @@ export function summary(report) {
   const z = report.quizzes;
   return [
     `Documents: unchanged ${d.unchanged}, updated ${d.updated.length}, inserted ${d.inserted.length}, skipped without parent ${d.skippedNoParent}`,
-    `Quizzes: same ${z.same}, replaced ${z.replaced.length}, inserted ${z.inserted.length} (inactive), conflicts ${z.conflicts.length}`,
+    `Quizzes: same ${z.same}, replaced ${z.replaced.length}, split from a shared quiz ${z.split.reduce((n, x) => n + x.links.length, 0)} links in ${z.split.length} new quizzes, inserted ${z.inserted.length} (inactive), conflicts ${z.conflicts.length}`,
     ...z.conflicts
       .slice(0, 20)
       .map(c => `  conflict ${c.level} of enabler ${c.enabler}: ${c.why}`),
@@ -465,6 +519,11 @@ export async function rollbackReport(client, r) {
           [qid, o.option_text, o.is_correct, o.explanation, o.order_index]
         );
     }
+  }
+  for (const x of r.quizzes.split ?? []) {
+    for (const l of x.links)
+      await client.query(`update ${DST}.enabler_quiz_links set quiz_id = $1 where id = $2`, [x.from, l.link]);
+    await client.query(`delete from ${DST}.quizzes where id = $1`, [x.quiz]);
   }
   for (const x of r.quizzes.inserted) {
     await client.query(`delete from ${DST}.enabler_quiz_links where quiz_id = $1`, [x.quiz]);
@@ -505,7 +564,10 @@ export async function main(argv, env = process.env) {
   });
   await client.connect();
   try {
-    await client.query('begin');
+    // a dry run is a read only transaction: even a mistake in the script cannot write
+    await client.query(
+      args.apply || args.command === 'rollback' ? 'begin' : 'begin read only'
+    );
     if (args.command === 'rollback') {
       const r = JSON.parse(readFileSync(args.source, 'utf8'));
       await rollbackReport(client, r);
@@ -513,7 +575,7 @@ export async function main(argv, env = process.env) {
         `Report undone: ${r.documents.updated.length} documents restored, ${r.documents.inserted.length} removed, ${r.quizzes.replaced.length} quizzes restored, ${r.quizzes.inserted.length} removed.`
       );
     } else {
-      const report = await promote(client);
+      const report = await promote(client, { readOnly: !args.apply });
       summary(report).forEach(l => console.log(l));
       if (args.out) writeFileSync(args.out, JSON.stringify(report, null, 1));
     }
