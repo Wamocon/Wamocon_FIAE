@@ -60,6 +60,12 @@ export interface GoldenChunk {
   sourceType: string;
   catalog: GoldenCatalogCode;
   visibility: GoldenVisibility;
+  /**
+   * A chunk of a model solution of the private bucket (metadata.trainerSolution
+   * in the real index). Only a trainer of the occupation reads it, and only
+   * while the switch HAI_TRAINER_SOLUTIONS is on. Always visibility 'trainer'.
+   */
+  privateSolution?: boolean;
   /** A token that occurs in this chunk only; its presence proves a leak. */
   canary: string;
   text: string;
@@ -136,6 +142,13 @@ export function goldenSetProblems(raw: unknown): string[] {
     }
     if (chunk.visibility !== 'all' && chunk.visibility !== 'trainer') {
       problems.push(`${where}.visibility`);
+    }
+    if (chunk.privateSolution !== undefined) {
+      if (typeof chunk.privateSolution !== 'boolean') {
+        problems.push(`${where}.privateSolution must be true or false`);
+      } else if (chunk.privateSolution && chunk.visibility !== 'trainer') {
+        problems.push(`${where}: a private solution has visibility trainer`);
+      }
     }
     if (typeof chunk.canary !== 'string' || chunk.canary.length < 8) {
       problems.push(`${where}.canary needs at least 8 characters`);

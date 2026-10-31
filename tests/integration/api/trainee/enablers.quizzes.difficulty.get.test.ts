@@ -118,30 +118,85 @@ describe('GET /api/trainee/enablers/[enablerId]/quizzes/[difficulty]', () => {
             id: 'q-1',
             questionText: 'A',
             questionType: 'MCQ',
-            options: [
+            // mixed per attempt, so only the set is fixed here
+            options: expect.arrayContaining([
               { id: 'o-1', optionText: 'A1' },
               { id: 'o-2', optionText: 'A2' },
-            ],
+            ]),
           },
         ],
       },
     });
   });
 
-  it('lists the options in the order of the author (order_index, old rows after it in stored order)', async () => {
-    const { GET } = await load({
-      ...fullTables(),
-      options: [
-        { id: 'o-b', questionId: 'q-1', optionText: 'B', orderIndex: 2 },
-        { id: 'o-old', questionId: 'q-1', optionText: 'Old', orderIndex: null },
-        { id: 'o-a', questionId: 'q-1', optionText: 'A', orderIndex: 1 },
-      ],
+  describe('mixed options (KFB-1162)', () => {
+    const many = ['a', 'b', 'c', 'd', 'e'].map((k, i) => ({
+      id: `o-${k}`,
+      questionId: 'q-1',
+      optionText: `Choice ${k.toUpperCase()}`,
+      orderIndex: i + 1,
+    }));
+    const optionIds = async (tables: Tables) => {
+      const { GET } = await load(tables);
+      const body = await (await call(GET)).json();
+      const q1 = body.quiz.questions.find((q: any) => q.id === 'q-1');
+      return { body, ids: q1.options.map((o: any) => o.id) as string[] };
+    };
+
+    it('serves every option once, stable for one attempt, whatever order the rows come in', async () => {
+      const first = await optionIds({ ...fullTables(), options: many });
+      const again = await optionIds({ ...fullTables(), options: many });
+      const reversed = await optionIds({
+        ...fullTables(),
+        options: [...many].reverse(),
+      });
+      expect([...first.ids].sort()).toEqual(many.map(o => o.id));
+      expect(again.ids).toEqual(first.ids);
+      expect(reversed.ids).toEqual(first.ids);
+      expect(findSolutionKeys(first.body)).toEqual([]);
+      expect(JSON.stringify(first.body)).not.toContain('orderIndex');
     });
-    const body = await (await call(GET)).json();
-    const q1 = body.quiz.questions.find((q: any) => q.id === 'q-1');
-    expect(q1.options.map((o: any) => o.id)).toEqual(['o-a', 'o-b', 'o-old']);
-    expect(findSolutionKeys(body)).toEqual([]);
-    expect(JSON.stringify(body)).not.toContain('orderIndex');
+
+    it('serves another order for the next attempt of the same trainee', async () => {
+      const orders = new Set<string>();
+      for (let done = 0; done <= 8; done++) {
+        const quizSubmissions = Array.from({ length: done }, (_, i) => ({
+          id: `s${i}`,
+          quizId: 'q1',
+          traineeId: 't1',
+        }));
+        const { ids } = await optionIds({
+          ...fullTables(),
+          options: many,
+          quizSubmissions,
+        });
+        orders.add(ids.join());
+      }
+      expect(orders.size).toBeGreaterThan(1);
+    });
+
+    it('reads the attempts of the session user for this quiz only', async () => {
+      const { GET, mock } = await load({ ...fullTables(), options: many });
+      await call(GET);
+      const filter = mock.filters('select', 'quizSubmissions');
+      expect(filter.params).toContain('t1');
+      expect(filter.params).toContain('q1');
+    });
+
+    it('keeps the author order for a question with an option that points at the others', async () => {
+      const refs = [
+        { id: 'o-1', questionId: 'q-1', optionText: 'First', orderIndex: 1 },
+        { id: 'o-2', questionId: 'q-1', optionText: 'Second', orderIndex: 2 },
+        {
+          id: 'o-3',
+          questionId: 'q-1',
+          optionText: 'All of the above',
+          orderIndex: 3,
+        },
+      ];
+      const { ids } = await optionIds({ ...fullTables(), options: refs });
+      expect(ids).toEqual(['o-1', 'o-2', 'o-3']);
+    });
   });
 
   it('carries no solution key anywhere in the answer (recursive scan)', async () => {

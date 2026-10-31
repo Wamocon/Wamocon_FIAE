@@ -19,6 +19,9 @@ import { sendBlockerInvite } from '@/lib/email';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
+import { isoWeekOf } from '@/lib/school/day';
+import { refreshTraineeDashboard } from '@/lib/school/dashboard-cache';
 
 // Helper to calculate the module phase for a block date.
 function calculateAusbildungsjahr(
@@ -173,7 +176,9 @@ export async function POST(req: NextRequest) {
       .from(profiles)
       .where(eq(profiles.id, trainerId));
 
-    if (!trainer || trainer.role !== 'TRAINER') {
+    // Trainer level: the trainer, the admin and the super admin (the session
+    // guard above lets exactly these in, the role TRAINER alone locked admins out)
+    if (!trainer || !isTrainerLevelRole(trainer.role)) {
       return NextResponse.json(
         { error: 'Unauthorized: Trainer access required' },
         { status: 403 }
@@ -237,7 +242,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Calculate week and year
-        const calendarWeek = getISOWeek(start);
+        const calendarWeek = isoWeekOf(start);
         const year = start.getFullYear();
         const schuljahr = getCurrentSchuljahr();
         // Phase one of the occupation of this trainee (KfBM 15 months, FIAE 18)
@@ -314,7 +319,7 @@ export async function POST(req: NextRequest) {
             type: 'BLOCK_SCHEDULED',
             title: 'Neuer Block geplant',
             message: `Ein neuer Block "${blockLabel}" wurde für ${startStr} – ${endStr} geplant.`,
-            linkUrl: '/trainee/school?tab=blocks',
+            linkUrl: '/trainee/school?tab=calendar',
             context: {
               blockId: row.id,
               blockType,
@@ -336,6 +341,8 @@ export async function POST(req: NextRequest) {
         errors.push(`Error for ${tid}`);
       }
     }
+
+    if (results.length > 0) refreshTraineeDashboard();
 
     // If at least one succeeded, return 201 (or 207 Multi-Status if strict, but 201 is fine for UI)
     // If single trainee, return the block like before to not break UI if it expects single object

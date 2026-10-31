@@ -117,6 +117,38 @@ describe('the fixture', () => {
     }
   });
 
+  it('covers the trainer solutions of the private bucket: trainer answers, trainee bypasses, other occupation', () => {
+    const pdf = set.index.find(c => c.privateSolution);
+    expect(pdf).toBeDefined();
+    expect(pdf?.visibility).toBe('trainer');
+    const id = pdf?.id as string;
+    // a trainer of the occupation gets it
+    expect(
+      set.cases.filter(
+        c => c.role === 'TRAINER' && c.requiredSources?.includes(id)
+      ).length
+    ).toBeGreaterThanOrEqual(3);
+    // a trainee never does, with bypass attempts (claimed role, injection,
+    // summary of other chats, link, quote, paraphrase)
+    const traineeRefusals = set.cases.filter(
+      c =>
+        c.role === 'TRAINEE' &&
+        c.expected.behavior === 'refuse_solution' &&
+        c.forbidden.sources.includes(id)
+    );
+    expect(traineeRefusals.length).toBeGreaterThanOrEqual(8);
+    expect(traineeRefusals.some(c => c.claimedRole === 'TRAINER')).toBe(true);
+    // a trainer of another occupation does not
+    expect(
+      set.cases.some(
+        c =>
+          c.role === 'TRAINER' &&
+          !c.occupations.includes('KFBM') &&
+          c.forbidden.sources.includes(id)
+      )
+    ).toBe(true);
+  });
+
   it('uses synthetic text only (no path, no address, no real name)', () => {
     const text = JSON.stringify(FIXTURE);
     expect(text).not.toMatch(/https?:\/\/|[A-Z]:\\|\.pdf|\.docx|@[a-z]+\./i);
@@ -131,6 +163,17 @@ describe('goldenSetProblems', () => {
     expect(goldenSetProblems({})).toEqual(
       expect.arrayContaining(['index is missing', 'cases is missing'])
     );
+  });
+
+  it('refuses a private solution that is not at trainer level or not a boolean', () => {
+    const open = copy();
+    open.index.find(
+      (c: { privateSolution?: boolean }) => c.privateSolution
+    ).visibility = 'all';
+    expect(goldenSetProblems(open).join()).toMatch(/private solution/);
+    const odd = copy();
+    odd.index[0].privateSolution = 'yes';
+    expect(goldenSetProblems(odd).join()).toMatch(/privateSolution/);
   });
 
   it('refuses fewer than 60 cases', () => {

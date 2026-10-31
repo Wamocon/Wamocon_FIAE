@@ -13,6 +13,7 @@ import {
 } from './trainingScope';
 import { FIAE_PERSONA, type HaiPersona } from './persona';
 import { sanitizePromptData } from '../prompt-sanitize';
+import { isTrainerSolutionChunk } from './trainerSolutions';
 import { buildLearningTechniquePrompt } from './learningTechniques/promptSection';
 
 // ============================================================================
@@ -388,7 +389,11 @@ export function buildRetrievedContext(
     .map((r, i) => {
       const source = r.metadata.title || `Quelle ${i + 1}`;
       const relevance = Math.round(r.similarity * 100);
-      return `### ${source} (${relevance}% relevant)\n${r.content}`;
+      // a model solution of the private bucket is marked as trainer knowledge
+      const mark = isTrainerSolutionChunk(r.metadata)
+        ? ' [Musterlösung, nur für Trainer]'
+        : '';
+      return `### ${source} (${relevance}% relevant)${mark}\n${r.content}`;
     })
     .join('\n\n');
 }

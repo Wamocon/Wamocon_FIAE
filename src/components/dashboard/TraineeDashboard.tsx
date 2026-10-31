@@ -23,6 +23,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCatalog } from '@/contexts/CatalogContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { DashboardOccupation } from '@/components/catalog/DashboardOccupation';
 import dynamic from 'next/dynamic';
 
 // Lazy-load recharts components (~200KB) - they're not needed for initial render
@@ -73,6 +74,14 @@ type DashboardData = {
   skillRadar: any[];
   achievements: any[];
   deadlines: any[];
+  appointments?: {
+    id: string;
+    label: string | null;
+    kind: string;
+    source: 'block' | 'exam';
+    startDate: string;
+    endDate: string | null;
+  }[];
 };
 
 // Cache helpers for instant dashboard loading (used as placeholderData)
@@ -151,6 +160,7 @@ export default function TraineeDashboard() {
   const skillRadar = data?.skillRadar ?? [];
   const achievements = data?.achievements ?? [];
   const deadlines = data?.deadlines ?? [];
+  const appointments = data?.appointments ?? [];
   const nextLesson = data?.nextItem
     ? {
         id: data.nextItem.lessonId,
@@ -185,7 +195,9 @@ export default function TraineeDashboard() {
   // Derived module progress for charts
 
   const moduleProgress = modules.map((module: any) => ({
-    name:
+    // The whole name for the lists, a short one only for the axis of the chart
+    name: module.title,
+    shortName:
       module.title.length > 20
         ? module.title.substring(0, 20) + '...'
         : module.title,
@@ -207,13 +219,33 @@ export default function TraineeDashboard() {
     router.push(`/trainee/enablers/${lessonId}`);
   };
 
+  // Kind of a calendar entry (block type or exam) as the label of an entry
+  // without a text of its own
+  const kindLabel = (kind: string) => {
+    const key: Record<string, string> = {
+      SCHOOL: 'block.type.school',
+      COMPANY: 'block.type.company',
+      HOLIDAY: 'block.type.holiday',
+      EXAM: 'block.type.exam',
+      PERSONAL: 'block.type.personal',
+      SONSTIGES: 'block.type.other',
+      TRAINER_BLOCKER: 'block.type.trainer',
+    };
+    return key[kind] ? t(key[kind]) : kind;
+  };
+  const dateRange = (start: string, end: string | null) => {
+    const from = new Date(start).toLocaleDateString();
+    const to = end ? new Date(end).toLocaleDateString() : from;
+    return from === to ? from : `${from} - ${to}`;
+  };
+
   const handleNavigation = (view: string, data?: any) => {
     switch (view) {
       case 'modules':
         if (data?.moduleId) {
           router.push(`/trainee/modules/${data.moduleId}`);
         } else {
-          router.push('/trainee/modules');
+          router.push('/trainee/courses');
         }
         break;
       case 'lessons':
@@ -244,6 +276,7 @@ export default function TraineeDashboard() {
       {/* Enhanced red background overlay */}
       <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25"></div>
       <div className="relative z-10">
+        <DashboardOccupation />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             {/* Continue Learning Card */}
@@ -337,7 +370,7 @@ export default function TraineeDashboard() {
                       onClick={() => handleModuleClick(module.id)}
                     >
                       <div className="mb-3 flex items-center justify-between">
-                        <h3 className="text-foreground group-hover:text-accent min-w-0 truncate text-lg font-bold transition-colors">
+                        <h3 className="text-foreground group-hover:text-accent min-w-0 text-lg font-bold break-words transition-colors">
                           {module.title}
                         </h3>
                         <ArrowRight className="text-accent/60 group-hover:text-accent h-5 w-5 transition-colors" />
@@ -451,19 +484,50 @@ export default function TraineeDashboard() {
             </div>
 
             {/* Upcoming Deadlines Section - Textual Information Above Charts */}
-            <div className="glass-effect border-accent/20 rounded-2xl border p-6 shadow-lg">
-              <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
-                <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-pink-500">
-                  <Calendar className="text-foreground h-4 w-4" />
-                </div>
-                {t('dashboard.upcomingDeadlines')}
-              </h3>
+            <div
+              role="link"
+              tabIndex={0}
+              onClick={() => router.push('/trainee/school?tab=calendar')}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  router.push('/trainee/school?tab=calendar');
+                }
+              }}
+              className="glass-effect border-accent/20 hover:border-accent/50 cursor-pointer rounded-2xl border p-6 shadow-lg transition-colors"
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-foreground flex items-center text-lg font-bold">
+                  <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-pink-500">
+                    <Calendar className="text-foreground h-4 w-4" />
+                  </div>
+                  {t('dashboard.upcomingDeadlines')}
+                </h3>
+                <span className="text-accent flex items-center text-sm font-medium">
+                  {t('dashboard.openCalendar')}
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </span>
+              </div>
               <div className="space-y-3">
-                {deadlines.length === 0 && (
+                {deadlines.length === 0 && appointments.length === 0 && (
                   <div className="text-muted-foreground">
                     {t('dashboard.noDeadlines')}
                   </div>
                 )}
+                {appointments.map(a => (
+                  <div
+                    key={`${a.source}-${a.id}`}
+                    className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors"
+                  >
+                    <span className="text-foreground font-medium">
+                      {a.label || kindLabel(a.kind)}:{' '}
+                      {dateRange(a.startDate, a.endDate)}
+                    </span>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-500/20">
+                      <Calendar className="h-4 w-4 text-purple-400" />
+                    </div>
+                  </div>
+                ))}
                 {deadlines.map((d, idx) => (
                   <div
                     key={idx}
@@ -559,7 +623,7 @@ export default function TraineeDashboard() {
                         exit={{ opacity: 0, height: 0 }}
                         className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-2"
                       >
-                        <span className="text-foreground mr-2 flex-1 truncate text-xs font-medium">
+                        <span className="text-foreground mr-2 min-w-0 flex-1 text-xs font-medium break-words">
                           {item.name}
                         </span>
                         <div className="flex items-center space-x-2">

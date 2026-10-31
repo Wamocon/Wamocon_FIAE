@@ -20,6 +20,11 @@ import {
 import { requireProPlan } from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { badRequestUnlessUuid, isUuid } from '@/lib/uuid';
+import { TRAINER_KNOWLEDGE_KEY } from '@/lib/hai/trainerSolutions';
+import {
+  mayReadTrainerKnowledgeHistory,
+  sessionVisibilityCondition,
+} from '@/lib/hai/chatHistoryAccess';
 
 // ============================================================================
 // TYPES
@@ -58,6 +63,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Chats that hold trainer knowledge (answers built with model solutions)
+    // are shown to trainer level roles only. The role is the one of the
+    // session (database), so a person who is no trainer any more does not get
+    // them back in the list, the search or as a single session.
+    const mayReadHidden = mayReadTrainerKnowledgeHistory(me.role);
+    const visibleOnly = sessionVisibilityCondition(mayReadHidden);
+    // the same rule for the search over the sessions table with alias s
+    const hiddenFilter = mayReadHidden
+      ? sql`TRUE`
+      : sql`COALESCE(s.metadata->>${sql.raw(`'${TRAINER_KNOWLEDGE_KEY}'`)}, '') <> 'true'`;
+
     // Phase 2C: Search across sessions and messages
     if (search && search.length >= 2) {
       const searchPattern = `%${search}%`;
@@ -74,6 +90,7 @@ export async function GET(req: NextRequest) {
                 FROM hai_chat_sessions s
                 LEFT JOIN hai_chat_messages m ON m.session_id = s.id
                 WHERE s.user_id = ${userId}
+                  AND ${hiddenFilter}
                   AND (
                       s.title ILIKE ${searchPattern}
                       OR m.content ILIKE ${searchPattern}
@@ -146,7 +163,8 @@ export async function GET(req: NextRequest) {
         .where(
           and(
             eq(haiChatSessions.id, sessionId),
-            eq(haiChatSessions.userId, userId)
+            eq(haiChatSessions.userId, userId),
+            visibleOnly
           )
         )
         .limit(1);
@@ -193,10 +211,11 @@ export async function GET(req: NextRequest) {
       .from(haiChatSessions)
       .where(
         includeArchived
-          ? eq(haiChatSessions.userId, userId)
+          ? and(eq(haiChatSessions.userId, userId), visibleOnly)
           : and(
               eq(haiChatSessions.userId, userId),
-              eq(haiChatSessions.isActive, true)
+              eq(haiChatSessions.isActive, true),
+              visibleOnly
             )
       )
       .orderBy(desc(haiChatSessions.lastMessageAt))
@@ -211,10 +230,11 @@ export async function GET(req: NextRequest) {
       .from(haiChatSessions)
       .where(
         includeArchived
-          ? eq(haiChatSessions.userId, userId)
+          ? and(eq(haiChatSessions.userId, userId), visibleOnly)
           : and(
               eq(haiChatSessions.userId, userId),
-              eq(haiChatSessions.isActive, true)
+              eq(haiChatSessions.isActive, true),
+              visibleOnly
             )
       );
 

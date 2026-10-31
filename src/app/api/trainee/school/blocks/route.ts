@@ -13,6 +13,8 @@ import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { isoWeekOf } from '@/lib/school/day';
+import { refreshTraineeDashboard } from '@/lib/school/dashboard-cache';
 
 // Helper to calculate the module phase for a block date.
 function calculateAusbildungsjahr(
@@ -130,12 +132,6 @@ export async function POST(req: NextRequest) {
     } = body;
 
     // Validation
-    if (!calendarWeek || calendarWeek < 1 || calendarWeek > 53) {
-      return NextResponse.json(
-        { error: 'Valid calendarWeek (1-53) required' },
-        { status: 400 }
-      );
-    }
     if (!year)
       return NextResponse.json({ error: 'year required' }, { status: 400 });
     if (!startDate)
@@ -143,6 +139,26 @@ export async function POST(req: NextRequest) {
         { error: 'startDate required' },
         { status: 400 }
       );
+    // The week is derived from the start date when the client sends none (a
+    // week of 0 is what older clients computed for the first days of January)
+    // and refused only when it cannot exist
+    if (
+      calendarWeek &&
+      (!Number.isInteger(calendarWeek) || calendarWeek < 1 || calendarWeek > 53)
+    ) {
+      return NextResponse.json(
+        { error: 'Valid calendarWeek (1-53) required' },
+        { status: 400 }
+      );
+    }
+    const startInstant = new Date(startDate);
+    if (Number.isNaN(startInstant.getTime())) {
+      return NextResponse.json(
+        { error: 'Valid startDate required' },
+        { status: 400 }
+      );
+    }
+    const week: number = calendarWeek || isoWeekOf(startInstant);
     if (!endDate)
       return NextResponse.json({ error: 'endDate required' }, { status: 400 });
 
@@ -212,7 +228,7 @@ export async function POST(req: NextRequest) {
         organizationId,
         schuljahr: calculatedSchuljahr,
         ausbildungsjahr: calculatedAusbildungsjahr,
-        calendarWeek,
+        calendarWeek: week,
         year,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
@@ -230,6 +246,8 @@ export async function POST(req: NextRequest) {
 
     // TODO: Send email invitations if inviteeEmails is provided
     // This will be handled by the email service module
+
+    refreshTraineeDashboard();
 
     return NextResponse.json({ id: row.id, block: row }, { status: 201 });
   } catch (e) {

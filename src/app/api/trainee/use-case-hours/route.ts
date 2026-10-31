@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and, sql, ne } from 'drizzle-orm';
 import { activityReports, activityReportUseCaseEntries, trainingComponents, trainingUseCases } from '@/db/migrations/schemas/schema';
-import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import {
+    isHoursLimited,
+    normalizePlannedHours,
+} from '@/lib/ausbildung/planned-hours';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import {
     catalogCondition,
@@ -53,12 +56,15 @@ export async function GET(request: NextRequest) {
                     id: trainingUseCases.id,
                     description: trainingUseCases.description,
                     plannedHours: trainingUseCases.plannedHours,
+                    catalogId: trainingComponents.trainingCatalogId,
                 })
                 .from(trainingUseCases)
                 .innerJoin(trainingComponents, eq(trainingUseCases.componentId, trainingComponents.id))
                 .where(catalogCondition(trainingComponents.trainingCatalogId, scope));
 
-            const result = allUseCases.map(uc => ({
+            // A use case without hours (not FIAE) has no limit: it is left out here,
+            // the page treats a use case without an entry as "allowed"
+            const result = allUseCases.filter(uc => isHoursLimited(uc.plannedHours, uc.catalogId)).map(uc => ({
                 useCaseId: uc.id,
                 totalHours: normalizePlannedHours(uc),
                 usedHours: 0,
@@ -90,12 +96,13 @@ export async function GET(request: NextRequest) {
                 id: trainingUseCases.id,
                 description: trainingUseCases.description,
                 plannedHours: trainingUseCases.plannedHours,
+                catalogId: trainingComponents.trainingCatalogId,
             })
             .from(trainingUseCases)
                 .innerJoin(trainingComponents, eq(trainingUseCases.componentId, trainingComponents.id))
                 .where(catalogCondition(trainingComponents.trainingCatalogId, scope));
 
-        const result = allUseCases.map(uc => {
+        const result = allUseCases.filter(uc => isHoursLimited(uc.plannedHours, uc.catalogId)).map(uc => {
             const used = usedMap.get(uc.id) || 0;
             const totalHours = normalizePlannedHours(uc);
             return {

@@ -74,6 +74,28 @@ describe('API: Trainee Courses', () => {
     expect(filters('select', 'courses').sql).toContain('"is_active" = $');
   });
 
+  it('GET /api/trainee/courses lists the courses in the order of the training plan, numeric (KFB-1175)', async () => {
+    const chapters = [4, 5, 10, 1, 2, 3, 25, 9];
+    const { db } = createTableDb({
+      courseMembers: chapters.map(n => ({ userId: 't1', courseId: `c${n}` })),
+      // the database returns them in this arbitrary order
+      courses: chapters.map(n => ({
+        id: `c${n}`,
+        title: `Komponente ${n}`,
+        year: 1,
+        chapter: n,
+        code: `K${n}`,
+      })),
+      enablers: [],
+    });
+    const GET = await importListHandlerWithDb(db);
+    const res = await GET(makeGet('http://localhost/api/trainee/courses'));
+    const body = await (res as any).json();
+    expect(body.courses.map((c: any) => c.chapter)).toEqual([
+      1, 2, 3, 4, 5, 9, 10, 25,
+    ]);
+  });
+
   it('GET /api/trainee/courses counts a failed quiz as not done and a scenario as no condition', async () => {
     const { db } = createTableDb({
       courseMembers: [{ userId: 't1', courseId: 'c1' }],

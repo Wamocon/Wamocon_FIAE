@@ -6,6 +6,7 @@ import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { authFetch } from '@/lib/authFetch';
+import { isoWeekOfDate } from '@/lib/school/day';
 import {
   Calendar,
   ChevronLeft,
@@ -1265,11 +1266,10 @@ function AddBlockModal({
   );
 
   // Calculate calendar week from start date
+  // (dateStr is the value of a date input, yyyy-mm-dd)
   const getCalendarWeek = (dateStr: string): number => {
-    const date = new Date(dateStr);
-    const jan4 = new Date(date.getFullYear(), 0, 4);
-    const dayDiff = (date.getTime() - jan4.getTime()) / 86400000;
-    return Math.ceil((dayDiff + jan4.getDay() + 1) / 7);
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return isoWeekOfDate(y, m, d);
   };
 
   const handleSubmit = (e: React.FormEvent) => {

@@ -67,6 +67,18 @@ const nextConfig: NextConfig = {
       '@radix-ui/react-tabs',
     ],
   },
+  // The list of all modules ("Meine Fragenkomplexe") is gone, "Lernen" shows
+  // the same courses. An old link or bookmark goes there. The page of one
+  // course (/trainee/modules/<id>) is not touched, the source is exact.
+  async redirects() {
+    return [
+      {
+        source: '/trainee/modules',
+        destination: '/trainee/courses',
+        permanent: false,
+      },
+    ];
+  },
   // Webpack configuration for react-pdf
   webpack: config => {
     config.resolve.alias.canvas = false;

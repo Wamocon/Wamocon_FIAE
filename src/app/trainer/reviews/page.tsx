@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { FlipbookViewer } from '@/components/ui/FlipbookViewer';
+import { SubmissionFileLink } from '@/components/trainer/SubmissionFileLink';
 
 type EnablerReviewItem = {
   id: string;
@@ -931,6 +932,7 @@ export default function TrainerReviewsPage() {
                   </p>
                 </div>
               )}
+              <SubmissionFileLink submissionId={it.id} />
               <div className="mt-3">
                 <label className="mb-1 block text-sm font-medium">
                   {t('trainer.reviews.feedback')}

@@ -1,21 +1,21 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import {
-  courses,
-  courseMembers,
   enablers,
   enablerSubmissions,
   profiles,
   useCases,
   useCaseSubmissions,
 } from '@/db/migrations/schemas/schema';
+import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
+import { requireCatalogScope } from '@/lib/catalog/scope';
 import {
-  requireTraineeScopeCondition,
-  traineeIdInScope,
-} from '@/lib/auth/trainee-scope-conditions';
-import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
+  enablerSubmissionsWhere,
+  reviewableCourseIds,
+  submissionsOfUseCasesWhere,
+} from '@/lib/trainer/pending-reviews';
 
 export async function GET(req: NextRequest) {
   try {
@@ -26,7 +26,6 @@ export async function GET(req: NextRequest) {
     if (isErrorResponse(scope)) return scope;
 
     const { searchParams } = new URL(req.url);
-    const trainerId = session.id;
     const onlyPending = searchParams.get('onlyPending') === 'true';
     const type = searchParams.get('type'); // 'enabler' | 'usecase' | undefined (all)
 
@@ -36,50 +35,16 @@ export async function GET(req: NextRequest) {
     const traineeScope = await requireTraineeScopeCondition(session, req);
     if (isErrorResponse(traineeScope)) return traineeScope;
 
-    // Determine courses the trainer can review: creator or member (TRAINER)
-    const created = await db
-      .select({ id: courses.id })
-      .from(courses)
-      .where(eq(courses.createdById, trainerId));
-    const member = await db
-      .select({ courseId: courseMembers.courseId })
-      .from(courseMembers)
-      .where(
-        and(
-          eq(courseMembers.userId, trainerId),
-          eq(courseMembers.role, 'TRAINER')
-        )
-      );
-    const candidateCourseIds = Array.from(
-      new Set([
-        ...created.map(c => String(c.id)),
-        ...member.map(m => String(m.courseId)),
-      ])
-    );
-    // Only courses of the caller's catalogs
-    const courseIds = candidateCourseIds.length
-      ? (
-          await db
-            .select({ id: courses.id })
-            .from(courses)
-            .where(
-              and(
-                inArray(courses.id, candidateCourseIds as any),
-                catalogCondition(courses.trainingCatalogId, scope)
-              )
-            )
-        ).map(c => String(c.id))
-      : [];
+    // The courses a trainer reviews: every course of the caller's catalogs. Who
+    // the submissions of those courses belong to is limited by the trainee scope
+    // above (own organization, chosen occupation), not by who created the
+    // course or is a member of it (decision of the owner, WMCNL-2876).
+    const courseIds = await reviewableCourseIds(scope);
     if (!courseIds.length)
       return NextResponse.json({
         enablerSubmissions: [],
         useCaseSubmissions: [],
       });
-
-    // Build status filter conditions for SQL WHERE
-    const statusFilter = onlyPending
-      ? eq(enablerSubmissions.status, 'PENDING')
-      : undefined;
 
     let enablerRows: Array<{
       id: string;
@@ -108,10 +73,11 @@ export async function GET(req: NextRequest) {
     }> = [];
     if (!type || type === 'enabler') {
       // Get enabler submissions for trainer's courses
-      const esWhere = and(
-        inArray(enablers.courseId, courseIds),
-        traineeIdInScope(enablerSubmissions.traineeId, traineeScope.condition),
-        statusFilter ? eq(enablerSubmissions.status, 'PENDING') : undefined
+      // The same filter the dashboard counts the pending reviews with
+      const esWhere = enablerSubmissionsWhere(
+        courseIds,
+        traineeScope.condition,
+        onlyPending
       );
       const es = await db
         .select({
@@ -163,10 +129,10 @@ export async function GET(req: NextRequest) {
     }
 
     if (!type || type === 'usecase') {
-      const usWhere = and(
-        inArray(useCases.courseId, courseIds),
-        traineeIdInScope(useCaseSubmissions.traineeId, traineeScope.condition),
-        onlyPending ? eq(useCaseSubmissions.status, 'PENDING') : undefined
+      const usWhere = submissionsOfUseCasesWhere(
+        courseIds,
+        traineeScope.condition,
+        onlyPending
       );
       const us = await db
         .select({

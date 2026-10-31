@@ -7,9 +7,17 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { apiQueryKey, useApiQuery } from '@/lib/hooks/useApiQuery';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import {
+  ChevronLeft,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  Lock,
+} from 'lucide-react';
 import { PageLoader } from '@/components/ui/PageLoader';
 import { authFetch } from '@/lib/authFetch';
+import { SubmissionFileField } from '@/components/trainee/SubmissionFileField';
+import { lockText } from '@/components/trainee/EnablerStateBadge';
 
 export default function TraineeUseCaseDetailPage() {
   const params = useParams<{ useCaseId: string }>();
@@ -19,6 +27,11 @@ export default function TraineeUseCaseDetailPage() {
   const queryClient = useQueryClient();
 
   type UseCaseResponse = {
+    // Set while the enabler of the use case is locked (order of work)
+    lock?: {
+      reason: 'SEQUENCE' | 'MANUAL' | null;
+      lockedBy: { title: string } | null;
+    } | null;
     useCase: {
       id: string;
       title: string;
@@ -96,7 +109,8 @@ export default function TraineeUseCaseDetailPage() {
   }, [ucData]);
 
   // Determine if editing is allowed
-  const canEdit = !submission || submission.status === 'REJECTED';
+  const lock = ucData?.lock || null;
+  const canEdit = !lock && (!submission || submission.status === 'REJECTED');
 
   const submit = async () => {
     if (!profile?.id) return setError(t('useCase.profileMissing'));
@@ -114,7 +128,15 @@ export default function TraineeUseCaseDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!r.ok) throw new Error(t('useCase.submitFailed'));
+      if (!r.ok) {
+        const answer = await r.json().catch(() => null);
+        if (answer?.code === 'ENABLER_LOCKED') {
+          throw new Error(
+            `${t('useCase.locked')} ${lockText(t, answer.reason, answer.lockedBy?.title)}`
+          );
+        }
+        throw new Error(t('useCase.submitFailed'));
+      }
       setSuccess(t('useCase.submitSuccess'));
 
       // Optimistically update query data
@@ -184,7 +206,7 @@ export default function TraineeUseCaseDetailPage() {
           <div className="animate-in fade-in slide-in-from-top-4 mt-4 duration-300">
             <div className="border-accent/30 bg-card relative h-[80vh] w-full overflow-hidden rounded-xl border shadow-2xl">
               <iframe
-                src={`${selectedPdf.url}#toolbar=1&navpanes=0&view=FitH`}
+                src={`${selectedPdf.url}#toolbar=0&navpanes=0&view=FitH`}
                 className="h-full w-full"
                 title="PDF Viewer"
               />
@@ -229,6 +251,26 @@ export default function TraineeUseCaseDetailPage() {
       {error && (
         <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-red-300">
           {error}
+        </div>
+      )}
+
+      {lock && (
+        <div
+          data-testid="use-case-locked"
+          className="flex items-start gap-3 rounded-2xl border border-amber-600/60 bg-amber-500/15 p-4"
+        >
+          <Lock
+            className="mt-0.5 h-5 w-5 shrink-0 text-amber-600"
+            aria-hidden="true"
+          />
+          <div>
+            <div className="text-foreground font-semibold">
+              {t('useCase.locked')}
+            </div>
+            <div className="text-foreground text-sm">
+              {lockText(t, lock.reason, lock.lockedBy?.title)}
+            </div>
+          </div>
         </div>
       )}
 
@@ -361,6 +403,9 @@ export default function TraineeUseCaseDetailPage() {
             </div>
           )}
         </div>
+        {!lock && (
+          <SubmissionFileField useCaseId={useCaseId} canEdit={canEdit} />
+        )}
         {canEdit && (
           <div className="flex justify-end">
             <button

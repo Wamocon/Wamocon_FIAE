@@ -74,7 +74,7 @@ export async function DELETE(
                     type: 'BLOCK_CANCELLED',
                     title: 'Block storniert',
                     message: `Der Block "${blockLabel}" wurde storniert.`,
-                    linkUrl: '/trainee/school?tab=blocks',
+                    linkUrl: '/trainee/school?tab=calendar',
                     context: { blockId, blockType: block.blockType },
                     organizationId,
                 });
@@ -171,7 +171,7 @@ export async function PATCH(
                     type: 'BLOCK_UPDATED',
                     title: 'Block aktualisiert',
                     message: `Der Block "${blockLabel}" wurde aktualisiert.`,
-                    linkUrl: '/trainee/school?tab=blocks',
+                    linkUrl: '/trainee/school?tab=calendar',
                     context: { blockId, blockType: updatedBlock.blockType },
                     organizationId,
                 });

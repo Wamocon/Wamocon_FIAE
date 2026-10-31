@@ -26,7 +26,9 @@ describe('reindex-gemini.ts: documents', () => {
     expect(documents).toMatch(/planDocumentIndexing\(/);
     expect(script).not.toMatch(/documentVisibility\(/);
     expect(script).not.toMatch(/firstCatalogId\(/);
-    expect(documents).not.toMatch(/TRAINER_SOLUTION/);
+    // no literal document type (the label and the marker are constants of
+    // trainerSolutions.ts)
+    expect(documents).not.toMatch(/['"]TRAINER_SOLUTION['"]/);
   });
 
   it('reads description and mime type, the fields of the text rows', () => {
@@ -76,6 +78,74 @@ describe('reindex-gemini.ts: documents', () => {
   });
 });
 
+// Model solutions of the private bucket (trainer solutions, off by default).
+describe('reindex-gemini.ts: trainer solutions', () => {
+  const branch = documents.slice(
+    documents.indexOf("plan.kind === 'private_pdf'"),
+    documents.indexOf('// A dry run does not download the PDF')
+  );
+
+  it('reads the switch from the shell before dotenv, like the rollout gate', () => {
+    const switchAt = script.indexOf('isTrainerSolutionsEnabled(process.env)');
+    expect(switchAt).toBeGreaterThan(0);
+    expect(switchAt).toBeLessThan(script.indexOf('dotenv.config('));
+  });
+
+  it('hands the switch and the folder of the target to the plan', () => {
+    expect(documents).toMatch(/trainerSolutions: TRAINER_SOLUTIONS_ON/);
+    expect(documents).toMatch(/solutionPrefix: OPTIONS\.target/);
+    expect(documents).toMatch(/privateSolutionPrefix\(OPTIONS\.target\)/);
+  });
+
+  it('counts the files apart in every dry run, before it looks at the switch', () => {
+    const count = branch.indexOf('PLAN_TRAINER_SOLUTIONS.add(');
+    const off = branch.indexOf('!plan.enabled');
+    expect(count).toBeGreaterThan(0);
+    expect(off).toBeGreaterThan(count);
+    expect(script).toMatch(
+      /trainerSolutions: PLAN_TRAINER_SOLUTIONS\.rows\(\)/
+    );
+    expect(script).toContain('TRAINER_SOLUTION_SOURCE_LABEL');
+  });
+
+  it('reads nothing while the switch is off or in a dry run, and removes old chunks when off', () => {
+    const off = branch.indexOf('!plan.enabled');
+    const dry = branch.indexOf('if (IS_DRY_RUN)', off);
+    const read = branch.indexOf('readPrivateSolutionText(');
+    expect(off).toBeGreaterThan(0);
+    expect(dry).toBeGreaterThan(off);
+    expect(read).toBeGreaterThan(dry);
+    const offBlock = branch.slice(off, dry);
+    expect(offBlock).toMatch(/DELETE FROM hai_embeddings/);
+    expect(offBlock).toMatch(/continue;/);
+  });
+
+  it('checks the storage access once before the first read, and needs trainer visibility', () => {
+    const check = branch.indexOf('solutionStorageProblems(');
+    const read = branch.indexOf('readPrivateSolutionText(');
+    const level = branch.indexOf("scope.visibility !== 'trainer'");
+    expect(level).toBeGreaterThan(0);
+    expect(check).toBeGreaterThan(level);
+    expect(read).toBeGreaterThan(check);
+    expect(branch).toMatch(/confirmedHost: OPTIONS\.confirmStorageHost/);
+  });
+
+  it('marks the chunks and never puts the file reference into them', () => {
+    expect(branch).toMatch(/metadata\[TRAINER_SOLUTION_CHUNK_KEY\] = true/);
+    expect(branch.indexOf('TRAINER_SOLUTION_CHUNK_KEY')).toBeLessThan(
+      branch.indexOf('await indexSource(')
+    );
+    expect(branch).not.toMatch(/storage_url/);
+    expect(branch).not.toMatch(/extractPDFText/);
+    expect(branch).not.toMatch(/fetch\(/);
+  });
+
+  it('keeps the script free of its own rule (no literal type or visibility)', () => {
+    expect(documents).not.toMatch(/TRAINER_SOLUTION'/);
+    expect(documents).not.toMatch(/visibility: 'trainer'/);
+  });
+});
+
 describe('reindex-gemini.ts: the plan of a dry run', () => {
   it('measures the characters of every counted chunk', () => {
     const indexSource = script.slice(
@@ -104,7 +174,7 @@ describe('reindex-gemini.ts: the plan of a dry run', () => {
 
   it('writes the plan with the measures into the log of the run', () => {
     expect(script).toMatch(
-      /plan: IS_DRY_RUN\s*\? \{\s*inventory: PLAN_INVENTORY\.rows\(\),\s*changes: PLAN_CHANGES\.rows\(\),\s*rescope: PLAN_RESCOPE\.rows\(\),\s*\}/
+      /plan: IS_DRY_RUN\s*\? \{\s*inventory: PLAN_INVENTORY\.rows\(\),\s*changes: PLAN_CHANGES\.rows\(\),\s*rescope: PLAN_RESCOPE\.rows\(\),\s*trainerSolutions: PLAN_TRAINER_SOLUTIONS\.rows\(\),\s*\}/
     );
   });
 });

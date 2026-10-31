@@ -15,6 +15,8 @@
  * @module lib/hai/embeddingCost
  */
 
+import { TRAINER_SOLUTION_SOURCE_LABEL } from './trainerSolutions';
+
 export type CostScenario = 'optimistic' | 'base' | 'pessimistic';
 
 export const COST_SCENARIOS: readonly CostScenario[] = [
@@ -274,12 +276,16 @@ function groupFrom(raw: unknown, index: number): InventoryGroup {
 /**
  * Reads an inventory. Accepted: { groups: [...] } typed by hand, or the log of
  * a dry run of scripts/reindex-gemini.ts ({ plan: { inventory, changes } }),
- * of which `which` picks the part (default: what a real run would embed now).
+ * of which `which` picks the part (default: what a real run would embed now;
+ * `trainerSolutions` is the separate count of the model solution files of the
+ * private bucket, which a dry run keeps apart whether the switch is on or not).
  * Only labels and numbers are taken, any other field is ignored.
  */
+export type InventoryPart = 'inventory' | 'changes' | 'trainerSolutions';
+
 export function parseInventory(
   raw: unknown,
-  which: 'inventory' | 'changes' = 'changes'
+  which: InventoryPart = 'changes'
 ): InventoryGroup[] {
   if (!isRecord(raw)) throw new Error('The inventory is no object');
   let rows: unknown;
@@ -329,7 +335,7 @@ export interface ModelCost extends Record<CostScenario, Cost> {
   status: PriceStatus;
 }
 
-export interface CostEstimate {
+export interface CostEstimateCore {
   runs: number;
   groups: GroupEstimate[];
   totals: {
@@ -342,6 +348,15 @@ export interface CostEstimate {
   };
   /** The default model first, then the other models of the configuration. */
   costs: ModelCost[];
+}
+
+export interface CostEstimate extends CostEstimateCore {
+  /**
+   * The share of the model solution files of the private bucket (they go to
+   * the model provider only with HAI_TRAINER_SOLUTIONS=on), priced on their
+   * own. Not there when the inventory holds none.
+   */
+  trainerSolutions?: CostEstimateCore;
 }
 
 function scenarioTokens(chars: number, config: PricingConfig): Tokens {
@@ -427,6 +442,21 @@ export function estimateEmbeddingCost(
   config: PricingConfig,
   options: { runs?: number } = {}
 ): CostEstimate {
+  const estimate: CostEstimate = estimateCore(inventory, config, options);
+  const solutions = inventory.filter(
+    group => group.sourceType === TRAINER_SOLUTION_SOURCE_LABEL
+  );
+  if (solutions.length > 0) {
+    estimate.trainerSolutions = estimateCore(solutions, config, options);
+  }
+  return estimate;
+}
+
+function estimateCore(
+  inventory: InventoryGroup[],
+  config: PricingConfig,
+  options: { runs?: number }
+): CostEstimateCore {
   const runs = options.runs ?? 1;
   if (!Number.isInteger(runs) || runs < 1) {
     throw new Error('runs must be a whole number of 1 or more');
@@ -479,6 +509,27 @@ export function estimateEmbeddingCost(
 const number = (value: number) => value.toLocaleString('en-US');
 const usd = (value: number) => `$${value.toFixed(4)}`;
 
+function appendCosts(
+  lines: string[],
+  costs: ModelCost[],
+  config: PricingConfig
+): void {
+  for (const c of costs) {
+    const entry = config.models[c.model];
+    const cell = (s: CostScenario) =>
+      `${usd(c[s].standardUsd)} / ${c[s].batchUsd === null ? 'no batch' : usd(c[s].batchUsd)}`;
+    lines.push(`  ${c.model} (${c.status}, ${entry.asOf}, ${entry.source})`);
+    lines.push(
+      `    ${cell('optimistic')} | ${cell('base')} | ${cell('pessimistic')}`
+    );
+    if (c.base.standardEur !== null) {
+      lines.push(
+        `    EUR (standard): ${c.optimistic.standardEur!.toFixed(4)} | ${c.base.standardEur.toFixed(4)} | ${c.pessimistic.standardEur!.toFixed(4)}`
+      );
+    }
+  }
+}
+
 /** Plain text report of an estimate, with the source and date of every price. */
 export function formatCostReport(
   estimate: CostEstimate,
@@ -516,19 +567,17 @@ export function formatCostReport(
   lines.push(
     'Cost in USD (standard / batch), optimistic | base | pessimistic:'
   );
-  for (const c of estimate.costs) {
-    const entry = config.models[c.model];
-    const cell = (s: CostScenario) =>
-      `${usd(c[s].standardUsd)} / ${c[s].batchUsd === null ? 'no batch' : usd(c[s].batchUsd)}`;
-    lines.push(`  ${c.model} (${c.status}, ${entry.asOf}, ${entry.source})`);
+  appendCosts(lines, estimate.costs, config);
+  const own = estimate.trainerSolutions;
+  if (own) {
+    lines.push('');
     lines.push(
-      `    ${cell('optimistic')} | ${cell('base')} | ${cell('pessimistic')}`
+      `Of this, trainer solutions (model solution PDFs of the private bucket): ${number(own.totals.files)} files -> ${number(own.totals.chunks)} chunks, ~${number(own.totals.tokens.base)} tokens (base, with runs).`
     );
-    if (c.base.standardEur !== null) {
-      lines.push(
-        `    EUR (standard): ${c.optimistic.standardEur!.toFixed(4)} | ${c.base.standardEur.toFixed(4)} | ${c.pessimistic.standardEur!.toFixed(4)}`
-      );
-    }
+    lines.push(
+      'They are embedded only with HAI_TRAINER_SOLUTIONS=on, and then the text of the solutions goes to the model provider (embedding, and parts of it in answers). Cost of this share alone:'
+    );
+    appendCosts(lines, own.costs, config);
   }
   lines.push('');
   lines.push(

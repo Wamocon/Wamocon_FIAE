@@ -12,6 +12,7 @@
 // This file should only be used in API routes, not client components
 
 import { readableStorageUrl } from '@/lib/document-storage';
+import { cleanPDFText } from './pdfBufferText';
 import { readContentObject } from '@/lib/storage/contentRead';
 
 // ============================================================================
@@ -189,29 +190,9 @@ export async function extractTextFromPDF(
   }
 }
 
-/**
- * Clean extracted PDF text
- * Removes excessive whitespace, page breaks, headers/footers
- */
-export function cleanPDFText(text: string): string {
-  return (
-    text
-      // Normalize line endings
-      .replace(/\r\n/g, '\n')
-      // Remove page numbers (common formats)
-      .replace(/^[\s]*\d+[\s]*$/gm, '')
-      .replace(/Seite \d+ von \d+/gi, '')
-      .replace(/Page \d+ of \d+/gi, '')
-      // Remove excessive whitespace
-      .replace(/\n{3,}/g, '\n\n')
-      .replace(/[ \t]+/g, ' ')
-      // Remove common header/footer patterns
-      .replace(/^\s*©.*$/gm, '')
-      .replace(/^\s*www\..*$/gm, '')
-      // Trim
-      .trim()
-  );
-}
+// Cleaning of extracted text lives in pdfBufferText.ts (shared with the reader
+// of the private model solutions); it is exported from here as it always was.
+export { cleanPDFText };
 
 /**
  * Extract and combine text from multiple PDFs
