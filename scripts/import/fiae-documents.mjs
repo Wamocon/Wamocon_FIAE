@@ -1,6 +1,6 @@
 // FIAE documents of the Word delivery (06-01-26 LFA\FIAE\Komponenten) into the Preview: the teaching
 // text of every enabler (THEORY), the parts of its scenario (EXERCISE) and the model solution of the
-// use cases (TRAINER_SOLUTION) are converted to PDF and replace the documents of the same enabler or
+// use cases (TRAINER_SOLUTION) and the task version of the use cases (TRAINEE_QUESTION, folder Ohne Musterlösung) are converted to PDF and replace the documents of the same enabler or
 // use case. Only the Preview exists as a target, there is no switch for Production.
 //
 // What replace means: the new PDF is stored under a NEW path (preview/fiae/...), the row of the old
@@ -261,6 +261,13 @@ function ucItem(file, name) {
   return { file, name, key: keyOfUseCaseFile(name) };
 }
 
+/** A task version must not carry a solution part: a paragraph that starts with Musterlösung or Lösung. */
+export async function hasSolutionPart(file) {
+  const { docxLines } = await import('./fiae-quiz-parse.mjs');
+  const lines = await docxLines(readFileSync(file));
+  return lines.some(l => /^(Muster-?l[öo]sung|L[öo]sungsvorschlag|L[öo]sung)/i.test(l));
+}
+
 /** The component folders with their enablers (main file, scenario parts) and use case files. */
 export function readSource(root) {
   const comps = [];
@@ -480,7 +487,7 @@ async function execute(args, client, origin, env) {
     noEnabler: [],
     noUseCase: [],
     noMain: [],
-    withoutSolutionFiles: [],
+    taskWithSolution: [],
     deferred: deferred.map(d => d.title),
   };
   for (const comp of source) {
@@ -594,9 +601,41 @@ async function execute(args, client, origin, env) {
         useCase: u,
       });
     }
-    comp.withoutSolution.forEach(x =>
-      gaps.withoutSolutionFiles.push(`${comp.key} / ${x.name}`)
+    // the task versions (folder "Ohne Musterlösung", no solution part): TRAINEE_QUESTION of the use case,
+    // public like the task documents the Preview already has. A file that carries a solution part is
+    // not taken and reported.
+    const taskHits = comp.withoutSolution.map(uc => ({ uc, u: matchUseCase(uc) }));
+    const perTask = new Map();
+    taskHits.forEach(
+      h => h.u && perTask.set(h.u.id, (perTask.get(h.u.id) ?? 0) + 1)
     );
+    for (const { uc, u } of taskHits) {
+      if (!u || perTask.get(u.id) > 1) {
+        gaps.noUseCase.push(
+          `${comp.key} / ${uc.name} (Aufgabenfassung${u ? ', zwei Dateien für einen Use Case' : ''})`
+        );
+        continue;
+      }
+      if (await hasSolutionPart(uc.file)) {
+        gaps.taskWithSolution.push(`${comp.key} / ${uc.name}`);
+        continue;
+      }
+      const row =
+        docs.find(
+          d => d.use_case_id === u.id && d.document_type === 'TRAINEE_QUESTION'
+        ) ?? null;
+      work.push({
+        comp,
+        kind: 'TRAINEE_QUESTION',
+        label: `${comp.key} ${uc.key} Aufgabe`,
+        title: row?.title ?? `Use Case ${uc.key}: Aufgabe`,
+        file: uc.file,
+        bucket: CONTENT_BUCKET,
+        path: `${PREFIX}k${comp.key}/uc_${uc.key}_aufgabe.pdf`,
+        row,
+        useCase: u,
+      });
+    }
   }
   const isDone = w => w.row && w.row.storage_path === w.path;
   const pending = work.filter(w => !isDone(w));
@@ -614,10 +653,11 @@ async function execute(args, client, origin, env) {
     `To write now: ${limited.length} ${JSON.stringify(count(limited))}, replace ${limited.filter(w => w.row).length}, add ${limited.filter(w => !w.row).length}, already done ${work.length - pending.length}`
   );
   console.log(
-    `No enabler in the Preview: ${gaps.noEnabler.length}; no use case: ${gaps.noUseCase.length}; without main file: ${gaps.noMain.length}; task versions without solution part, folder Ohne Musterlösung (not uploaded): ${gaps.withoutSolutionFiles.length}`
+    `No enabler in the Preview: ${gaps.noEnabler.length}; no use case: ${gaps.noUseCase.length}; without main file: ${gaps.noMain.length}; task versions with a solution part (not uploaded): ${gaps.taskWithSolution.length}`
   );
   gaps.noEnabler.forEach(x => console.log(`  - no enabler: ${x}`));
   gaps.noUseCase.forEach(x => console.log(`  - no use case: ${x}`));
+  gaps.taskWithSolution.forEach(x => console.log(`  - task version with a solution part: ${x}`));
   if (args.command === 'plan' || !args.apply) {
     console.log(
       args.command === 'plan'

@@ -1,6 +1,6 @@
 # FIAE-Dokumente aus der Word-Lieferung in die Preview
 
-Stand: 30.10.2026. Das Skript `scripts/import/fiae-documents.mjs` (`npm run import:fiae:documents`) wandelt die Word-Dateien der FIAE-Lieferung (`06-01-26 LFA\FIAE\Komponenten`) in PDF um und ersetzt damit die Dokumente der Enabler und Use Cases in der Preview. Production ist nicht vorgesehen, es gibt kein Ziel dafür.
+Stand: 31.10.2026 (Aufgabenfassungen ergänzt). Das Skript `scripts/import/fiae-documents.mjs` (`npm run import:fiae:documents`) wandelt die Word-Dateien der FIAE-Lieferung (`06-01-26 LFA\FIAE\Komponenten`) in PDF um und ersetzt damit die Dokumente der Enabler und Use Cases in der Preview. Production ist nicht vorgesehen, es gibt kein Ziel dafür.
 
 ## Was es tut
 
@@ -9,6 +9,7 @@ Stand: 30.10.2026. Das Skript `scripts/import/fiae-documents.mjs` (`npm run impo
 | Hauptdatei eines Enablers | `THEORY` des Enablers, Zeile wird ersetzt | `content` (öffentlich) |
 | Datei in `Szenario parts` | `EXERCISE`, je Teil eine Zeile ("Szenario: Part N: …"), vorhandene Zeile wird ersetzt, ein neuer Teil bekommt eine neue Zeile | `content` (öffentlich) |
 | Use Case "mit Lösung" | `TRAINER_SOLUTION` des Use Cases, Zeile wird ersetzt | `content-solutions` (privat, Verweis `private://`) |
+| Aufgabenfassung im Unterordner "Ohne Musterlösung" | `TRAINEE_QUESTION` des Use Cases, Zeile wird ersetzt oder neu angelegt, `visibility` ALL | `content` (öffentlich) |
 
 **Ersetzen heißt:** Die neue PDF liegt unter einem neuen Pfad `preview/fiae/k<Komponente>/…`, die Zeile zeigt darauf, die alte Datei bleibt im Speicher. Nichts wird gelöscht. Der Bericht (`--out`) nennt die alten Werte jeder Zeile.
 
@@ -17,7 +18,6 @@ Stand: 30.10.2026. Das Skript `scripts/import/fiae-documents.mjs` (`npm run impo
 **Nicht hochgeladen werden:**
 
 - die Komponente `22_Sicherstellen der Qualität von Softwareanwendungen (Vertiefung)` (kommt nach, Entscheidung vom 30.10.2026),
-- die Dateien im Unterordner "Ohne Musterlösung": Das sind die Aufgabenfassungen der Use Cases ohne Lösungsteil (am Inhalt geprüft am 30.10.2026, 51 Dateien). Die Musterlösung liegt im Hauptordner Use_Cases. Ob die Aufgabenfassung als Aufgabe für Azubis hochgeladen wird, ist noch nicht entschieden,
 - Quizze (nicht Teil der Lieferung, die vorhandenen bleiben den Enablern zugeordnet),
 - Dateien, die zwei Use Cases gleichzeitig treffen würden oder deren Name nicht lesbar ist (werden gemeldet).
 
@@ -59,3 +59,24 @@ Die Verbindung kommt aus `DB_CONNECTION_STRING` (Rolle `app_preview_migrator`), 
 - Die HAI-Suche kennt die neuen Texte erst nach einer Neuindexierung der Preview.
 - Die Vertiefungs-Enabler sind teilweise byte-gleiche Kopien der Original-Enabler (Betreiben 5 von 13, Beurteilen 2 von 4). Sie werden wie gelieferte Dateien behandelt.
 - Tests: `tests/scripts/import/fiae-documents.test.mjs`.
+
+## Quizze (`npm run import:fiae:quizzes`)
+
+Stand 31.10.2026. Das Skript `scripts/import/fiae-quizzes.mjs` liest die Quizze der Lieferung (`Enablers\<Enabler>\Quiz\QUIZ_FR-nnn_light|medium|hard.docx`) und gleicht sie mit den Quizzen der Preview ab (LOW, MEDIUM, HIGH je Enabler). Gleiche Fragen und gleiche richtige Antworten heißen: nichts zu tun. Hat ein Enabler ein geändertes oder fehlendes Quiz, bekommt er alle drei aus der Lieferung.
+
+- Ein vorhandenes Quiz behält Zeile und Verknüpfung, seine Fragen und Optionen werden ersetzt (Testantworten auf den alten Fragen entfallen dabei).
+- Ein fehlendes Quiz wird angelegt und verknüpft.
+- Ein Quiz, das mehrere Enabler teilen (Vertiefung kopiert den Grundkurs), wird für keinen von ihnen geändert: der Enabler bekommt ein eigenes Quiz, seine Verknüpfung wird umgehängt.
+- Eine Frage wird nur gelesen, wenn sie einen Text, mindestens zwei Optionen und genau eine klare richtige Antwort hat ("Richtige Antwort: B" oder Haken an der Option). Sonst wird der ganze Enabler ausgelassen und gemeldet.
+- Nicht enthalten: Global-Quizze, Komponente 22.
+
+```
+npm run import:fiae:quizzes -- plan "<Ordner Komponenten>" --target preview
+npm run import:fiae:quizzes -- run  "<Ordner Komponenten>" --target preview --apply --confirm-host <Host> --out bericht.json
+npm run import:fiae:quizzes -- rollback bericht.json --target preview --apply --confirm-host <Host>
+```
+
+Erster Lauf am 31.10.2026: 188 Enabler gelesen, 146 unverändert, 42 geschrieben (64 Quizze ersetzt, 62 angelegt), danach weitere 9 eigene Quizze für die Komponente 09 (geteilt mit 20), 0 ausgelassen. Folgelauf: 188 unverändert.
+
+
+Aufgabenfassungen: Eine Datei, die einen Lösungsteil trägt (Absatz mit "Musterlösung" oder "Lösung"), wird nicht hochgeladen und gemeldet. Erster Lauf am 31.10.2026: 46 Dateien (40 ersetzt, 6 neu), 5 nicht zuordenbar (24d, 23a und 26a doppelt für 26_), Komponente 22 kommt nach.
