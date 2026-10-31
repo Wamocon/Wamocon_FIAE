@@ -500,7 +500,9 @@ const RUN_MODEL = process.env.HAI_GOLDEN_MODEL_RUN === 'yes';
         // a run of selected cases is a diagnosis, the thresholds are for the full set
         if (only.length === 0) expect(summary.violations).toEqual([]);
       },
-      15 * 60 * 1000
+      // 85 cases against a shared server take longer than 15 minutes when it is busy; after the
+      // limit Jest tears the environment down and the cases that follow fail for that reason only
+      Number(process.env.HAI_GOLDEN_TIMEOUT_MIN ?? 90) * 60 * 1000
     );
   }
 );
