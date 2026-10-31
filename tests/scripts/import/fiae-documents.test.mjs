@@ -271,3 +271,31 @@ test('a rollback needs no storage host, a real run does', () => {
   const run = parseArgs(['run', 'src', '--target', 'preview', '--apply']);
   assert.ok(run.errors.some(e => /confirm-storage-host/.test(e)));
 });
+
+test('a task version with a solution part is recognized, one without is not', async t => {
+  let JSZip;
+  try {
+    ({ default: JSZip } = await import('jszip'));
+  } catch {
+    t.skip('jszip is not installed');
+    return;
+  }
+  const { hasSolutionPart } = await import('../../../scripts/import/fiae-documents.mjs');
+  const docx = async paragraphs => {
+    const zip = new JSZip();
+    zip.file(
+      'word/document.xml',
+      `<w:document><w:body>${paragraphs.map(x => `<w:p><w:r><w:t>${x}</w:t></w:r></w:p>`).join('')}</w:body></w:document>`
+    );
+    return zip.generateAsync({ type: 'nodebuffer' });
+  };
+  const root = mkdtempSync(path.join(tmpdir(), 'fiae-task-'));
+  try {
+    writeFileSync(path.join(root, 'task.docx'), await docx(['Ausgangslage:', 'Aufgabenstellung:', 'Weg zum Ziel:']));
+    writeFileSync(path.join(root, 'sol.docx'), await docx(['Ausgangslage:', 'Musterlösung', 'Zu 1. Planung']));
+    assert.equal(await hasSolutionPart(path.join(root, 'task.docx')), false);
+    assert.equal(await hasSolutionPart(path.join(root, 'sol.docx')), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

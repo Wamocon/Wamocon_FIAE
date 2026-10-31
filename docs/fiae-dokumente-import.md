@@ -1,6 +1,6 @@
 # FIAE-Dokumente aus der Word-Lieferung in die Preview
 
-Stand: 30.10.2026. Das Skript `scripts/import/fiae-documents.mjs` (`npm run import:fiae:documents`) wandelt die Word-Dateien der FIAE-Lieferung (`06-01-26 LFA\FIAE\Komponenten`) in PDF um und ersetzt damit die Dokumente der Enabler und Use Cases in der Preview. Production ist nicht vorgesehen, es gibt kein Ziel dafür.
+Stand: 31.10.2026 (Aufgabenfassungen ergänzt). Das Skript `scripts/import/fiae-documents.mjs` (`npm run import:fiae:documents`) wandelt die Word-Dateien der FIAE-Lieferung (`06-01-26 LFA\FIAE\Komponenten`) in PDF um und ersetzt damit die Dokumente der Enabler und Use Cases in der Preview. Production ist nicht vorgesehen, es gibt kein Ziel dafür.
 
 ## Was es tut
 
@@ -9,6 +9,7 @@ Stand: 30.10.2026. Das Skript `scripts/import/fiae-documents.mjs` (`npm run impo
 | Hauptdatei eines Enablers | `THEORY` des Enablers, Zeile wird ersetzt | `content` (öffentlich) |
 | Datei in `Szenario parts` | `EXERCISE`, je Teil eine Zeile ("Szenario: Part N: …"), vorhandene Zeile wird ersetzt, ein neuer Teil bekommt eine neue Zeile | `content` (öffentlich) |
 | Use Case "mit Lösung" | `TRAINER_SOLUTION` des Use Cases, Zeile wird ersetzt | `content-solutions` (privat, Verweis `private://`) |
+| Aufgabenfassung im Unterordner "Ohne Musterlösung" | `TRAINEE_QUESTION` des Use Cases, Zeile wird ersetzt oder neu angelegt, `visibility` ALL | `content` (öffentlich) |
 
 **Ersetzen heißt:** Die neue PDF liegt unter einem neuen Pfad `preview/fiae/k<Komponente>/…`, die Zeile zeigt darauf, die alte Datei bleibt im Speicher. Nichts wird gelöscht. Der Bericht (`--out`) nennt die alten Werte jeder Zeile.
 
@@ -17,7 +18,6 @@ Stand: 30.10.2026. Das Skript `scripts/import/fiae-documents.mjs` (`npm run impo
 **Nicht hochgeladen werden:**
 
 - die Komponente `22_Sicherstellen der Qualität von Softwareanwendungen (Vertiefung)` (kommt nach, Entscheidung vom 30.10.2026),
-- die Dateien im Unterordner "Ohne Musterlösung": Das sind die Aufgabenfassungen der Use Cases ohne Lösungsteil (am Inhalt geprüft am 30.10.2026, 51 Dateien). Die Musterlösung liegt im Hauptordner Use_Cases. Ob die Aufgabenfassung als Aufgabe für Azubis hochgeladen wird, ist noch nicht entschieden,
 - Quizze (nicht Teil der Lieferung, die vorhandenen bleiben den Enablern zugeordnet),
 - Dateien, die zwei Use Cases gleichzeitig treffen würden oder deren Name nicht lesbar ist (werden gemeldet).
 
@@ -78,3 +78,5 @@ npm run import:fiae:quizzes -- rollback bericht.json --target preview --apply --
 
 Erster Lauf am 31.10.2026: 188 Enabler gelesen, 146 unverändert, 42 geschrieben (64 Quizze ersetzt, 62 angelegt), danach weitere 9 eigene Quizze für die Komponente 09 (geteilt mit 20), 0 ausgelassen. Folgelauf: 188 unverändert.
 
+
+Aufgabenfassungen: Eine Datei, die einen Lösungsteil trägt (Absatz mit "Musterlösung" oder "Lösung"), wird nicht hochgeladen und gemeldet. Erster Lauf am 31.10.2026: 46 Dateien (40 ersetzt, 6 neu), 5 nicht zuordenbar (24d, 23a und 26a doppelt für 26_), Komponente 22 kommt nach.
