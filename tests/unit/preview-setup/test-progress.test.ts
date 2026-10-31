@@ -74,6 +74,29 @@ describe('arguments of the test progress scripts', () => {
     expect(r.ok && r.options.dbUrlEnv).toBe('PREVIEW_IMPORT_DB_URL');
   });
 
+  it('takes a level for the chosen accounts and refuses it without accounts or with a wrong name', () => {
+    const r = parse([
+      '--target',
+      'preview',
+      '--email',
+      'a@x.de',
+      '--level',
+      'weit',
+    ]);
+    expect(r.ok && r.options.level).toBe('weit');
+    expect(parse(['--target', 'preview', '--email', 'a@x.de']).ok && true).toBe(
+      true
+    );
+    expect(parse(['--target', 'preview', '--level', 'weit']).ok).toBe(false);
+    expect(
+      parse(['--target', 'preview', '--email', 'a@x.de', '--level', 'riesig'])
+        .ok
+    ).toBe(false);
+    expect(
+      parse(['--target', 'preview', '--email', 'a@x.de', '--level']).ok
+    ).toBe(false);
+  });
+
   it('refuses a value that is missing or no variable name', () => {
     expect(parse(['--target', 'preview', '--email']).ok).toBe(false);
     expect(parse(['--target', 'preview', '--confirm-host']).ok).toBe(false);
@@ -153,6 +176,18 @@ describe('levels', () => {
     expect(only).toHaveLength(1);
     expect(only[0].level).toBe(all[2].level);
     expect(only[0].level).toBe(levelFor(2));
+  });
+
+  it('gives the chosen accounts the level that was asked for', async () => {
+    const rows = [
+      { id: 'a', email: 'a@x.de', organization_id: 'o' },
+      { id: 'b', email: 'b@x.de', organization_id: 'o' },
+    ];
+    const set = await loadTrainees(fakeDb(() => rows).db, ['b@x.de'], 'weit');
+    expect(set).toHaveLength(1);
+    expect(set[0].level).toBe('weit');
+    const unchanged = await loadTrainees(fakeDb(() => rows).db, ['b@x.de']);
+    expect(unchanged[0].level).toBe(levelFor(1));
   });
 });
 

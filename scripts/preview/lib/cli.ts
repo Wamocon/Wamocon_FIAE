@@ -71,7 +71,7 @@ export async function main(command: Options['command'], argv: string[]) {
             `Tables missing in public_preview: ${missing.join(', ')}`
           );
         }
-        const trainees = await loadTrainees(tx, options.emails);
+        const trainees = await loadTrainees(tx, options.emails, options.level);
         if (trainees.length === 0) throw new Error('No trainee found.');
         const trainer = await findTrainer(tx);
 
