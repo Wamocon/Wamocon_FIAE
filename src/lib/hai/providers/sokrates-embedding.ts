@@ -2,7 +2,8 @@
  * HAI.ai embeddings through Sokrates (the own AI, Open WebUI in front of Ollama).
  *
  * Calls the OpenAI compatible route `<base>/embeddings` with a bearer key. The
- * model is `qwen3-embedding:8b` (4096 dimensions by itself). The column of the
+ * model is `qwen3-embedding` in the gateway of Sokrates, that is `qwen3-embedding:8b`
+ * of Ollama (4096 dimensions by itself). The column of the
  * index has 3072 dimensions, so the vector is cut to the first `dimensions`
  * values and normalized again (the model is trained for that: Matryoshka). A
  * measurement on 400 questions and about 8000 text parts gave the same quality
