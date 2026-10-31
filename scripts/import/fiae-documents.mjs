@@ -614,7 +614,7 @@ async function execute(args, client, origin, env) {
     `To write now: ${limited.length} ${JSON.stringify(count(limited))}, replace ${limited.filter(w => w.row).length}, add ${limited.filter(w => !w.row).length}, already done ${work.length - pending.length}`
   );
   console.log(
-    `No enabler in the Preview: ${gaps.noEnabler.length}; no use case: ${gaps.noUseCase.length}; without main file: ${gaps.noMain.length}; use cases without solution (not uploaded): ${gaps.withoutSolutionFiles.length}`
+    `No enabler in the Preview: ${gaps.noEnabler.length}; no use case: ${gaps.noUseCase.length}; without main file: ${gaps.noMain.length}; task versions without solution part, folder Ohne Musterlösung (not uploaded): ${gaps.withoutSolutionFiles.length}`
   );
   gaps.noEnabler.forEach(x => console.log(`  - no enabler: ${x}`));
   gaps.noUseCase.forEach(x => console.log(`  - no use case: ${x}`));
