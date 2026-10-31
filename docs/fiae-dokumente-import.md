@@ -59,3 +59,22 @@ Die Verbindung kommt aus `DB_CONNECTION_STRING` (Rolle `app_preview_migrator`), 
 - Die HAI-Suche kennt die neuen Texte erst nach einer Neuindexierung der Preview.
 - Die Vertiefungs-Enabler sind teilweise byte-gleiche Kopien der Original-Enabler (Betreiben 5 von 13, Beurteilen 2 von 4). Sie werden wie gelieferte Dateien behandelt.
 - Tests: `tests/scripts/import/fiae-documents.test.mjs`.
+
+## Quizze (`npm run import:fiae:quizzes`)
+
+Stand 31.10.2026. Das Skript `scripts/import/fiae-quizzes.mjs` liest die Quizze der Lieferung (`Enablers\<Enabler>\Quiz\QUIZ_FR-nnn_light|medium|hard.docx`) und gleicht sie mit den Quizzen der Preview ab (LOW, MEDIUM, HIGH je Enabler). Gleiche Fragen und gleiche richtige Antworten heißen: nichts zu tun. Hat ein Enabler ein geändertes oder fehlendes Quiz, bekommt er alle drei aus der Lieferung.
+
+- Ein vorhandenes Quiz behält Zeile und Verknüpfung, seine Fragen und Optionen werden ersetzt (Testantworten auf den alten Fragen entfallen dabei).
+- Ein fehlendes Quiz wird angelegt und verknüpft.
+- Ein Quiz, das mehrere Enabler teilen (Vertiefung kopiert den Grundkurs), wird für keinen von ihnen geändert: der Enabler bekommt ein eigenes Quiz, seine Verknüpfung wird umgehängt.
+- Eine Frage wird nur gelesen, wenn sie einen Text, mindestens zwei Optionen und genau eine klare richtige Antwort hat ("Richtige Antwort: B" oder Haken an der Option). Sonst wird der ganze Enabler ausgelassen und gemeldet.
+- Nicht enthalten: Global-Quizze, Komponente 22.
+
+```
+npm run import:fiae:quizzes -- plan "<Ordner Komponenten>" --target preview
+npm run import:fiae:quizzes -- run  "<Ordner Komponenten>" --target preview --apply --confirm-host <Host> --out bericht.json
+npm run import:fiae:quizzes -- rollback bericht.json --target preview --apply --confirm-host <Host>
+```
+
+Erster Lauf am 31.10.2026: 188 Enabler gelesen, 146 unverändert, 42 geschrieben (64 Quizze ersetzt, 62 angelegt), danach weitere 9 eigene Quizze für die Komponente 09 (geteilt mit 20), 0 ausgelassen. Folgelauf: 188 unverändert.
+
