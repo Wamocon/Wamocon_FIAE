@@ -5,7 +5,7 @@
 // when it has a text, at least two options and exactly one clear right answer. Everything else is
 // reported, nothing is guessed.
 
-import JSZip from 'jszip';
+// jszip is loaded when a file is read, so the parser can be tested where the packages are not installed
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 
@@ -23,6 +23,7 @@ const decode = s =>
 
 /** The non-empty paragraphs of a .docx in reading order (tables included). */
 export async function docxLines(buffer) {
+  const { default: JSZip } = await import('jszip');
   const zip = await JSZip.loadAsync(buffer);
   const entry = zip.file('word/document.xml');
   if (!entry) throw new Error('word/document.xml is missing');
