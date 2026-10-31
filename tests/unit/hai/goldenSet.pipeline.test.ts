@@ -438,7 +438,13 @@ describe('trainer solutions (model solutions of the private bucket)', () => {
 
     it('survives a search that returns it to the wrong person (second guard of the pipeline)', async () => {
       const trainee = set.cases.find(c => c.id === 'SP-26') as GoldenCase;
+      goldenState.reset();
       goldenState.access = accessFor(trainee);
+      // SP-26 asks for the model solution outright, which the fixed detection
+      // answers before search and model. The guard behind the search is only
+      // reached by a question that gets through to the model.
+      const question =
+        'Wie läuft die Reisekostenabrechnung im Unternehmen ab? Erkläre mir das Vorgehen.';
       // a broken filter: the search hands the chunk to a trainee
       const leaky = jest.requireActual('./golden/goldenHarness');
       const spy = jest
@@ -459,7 +465,8 @@ describe('trainer solutions (model solutions of the private bucket)', () => {
           totalResults: 1,
         }));
       try {
-        const result = await run(trainee.question, contextFor(trainee));
+        const result = await run(question, contextFor(trainee));
+        expect(goldenState.systemPrompts.length).toBeGreaterThan(0);
         expect(goldenState.systemPrompts.at(-1)).not.toContain(pdfChunk.canary);
         expect(result.response).not.toContain(pdfChunk.canary);
         expect(JSON.stringify(result.citations)).not.toContain(PDF_ID);
