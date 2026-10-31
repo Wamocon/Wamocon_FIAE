@@ -86,7 +86,9 @@ describe('reindex-gemini.ts protection', () => {
 
   it('makes no model call in a dry run', () => {
     // the API key check and the test embedding sit inside the apply branch
-    const branch = main.indexOf('if (!IS_DRY_RUN) {\n    if (!GEMINI_API_KEY)');
+    const branch = main.indexOf(
+      "if (!IS_DRY_RUN) {\n    if (REINDEX_PROVIDER === 'ollama')"
+    );
     expect(branch).toBeGreaterThan(0);
     expect(main.indexOf('generateEmbedding(')).toBeGreaterThan(branch);
     // indexSource returns before any embedding in a dry run
@@ -94,6 +96,22 @@ describe('reindex-gemini.ts protection', () => {
     const embed = script.indexOf('generateEmbeddingsBatch(texts)');
     expect(dry).toBeGreaterThan(0);
     expect(dry).toBeLessThan(embed);
+  });
+
+  it('embeds through Ollama only on this machine and keeps Gemini as the default', () => {
+    // HAI_REINDEX_PROVIDER=ollama: the texts go to localhost (the SSH tunnel to
+    // the Sokrates server), a real run refuses any other address
+    expect(script).toContain('HAI_REINDEX_PROVIDER');
+    expect(script).toContain("|| 'gemini')");
+    const ollama = script.slice(
+      script.indexOf('async function generateOllamaEmbedding'),
+      script.indexOf('async function generateEmbeddingsBatch')
+    );
+    expect(ollama).toContain('`${OLLAMA_BASE_URL}/api/embed`');
+    expect(ollama).toContain('cutAndNormalize');
+    expect(main).toContain("host !== 'localhost' && host !== '127.0.0.1'");
+    // the index is tagged with the model and the dimensions
+    expect(script).toContain('`${OLLAMA_MODEL}@${EMBEDDING_DIMS}`');
   });
 
   it('does not download PDFs in a dry run', () => {

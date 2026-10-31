@@ -519,8 +519,26 @@ export function isForeignOccupationQuestion(
 ): boolean {
   if (persona.foreignMarkers.length === 0) return false;
   const lower = normalizeForMatch(message);
-  return persona.foreignMarkers.some(marker =>
-    new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(marker)}`, 'u').test(lower)
+  // Also the text with spelled-out words put together ("K f B M" is "kfbm")
+  const spelled = collapseSpelledLetters(lower);
+  return persona.foreignMarkers.some(marker => {
+    const pattern = new RegExp(
+      `(^|[^\\p{L}\\p{N}])${escapeRegExp(marker)}`,
+      'u'
+    );
+    return pattern.test(lower) || pattern.test(spelled);
+  });
+}
+
+/**
+ * Puts a word that is spelled out letter by letter back together: "k f b m",
+ * "k.f.b.m", "k-f-b-m" and "k_f_b_m" become "kfbm". Needs at least three single
+ * letters in a row, so "teil a b" stays as it is.
+ */
+function collapseSpelledLetters(value: string): string {
+  return value.replace(
+    /(?<![\p{L}\p{N}])\p{L}(?:[\s.\-_]+\p{L}(?![\p{L}\p{N}])){2,}/gu,
+    run => run.replace(/[\s.\-_]+/g, '')
   );
 }
 
