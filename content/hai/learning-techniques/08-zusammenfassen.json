@@ -31,11 +31,11 @@
     "note": "Niedriger Nutzen in der Übersichtsarbeit."
   },
   "review": {
-    "reviewed": false,
-    "status": "Entwurf, ungeprüft gegen Originaltext",
-    "reviewedBy": null,
-    "reviewedAt": null,
-    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
-    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt. Die Begründung (Abhängigkeit von der Zusammenfassungsfähigkeit) ist nicht am Text geprüft."
+    "reviewed": true,
+    "status": "Freigegeben",
+    "reviewedBy": "Nikolaj Schefner",
+    "reviewedAt": "2026-11-01",
+    "checked": "Am 29.10.2026 gegen den Volltext von Dunlosky et al. (2013) geprüft (Prüfdokument, WMCNL-2845): Die Einstufung niedrig und die Bedingungen der Gesamtbewertung stimmen mit dem Artikel überein (S. 18).",
+    "notChecked": "Schritte, Beispiele und einzelne Formulierungen der Beschreibung sind eigener Text und nicht Zeile für Zeile am Artikel belegt."
   }
 }

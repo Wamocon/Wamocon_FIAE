@@ -31,11 +31,11 @@
     "note": "Anwendung des verteilten Übens auf einen Prüfungstermin. Die Anwendung ist nicht Gegenstand der Übersichtsarbeit."
   },
   "review": {
-    "reviewed": false,
-    "status": "Entwurf, ungeprüft gegen Originaltext",
-    "reviewedBy": null,
-    "reviewedAt": null,
-    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
-    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt. Die Planungsschritte (Puffertag, wöchentliche Prüfung) sind eigene Empfehlungen ohne Beleg."
+    "reviewed": true,
+    "status": "Freigegeben",
+    "reviewedBy": "Nikolaj Schefner",
+    "reviewedAt": "2026-11-01",
+    "checked": "Am 29.10.2026 gegen den Volltext von Dunlosky et al. (2013) geprüft (Prüfdokument, WMCNL-2845): Die Karte ist eine eigene Anwendung und nicht Gegenstand des Artikels, sie stützt sich auf die Abrufübung und das verteilte Üben, die dort mit hoch bewertet sind.",
+    "notChecked": "Eigene Anwendung des verteilten Übens auf einen Termin, nicht Gegenstand des Artikels. Die Stufe hoch ist abgeleitet. Puffertag und wöchentliche Prüfung sind eigene Empfehlungen. Schritte, Beispiele und einzelne Formulierungen der Beschreibung sind eigener Text und nicht Zeile für Zeile am Artikel belegt."
   }
 }
