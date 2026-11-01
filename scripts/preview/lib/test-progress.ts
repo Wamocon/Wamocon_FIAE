@@ -43,6 +43,8 @@ export const LEVEL_CYCLE: readonly Level[] = [
 export const levelFor = (index: number): Level =>
   LEVEL_CYCLE[index % LEVEL_CYCLE.length];
 
+export const LEVELS: readonly Level[] = ['weit', 'mittel', 'bereit', 'anfang'];
+
 /**
  * What a test can create for a trainee. A reset empties exactly these tables for
  * the chosen trainees. Child tables go with their parent (ON DELETE CASCADE:
@@ -82,6 +84,8 @@ export interface Options {
   confirmHost: string | null;
   dbUrlEnv: string;
   emails: string[];
+  /** Level for the chosen accounts instead of the one of their position (needs --email). */
+  level: Level | null;
   clearOnly: boolean;
   keepFiles: boolean;
 }
@@ -100,6 +104,7 @@ export function parseArgs(
     '--confirm-host',
     '--db-url-env',
     '--email',
+    '--level',
     '--clear-only',
     '--keep-files',
   ]);
@@ -134,6 +139,21 @@ export function parseArgs(
     .split(',')
     .map(e => e.trim().toLowerCase())
     .filter(Boolean);
+  const levelRaw = valueOf('--level');
+  if (levelRaw === '') return { ok: false, error: '--level needs a value.' };
+  if (levelRaw !== null && !LEVELS.includes(levelRaw as Level)) {
+    return {
+      ok: false,
+      error: `--level is one of ${LEVELS.join(', ')}.`,
+    };
+  }
+  if (levelRaw !== null && emails.length === 0) {
+    return {
+      ok: false,
+      error:
+        '--level needs --email: it sets the level of the chosen accounts only.',
+    };
+  }
   const clearOnly = argv.includes('--clear-only');
   const keepFiles = argv.includes('--keep-files');
   if (command === 'seed' && (clearOnly || keepFiles)) {
@@ -150,6 +170,7 @@ export function parseArgs(
       confirmHost,
       dbUrlEnv,
       emails,
+      level: levelRaw as Level | null,
       clearOnly,
       keepFiles,
     },
@@ -203,7 +224,8 @@ export interface Trainee {
 /** Active trainees in the order of their e-mail address, each with a level. */
 export async function loadTrainees(
   db: Db,
-  emails: readonly string[]
+  emails: readonly string[],
+  level: Level | null = null
 ): Promise<Trainee[]> {
   const rows = await db.unsafe(
     `select id, lower(email) as email, organization_id
@@ -217,8 +239,11 @@ export async function loadTrainees(
     organization_id: r.organization_id,
     level: levelFor(i),
   }));
-  // the level belongs to the position among all trainees, a filter keeps it
-  return emails.length ? all.filter(t => emails.includes(t.email)) : all;
+  // the level belongs to the position among all trainees, a filter keeps it, --level replaces it
+  const chosen = emails.length
+    ? all.filter(t => emails.includes(t.email))
+    : all;
+  return level ? chosen.map(t => ({ ...t, level })) : chosen;
 }
 
 export async function findTrainer(db: Db): Promise<string | null> {
