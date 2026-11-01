@@ -142,10 +142,17 @@ describe(
       create table ${schema}.quiz_submissions (id uuid primary key default gen_random_uuid(), quiz_id uuid references ${schema}.quizzes(id) on delete cascade);
     `;
 
-    const addQuiz = async (schema, quizId, enablerIds, level, questions) => {
+    const addQuiz = async (
+      schema,
+      quizId,
+      enablerIds,
+      level,
+      questions,
+      type = 'LESSON'
+    ) => {
       await db.query(
-        `insert into ${schema}.quizzes (id, title, quiz_type, created_by_id, training_catalog_id) values ($1, $2, 'LESSON', $3, $4)`,
-        [quizId, `quiz ${level}`, id(900), id(800)]
+        `insert into ${schema}.quizzes (id, title, quiz_type, created_by_id, training_catalog_id) values ($1, $2, $5::text::${schema}.quiz_type, $3, $4)`,
+        [quizId, `quiz ${level}`, id(900), id(800), type]
       );
       for (const e of enablerIds)
         await db.query(
@@ -224,6 +231,15 @@ describe(
       await addQuiz('public', id(205), [id(2), id(3)], 'MEDIUM', [['Alt F', 'f']]);
       await db.query(`update public.quizzes set is_active = true where id = $1`, [id(205)]);
       await addQuiz('public_preview', id(205), [id(2), id(3)], 'MEDIUM', [['Neu F', 'f']]);
+      // global quizzes (no enabler): same, different (replaced), different but answered (conflict), only in the Preview
+      await addQuiz('public', id(301), [], 'GLOBAL', [['Frage G1', 'a']], 'GLOBAL');
+      await addQuiz('public_preview', id(301), [], 'GLOBAL', [['Frage G1', 'a']], 'GLOBAL');
+      await addQuiz('public', id(302), [], 'GLOBAL', [['Alt G2', 'g']], 'GLOBAL');
+      await addQuiz('public_preview', id(302), [], 'GLOBAL', [['Neu G2', 'g'], ['Neu G3', 'h']], 'GLOBAL');
+      await addQuiz('public', id(303), [], 'GLOBAL', [['Alt G4', 'i']], 'GLOBAL');
+      await addQuiz('public_preview', id(303), [], 'GLOBAL', [['Neu G4', 'i']], 'GLOBAL');
+      await db.query(`insert into public.quiz_submissions (quiz_id) values ($1)`, [id(303)]);
+      await addQuiz('public_preview', id(304), [], 'GLOBAL', [['Nur Preview', 'p']], 'GLOBAL');
     });
 
     after(async () => {
@@ -248,8 +264,9 @@ describe(
         console.log = quiet;
       }
       assert.equal(await count(`select count(*) n from public.content_documents`), 2);
-      assert.equal(await count(`select count(*) n from public.quizzes`), 4);
+      assert.equal(await count(`select count(*) n from public.quizzes`), 7);
       assert.deepEqual(await text(id(202)), ['Alt B']);
+      assert.deepEqual(await text(id(302)), ['Alt G2']);
     });
 
     test('the promotion replaces, inserts, splits shared quizzes and lists the quizzes with answers', async () => {
@@ -293,6 +310,19 @@ describe(
       assert.deepEqual(await text(id(204)), ['Alt E']);
       assert.equal(await count(`select count(*) n from public.quiz_submissions where quiz_id = $1`, [id(204)]), 1);
       assert.deepEqual(await text(id(205)), ['Alt F']);
+      // global quizzes: replaced in place, the answered one is a conflict, the one Production does not have is only listed
+      assert.deepEqual(
+        {
+          same: report.globals.same,
+          replaced: report.globals.replaced.map(x => x.quiz),
+          conflicts: report.globals.conflicts.map(c => c.quiz),
+          missing: report.globals.missing,
+        },
+        { same: 1, replaced: [id(302)], conflicts: [id(303)], missing: [id(304)] }
+      );
+      assert.deepEqual(await text(id(302)), ['Neu G2', 'Neu G3']);
+      assert.deepEqual(await text(id(303)), ['Alt G4']);
+      assert.equal(await count(`select count(*) n from public.quizzes where id = $1`, [id(304)]), 0);
     });
 
     test('a second run finds nothing to do except the conflicts', async () => {
@@ -316,8 +346,9 @@ describe(
       assert.equal(await count(`select count(*) n from public.content_documents`), 2);
       assert.equal(await count(`select count(*) n from public.quizzes where id = $1`, [id(203)]), 0);
       assert.equal(await count(`select count(*) n from public.enabler_quiz_links where quiz_id = $1`, [id(205)]), 2);
-      assert.equal(await count(`select count(*) n from public.quizzes`), 4);
+      assert.equal(await count(`select count(*) n from public.quizzes`), 7);
       assert.deepEqual(await text(id(202)), ['Alt B']);
+      assert.deepEqual(await text(id(302)), ['Alt G2']);
     });
   }
 );
