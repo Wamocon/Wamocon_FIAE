@@ -24,6 +24,9 @@
 //                                              as the old one.
 //                                With submissions the quiz is left as it is and listed as a conflict:
 //                                replacing its questions would delete the answers of the trainees.
+//   global quizzes  the FIAE global quizzes (one per subject area, no enabler) are matched by id and compared
+//              like the others: same nothing, different and no submission the questions are replaced IN PLACE,
+//              with submissions a conflict. One that Production does not have is only listed.
 // What it never does: delete a document or a quiz, change an activation state, touch users, progress,
 // submissions or the HAI index (the index of Production is rebuilt separately).
 //
@@ -151,6 +154,8 @@ export async function promote(client, { readOnly = false } = {}) {
   const report = {
     documents: { unchanged: 0, updated: [], inserted: [], skippedNoParent: 0 },
     quizzes: { same: 0, replaced: [], split: [], inserted: [], conflicts: [] },
+    // the global quizzes (one per subject area, no enabler link) of the FIAE catalog
+    globals: { same: 0, replaced: [], conflicts: [], missing: [] },
   };
 
   const srcEnablers = column(
@@ -368,8 +373,8 @@ export async function promote(client, { readOnly = false } = {}) {
       )[0]?.training_catalog_id ?? null)
     : null;
 
-  const writeQuestions = async (quizId, sourceQuizId) => {
-    for (const x of src.byQuiz.get(sourceQuizId) ?? []) {
+  const writeQuestions = async (quizId, sourceQuizId, from = src) => {
+    for (const x of from.byQuiz.get(sourceQuizId) ?? []) {
       const qid = (
         await w(
           `insert into ${DST}.questions (quiz_id, question_text, order_index, question_type, expected_answer)
@@ -377,7 +382,7 @@ export async function promote(client, { readOnly = false } = {}) {
           [quizId, x.question_text, x.order_index, x.qt, x.expected_answer]
         )
       ).rows[0].id;
-      for (const o of src.optionsOf.get(x.id) ?? [])
+      for (const o of from.optionsOf.get(x.id) ?? [])
         await w(
           `insert into ${DST}.options (question_id, option_text, is_correct, explanation, order_index)
            values ($1, $2, $3, $4, $5)`,
@@ -385,6 +390,20 @@ export async function promote(client, { readOnly = false } = {}) {
         );
     }
   };
+  // the questions of a quiz as they are now, for the report (the rollback writes them back)
+  const snapshotOf = (set, quizId) =>
+    (set.byQuiz.get(quizId) ?? []).map(x => ({
+      question_text: x.question_text,
+      order_index: x.order_index,
+      qt: x.qt,
+      expected_answer: x.expected_answer,
+      options: (set.optionsOf.get(x.id) ?? []).map(o => ({
+        option_text: o.option_text,
+        is_correct: o.is_correct,
+        explanation: o.explanation,
+        order_index: o.order_index,
+      })),
+    }));
 
   for (const l of srcLinks) {
     if (!LEVELS.includes(l.d)) continue;
@@ -431,18 +450,7 @@ export async function promote(client, { readOnly = false } = {}) {
       await w(`update ${DST}.enabler_quiz_links set quiz_id = $1 where id = $2`, [quizId, link.id]);
       report.quizzes.split.find(x => x.quiz === quizId).links.push({ link: link.id, enabler: l.enabler_id, level: l.d });
     } else if (what === 'replace') {
-      const old = (dst.byQuiz.get(target.quizId) ?? []).map(x => ({
-        question_text: x.question_text,
-        order_index: x.order_index,
-        qt: x.qt,
-        expected_answer: x.expected_answer,
-        options: (dst.optionsOf.get(x.id) ?? []).map(o => ({
-          option_text: o.option_text,
-          is_correct: o.is_correct,
-          explanation: o.explanation,
-          order_index: o.order_index,
-        })),
-      }));
+      const old = snapshotOf(dst, target.quizId);
       await w(`delete from ${DST}.questions where quiz_id = $1`, [target.quizId]);
       await writeQuestions(target.quizId, l.quiz_id);
       report.quizzes.replaced.push({ enabler: l.enabler_id, level: l.d, quiz: target.quizId, old });
@@ -477,18 +485,71 @@ export async function promote(client, { readOnly = false } = {}) {
       report.quizzes.inserted.push({ enabler: l.enabler_id, level: l.d, quiz: quizId });
     }
   }
+
+  // ---- global quizzes: matched by id, compared like the others. A quiz with test submissions stays as it is.
+  const globalIds = column(
+    await q(
+      `select z.id from ${SRC}.quizzes z join ${SRC}.training_catalogs k on k.id = z.training_catalog_id
+        where k.code = 'FIAE' and z.quiz_type::text = 'GLOBAL'`
+    ),
+    'id'
+  );
+  const globalSrc = await loadQuestions(SRC, globalIds);
+  const globalHave = column(
+    await q(
+      `select id from ${DST}.quizzes where id = any($1::uuid[]) and quiz_type::text = 'GLOBAL'`,
+      [globalIds]
+    ),
+    'id'
+  );
+  const globalDst = await loadQuestions(DST, globalHave);
+  const globalSubmitted = new Set(
+    column(
+      await q(
+        `select distinct quiz_id from ${DST}.quiz_submissions where quiz_id = any($1::uuid[])`,
+        [globalHave]
+      ),
+      'quiz_id'
+    )
+  );
+  for (const quizId of globalIds) {
+    if (!globalHave.includes(quizId)) {
+      report.globals.missing.push(quizId);
+      continue;
+    }
+    const what = decideQuiz(
+      describeQuestions(globalSrc.byQuiz.get(quizId) ?? [], globalSrc.optionsOf),
+      {
+        questions: describeQuestions(globalDst.byQuiz.get(quizId) ?? [], globalDst.optionsOf),
+        shared: false,
+        submissions: globalSubmitted.has(quizId) ? 1 : 0,
+      }
+    );
+    if (what === 'same') report.globals.same++;
+    else if (what.startsWith('conflict'))
+      report.globals.conflicts.push({ quiz: quizId, why: what.slice('conflict-'.length) });
+    else {
+      const old = snapshotOf(globalDst, quizId);
+      await w(`delete from ${DST}.questions where quiz_id = $1`, [quizId]);
+      await writeQuestions(quizId, quizId, globalSrc);
+      report.globals.replaced.push({ quiz: quizId, old });
+    }
+  }
   return report;
 }
 
 export function summary(report) {
   const d = report.documents;
   const z = report.quizzes;
+  const g = report.globals;
   return [
     `Documents: unchanged ${d.unchanged}, updated ${d.updated.length}, inserted ${d.inserted.length}, skipped without parent ${d.skippedNoParent}`,
     `Quizzes: same ${z.same}, replaced ${z.replaced.length}, split from a shared quiz ${z.split.reduce((n, x) => n + x.links.length, 0)} links in ${z.split.length} new quizzes, inserted ${z.inserted.length} (inactive), conflicts ${z.conflicts.length}`,
     ...z.conflicts
       .slice(0, 20)
       .map(c => `  conflict ${c.level} of enabler ${c.enabler}: ${c.why}`),
+    `Global quizzes: same ${g.same}, replaced ${g.replaced.length}, conflicts ${g.conflicts.length}, not in Production ${g.missing.length}`,
+    ...g.conflicts.map(c => `  conflict global quiz ${c.quiz}: ${c.why}`),
   ];
 }
 
@@ -502,7 +563,7 @@ export async function rollbackReport(client, r) {
     );
   for (const id of r.documents.inserted)
     await client.query(`delete from ${DST}.content_documents where id = $1`, [id]);
-  for (const x of r.quizzes.replaced) {
+  for (const x of [...r.quizzes.replaced, ...(r.globals?.replaced ?? [])]) {
     await client.query(`delete from ${DST}.questions where quiz_id = $1`, [x.quiz]);
     for (const qu of x.old) {
       const qid = (
@@ -572,7 +633,7 @@ export async function main(argv, env = process.env) {
       const r = JSON.parse(readFileSync(args.source, 'utf8'));
       await rollbackReport(client, r);
       console.log(
-        `Report undone: ${r.documents.updated.length} documents restored, ${r.documents.inserted.length} removed, ${r.quizzes.replaced.length} quizzes restored, ${r.quizzes.inserted.length} removed.`
+        `Report undone: ${r.documents.updated.length} documents restored, ${r.documents.inserted.length} removed, ${r.quizzes.replaced.length} quizzes restored, ${r.quizzes.inserted.length} removed, ${r.globals?.replaced.length ?? 0} global quizzes restored.`
       );
     } else {
       const report = await promote(client, { readOnly: !args.apply });

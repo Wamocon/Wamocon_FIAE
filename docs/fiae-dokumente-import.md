@@ -68,7 +68,7 @@ Stand 31.10.2026. Das Skript `scripts/import/fiae-quizzes.mjs` liest die Quizze 
 - Ein fehlendes Quiz wird angelegt und verknüpft.
 - Ein Quiz, das mehrere Enabler teilen (Vertiefung kopiert den Grundkurs), wird für keinen von ihnen geändert: der Enabler bekommt ein eigenes Quiz, seine Verknüpfung wird umgehängt.
 - Eine Frage wird nur gelesen, wenn sie einen Text, mindestens zwei Optionen und genau eine klare richtige Antwort hat ("Richtige Antwort: B" oder Haken an der Option). Sonst wird der ganze Enabler ausgelassen und gemeldet.
-- Nicht enthalten: Global-Quizze, Komponente 22.
+- Nicht enthalten: Global-Quizze (eigenes Skript, siehe unten), Komponente 22.
 
 ```
 npm run import:fiae:quizzes -- plan "<Ordner Komponenten>" --target preview
@@ -80,3 +80,21 @@ Erster Lauf am 31.10.2026: 188 Enabler gelesen, 146 unverändert, 42 geschrieben
 
 
 Aufgabenfassungen: Eine Datei, die einen Lösungsteil trägt (Absatz mit "Musterlösung" oder "Lösung"), wird nicht hochgeladen und gemeldet. Erster Lauf am 31.10.2026: 46 Dateien (40 ersetzt, 6 neu), 5 nicht zuordenbar (24d, 23a und 26a doppelt für 26_), Komponente 22 kommt nach.
+
+## Global-Quizze (`npm run import:fiae:global-quizzes`)
+
+Stand 31.10.2026. Das Skript `scripts/import/fiae-global-quizzes.mjs` liest die Dateien `<nn>_...\Global_Quiz\Global_Quiz.docx` (Parser `scripts/import/fiae-global-quiz-parse.mjs`) und gleicht sie mit den 22 Global-Quizzen der Preview ab. Die Preview hat ein Quiz je Themengebiet (§ 4 ...), die Lieferung eine Datei je Komponente. Deshalb gibt es 26 Komponenten und 22 Quizze: Informieren (Nr. 2), Beurteilen (Nr. 3), Betreiben (Nr. 8) und Sicherstellen der Qualität (AE2) haben ein gemeinsames Quiz für das erste und zweite Jahr. Die Quizze sind bei FIAE nicht mit einer Komponente verknüpft (anders als bei KfBM).
+
+- Die Dateien haben rund zehn Layouts (Chat-Exporte). Die richtige Antwort steht als Zeile "Lösung: B" oder "Korrekte Antwort: B", als Haken oder als fette Option. Eine Frage wird nur gelesen, wenn sie einen Text, Optionen A, B, C ... in Reihenfolge und genau eine klare richtige Antwort hat. Alles andere wird gemeldet und nicht geraten (keine Antwort, zwei Antworten, Widerspruch zwischen fetter Option und Antwortzeile, kaputte Zeile in einer Option). Eine zurückgezogene Frage ("Note: ... I will replace it") wird übersprungen.
+- Je Quiz: **same** (alles gleich, nichts zu tun), **replace** (Datei vollständig gelesen und anders: Fragen und Optionen werden ersetzt) oder **patch** (einzelne Fragen der Datei nicht lesbar: nur die lesbaren werden genutzt, eine vorhandene Frage bekommt Optionen und Antwort der Datei, eine neue wird angehängt, alle anderen Fragen bleiben). Liegen Testantworten auf einer Frage, die sich ändern würde, wird das Quiz nicht angefasst.
+- Es wird kein Quiz angelegt oder gelöscht. Nicht übernommen werden die Dateien 14, 18 und 22 (byte-gleiche Kopien von 03, 08 und 11 für das zweite Jahr, Entscheidung offen), 09 (die Fragen stammen aus den Enablern FR-726 bis FR-731, Netzwerk und Speicher, nicht aus Programmieren) und 13 (fehlt in der Lieferung).
+
+```
+npm run import:fiae:global-quizzes -- plan "<Ordner Komponenten>" --target preview
+npm run import:fiae:global-quizzes -- run  "<Ordner Komponenten>" --target preview --apply --confirm-host <Host> --out bericht.json
+npm run import:fiae:global-quizzes -- rollback bericht.json --target preview --apply --confirm-host <Host>
+```
+
+Erster Lauf am 31.10.2026: 21 Dateien gelesen, 12 unverändert, 9 Quizze geändert (4 ersetzt, 5 ergänzt), danach zeigt der Plan 21 von 21 unverändert. Der Bericht enthält die alten Fragen für den Rückbau. Dabei ist aufgefallen: Das Preview-Quiz "Erbringen der Leistungen" enthielt die 166 Fragen von "Berufsbildung" und hat jetzt die 50 eigenen Fragen. Im Quiz "Beurteilen" haben 28 Fragen eine andere richtige Antwort, die Belegsätze der Datei stützen die neuen Antworten.
+
+Offen in der Lieferung (nicht lesbar, die Preview behält ihre bisherigen Fragen): Datei 03 mit 19 Fragen ohne markierte Antwort, Datei 20 mit 14 Fragen (keine Antwort oder kaputte Option), Dateien 10 und 21 mit je einer Frage mit widersprüchlicher Antwort, Datei 16 mit einer Frage mit Widerspruch, Datei 01 mit einer Frage ohne Antwort, Datei 08 und 23 mit je 1 und 2 kaputten Optionen. In der Preview bleiben deshalb 8 Fragen mit zwei richtigen Optionen aus dem alten Import stehen (im Quiz "Berufsbildung" 3, in den beiden Programmieren-Quizzen je 2 DTD- und TDD-Frage und 1 Roboter-Frage). Tests: `tests/scripts/import/fiae-global-quizzes.test.mjs`.
