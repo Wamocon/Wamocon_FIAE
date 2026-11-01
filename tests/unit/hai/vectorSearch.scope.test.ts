@@ -15,7 +15,12 @@ const mockIsInitialized = jest.fn();
 
 jest.mock('@/db/haiDb', () => ({
   __esModule: true,
-  default: { execute: (...args: unknown[]) => mockExecute(...args) },
+  default: {
+    execute: (...args: unknown[]) => mockExecute(...args),
+    // the halfvec path runs the settings and the search in one transaction
+    transaction: (fn: (tx: unknown) => unknown) =>
+      fn({ execute: (...args: unknown[]) => mockExecute(...args) }),
+  },
 }));
 jest.mock('@/lib/hai/providers', () => ({
   getEmbeddingProvider: () => ({
@@ -172,6 +177,49 @@ describe('searchSimilar', () => {
     );
     expect(params).toContain(FIAE);
     expect(params[params.length - 1]).toBe(4);
+  });
+
+  describe('halfvec index switch', () => {
+    afterEach(() => {
+      delete process.env.HAI_HALFVEC_SEARCH;
+    });
+
+    it('is off by default: exact order, no transaction settings', async () => {
+      await searchSimilar('frage', trainee(), VECTOR);
+      expect(mockExecute).toHaveBeenCalledTimes(1);
+      const { text } = rendered();
+      expect(text).toContain('ORDER BY embedding <=> $');
+      expect(text).not.toContain('halfvec');
+    });
+
+    it('with HAI_HALFVEC_SEARCH=on sets the iterative scan first and orders by the halfvec expression', async () => {
+      process.env.HAI_HALFVEC_SEARCH = 'on';
+      mockExecute.mockResolvedValue([row('a', 0.5), row('b', 0.9)]);
+      const result = await searchSimilar('frage', trainee(), VECTOR);
+      expect(mockExecute).toHaveBeenCalledTimes(2);
+      const settings = rendered(0).text;
+      expect(settings).toContain(
+        "set_config('hnsw.iterative_scan', 'relaxed_order', true)"
+      );
+      expect(settings).toContain("set_config('hnsw.ef_search', '100', true)");
+      expect(settings).toContain(
+        "set_config('hnsw.max_scan_tuples', '40000', true)"
+      );
+      const search = rendered(1).text;
+      expect(search).toContain('ORDER BY embedding::halfvec(3072) <=> $');
+      expect(search).toContain('::halfvec(3072) LIMIT');
+      // the similarity still comes from the full vector, the scope is unchanged
+      expect(search).toContain('1 - (embedding <=> $');
+      expect(search).toContain('training_catalog_id IN');
+      // the relaxed order of the index scan is put right by the search
+      expect(result.map(r => r.id)).toEqual(['b', 'a']);
+    });
+
+    it('any other value keeps the exact search', async () => {
+      process.env.HAI_HALFVEC_SEARCH = 'true';
+      await searchSimilar('frage', trainee(), VECTOR);
+      expect(mockExecute).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('returns nothing and calls neither database nor model without scope', async () => {
