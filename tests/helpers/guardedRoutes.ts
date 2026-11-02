@@ -1090,6 +1090,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   {
+    route: 'trainee/lesson-quizzes',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
     route: 'trainee/quizzes/[quizId]',
     method: 'GET',
     guard: 'trainee',
