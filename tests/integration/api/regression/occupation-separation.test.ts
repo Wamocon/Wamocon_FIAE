@@ -625,6 +625,10 @@ const COVERED_ELSEWHERE: Record<string, string> = {
     'tests/integration/api/regression/report-catalog-routes.test.ts',
   'trainer/trainees/with-stats':
     'tests/integration/api/regression/report-catalog-routes.test.ts',
+  // The progress of a trainee counts the courses of the chosen occupation (one
+  // figure on every trainer page), tested with the lists in this file
+  'trainer/trainees/[traineeId]/overview':
+    'tests/integration/api/trainer/trainee-progress-routes.test.ts',
   // the insights of the HAI follow the chosen occupation (requireCatalogScope)
   'hai/insights': 'tests/integration/api/hai/insights-occupation.test.ts',
 };

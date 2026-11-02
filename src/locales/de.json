@@ -1391,7 +1391,7 @@
   "hai.admin.confirmAccess": "Zugriff bestätigen",
   "hai.admin.invalidPin": "Falscher PIN. Bitte versuchen Sie es erneut.",
   "charts.noActivityData": "Keine Aktivitätsdaten vorhanden",
-  "charts.noCourseData": "Keine Fragenkomplexedaten vorhanden",
+  "charts.noCourseData": "Keine Daten zu Fragenkomplexen vorhanden",
   "charts.activities": "Aktivitäten",
   "charts.progress": "Fortschritt",
   "landing.platformName": "LFA-Lernplattform",
