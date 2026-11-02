@@ -217,16 +217,24 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
     // A new method on a HAI route without a guard entry fails here
     const dir = path.join(process.cwd(), 'src/app/api/hai');
     const found: string[] = [];
-    for (const name of fs.readdirSync(dir)) {
-      const file = path.join(dir, name, 'route.ts');
-      if (!fs.existsSync(file)) continue;
-      const source = fs.readFileSync(file, 'utf8');
-      for (const m of source.matchAll(
-        /export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\b/g
-      )) {
-        found.push(`${m[1]} hai/${name}`);
+    // Nested folders count too (hai/quiz-mode/next)
+    const walk = (folder: string, route: string) => {
+      const file = path.join(folder, 'route.ts');
+      if (fs.existsSync(file)) {
+        const source = fs.readFileSync(file, 'utf8');
+        for (const m of source.matchAll(
+          /export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\b/g
+        )) {
+          found.push(`${m[1]} ${route}`);
+        }
       }
-    }
+      for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          walk(path.join(folder, entry.name), `${route}/${entry.name}`);
+        }
+      }
+    };
+    walk(dir, 'hai');
     const listed = GUARDED_ROUTES.filter(r => r.route.startsWith('hai/')).map(
       r => `${r.method} ${r.route}`
     );

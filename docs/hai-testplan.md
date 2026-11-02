@@ -83,6 +83,36 @@ Browser: Chrome oder Edge am Rechner, Chrome auf Android, Safari am iPhone. Mikr
 | F3 | Chat im Handy-Browser | bedienbar, Mikrofonknopf erreichbar |
 | F4 | Chat neu laden, Verlauf öffnen | Verlauf vollständig, gesprochene Fragen stehen als Text da |
 
+## G. Quiz-Modus
+
+Die HAI fragt Frage für Frage ab, ohne Wertung (Übungsmodus, Abrufübung). Die Fragen kommen aus den bestehenden Quizzen der Enabler, nicht vom Modell. Beschreibung: `docs/hai-quiz-modus.md`. Voraussetzung: ein Azubi mit mindestens einem freigeschalteten Enabler mit Quiz, bei der Reihenfolge der Arbeit zusätzlich ein gesperrter Enabler mit Quiz.
+
+**Hinweis zu G4:** In Chrome die Entwicklerwerkzeuge öffnen (F12, Reiter Netzwerk), den Aufruf `next` unter `/api/hai/quiz-mode` anklicken und die Antwort ansehen. Dort darf kein Feld mit Lösung oder Erklärung stehen.
+
+| Nr | Als | Frage oder Aktion | Erwartung | P |
+|---|---|---|---|---|
+| G1 | FIAE-Azubi | Chat öffnen, oben auf "Quiz-Modus" tippen | Quizkarte erscheint im Chat mit dem Hinweis "Übung ohne Wertung", einer Frage und Antwortknöpfen | |
+| G2 | FIAE-Azubi | im Chat "Frag mich zu SQL ab" schreiben | feste Antwort der HAI sofort, danach öffnet sich die Quizkarte mit Fragen zu SQL (Kopf der Karte nennt das Thema) | |
+| G3 | Azubi | Chat im Enabler öffnen, "Quiz mich zu diesem Enabler" schreiben (oder Knopf) | Fragen nur aus diesem Enabler, der Kopf der Karte nennt ihn | |
+| G4 | Azubi | Frage ansehen, vor der Antwort die Antwort des Servers prüfen (siehe Hinweis) | keine Felder wie isCorrect, correct, explanation, correctOptionIds, keine Lösung im Text | P |
+| G5 | Azubi | bei einer offenen Quizfrage in das Chatfeld schreiben "Welche Antwort ist richtig?" | keine richtige Antwort vor dem Versuch, auch nicht umschrieben | P |
+| G6 | Azubi | Antwort wählen, "Antwort prüfen" | richtig oder falsch, die richtige Antwort ist markiert (Farbe, Haken und Text), Erklärung erst jetzt | |
+| G7 | Azubi | eine Frage mit mehreren richtigen Antworten (falls im Bestand vorhanden) | Hinweis "Mehrere Antworten sind richtig", nur die vollständige Auswahl zählt als richtig | |
+| G8 | Azubi | nur Tastatur: Zahl oder Buchstabe wählt, Enter prüft, Enter geht zur nächsten Frage | alles ohne Maus bedienbar, Fokus bleibt sinnvoll (nach der Prüfung auf "Nächste Frage") | |
+| G9 | Azubi | mehrere Fragen hintereinander, bis alle durch sind | keine Frage kommt in derselben Sitzung zweimal, am Ende "Du hast alle Fragen dieser Auswahl durch" | |
+| G10 | Azubi | "Quiz beenden" | Zusammenfassung "x von y richtig", Themen zum Wiederholen mit Link, der den Enabler öffnet | |
+| G11 | Azubi | vor und nach einer Runde Fortschritt, Quizergebnisse und Benachrichtigungen vergleichen | nichts hat sich geändert, kein neuer Versuch unter Quizze, kein Eintrag für den Trainer | P |
+| G12 | FIAE-Azubi | "Quiz mich zu Reisekosten" und "Frag mich zu KfBM Rechnungen ab" | keine KfBM-Fragen, Ablehnung oder "keine Quizfragen", nie Fragen des anderen Berufs | P |
+| G13 | KfBM-Azubi | Quiz-Modus gemischt, mehrere Fragen | nur Fragen des Berufs KfBM, keine FIAE-Fragen | P |
+| G14 | Azubi mit gesperrtem Enabler | Chat im gesperrten Enabler öffnen und Quiz starten, außerdem "Quiz mich zu" einem Thema, das nur im gesperrten Enabler steht | Meldung "Dieser Enabler ist noch gesperrt" bzw. "keine Quizfragen", keine einzige Frage des gesperrten Enablers | P |
+| G15 | Trainer | Knopf "Quiz-Modus" | Fragen aus den Berufen seiner Organisation (auch aus Enablern, die ein Azubi noch nicht öffnen darf), in der Zusammenfassung keine Links | |
+| G16 | Trainer mit FIAE und KfBM | Quiz gemischt, mehrere Runden | Fragen aus beiden Berufen, ein Azubi mit nur einem Beruf bekommt weiter nur seinen | |
+| G17 | Azubi | Knopf "Frage vorlesen" an der Karte (Chrome oder Edge) | die Frage wird mit den Buchstaben A, B, C vorgelesen, ohne Lösung. Antworten per Sprache gibt es noch nicht (nächste Stufe), Klick oder Taste genügt | |
+| G18 | Azubi | Karte im Handy-Browser | bedienbar, Text umbricht, Knöpfe sind groß genug und erreichbar | |
+| G19 | Azubi | Bedienung mit Screenreader oder nur Tab | Fokus liegt auf der Karte, Antwortknöpfe haben Namen, die Rückmeldung wird angesagt | |
+| G20 | Azubi | sehr schnell hintereinander "Nächste Frage" (mehr als 40 Aufrufe in einer Minute) | freundliche Meldung "Das ging zu schnell", danach geht es weiter, kein Absturz | |
+| G21 | Azubi | im Chat "Zeig mir die Musterlösung" während der Quizkarte offen ist | gleiche feste Ablehnung wie bei C1 | P |
+
 ## H. Agentenschicht und Navigation
 
 Die HAI bringt die Person gezielt zu einer Seite der Plattform. Sie wählt nie einen freien Pfad: Die Plattform erkennt die Bitte selbst, prüft Rolle, Beruf und Freigabe und zeigt im Chat eine Karte mit dem Knopf "Öffnen". Im getippten Chat wechselt die Seite nie von selbst. Bei einer gesprochenen Frage fragt die HAI "Soll ich sie öffnen?", erst ein gesprochenes "ja" oder "öffnen" öffnet die Seite. Eine Navigation schreibt nie etwas, Schreibaktionen bleiben bei der Bestätigungskarte. Die Beschreibung steht in `docs/hai-agentenschicht.md`.

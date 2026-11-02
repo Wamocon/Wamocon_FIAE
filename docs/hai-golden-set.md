@@ -59,6 +59,8 @@ Die Texte der Datei sind erfunden. Quelldokumente, Pfade oder echte Namen stehen
 | Themenfremd | 13 | Wetter, Rezept, Witz, Fußball, Horoskop und weitere, für beide Berufe und für Trainer |
 | Ausnahmen je Beruf | 8 | Dieselbe Frage ist bei einem Beruf erlaubt und bei dem anderen themenfremd (Hotel für die Dienstreise, Büromaterial, Server bei Netflix) |
 
+Hinweis zum Quiz-Modus (`docs/hai-quiz-modus.md`): Eine Bitte "Teste mich", "Quiz mich" oder "Frag mich ab" beantwortet die Pipeline seitdem fest und ohne Modell, die Fragen kommen aus den echten Quizzen. Der Fall AL-08 prüft aber den Weg über das Modell (eine Quizfrage ohne Antwort aus dem Kontext). Er wurde deshalb von "Teste mich zur Beschaffung mit einer Quizfrage." auf "Stelle mir eine Quizfrage zur Beschaffung." umformuliert, sonst nichts. Die Fälle zum Quiz-Modus stehen im Testplan (Abschnitt G) und in `tests/unit/hai/quizMode.*.test.ts`.
+
 Nach Verhalten: 26 `answer`, 22 `refuse_solution`, 22 `refuse_other_occupation` (15 vor dem Modell, 7 durch den Kontext), 17 `refuse_offtopic`.
 
 ## 4. Was der deterministische Test beweist

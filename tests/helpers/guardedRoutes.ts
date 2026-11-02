@@ -1214,6 +1214,8 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   { route: 'hai/action', method: 'GET', guard: 'user', params: [] },
   { route: 'hai/insights', method: 'GET', guard: 'user', params: [] },
   { route: 'hai/voice', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/quiz-mode/next', method: 'POST', guard: 'user', params: [] },
+  { route: 'hai/quiz-mode/answer', method: 'POST', guard: 'user', params: [] },
   { route: 'hai/embed', method: 'POST', guard: 'haiIndex', params: [] },
   { route: 'hai/embed', method: 'GET', guard: 'haiIndex', params: [] },
   { route: 'hai/embed', method: 'DELETE', guard: 'haiIndex', params: [] },

@@ -1038,6 +1038,7 @@ export async function POST(req: NextRequest) {
                   intent: result.intent,
                   pendingAction: result.pendingAction,
                   navigationOffer: result.navigationOffer,
+                  quizMode: result.quizMode,
                 })}\n\n`
               )
             );
@@ -1157,6 +1158,7 @@ export async function POST(req: NextRequest) {
       quizState: result.quizState,
       pendingAction: result.pendingAction,
       navigationOffer: result.navigationOffer,
+      quizMode: result.quizMode,
     });
   } catch (error) {
     console.error('HAI.ai chat error:', error);

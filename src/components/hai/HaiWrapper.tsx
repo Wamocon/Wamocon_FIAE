@@ -19,6 +19,7 @@ import dynamic from 'next/dynamic';
 import { useAuth } from '@/contexts/AuthContext';
 import { isAccountStopped } from '@/lib/auth/access-state';
 import { HaiProvider, HaiContext } from './HaiProvider';
+import { HaiQuizModeProvider } from './HaiQuizMode';
 
 // Lazy-load the button & chat panel — keeps framer-motion out of the
 // critical-path bundle.  They are only downloaded once the wrapper mounts
@@ -54,11 +55,13 @@ export function HaiWrapper({ children, context }: HaiWrapperProps) {
   }
 
   return (
-    <HaiProvider userId={user.id} initialContext={context}>
-      {children}
-      <HaiButton />
-      <HaiChat />
-    </HaiProvider>
+    <HaiQuizModeProvider>
+      <HaiProvider userId={user.id} initialContext={context}>
+        {children}
+        <HaiButton />
+        <HaiChat />
+      </HaiProvider>
+    </HaiQuizModeProvider>
   );
 }
 

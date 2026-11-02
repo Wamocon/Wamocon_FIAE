@@ -44,6 +44,7 @@ import {
 } from './persona';
 import { loadHaiPersona } from './personaAccess';
 import { solutionRequestRefusal } from './solutionRequest';
+import { quizModeStartFor, type QuizModeStartSignal } from './quizMode/start';
 import {
   buildSystemPrompt,
   buildRetrievedContext,
@@ -140,6 +141,8 @@ export interface PipelineResult {
   pendingAction?: PendingAction;
   /** A page the interface can offer with a card "Öffnen", never a write */
   navigationOffer?: NavigationOffer;
+  /** The person asked to be quizzed: the browser opens the quiz card */
+  quizMode?: QuizModeStartSignal;
   error?: string;
   /**
    * i18n key of a message for the user, set when no chat provider could answer
@@ -652,6 +655,19 @@ export async function processMessage(
       return { response: solutionRefusal, intent: 'question', citations: [] };
     }
 
+    // A request to be quizzed ("Frag mich zu SQL ab") ends here with a fixed
+    // text and the start signal of the quiz card: no retrieval, no model, so
+    // no question and no answer comes from the model (quiz mode)
+    const quizStart = quizModeStartFor(userMessage, context);
+    if (quizStart) {
+      return {
+        response: quizStart.response,
+        intent: 'quiz_request',
+        citations: [],
+        quizMode: quizStart.quizMode,
+      };
+    }
+
     // Step 1b: An action in the message becomes a proposal, never a write.
     // Behind the persona gate: without a scope or for a message about another
     // occupation there is no proposal.
@@ -896,6 +912,19 @@ export async function processMessageStream(
     if (solutionRefusal) {
       onChunk(solutionRefusal);
       return { response: solutionRefusal, intent: 'question', citations: [] };
+    }
+
+    // A request to be quizzed: fixed text and start signal, like in
+    // processMessage (quiz mode)
+    const quizStart = quizModeStartFor(userMessage, context);
+    if (quizStart) {
+      onChunk(quizStart.response);
+      return {
+        response: quizStart.response,
+        intent: 'quiz_request',
+        citations: [],
+        quizMode: quizStart.quizMode,
+      };
     }
 
     // An action in the message becomes a proposal, never a write (behind the
