@@ -88,3 +88,22 @@ export function quizSubmissionsWhere(
     onlyPending ? eq(quizSubmissions.isReviewed, false as any) : undefined
   );
 }
+
+/**
+ * The open reviews are listed newest first (WMCNL-2924). The database gives no
+ * order without ORDER BY, so the lists are sorted by submission date; the id
+ * breaks a tie so the order stays stable between two requests.
+ */
+export function newestFirst<T extends { id: unknown; submittedAt: unknown }>(
+  rows: T[]
+): T[] {
+  const time = (v: unknown) => {
+    const t = new Date(v as any).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  };
+  return [...rows].sort(
+    (a, b) =>
+      time(b.submittedAt) - time(a.submittedAt) ||
+      String(b.id).localeCompare(String(a.id))
+  );
+}
