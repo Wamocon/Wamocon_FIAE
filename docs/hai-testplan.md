@@ -54,6 +54,16 @@ Hinweis: Die Szenario-Dokumente enthalten laut Beschluss vom 29.10.2026 auch Lö
 | D5 | Azubi | "Was steht heute an?" | höchstens drei Punkte aus den echten Daten, Dringendes zuerst, eine Frage am Ende, keine erfundenen Termine | P |
 | D6 | Azubi | "Wann habe ich Berufsschule?" | Antwort aus dem Kalender oder "keine Daten" | |
 | D7 | Trainer | "Was steht heute an?" | offene Bewertungen und Benachrichtigungen | |
+| D8 | Azubi | **Pflichtfall:** "Was steht für mich an?" | Daten und Fortschritt statt "keine Daten": Fortschritt und nächster Schritt, Termine, Nachweise, Rückmeldungen, höchstens drei Punkte, eine Frage am Ende. Keine Quellenkarten von Enablern unter der Antwort | |
+| D9 | Azubi | "Was habe ich diese Woche zu tun?", "Was muss ich machen?", "Was ist offen?", "Was liegt bei mir an?" | wie D8, jeweils aus den eigenen Daten | |
+| D10 | Azubi | "Wo stehe ich?", "Gibt es etwas Neues für mich?", "Plane meine Woche" | wie D8 | |
+| D11 | Azubi mit zwei Berufen | "Was steht für mich an?" mit gewähltem Reiter KfBM, danach mit Reiter FIAE | Fortschritt je Beruf, der gewählte Beruf steht zuerst und ist als gewählt gekennzeichnet, die Tageslage selbst bleibt berufsübergreifend | |
+| D12 | Azubi ohne Termine | "Was steht für mich an?" | die HAI nennt konkret "Für heute sind keine Termine eingetragen", sagt nie pauschal "keine Daten vor" und schickt nicht zum Stundenplan | |
+| D13 | Azubi ohne Kurs, Abgaben und Termine | "Was steht für mich an?" | ehrlich, dass nichts vorliegt, mit Vorschlag (zum Beispiel weiter lernen) | |
+| D14 | Azubi | "Was steht in Enabler 3 an?", "Was muss ich tun, um einen Fremdschlüssel zu definieren?" | bleibt eine Wissensfrage: Antwort aus dem Wissen mit Quellenkarten, keine Tageslage | |
+| D15 | Azubi | "Wie ist mein Fortschritt?", "Habe ich Rückmeldungen?", "Habe ich neue Benachrichtigungen?" | wie bisher je Absicht (Fortschritt, Abgaben, Benachrichtigungen) | |
+| D16 | Azubi, gesprochen | "Was steht für mich an?" | höchstens drei Punkte, kurz und ohne Markup, eine Frage am Ende, keine Quellenangaben | |
+| D17 | Trainer | "Was muss ich tun?" | offene Bewertungen und Benachrichtigungen, kein Azubi-Fortschritt | |
 
 ## E. Sprachassistent
 
