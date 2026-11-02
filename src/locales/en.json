@@ -3124,5 +3124,6 @@
   "content.assignSelectBoth": "Please select at least one trainee and one topic.",
   "content.assignedTrainees.one": "{count} trainee",
   "trainer.school.calendar.selectTrainee": "Select trainee...",
-  "trainer.school.calendar.unknownTrainee": "Unknown"
+  "trainer.school.calendar.unknownTrainee": "Unknown",
+  "trainer.school.tabs.lernfelderDescReadOnly": "View learning fields and their use cases"
 }

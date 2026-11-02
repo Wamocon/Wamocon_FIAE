@@ -3126,5 +3126,6 @@
   "content.assignSelectBoth": "Bitte mindestens einen Azubi und einen Fragenkomplex auswählen.",
   "content.assignedTrainees.one": "{count} Azubi",
   "trainer.school.calendar.selectTrainee": "Azubi auswählen...",
-  "trainer.school.calendar.unknownTrainee": "Unbekannt"
+  "trainer.school.calendar.unknownTrainee": "Unbekannt",
+  "trainer.school.tabs.lernfelderDescReadOnly": "Lernfelder und zugehörige Use Cases ansehen"
 }
