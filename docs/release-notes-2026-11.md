@@ -14,7 +14,7 @@ Die Lernplattform führt jetzt zwei Ausbildungsberufe in einem System: Fachinfor
 | Verwaltung | Berufe je Organisation, Plätze und Rollengrenzen, Freigabe- und Zuweisungswerkzeug, Inhaltsstatistik mit Soll |
 | HAI | Berufstrennung, Lösungsschutz, Lernkarten, Tagesbegleiter, Sprachassistent, Einbettung und Chat über Sokrates |
 | Sicherheit | Server-Sitzung für alle Routen, Zeilenschutz, Speicherrechte, Passwortregel, Bucket mit signierten Links |
-| Betrieb | 36 Migrationen mit Freigabetor, Release-Strecke mit zwei Schemas, Inhaltsübertragung per Id |
+| Betrieb | 38 Migrationen mit Freigabetor, Release-Strecke mit zwei Schemas, Inhaltsübertragung per Id |
 
 ## 2. Neu für Auszubildende
 
@@ -45,7 +45,9 @@ Die Lernplattform führt jetzt zwei Ausbildungsberufe in einem System: Fachinfor
 - Aktionen brauchen eine Bestätigung und prüfen die Zuständigkeit (PR 122).
 - Lernkarten (zwölf, geprüft und freigegeben am 01.11.2026) mit Quelle Dunlosky, keine Lerntypen, kein Burnout-Rat (PR 179, 232).
 - Tagesbegleiter ("Was steht heute an?") mit höchstens drei Punkten aus echten Daten (PR 233).
-- Sprachassistent im Browser mit Einwilligung, Schalter je Organisation, Standard aus (PR 233).
+- Sprachassistent mit Einwilligung, Schalter je Organisation, Standard aus (PR 233). Anbieterwahl in der neuen HAI-Admin-Seite: Soniox (Region EU) als Hauptanbieter, Sokrates und der Browser als Rückfallebene, Umschalten ohne neuen Release (PR 241).
+- Quiz-Modus: Abfrage Frage für Frage aus den Lektionsquizzen ohne Wertung, nur aus freigeschalteten Enablern des eigenen Berufs, die richtige Antwort erst nach dem Versuch (PR 240).
+- Agentenschicht: Die HAI führt gezielt durch die Plattform, Navigationskarten mit Knopf "Öffnen" aus einer festen Zulassungsliste je Rolle, "Weiter lernen", keine Schreibwirkung (PR 239).
 - Einbettung und Chat über Sokrates (Qwen3-Embedding, gemma4:31b), Rückfall des Chats nur auf Sokrates, nie auf einen externen Anbieter (PR 171, 199, 209).
 - Vektorindex (halfvec) beschleunigt die Suche von 26 auf 0,9 Sekunden, hinter einem Schalter (PR 231).
 - Prüfsatz mit 98 Fällen: kein Leck, Antworten 93,1 Prozent, Fremdberuf 100 Prozent, Lösungen verweigern 100 Prozent.
@@ -67,9 +69,9 @@ Die Lernplattform führt jetzt zwei Ausbildungsberufe in einem System: Fachinfor
 
 ## 7. Datenbank und Betrieb
 
-- 36 neue Migrationsdateien von `20261023100000` bis `20261101000200`, rückwärtskompatibel geschrieben. Eine Datei (`20261025000000`, Backfill SUPER_ADMIN) hält das Freigabetor an, bis `KFBM_ROLLOUT_APPROVED` gesetzt ist.
+- 38 neue Migrationsdateien von `20261023100000` bis `20261102000200`, rückwärtskompatibel geschrieben. Eine Datei (`20261025000000`, Backfill SUPER_ADMIN) hält das Freigabetor an, bis `KFBM_ROLLOUT_APPROVED` gesetzt ist.
 - Release-Strecke mit zwei Schemas: `public` ist Production, `public_preview` die Preview. Ablauf `guard`, `migrate`, `content-sync`, `deploy`, Beschreibung in `docs/release-prozess.md`.
-- Generalprobe am 31.10.2026 auf einem Wegwerf-Container: 34 Migrationen (damals), längste Datei 2,4 Sekunden, Nachchecks N01 bis N09 wie erwartet, FIAE-Übertragung angewendet, zweiter Lauf ohne Änderung, Rückbau erprobt. Die zwei später hinzugekommenen Dateien (Check der Lernkarten-Quelle, Schalter Sprachassistent) sind additiv.
+- Generalprobe am 31.10.2026 auf einem Wegwerf-Container: 34 Migrationen (damals), längste Datei 2,4 Sekunden, Nachchecks N01 bis N09 wie erwartet, FIAE-Übertragung angewendet, zweiter Lauf ohne Änderung, Rückbau erprobt. Die vier später hinzugekommenen Dateien (Check der Lernkarten-Quelle, Schalter Sprachassistent, Tabelle `hai_settings` und die Bereinigung ihres Fremdschlüssels) sind additiv.
 - Rückweg: Sicherung der Datenbank vor dem Fenster, Rückbau der Katalogreihe (`docs/rollback/`), App über "Production Deploy" nur mit dem Release, das die Migrationsdateien kennt.
 
 ## 8. Änderungen für FIAE-Nutzer
@@ -78,6 +80,8 @@ Für bestehende FIAE-Azubis bleibt der Weg gleich. Sichtbar neu sind die Reiter 
 
 ## 9. Bekannte Grenzen
 
+- Der Quiz-Modus gibt die richtige Antwort eines Lektionsquizzes nach jedem Versuch frei, das echte Quiz hält sie bis zum Bestehen zurück. Entscheidung von Niko offen (docs/hai-quiz-modus.md, Abschnitt 6).
+- Soniox ist nur gegen Nachbauten getestet, der erste echte Lauf ist Teil des Preview-Tests (Testplan E14 bis E16). Safari und iPhone nehmen in einem Format auf, das Soniox eventuell ablehnt, dann fällt die Kette zurück.
 - Zwei Prüffälle der HAI (Netflix-Server, Hotelbuchung) werden zu Unrecht abgelehnt.
 - Gesprochene Antworten erreichen 88,5 Prozent im Prüfsatz (Schwelle 90 Prozent), alle Schutzregeln halten.
 - Die HAI braucht Sokrates. Fällt der Server aus, antwortet sie nicht, Lernen und Abgaben laufen weiter.
