@@ -636,6 +636,12 @@ const SHARES_PARENT_SCOPE: Record<string, string[]> = {
   'trainer/courses/[courseId]/enablers': ['trainer/courses/[courseId]'],
   'trainer/courses/[courseId]/members': ['trainer/courses/[courseId]'],
   'trainer/courses/[courseId]/use-cases': ['trainer/courses/[courseId]'],
+  // the bytes of the scenario PDF for the viewer of a trainee: the scope check of
+  // the enabler page (the separation itself is also tested in
+  // tests/integration/api/trainee/enablers.scenario.content.get.test.ts)
+  'trainee/enablers/[enablerId]/scenario/content': [
+    'trainee/enablers/[enablerId]',
+  ],
   'trainer/enablers/[enablerId]/quiz': ['trainer/enablers/[enablerId]'],
   'trainer/enablers/[enablerId]/quizzes': ['trainer/enablers/[enablerId]'],
   'trainer/enablers/[enablerId]/quizzes/[quizId]': [
