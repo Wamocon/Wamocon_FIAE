@@ -79,6 +79,8 @@ export function TrainerExamsTab() {
       TEST: t('exams.type.test'),
       PROJEKT: t('exams.type.projekt'),
       PRAESENTATION: t('exams.type.praesentation'),
+      ABGABE: t('exams.type.abgabe'),
+      MUENDLICH: t('exams.type.muendlich'),
       COMPANY: t('exams.type.company'),
     };
     return typeMap[type] || typeMap['KLAUSUR'];
@@ -100,7 +102,7 @@ export function TrainerExamsTab() {
       try {
         const [examsRes, traineesRes] = await Promise.all([
           authFetch(
-            `/api/trainer/school/exams${traineeFilter ? `&traineeId=${traineeFilter}` : ''}`,
+            `/api/trainer/school/exams${traineeFilter ? `?traineeId=${traineeFilter}` : ''}`,
             { cache: 'no-store' }
           ),
           authFetch(`/api/trainer/trainees`, {
@@ -313,7 +315,11 @@ function ExamCard({
   getExamTypeLabel: (type: string) => string;
   t: (key: string) => string;
 }) {
-  const examType = exam.isCompanyExam ? 'COMPANY' : exam.examTypeValue;
+  // The type the exam was given (an exam of a trainee is a "Test" or a
+  // "Klausur", not always a company exam). Only an exam without a type of its
+  // own is labelled by where it belongs.
+  const examType =
+    exam.examTypeValue || (exam.isCompanyExam ? 'COMPANY' : 'KLAUSUR');
   const typeStyle =
     EXAM_TYPE_STYLES[examType as keyof typeof EXAM_TYPE_STYLES] ||
     EXAM_TYPE_STYLES.KLAUSUR;

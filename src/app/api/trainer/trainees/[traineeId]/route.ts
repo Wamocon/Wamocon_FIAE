@@ -1,15 +1,14 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, eq, inArray } from 'drizzle-orm';
-import {
-  profiles,
-  enablers,
-  courses,
-  enablerCompletions,
-} from '@/db/migrations/schemas/schema';
+import { eq } from 'drizzle-orm';
+import { profiles } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import {
+  loadTraineeProgress,
+  requireProgressScope,
+} from '@/lib/trainer/trainee-progress';
 import {
   isTrainerInOrgScope,
   traineeRecordCondition,
@@ -43,41 +42,14 @@ export async function GET(
       .limit(1);
     if (!p) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Compute progress: completed enablers / total enablers for courses by this trainee's trainer (if assigned)
-    let totalEnablers = 0;
-    let completed = 0;
-    if (p) {
-      // Determine trainer from trainee's assignedTrainerId
-      const [traineeProfile] = await db
-        .select({ assignedTrainerId: profiles.assignedTrainerId })
-        .from(profiles)
-        .where(eq(profiles.id, traineeId as any))
-        .limit(1);
-      const trainerId = traineeProfile?.assignedTrainerId || null;
-      if (trainerId) {
-        const trainerEnablerRows = await db
-          .select({ id: enablers.id })
-          .from(enablers)
-          .innerJoin(courses, eq(enablers.courseId, courses.id))
-          .where(eq(courses.createdById, trainerId as any));
-        const enablerIds = trainerEnablerRows.map(e => e.id);
-        totalEnablers = enablerIds.length;
-        if (totalEnablers > 0) {
-          const [{ c = 0 } = { c: 0 }] = await db
-            .select({ c: count() })
-            .from(enablerCompletions)
-            .where(
-              and(
-                eq(enablerCompletions.traineeId, traineeId as any),
-                inArray(enablerCompletions.enablerId, enablerIds as any)
-              )
-            );
-          completed = Number(c);
-        }
-      }
-    }
-    const progressPct =
-      totalEnablers > 0 ? Math.round((completed / totalEnablers) * 100) : 0;
+    // Progress: the one figure of every trainer page, over the courses of the
+    // chosen occupation (src/lib/trainer/trainee-progress.ts). It used to count
+    // rows of enabler_completions over the courses of the assigned trainer, so
+    // the PDF export showed 0 % where the detail page showed 46 %.
+    const scope = await requireProgressScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+    const progress = await loadTraineeProgress([traineeId], scope);
+    const progressPct = progress.byTrainee.get(traineeId)?.pct ?? 0;
 
     return NextResponse.json({
       trainee: {

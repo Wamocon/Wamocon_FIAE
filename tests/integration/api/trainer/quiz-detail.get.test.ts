@@ -59,6 +59,20 @@ describe('GET /api/trainer/quizzes/[quizId]', () => {
     ]);
   });
 
+  it('lists who the quiz is assigned to, with the names (WMCNL-3027)', async () => {
+    const { mod } = await loadScoped(ONE, {
+      tables: {
+        ...tables(),
+        quizAssignments: [{ traineeId: 'u1', fullName: 'Leon Moretz' }],
+      },
+    });
+    const body = await (await mod.GET(scopeReq(URL_ONE), params)).json();
+    expect(body.assigned_trainee_ids).toEqual(['u1']);
+    expect(body.assigned_trainees).toEqual([
+      { id: 'u1', full_name: 'Leon Moretz' },
+    ]);
+  });
+
   it('a trainee is turned away (403) and no question is read', async () => {
     const { mod, mock } = await loadScoped(ONE, {
       session: traineeSession('t1'),
