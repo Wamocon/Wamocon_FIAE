@@ -7,6 +7,7 @@ import {
   enablerSubmissionHasContent,
 } from '@/lib/submission-input';
 import db from '@/db';
+import { submissionNoticeText } from '@/lib/notifications/submissionNotice';
 import { and, eq } from 'drizzle-orm';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import {
@@ -164,10 +165,17 @@ export async function POST(
           userId: uid,
           actorId: traineeId,
           type: 'ENABLER_SUBMITTED',
-          title: 'Szenario eingereicht',
-          message: `Ein Trainee hat ein Enabler-Szenario eingereicht: ${e.title}`,
+          ...submissionNoticeText('ENABLER_SUBMITTED', {
+            traineeName: session.fullName,
+            subject: e.title,
+          }),
           linkUrl: '/trainer/reviews?view=enablers&onlyPending=true',
-          context: { enablerId, courseId: e.courseId },
+          context: {
+            enablerId,
+            courseId: e.courseId,
+            traineeName: session.fullName,
+            subjectTitle: e.title,
+          },
           organizationId,
         }));
         await db.insert(notifications).values(values);

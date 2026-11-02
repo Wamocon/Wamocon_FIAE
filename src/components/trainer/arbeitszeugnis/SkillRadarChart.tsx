@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface RadarDataPoint {
   component: string;
@@ -43,6 +44,7 @@ export function SkillRadarChart({
   showLabels = true,
   forPDF = false,
 }: SkillRadarChartProps) {
+  const { t } = useLanguage();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const drawChart = useCallback(() => {
@@ -281,7 +283,7 @@ export function SkillRadarChart({
             d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
           />
         </svg>
-        <p>Keine bewerteten Komponenten vorhanden</p>
+        <p>{t('arbeitszeugnis.radarNoComponents')}</p>
       </div>
     );
   }
@@ -291,7 +293,7 @@ export function SkillRadarChart({
     return (
       <div key="bar-chart-view" className="space-y-4 p-4">
         <p className="text-muted-foreground mb-4 text-center text-sm">
-          Mindestens 3 Komponenten für Radar-Ansicht erforderlich
+          {t('arbeitszeugnis.radarMinThree')}
         </p>
         <div className="space-y-3">
           {data.map(point => {

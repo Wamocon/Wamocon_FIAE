@@ -751,7 +751,7 @@ export default function TrainerActivityReportsPage() {
           className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 font-medium text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl"
         >
           <Award className="h-5 w-5" />
-          <span>Arbeitszeugnis erstellen</span>
+          <span>{t('arbeitszeugnis.title')}</span>
         </button>
       </div>
 
