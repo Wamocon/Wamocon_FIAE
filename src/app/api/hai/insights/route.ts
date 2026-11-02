@@ -34,12 +34,18 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        // The occupation the person works in (x-catalog): a report belongs to
-        // one occupation, so the report reminders follow it. A scope that cannot
-        // be read leaves it open, the checks then use the default occupation.
+        // The occupation the person works in (x-catalog): a report and a course
+        // belong to one occupation, so the reminders follow it. A scope that
+        // cannot be read (also an occupation the person does not have) leaves it
+        // open, the checks then use the default occupation of a trainee. A trainer
+        // who chose no occupation keeps the counts of all occupations of the
+        // organization, as before.
         const catalogScope = await requireCatalogScope(me, req);
         const catalogId =
-            catalogScope instanceof Response ? null : catalogScope.activeCatalogId;
+            catalogScope instanceof Response ||
+            (me.isTrainerLevel && !catalogScope.selected)
+                ? null
+                : catalogScope.activeCatalogId;
 
         // Run proactive checks
         const insights = await runProactiveChecks(userId, catalogId);
