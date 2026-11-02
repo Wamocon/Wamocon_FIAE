@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { PdfUploader } from '@/components/trainer/PdfUploader';
 import { FlipbookViewer } from '@/components/ui/FlipbookViewer';
+import { documentTypeLabel } from '@/lib/documentTypeLabel';
 
 export default function EditCoursePage() {
   const router = useRouter();
@@ -2516,7 +2517,10 @@ export default function EditCoursePage() {
                         className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1"
                       >
                         <FileText className="h-3 w-3 flex-shrink-0 text-green-500" />
-                        <span className="max-w-[150px] truncate text-xs font-medium">
+                        <span
+                          className="max-w-[150px] truncate text-xs font-medium"
+                          title={doc.title}
+                        >
                           {doc.title}
                         </span>
                         {doc.documentType && (
@@ -2526,14 +2530,12 @@ export default function EditCoursePage() {
                                 ? 'bg-blue-500/20 text-blue-400'
                                 : doc.documentType === 'EXERCISE'
                                   ? 'bg-purple-500/20 text-purple-400'
-                                  : 'bg-amber-500/20 text-amber-400'
+                                  : doc.documentType === 'TRAINEE_QUESTION'
+                                    ? 'bg-cyan-500/20 text-cyan-400'
+                                    : 'bg-amber-500/20 text-amber-400'
                             }`}
                           >
-                            {doc.documentType === 'THEORY'
-                              ? 'T'
-                              : doc.documentType === 'EXERCISE'
-                                ? 'E'
-                                : 'S'}
+                            {documentTypeLabel(doc.documentType, t)}
                           </span>
                         )}
                         {doc.storageUrl && (
