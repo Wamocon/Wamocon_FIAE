@@ -53,9 +53,37 @@ describe('trainer quiz detail page', () => {
       '/api/trainer/quizzes/q1'
     );
     const beta = screen.getByText('Beta').closest('div') as HTMLElement;
-    expect(within(beta).getByText('Correct')).toBeInTheDocument();
+    expect(within(beta).getByText('Richtig')).toBeInTheDocument();
     const alpha = screen.getByText('Alpha').closest('div') as HTMLElement;
-    expect(within(alpha).queryByText('Correct')).toBeNull();
+    expect(within(alpha).queryByText('Richtig')).toBeNull();
+  });
+
+  it('shows German texts and who the quiz is assigned to (WMCNL-3027)', async () => {
+    authFetchMock.mockResolvedValue(
+      json({
+        id: 'q1',
+        title: 'K1 Telefonat',
+        quiz_type: 'big',
+        assigned_trainees: [{ id: 'u1', full_name: 'Leon Moretz' }],
+        questions: [],
+      })
+    );
+    renderWithProviders(<TrainerQuizDetailPage />);
+    expect(await screen.findByText('Leon Moretz')).toBeInTheDocument();
+    expect(screen.getByText('Quiz-Details')).toBeInTheDocument();
+    expect(screen.getByText(/Typ:\s*Global/)).toBeInTheDocument();
+    expect(screen.getByText(/1 Azubi(?!s)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Quiz Details|Type: GLOBAL/)).toBeNull();
+  });
+
+  it('says that nobody is assigned when no trainee is', async () => {
+    authFetchMock.mockResolvedValue(
+      json({ id: 'q1', title: 'K2', quiz_type: 'big', questions: [] })
+    );
+    renderWithProviders(<TrainerQuizDetailPage />);
+    expect(
+      await screen.findByText('Diesem Quiz ist kein Azubi zugewiesen.')
+    ).toBeInTheDocument();
   });
 
   it('says so for a quiz without questions', async () => {
@@ -63,20 +91,20 @@ describe('trainer quiz detail page', () => {
       json({ id: 'q1', title: 'Empty', quiz_type: 'big', questions: [] })
     );
     renderWithProviders(<TrainerQuizDetailPage />);
-    expect(await screen.findByText('No questions.')).toBeInTheDocument();
+    expect(await screen.findByText('Keine Fragen.')).toBeInTheDocument();
   });
 
   it('shows not found for a quiz the route does not return (404)', async () => {
     authFetchMock.mockResolvedValue(json({ error: 'Not found' }, false, 404));
     renderWithProviders(<TrainerQuizDetailPage />);
-    expect(await screen.findByText('Quiz not found')).toBeInTheDocument();
+    expect(await screen.findByText('Quiz nicht gefunden')).toBeInTheDocument();
   });
 
   it('shows an error, and no option, when the route refuses (403)', async () => {
     authFetchMock.mockResolvedValue(json({ error: 'Forbidden' }, false, 403));
     renderWithProviders(<TrainerQuizDetailPage />);
     expect(await screen.findByRole('alert')).toBeInTheDocument();
-    expect(screen.queryByText('Correct')).toBeNull();
+    expect(screen.queryByText('Richtig')).toBeNull();
   });
 
   it('shows an error when the request fails', async () => {
