@@ -116,6 +116,80 @@ describe('API: POST /api/trainee/use-cases/[useCaseId]/submit', () => {
     ]);
   });
 
+  describe('a hand-in without content (WMCNL-2926)', () => {
+    // fileFound: undefined = the file feature is off, false/true = on, with or
+    // without a file in the storage
+    const run = async (body: any, fileFound?: boolean) => {
+      const { db, writes } = createTableDb(
+        {
+          profiles: [orgRow],
+          useCases: [useCaseRow],
+          courseMembers: [memberRow],
+          useCaseSubmissions: [],
+        },
+        { useCaseSubmissions: [{ id: 's1' }] }
+      );
+      jest.resetModules();
+      jest.doMock('@/db', () => ({ __esModule: true, default: db }));
+      mockTraineeSession();
+      mockCatalogScope();
+      jest.doMock('@/lib/submission-file/availability', () => ({
+        isSubmissionFileEnabled: () => fileFound !== undefined,
+      }));
+      jest.doMock('@/lib/submission-file/access', () => ({
+        openStorage: () => ({}),
+      }));
+      jest.doMock('@/lib/submission-file/service', () => ({
+        getFile: async () => ({
+          ok: true,
+          value: fileFound ? { fileName: 'a.pdf', size: 3 } : null,
+        }),
+      }));
+      const mod =
+        await import('@/app/api/trainee/use-cases/[useCaseId]/submit/route');
+      const res = (await mod.POST(
+        makePost('http://localhost/api/trainee/use-cases/u1/submit', body),
+        { params: Promise.resolve({ useCaseId: 'u1' }) }
+      )) as any;
+      return { res, writes };
+    };
+
+    it.each([
+      ['nothing at all', {}],
+      ['an empty text and no link', { submissionText: '', links: [] }],
+      ['a null text', { submissionText: null, links: [] }],
+      ['only white space', { submissionText: ' \n\t', links: [] }],
+      ['a link without an address', { links: [{ url: '  ' }, { url: '' }] }],
+    ])('400 EMPTY_SUBMISSION for %s and nothing is stored', async (_n, body) => {
+      const { res, writes } = await run({ traineeId: 't1', ...body }, false);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: 'Empty submission',
+        code: 'EMPTY_SUBMISSION',
+      });
+      expect(writes('insert', 'useCaseSubmissions')).toHaveLength(0);
+      expect(writes('update', 'useCaseSubmissions')).toHaveLength(0);
+      expect(writes('insert', 'notifications')).toHaveLength(0);
+    });
+
+    it('is refused while the file feature is off and nothing else is given', async () => {
+      const { res, writes } = await run({ submissionText: '  ' });
+      expect(res.status).toBe(400);
+      expect(writes('insert', 'useCaseSubmissions')).toHaveLength(0);
+    });
+
+    it('takes a link without a text', async () => {
+      const { res } = await run({ links: [{ url: 'https://a' }] }, false);
+      expect(res.status).toBe(200);
+    });
+
+    it('takes a hand-in with only a file', async () => {
+      const { res, writes } = await run({ submissionText: ' ' }, true);
+      expect(res.status).toBe(200);
+      expect(writes('insert', 'useCaseSubmissions')).toHaveLength(1);
+    });
+  });
+
   it('403 if not member', async () => {
     const { db } = createTableDb({
       profiles: [orgRow],

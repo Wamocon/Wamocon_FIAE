@@ -151,6 +151,13 @@ const TRAINEE_LISTS: ListCase[] = [
     extra: { quizAssignments: [], quizzes: [] },
   },
   {
+    name: 'lesson quiz list',
+    route: 'trainee/lesson-quizzes',
+    url: 'http://localhost/api/trainee/lesson-quizzes',
+    table: 'courses',
+    extra: { courseMembers: [{ userId: 't1', courseId: ID }], courses: [] },
+  },
+  {
     name: 'learning fields',
     route: 'trainee/lernfelder',
     url: 'http://localhost/api/trainee/lernfelder',

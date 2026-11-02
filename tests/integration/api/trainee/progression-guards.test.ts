@@ -415,6 +415,16 @@ describe('reading stays free: title, material and the list of the quizzes', () =
     });
   });
 
+  it('the detail names the course, so the page can link back to the Fragenkomplex (WMCNL-2929)', async () => {
+    const { handler } = await load(
+      ENABLER_DETAIL,
+      'GET',
+      progressionWorld({ target: 'e2' })
+    );
+    const body = await (await handler(req(), ctx({ enablerId: 'e2' }))).json();
+    expect(body.enabler.courseId).toBe('c1');
+  });
+
   it('the detail of the first enabler is open', async () => {
     const { handler } = await load(
       ENABLER_DETAIL,

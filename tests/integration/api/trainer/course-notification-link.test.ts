@@ -66,6 +66,6 @@ describe('PATCH /api/trainer/courses/[courseId]: notification of the members', (
     const byUser = Object.fromEntries(rows.map((r: any) => [r.userId, r]));
     expect(byUser['trainee-1'].linkUrl).toBe(`/trainee/modules/${COURSE}`);
     expect(byUser['trainer-2'].linkUrl).toBe(`/trainer/courses/${COURSE}`);
-    expect(byUser['trainee-1'].title).toBe('Kurs aktualisiert');
+    expect(byUser['trainee-1'].title).toBe('Fragenkomplex aktualisiert');
   });
 });
