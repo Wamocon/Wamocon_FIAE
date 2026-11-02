@@ -258,7 +258,7 @@ export async function POST(
             : `Du wurdest dem Kurs "${courseName}" zugewiesen`,
           linkUrl: isTrainer
             ? `/trainer/courses/${courseId}`
-            : '/trainee/modules',
+            : `/trainee/modules/${courseId}`,
           context: { courseId },
           organizationId,
         });
@@ -280,7 +280,7 @@ export async function POST(
               : `Du wurdest dem Kurs "${courseName}" zugewiesen`,
             link_url: isTrainer
               ? `/trainer/courses/${courseId}`
-              : '/trainee/modules',
+              : `/trainee/modules/${courseId}`,
             context: { courseId },
           });
         } else {

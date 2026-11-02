@@ -117,6 +117,7 @@ describe('isCatalogTabPath', () => {
       '/trainee/dashboard',
       '/trainee/quizzes',
       '/trainee/school',
+      '/trainee/trainer-feedback',
     ]);
   });
 });

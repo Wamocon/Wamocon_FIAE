@@ -31,7 +31,13 @@ import {
 } from '@/lib/catalog/phase-plan-db';
 import { loadCourseProgressions } from '@/lib/catalog/progression-db';
 import { startOfToday } from '@/lib/school/day';
-import type { EnablerProgression } from '@/lib/catalog/progression';
+import {
+  PASS_THRESHOLD,
+  type EnablerProgression,
+  type ProgressionEnabler,
+  type ProgressionQuizLink,
+} from '@/lib/catalog/progression';
+import { weeklyProgressPercent } from '@/lib/catalog/weekly-progress';
 import { sortCourses } from '@/lib/catalog/course-order';
 import {
   getPhaseDeadline,
@@ -124,7 +130,9 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         .select({ skillId: traineeAchievedSkills.skillId })
         .from(traineeAchievedSkills)
         .where(eq(traineeAchievedSkills.traineeId, userId as any)),
-      // Recent quiz with title (for achievements, LIMIT 1)
+      // Recent PASSED quiz of the occupation with title (for achievements,
+      // LIMIT 1). A quiz below the passing score is no success, and a quiz of
+      // the other occupation of the trainee is not shown on this tab.
       db
         .select({
           score: quizSubmissions.score,
@@ -133,10 +141,17 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         })
         .from(quizSubmissions)
         .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
-        .where(eq(quizSubmissions.traineeId, userId as any))
+        .where(
+          and(
+            eq(quizSubmissions.traineeId, userId as any),
+            gte(quizSubmissions.score, PASS_THRESHOLD),
+            catalogCondition(quizzes.trainingCatalogId, scope)
+          )
+        )
         .orderBy(desc(quizSubmissions.submittedAt))
         .limit(1),
-      // Recent enabler completion with title (for achievements, LIMIT 1)
+      // Recent enabler completion of the occupation with title (for
+      // achievements, LIMIT 1)
       db
         .select({
           completedAt: enablerCompletions.completedAt,
@@ -144,7 +159,13 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         })
         .from(enablerCompletions)
         .innerJoin(enablers, eq(enablerCompletions.enablerId, enablers.id))
-        .where(eq(enablerCompletions.traineeId, userId as any))
+        .innerJoin(courses, eq(enablers.courseId, courses.id))
+        .where(
+          and(
+            eq(enablerCompletions.traineeId, userId as any),
+            catalogCondition(courses.trainingCatalogId, scope)
+          )
+        )
         .orderBy(desc(enablerCompletions.completedAt))
         .limit(1),
     ]);
@@ -156,6 +177,13 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
     const modules: Array<{ id: string; title: string; progress: number }> = [];
     let nextItem: any = null;
     let skillRadar: Array<{ skill: string; value: number }> = [];
+    // The enablers of the occupation (the completions of another occupation do
+    // not count for the streak) and the data of the weekly progress
+    const scopeEnablerIds = new Set<string>();
+    let weeklyCourses: Array<{
+      enablers: ProgressionEnabler[];
+      quizLinks: ProgressionQuizLink[];
+    }> = [];
 
     if (courseIds.length > 0) {
       // ── Phase 2: courseId-dependent (3 queries, was 4 – merged enabler queries) ──
@@ -198,6 +226,7 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
 
       // Filter to active enablers for the next item
       const allEnablers = allEnablerData.filter(e => e.isActive);
+      allEnablerData.forEach(e => scopeEnablerIds.add(String(e.id)));
       const useCaseIds = useCaseRows.map(u => u.id);
 
       // The completion of every enabler, by the one definition (quizzes
@@ -206,6 +235,7 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         userId,
         courseIds.map(String)
       );
+      weeklyCourses = Array.from(progressions.values());
       const enablerStates = new Map<string, EnablerProgression>();
       for (const p of progressions.values()) {
         for (const e of p.progression.enablers) {
@@ -309,30 +339,14 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         }));
     }
 
-    // ── Compute weekly progress from Phase 1 results (no DB) ──
-    const weeks = 6;
-    const now = new Date();
-    const weeklyBuckets: Array<{ week: string; progress: number }> = [];
-    for (let i = weeks - 1; i >= 0; i--) {
-      weeklyBuckets.push({ week: `W${weeks - i}`, progress: 0 });
-    }
-    const addToBucket = (dt: Date | null) => {
-      if (!dt) return;
-      const diffDays = Math.floor(
-        (now.getTime() - dt.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      const bucketIndex = Math.floor(diffDays / 7);
-      if (bucketIndex >= 0 && bucketIndex < weeks) {
-        weeklyBuckets[weeks - 1 - bucketIndex].progress += 1;
-      }
-    };
-    // Reuse allCompletionsRaw (has completedAt) – no separate compRows query needed
-    allCompletionsRaw.forEach(r =>
-      addToBucket(r.completedAt ? new Date(r.completedAt as any) : null)
-    );
-    allQuizSubs.forEach(r =>
-      addToBucket(r.submittedAt ? new Date(r.submittedAt as any) : null)
-    );
+    // ── Weekly progress of the occupation, in percent (0 to 100), computed
+    // from the quiz attempts of Phase 1 (no DB) ──
+    const weeklyBuckets = weeklyProgressPercent({
+      now: new Date(),
+      weeks: 6,
+      courses: weeklyCourses,
+      attempts: allQuizSubs,
+    });
 
     // ── Achievements from Phase 1 results (no DB) ──
     const achievements: Array<{
@@ -345,11 +359,8 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       const sub = recentQuizWithTitle[0];
       achievements.push({
         kind: 'quiz',
-        // A quiz without a score was not graded automatically
-        text:
-          sub.score === null || sub.score === undefined
-            ? `Quiz "${sub.quizTitle || 'Quiz'}" abgegeben`
-            : `${Math.round(sub.score)}% im Quiz "${sub.quizTitle || 'Quiz'}"`,
+        // Only a passed quiz is an achievement (the query asks for it)
+        text: `${Math.round(sub.score ?? 0)}% im Quiz "${sub.quizTitle || 'Quiz'}"`,
         at: sub.submittedAt?.toISOString?.() || null,
       });
     }
@@ -374,6 +385,7 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       dayEnd.setDate(dayStart.getDate() + 1);
       const rows = allCompletionsRaw.filter(r => {
         if (!r.completedAt) return false;
+        if (!scopeEnablerIds.has(String(r.enablerId))) return false;
         const d = new Date(r.completedAt as any);
         return d >= dayStart && d < dayEnd;
       });

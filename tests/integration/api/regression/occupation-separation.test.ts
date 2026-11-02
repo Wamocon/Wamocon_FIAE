@@ -178,6 +178,17 @@ const TRAINEE_LISTS: ListCase[] = [
     table: 'course_members',
     extra: { courseMembers: [{ userId: 't1', courseId: ID }], courses: [] },
   },
+  {
+    name: 'trainer feedback (quiz results)',
+    route: 'trainee/feedback',
+    url: 'http://localhost/api/trainee/feedback',
+    table: 'quiz_submissions',
+    extra: {
+      enablerSubmissions: [],
+      useCaseSubmissions: [],
+      quizSubmissions: [],
+    },
+  },
 ];
 
 function filterParams(mock: ReturnType<typeof createTableDb>, c: ListCase) {

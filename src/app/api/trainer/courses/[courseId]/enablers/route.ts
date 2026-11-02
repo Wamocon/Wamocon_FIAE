@@ -150,7 +150,7 @@ export async function POST(
             type: 'ENABLER_CREATED',
             title: 'Neue Lesson verfügbar',
             message: `Eine neue Lesson "${title}" wurde aktiviert.`,
-            linkUrl: '/trainee/modules',
+            linkUrl: `/trainee/modules/${courseId}`,
             context: { enablerId: inserted.id, courseId },
             organizationId,
           }));

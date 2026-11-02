@@ -80,7 +80,7 @@ describe('Lernfeld detail page of a trainee', () => {
     expect(
       await screen.findByText('Das Unternehmen präsentieren')
     ).toBeInTheDocument();
-    expect(screen.getByText('LF1')).toBeInTheDocument();
+    expect(screen.getByText('LF-1')).toBeInTheDocument();
     expect(screen.getByText('Beschreibung des Lernfelds')).toBeInTheDocument();
     expect(screen.getByText('80')).toBeInTheDocument();
     expect(String(authFetchMock.mock.calls[0][0])).toBe(

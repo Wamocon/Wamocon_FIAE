@@ -201,11 +201,9 @@ export function ExamManager() {
             {t('exams.title')}
           </h2>
           <p className="text-muted-foreground text-sm">
-            {exams.length}{' '}
-            {activeView === 'upcoming'
-              ? t('exams.upcomingCount')
-              : t('exams.pastCount')}{' '}
-            {t('exams.examsLabel')}
+            {t(
+              `exams.summary.${activeView === 'upcoming' ? 'upcoming' : 'past'}.${exams.length === 1 ? 'one' : 'other'}`
+            ).replace('{count}', String(exams.length))}
           </p>
         </div>
 

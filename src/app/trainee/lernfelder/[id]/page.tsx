@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { formatLernfeldLabel } from '@/lib/school/lernfeld-label';
 import {
   ArrowLeft,
   BookOpen,
@@ -156,7 +157,7 @@ export default function TraineeLernfeldDetailPage() {
           </div>
           <div className="min-w-0">
             <span className="bg-accent text-accent-foreground rounded-full px-3 py-1 text-xs font-bold">
-              {lernfeld.label}
+              {formatLernfeldLabel(lernfeld.label)}
             </span>
             <h1 className="text-foreground mt-2 text-2xl font-bold break-words">
               {lernfeld.title}

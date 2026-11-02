@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -1055,7 +1056,7 @@ function BlockDetailModal({
     setDeleting(false);
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <div className="bg-card border-border w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl">
         <div className={`p-6 ${config.lightBg}`}>
@@ -1200,7 +1201,8 @@ function BlockDetailModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1306,7 +1308,7 @@ function AddBlockModal({
     ([type]) => !['PERSONAL', 'TRAINER_BLOCKER'].includes(type)
   );
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <div className="bg-card border-border max-h-[90vh] w-full max-w-lg overflow-hidden overflow-y-auto rounded-2xl border shadow-2xl">
         <div className="border-border border-b p-6">
@@ -1378,14 +1380,23 @@ function AddBlockModal({
           </div>
 
           <div>
-            <label className="text-foreground mb-2 block text-sm font-medium">
+            <label
+              id="block-type-label"
+              className="text-foreground mb-2 block text-sm font-medium"
+            >
               {t('calendar.modal.blockType')}
             </label>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+            <div
+              role="group"
+              aria-labelledby="block-type-label"
+              className="grid grid-cols-3 gap-2 sm:grid-cols-6"
+            >
               {availableBlockTypes.map(([type, config]) => (
                 <button
                   key={type}
                   type="button"
+                  aria-label={t(config.labelKey)}
+                  aria-pressed={blockType === type}
                   onClick={() => setBlockType(type as Block['blockType'])}
                   className={`flex flex-col items-center gap-1 rounded-xl border-2 p-3 transition-all ${
                     blockType === type
@@ -1510,7 +1521,8 @@ function AddBlockModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1576,7 +1588,7 @@ function ImportBlocksModal({
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <div className="bg-card border-border w-full max-w-lg overflow-hidden rounded-2xl border shadow-2xl">
         <div className="border-border border-b p-6">
@@ -1666,6 +1678,7 @@ function ImportBlocksModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

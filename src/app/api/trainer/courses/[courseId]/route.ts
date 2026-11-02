@@ -193,7 +193,7 @@ export async function PATCH(
     // Notify course members about the update
     try {
       const memberRows = await db
-        .select({ userId: courseMembers.userId })
+        .select({ userId: courseMembers.userId, role: courseMembers.role })
         .from(courseMembers)
         .where(eq(courseMembers.courseId, courseId as any));
       const membersToNotify = memberRows.filter(
@@ -207,7 +207,12 @@ export async function PATCH(
           type: 'COURSE_UPDATED',
           title: 'Kurs aktualisiert',
           message: `Der Kurs "${courseTitle}" wurde aktualisiert.`,
-          linkUrl: '/trainee/modules',
+          // The course itself, not the list of the tab FIAE: the list of
+          // /trainee/modules goes to the courses of the first occupation, so
+          // a link to a KfBM course ended in an empty FIAE list
+          linkUrl: isTrainerLevelRole(m.role)
+            ? `/trainer/courses/${courseId}`
+            : `/trainee/modules/${courseId}`,
           context: { courseId },
           organizationId,
         }));
