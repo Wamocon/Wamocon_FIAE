@@ -365,7 +365,7 @@ describe('POST /api/hai/voice/haus/transcribe', () => {
     expect(await res.json()).toEqual({ text: 'Was ist ein Join?' });
     const [url] = fetchMock.mock.calls[0] as unknown as [string];
     expect(url).toBe(
-      'https://sokrates.test-qualitaetsmanagement.com/api/audio/transcriptions'
+      'https://sokrates.test-qualitaetsmanagement.com/api/v1/audio/transcriptions'
     );
   });
 
