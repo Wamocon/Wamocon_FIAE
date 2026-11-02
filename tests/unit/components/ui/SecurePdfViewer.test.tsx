@@ -249,3 +249,29 @@ describe('SecurePdfViewer: the locks', () => {
     expect(root(container).className).toContain('print:hidden');
   });
 });
+
+// WMCNL-2927: the trainer looks at the file of a submission in the same viewer.
+describe('SecurePdfViewer: the file of a submission for the trainer', () => {
+  const SUBMISSION_ROUTE =
+    '/api/trainer/reviews/use-cases/88888888-8888-4888-8888-888888888888/file/content';
+
+  it('asks that one route of the trainer area, with the session', async () => {
+    await open(SUBMISSION_ROUTE);
+    expect(authFetchMock.mock.calls[0][0]).toBe(SUBMISSION_ROUTE);
+  });
+
+  it.each([
+    '/api/trainer/reviews/use-cases/../file/content',
+    '/api/trainer/reviews/use-cases/a/b/file/content',
+    '/api/trainer/reviews/use-cases/a/file',
+    '/api/trainer/reviews/use-cases/a/file/content/x',
+    '/api/trainer/reviews/enablers/a/file/content',
+    '/api/trainer/reviews/use-cases/a/file/content?x=1',
+  ])('still refuses %s', async src => {
+    authFetchMock.mockClear();
+    const view = renderWithProviders(<SecurePdfViewer src={src} title="X" />);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(authFetchMock).not.toHaveBeenCalled();
+    view.unmount();
+  });
+});

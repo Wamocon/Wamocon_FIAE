@@ -572,6 +572,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['submissionId'],
   },
   {
+    route: 'trainer/reviews/use-cases/[submissionId]/file/content',
+    method: 'GET',
+    guard: 'trainer',
+    params: ['submissionId'],
+  },
+  {
     route: 'trainer/reviews/use-cases/[submissionId]',
     method: 'PATCH',
     guard: 'trainer',
@@ -1146,6 +1152,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   },
   {
     route: 'trainee/use-cases/[useCaseId]/submission-file',
+    method: 'GET',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  {
+    route: 'trainee/use-cases/[useCaseId]/submission-file/content',
     method: 'GET',
     guard: 'user',
     params: ['useCaseId'],

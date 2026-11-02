@@ -32,7 +32,7 @@ import {
   createSubmissionStorage,
   type SubmissionFileStorage,
 } from '@/lib/submission-file/storage';
-import type { ServiceResult } from '@/lib/submission-file/service';
+import type { FileContent, ServiceResult } from '@/lib/submission-file/service';
 
 const notFound = () =>
   NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -208,6 +208,35 @@ export function storageFailure(error: unknown): NextResponse {
     },
     { status: 503 }
   );
+}
+
+/**
+ * The answer of the preview route: the bytes of the file shown in the page
+ * (inline, never cached), a 404 when there is no file. The content type is one
+ * of the checked kinds, nosniff keeps the browser from guessing another one and
+ * the sandbox policy keeps a file from running anything.
+ */
+export function respondContent(
+  result: ServiceResult<FileContent | null>
+): Response {
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.code, code: result.code },
+      { status: result.status }
+    );
+  }
+  if (!result.value) return notFound();
+  return new Response(result.value.bytes as unknown as BodyInit, {
+    status: 200,
+    headers: {
+      'Content-Type': result.value.contentType,
+      'Content-Disposition': 'inline',
+      'Content-Length': String(result.value.bytes.length),
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+    },
+  });
 }
 
 /** The answer of a service result. */

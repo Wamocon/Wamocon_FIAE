@@ -54,6 +54,20 @@ const MIME: Record<SubmissionExt, string> = {
 /** The MIME type the browser has to send for an extension. */
 export const mimeOf = (ext: SubmissionExt): string => MIME[ext];
 
+export type PreviewKind = 'pdf' | 'image';
+
+/**
+ * How a file can be looked at inside the platform (WMCNL-2927): a PDF in the
+ * viewer, a PNG or JPG as an image. Word and Excel files have no preview here,
+ * they can only be downloaded. null for a name of any other kind.
+ */
+export function previewKindOf(fileName: string): PreviewKind | null {
+  const ext = extensionOf(fileName);
+  if (ext === 'pdf') return 'pdf';
+  if (ext === 'png' || ext === 'jpg') return 'image';
+  return null;
+}
+
 /** What the owner sets on the private bucket (a bucket is created by hand). */
 export const SUBMISSION_BUCKET_SETTINGS = {
   name: SUBMISSION_BUCKET,
