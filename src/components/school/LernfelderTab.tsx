@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { authFetch } from '@/lib/authFetch';
+import { formatLernfeldLabel } from '@/lib/school/lernfeld-label';
 import { Layers, Search, BookOpen, ArrowRight } from 'lucide-react';
 
 export function LernfelderTab() {
@@ -86,7 +87,7 @@ export function LernfelderTab() {
                 <Layers className="text-primary-foreground h-5 w-5" />
               </div>
               <span className="bg-accent text-accent-foreground rounded-full px-3 py-1 text-xs font-bold shadow-sm">
-                {lf.label}
+                {formatLernfeldLabel(lf.label)}
               </span>
             </div>
 

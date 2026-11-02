@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { authFetch } from '@/lib/authFetch';
+import { formatLernfeldLabel } from '@/lib/school/lernfeld-label';
 import {
   BookOpen,
   ChevronDown,
@@ -270,7 +271,7 @@ export function LernfeldNotes() {
                 <div className="text-left">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="bg-accent/10 text-accent rounded px-2 py-0.5 text-xs font-bold">
-                      {lf.code}
+                      {formatLernfeldLabel(lf.code)}
                     </span>
                     {lf.hoursBudget && (
                       <span className="text-muted-foreground text-xs">
@@ -542,7 +543,7 @@ function AddNoteModal({
                       : 'bg-accent/10 text-accent'
                   }`}
                 >
-                  {isSonstiges ? t('notes.other') : lernfeld.code}
+                  {isSonstiges ? t('notes.other') : formatLernfeldLabel(lernfeld.code)}
                 </span>
                 {isSonstiges ? t('notes.generalNote') : lernfeld.name}
               </p>
