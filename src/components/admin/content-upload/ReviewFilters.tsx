@@ -31,6 +31,8 @@ type Props = {
   filter: ReviewFilter;
   counts: ReviewCounts;
   facets: ReviewFacets;
+  /** What people see for a component code (FIAE: 2.1), the code itself by default. */
+  componentLabel?: (code: string) => string;
   onChange: (next: ReviewFilter) => void;
 };
 
@@ -52,7 +54,13 @@ export function hasActiveFilter(filter: ReviewFilter): boolean {
  * duplicates, the problems), then the filters themselves. The counts never change
  * with the filter: they always describe the whole run.
  */
-export function ReviewFilters({ filter, counts, facets, onChange }: Props) {
+export function ReviewFilters({
+  filter,
+  counts,
+  facets,
+  componentLabel,
+  onChange,
+}: Props) {
   const { t } = useLanguage();
   const id = useId();
   const [query, setQuery] = useState(filter.query ?? '');
@@ -215,7 +223,7 @@ export function ReviewFilters({ filter, counts, facets, onChange }: Props) {
             <option value="">{t('contentUpload.filters.all')}</option>
             {facets.components.map(code => (
               <option key={code} value={code}>
-                {code}
+                {componentLabel ? componentLabel(code) : code}
               </option>
             ))}
           </select>

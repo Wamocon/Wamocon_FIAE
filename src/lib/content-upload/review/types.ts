@@ -98,6 +98,8 @@ export interface CatalogComponentRow {
   title: string | null;
   kind: 'pflicht' | 'wahl' | 'integrativ' | null;
   phase: number | null;
+  /** Order index of the component, the label of a FIAE component is derived from it or the code. */
+  orderIndex?: number | null;
   enablers: { code: string; title: string | null }[];
 }
 
@@ -319,6 +321,8 @@ export interface ReviewOptions {
   quizLevels: string[];
   components: {
     code: string;
+    /** What people see (FIAE: 2.1, 2.2, ...), the code stays the key of every assignment. */
+    label: string;
     title: string | null;
     isNew: boolean;
     enablers: { code: string; title: string | null; isNew: boolean }[];

@@ -16,7 +16,8 @@
  * Nothing is written. The questions of a pool carry no solution (QuizCandidate),
  * the options with is_correct are read only for the one question that is
  * delivered or graded (loadQuestionSource) and leave the server through
- * toPublicQuestion or gradeAnswer only.
+ * toPublicQuestion or buildAnswerBody only (the latter once the solution is
+ * released).
  *
  * @module lib/hai/quizMode/access
  */
@@ -45,6 +46,7 @@ import {
 } from '@/lib/catalog/scope';
 import {
   enablerLockedResponse,
+  hasPassedQuiz,
   loadCourseProgressions,
   quizChainOf,
   requireQuizOpen,
@@ -282,7 +284,7 @@ export async function loadQuizCandidates(
 /**
  * The question with all its options, including the solution, for the server
  * only. The caller hands it to toPublicQuestion (before the attempt) or to
- * gradeAnswer (after it), never to a response.
+ * buildAnswerBody (after it), never to a response.
  */
 export async function loadQuestionSources(
   candidates: ReadonlyArray<QuizCandidate>
@@ -318,16 +320,33 @@ export async function loadQuestionSources(
   }));
 }
 
+/** A question cleared for grading, with the decision about its solution. */
+export interface AuthorizedQuestion {
+  /** The question with its solution, for the server only. */
+  source: QuizQuestionSource;
+  /** The lesson quiz the question belongs to. */
+  quizId: string;
+  /**
+   * The solution and the explanation may be shown after the attempt. A trainer
+   * always sees them. A trainee sees them once the quiz of the question is
+   * passed (hasPassedQuiz, the rule of the real quiz), before that the answer
+   * says only right or wrong.
+   */
+  solutionReleased: boolean;
+}
+
 /**
  * One question for grading, after the same access checks as the pool: a ready-
  * made error response (404 for a missing or foreign question, 403 for a trainee
- * outside the course or a locked enabler or quiz) or the source with solution.
+ * outside the course or a locked enabler or quiz) or the source with solution
+ * and the decision whether the solution may be shown. The quiz that counts is
+ * the one of the question, the person is the session.
  */
 export async function authorizeQuestion(
   session: SessionUser,
   req: CatalogRequestLike,
   questionId: string
-): Promise<QuizQuestionSource | NextResponse> {
+): Promise<AuthorizedQuestion | NextResponse> {
   const scope = await requireCatalogScopeForUser(session.id, req);
   if (scope instanceof Response) return scope as NextResponse;
 
@@ -414,5 +433,8 @@ export async function authorizeQuestion(
       enablerHref: enablerHrefFor(session, String(enabler.id)),
     },
   ]);
-  return source;
+  const solutionReleased =
+    session.isTrainerLevel ||
+    (await hasPassedQuiz(session.id, String(quiz.id)));
+  return { source, quizId: String(quiz.id), solutionReleased };
 }

@@ -24,6 +24,18 @@ export function codeText(
   return has(t, key) ? t(key) : t(fallbackKey, { code });
 }
 
+/**
+ * What people see for a component code: its label from the options of the review
+ * (FIAE: 2.1, 2.2, ...), the code itself when the options are not loaded or do not
+ * know it (KfBM labels are the codes). The code stays the key of every assignment.
+ */
+export function componentLabelOf(
+  options: { components: { code: string; label: string }[] } | null | undefined,
+  code: string
+): string {
+  return options?.components.find(c => c.code === code)?.label ?? code;
+}
+
 export const typeLabel = (t: Translate, type: string | null | undefined) =>
   type
     ? codeText(t, 'contentUpload.type', type, 'contentUpload.type.other')

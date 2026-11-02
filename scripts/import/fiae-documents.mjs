@@ -48,6 +48,13 @@ import {
   cleanPdfMetadata,
   createSupabaseStorage,
 } from './kfbm-documents-modules.mjs';
+import {
+  FIAE_COMPONENT_PAIRS,
+  describeComponent,
+  listComponentFolders,
+  parseComponentList,
+} from './fiae-component-folder.mjs';
+import { describeCopy, findBaseCopies } from './fiae-copy-check.mjs';
 
 const CONTENT_BUCKET = 'content';
 const SOLUTIONS_BUCKET = 'content-solutions';
@@ -57,7 +64,7 @@ const MAX_PDF_BYTES = 45 * 1024 * 1024;
 // 22_Sicherstellen der Qualität (Vertiefung) come after
 const DEFERRED = new Set(['22']);
 // components that are a Vertiefung (the second course of a pair in the Preview)
-const VERTIEFUNG = new Set([13, 14, 15, 16, 17, 18, 20, 21, 22]);
+const VERTIEFUNG = new Set(FIAE_COMPONENT_PAIRS.map(([, deep]) => deep));
 
 // ---------------------------------------------------------------- arguments
 
@@ -100,9 +107,10 @@ export function parseArgs(argv) {
     } else if (a === '--components') {
       const v = value(i, a);
       i++;
-      out.components = v
-        ? v.split(',').map(x => x.trim().padStart(2, '0'))
-        : null;
+      // old numbers (05, 13) and labels (2.1, 2.2) both work, an unknown one is an error
+      const list = v ? parseComponentList(v) : null;
+      out.components = list ? list.keys : null;
+      list?.errors.forEach(e => out.errors.push(`--components: ${e}`));
     } else if (a === '--limit') {
       out.limit = Number(value(i, a));
       i++;
@@ -170,7 +178,8 @@ const courseBase = t =>
   String(t)
     .replace(/\(.*?\)/g, ' ')
     .replace(/§.*$/, ' ')
-    .replace(/^\s*\d+[_ .-]+/, '')
+    // the number of the folder, old (02_, 13_) or new (2.1_, 2.2_)
+    .replace(/^\s*\d+(?:\.\d+)?[_ .-]+/, '')
     .trim();
 
 /** Component folder number -> course of the Preview (one to one, or error texts). */
@@ -190,13 +199,13 @@ export function mapComponents(folders, courses) {
       const both = cands.filter(x => /vertiefung/i.test(x.c.title) === wantV);
       pick = (both[0] ?? cands[0]).c;
     }
-    if (!pick) problems.push(`No course for component ${f.nr}.`);
+    if (!pick) problems.push(`No course for component ${describeComponent(f.nr)}.`);
     else map.set(f.nr, pick);
   }
   const used = new Set();
   for (const [nr, c] of map) {
     if (used.has(c.id))
-      problems.push(`Two components claim the same course (${nr}).`);
+      problems.push(`Two components claim the same course (${describeComponent(nr)}).`);
     used.add(c.id);
   }
   return { map, problems };
@@ -268,18 +277,24 @@ export async function hasSolutionPart(file) {
   return lines.some(l => /^(Muster-?l[öo]sung|L[öo]sungsvorschlag|L[öo]sung)/i.test(l));
 }
 
-/** The component folders with their enablers (main file, scenario parts) and use case files. */
+/**
+ * The component folders with their enablers (main file, scenario parts) and use case files.
+ * A folder starts with its number in the old spelling (02_, 13_) or the new one (2.1_, 2.2_), both give
+ * the order index of the component (nr, key with two digits, name for the reports). A number that is
+ * neither (2.3_, 13.1_, 27_) or two folders for one component stop the read with a message.
+ */
 export function readSource(root) {
   const comps = [];
-  for (const d of listDir(root)) {
-    if (!d.isDirectory()) continue;
-    const m = /^(\d+)[_ ]/.exec(d.name);
-    if (!m) continue;
-    const dir = path.join(root, d.name);
+  const { folders, problems } = listComponentFolders(root);
+  if (problems.length)
+    throw new Error(`The component folders are not clear: ${problems.join(' ')}`);
+  for (const f of folders) {
+    const dir = path.join(root, f.dirName);
     const comp = {
-      nr: Number(m[1]),
-      key: m[1].padStart(2, '0'),
-      title: d.name,
+      nr: f.nr,
+      key: f.key,
+      name: describeComponent(f.nr),
+      title: f.dirName,
       dir,
       enablers: [],
       useCases: [],
@@ -488,7 +503,13 @@ async function execute(args, client, origin, env) {
     noUseCase: [],
     noMain: [],
     taskWithSolution: [],
-    deferred: deferred.map(d => d.title),
+    deferred: deferred.map(d => d.name),
+    // content rule: a Vertiefung enabler is no byte-identical copy of the base course (warning only,
+    // the run is not changed; component 22 is checked although it is deferred)
+    copiesOfBase: findBaseCopies(
+      everything,
+      args.components ? new Set(args.components.map(Number)) : null
+    ),
   };
   for (const comp of source) {
     const course = map.get(comp.nr);
@@ -497,12 +518,12 @@ async function execute(args, client, origin, env) {
     comp.enablers.forEach((fe, i) => {
       const hit = matched.get(i);
       if (!hit) {
-        gaps.noEnabler.push(`${comp.key} / ${fe.folder}`);
+        gaps.noEnabler.push(`${comp.name} / ${fe.folder}`);
         return;
       }
       const e = hit.e;
       const base = `${PREFIX}k${comp.key}/e${fe.key}_${ascii(fe.title)}`;
-      if (!fe.main) gaps.noMain.push(`${comp.key} / ${fe.folder}`);
+      if (!fe.main) gaps.noMain.push(`${comp.name} / ${fe.folder}`);
       else {
         const row =
           docs.find(
@@ -511,7 +532,7 @@ async function execute(args, client, origin, env) {
         work.push({
           comp,
           kind: 'THEORY',
-          label: `${comp.key}/${fe.key} Lehrtext`,
+          label: `${comp.name} / ${fe.key} Lehrtext`,
           title: row?.title ?? e.title,
           file: fe.main,
           bucket: CONTENT_BUCKET,
@@ -540,7 +561,7 @@ async function execute(args, client, origin, env) {
         work.push({
           comp,
           kind: 'EXERCISE',
-          label: `${comp.key}/${fe.key} Part ${part.n}${part.sfx}`,
+          label: `${comp.name} / ${fe.key} Part ${part.n}${part.sfx}`,
           title,
           file: part.file,
           bucket: CONTENT_BUCKET,
@@ -576,12 +597,12 @@ async function execute(args, client, origin, env) {
     );
     for (const { uc, u } of hits) {
       if (!u) {
-        gaps.noUseCase.push(`${comp.key} / ${uc.name}`);
+        gaps.noUseCase.push(`${comp.name} / ${uc.name}`);
         continue;
       }
       if (perUseCase.get(u.id) > 1) {
         gaps.noUseCase.push(
-          `${comp.key} / ${uc.name} (zwei Dateien für einen Use Case)`
+          `${comp.name} / ${uc.name} (zwei Dateien für einen Use Case)`
         );
         continue;
       }
@@ -592,7 +613,7 @@ async function execute(args, client, origin, env) {
       work.push({
         comp,
         kind: 'TRAINER_SOLUTION',
-        label: `${comp.key} ${uc.key} Lösung`,
+        label: `${comp.name} / ${uc.key} Lösung`,
         title: row?.title ?? `Use Case ${uc.key}: Musterlösung`,
         file: uc.file,
         bucket: SOLUTIONS_BUCKET,
@@ -612,12 +633,12 @@ async function execute(args, client, origin, env) {
     for (const { uc, u } of taskHits) {
       if (!u || perTask.get(u.id) > 1) {
         gaps.noUseCase.push(
-          `${comp.key} / ${uc.name} (Aufgabenfassung${u ? ', zwei Dateien für einen Use Case' : ''})`
+          `${comp.name} / ${uc.name} (Aufgabenfassung${u ? ', zwei Dateien für einen Use Case' : ''})`
         );
         continue;
       }
       if (await hasSolutionPart(uc.file)) {
-        gaps.taskWithSolution.push(`${comp.key} / ${uc.name}`);
+        gaps.taskWithSolution.push(`${comp.name} / ${uc.name}`);
         continue;
       }
       const row =
@@ -627,7 +648,7 @@ async function execute(args, client, origin, env) {
       work.push({
         comp,
         kind: 'TRAINEE_QUESTION',
-        label: `${comp.key} ${uc.key} Aufgabe`,
+        label: `${comp.name} / ${uc.key} Aufgabe`,
         title: row?.title ?? `Use Case ${uc.key}: Aufgabe`,
         file: uc.file,
         bucket: CONTENT_BUCKET,
@@ -658,6 +679,12 @@ async function execute(args, client, origin, env) {
   gaps.noEnabler.forEach(x => console.log(`  - no enabler: ${x}`));
   gaps.noUseCase.forEach(x => console.log(`  - no use case: ${x}`));
   gaps.taskWithSolution.forEach(x => console.log(`  - task version with a solution part: ${x}`));
+  if (gaps.copiesOfBase.length > 0) {
+    console.log(
+      `Warning, ${gaps.copiesOfBase.length} enablers of a Vertiefung are a copy of the base course (no valid content, the run is not changed):`
+    );
+    gaps.copiesOfBase.forEach(c => console.log(`  - ${describeCopy(c)}`));
+  }
   if (args.command === 'plan' || !args.apply) {
     console.log(
       args.command === 'plan'
@@ -695,7 +722,7 @@ async function execute(args, client, origin, env) {
     limited.forEach(w =>
       byComp.set(w.comp.key, [...(byComp.get(w.comp.key) ?? []), w])
     );
-    for (const [key, items] of byComp) {
+    for (const [, items] of byComp) {
       const ready = [];
       for (const w of items) {
         seq += 1;
@@ -803,7 +830,7 @@ async function execute(args, client, origin, env) {
         throw error;
       }
       console.log(
-        `Component ${key}: ${ready.length} written of ${items.length}, failed so far ${log.failed.length}`
+        `Component ${items[0].comp.name}: ${ready.length} written of ${items.length}, failed so far ${log.failed.length}`
       );
       // the report after every component: a stopped run still leaves the old values for the rollback
       if (args.out) writeFileSync(args.out, JSON.stringify(log, null, 1));

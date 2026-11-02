@@ -6,6 +6,7 @@ import {
   publicCatalogHeaders,
   resolvePublicCatalog,
 } from '@/lib/catalog/public';
+import { getComponentLabel } from '@/lib/catalog/component-label';
 
 // Public list of the training components of one active catalog
 // (?catalog=CODE, default FIAE). The catalog is part of the URL, so shared
@@ -30,6 +31,12 @@ export async function GET(req: Request) {
     const formattedComponents = components.map(c => ({
       id: c.id,
       code: c.code,
+      // what people see (FIAE: 2.1, 2.2, ...); the code stays the key
+      label: getComponentLabel({
+        catalogCode: catalog.code,
+        code: c.code,
+        orderIndex: c.orderIndex,
+      }),
       title: c.title,
       description: c.description,
       totalWeeks: c.totalWeeks,

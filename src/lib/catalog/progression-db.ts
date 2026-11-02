@@ -27,6 +27,7 @@ import {
   bestScoresOf,
   computeCourseProgression,
   computeQuizChain,
+  isQuizPassed,
   isSequenceEnforced,
   readSequenceSince,
   type CourseProgression,
@@ -321,6 +322,30 @@ export async function requireEnablerOpen(
   const found = await getEnablerProgression(traineeId, enabler);
   if (!found || !found.enabler.locked) return null;
   return enablerLockedResponse(found.enabler);
+}
+
+/**
+ * Whether the trainee has passed the quiz: the best of their attempts reaches
+ * the passing score (isQuizPassed, the one definition of "passed"). This is the
+ * condition under which a lesson quiz hands out its key (withholdKey in
+ * quizzes/[quizId]/submit/route.ts), and the HAI quiz mode asks the same
+ * question before it shows a solution, so the two cannot drift apart. Keyed by
+ * the trainee id of the session, never by a client value.
+ */
+export async function hasPassedQuiz(
+  traineeId: string,
+  quizId: string
+): Promise<boolean> {
+  const attempts = await db
+    .select({ quizId: quizSubmissions.quizId, score: quizSubmissions.score })
+    .from(quizSubmissions)
+    .where(
+      and(
+        eq(quizSubmissions.traineeId, traineeId),
+        eq(quizSubmissions.quizId, quizId)
+      )
+    );
+  return isQuizPassed(bestScoresOf(attempts).get(String(quizId)));
 }
 
 /** The lock chain LOW, MEDIUM, HIGH of the lesson quizzes of one enabler. */

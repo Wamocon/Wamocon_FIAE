@@ -43,6 +43,8 @@ interface ARPUseCase {
   orderIndex?: number;
   component?: {
     code: string | null;
+    /** What people see (FIAE: 2.1, 2.2, ...), the code stays the key. */
+    label?: string | null;
     title: string | null;
   };
 }
@@ -178,7 +180,7 @@ export default function WeeklyEvaluationForm({
   const groupedUseCases = useMemo(() => {
     const groups: Record<
       string,
-      { code: string; title: string; useCases: ARPUseCase[] }
+      { code: string; label: string; title: string; useCases: ARPUseCase[] }
     > = {};
 
     arpUseCases.forEach(uc => {
@@ -188,6 +190,7 @@ export default function WeeklyEvaluationForm({
       if (!groups[componentCode]) {
         groups[componentCode] = {
           code: componentCode,
+          label: uc.component?.label || componentCode,
           title: componentTitle,
           useCases: [],
         };
@@ -284,6 +287,8 @@ export default function WeeklyEvaluationForm({
 
   // Get the selected use case for display
   const selectedUseCase = arpUseCases.find(uc => uc.id === arpUseCaseId);
+  const selectedComponentLabel =
+    selectedUseCase?.component?.label || selectedUseCase?.component?.code;
 
   return (
     <Card className="border-border bg-card/90 shadow-xl backdrop-blur-xl">
@@ -337,8 +342,7 @@ export default function WeeklyEvaluationForm({
                 {selectedUseCase && (
                   <span className="flex items-center gap-2 text-sm">
                     <span className="text-primary shrink-0 font-bold">
-                      [{selectedUseCase.component?.code}]{' '}
-                      {selectedUseCase.letter})
+                      [{selectedComponentLabel}] {selectedUseCase.letter})
                     </span>
                     <span className="truncate">
                       {selectedUseCase.description}
@@ -356,7 +360,7 @@ export default function WeeklyEvaluationForm({
                 groupedUseCases.map(group => (
                   <SelectGroup key={group.code}>
                     <SelectLabel className="text-primary/80 bg-muted/30 border-border border-b px-3 py-2 text-xs font-bold">
-                      [{group.code}] {group.title}
+                      [{group.label}] {group.title}
                     </SelectLabel>
                     {group.useCases.map(useCase => (
                       <SelectItem

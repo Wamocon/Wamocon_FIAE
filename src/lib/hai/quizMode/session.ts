@@ -32,8 +32,17 @@ export interface QuizScope {
 export interface QuizFeedback {
   correct: boolean;
   selectedOptionIds: string[];
+  /** Empty while the solution is withheld. */
   correctOptionIds: string[];
+  /** Null while the solution is withheld. */
   explanation: string | null;
+  /**
+   * The server holds the solution back: the quiz of the question is not passed
+   * yet. The card then says right or wrong and points to the quiz.
+   */
+  solutionWithheld: boolean;
+  /** Right options of a multiple choice question while withheld, else null. */
+  correctCount: number | null;
 }
 
 export interface QuizAttempt {
@@ -42,6 +51,8 @@ export interface QuizAttempt {
   enablerTitle: string;
   enablerHref: string | null;
   correct: boolean;
+  /** The solution of this question was not shown (quiz not passed yet). */
+  solutionWithheld: boolean;
 }
 
 export interface QuizSessionState {
@@ -137,6 +148,7 @@ export function quizReducer(
             enablerTitle: question.enablerTitle,
             enablerHref: question.enablerHref,
             correct: action.feedback.correct,
+            solutionWithheld: action.feedback.solutionWithheld,
           },
         ],
       };
@@ -174,6 +186,8 @@ export function quizReducer(
 export interface QuizSummary {
   total: number;
   correct: number;
+  /** At least one solution stayed back (its quiz is not passed yet). */
+  anyWithheld: boolean;
   /** Enablers with at least one wrong answer, the most wrong ones first. */
   repeat: Array<{
     enablerId: string;
@@ -205,6 +219,7 @@ export function buildSummary(
   return {
     total: attempts.length,
     correct: attempts.filter(a => a.correct).length,
+    anyWithheld: attempts.some(a => a.solutionWithheld),
     repeat: Array.from(wrongBy, ([enablerId, v]) => ({ enablerId, ...v })).sort(
       (a, b) => b.wrong - a.wrong || a.title.localeCompare(b.title)
     ),

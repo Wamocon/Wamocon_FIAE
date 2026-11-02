@@ -140,3 +140,12 @@ test('the arguments allow only the Preview', () => {
     ['09', '13']
   );
 });
+
+test('--components reads old numbers and labels (2.1, 2.2) and refuses an unknown value', () => {
+  assert.deepEqual(
+    parseArgs(['run', 'src', '--target', 'preview', '--components', '2.1,2.2,9']).components,
+    ['02', '13', '09']
+  );
+  const bad = parseArgs(['run', 'src', '--target', 'preview', '--components', '13.1']);
+  assert.ok(bad.errors.some(e => /--components/.test(e) && /13\.1/.test(e)));
+});

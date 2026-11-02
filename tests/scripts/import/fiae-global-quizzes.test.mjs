@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 
+import { listComponentFolders } from '../../../scripts/import/fiae-component-folder.mjs';
 import {
+  LEFT_OUT,
+  QUIZ_OF_FILE,
   keyOf,
   parseArgs,
   planQuiz,
   sameQuestion,
+  sourceFolder,
 } from '../../../scripts/import/fiae-global-quizzes.mjs';
 import { parseGlobalQuiz } from '../../../scripts/import/fiae-global-quiz-parse.mjs';
 
@@ -236,4 +243,45 @@ test('arguments: the target must be the preview and --apply does not belong to p
       .files,
     ['03', '07']
   );
+});
+
+test('--files reads old numbers and labels (9.2 is file 20) and refuses an unknown value', () => {
+  assert.deepEqual(
+    parseArgs(['run', 'Ordner', '--target', 'preview', '--files', '2.1,2.2,9.2,7']).files,
+    ['02', '13', '20', '07']
+  );
+  const bad = parseArgs(['run', 'Ordner', '--target', 'preview', '--files', '2.3']);
+  assert.ok(bad.errors.some(e => /--files/.test(e) && /2\.3/.test(e)));
+});
+
+test('the tables work with the folder number: every key is a component, the left-out files are not in the quiz table', () => {
+  const keys = [...Object.keys(QUIZ_OF_FILE), ...Object.keys(LEFT_OUT)].map(k => k.padStart(2, '0'));
+  assert.equal(new Set(keys).size, keys.length);
+  for (const key of keys) assert.ok(Number(key) >= 1 && Number(key) <= 26, key);
+});
+
+test('the Global_Quiz.docx is found by the old and the new folder name, a Vertiefung by 2.2_ as by 13_', () => {
+  const rootOld = mkdtempSync(path.join(tmpdir(), 'fiae-gq-'));
+  const rootNew = mkdtempSync(path.join(tmpdir(), 'fiae-gq-'));
+  try {
+    for (const [root, names] of [
+      [rootOld, ['01_Planen', '02_Informieren', '09_Programmieren', '20_Programmieren (Vertiefung)']],
+      [rootNew, ['1_Planen', '2.1_Informieren', '9.1_Programmieren', '9.2_Programmieren (Vertiefung)']],
+    ])
+      for (const n of names) mkdirSync(path.join(root, n));
+    const rel = (root, nr) => {
+      const { folders, problems } = listComponentFolders(root);
+      assert.deepEqual(problems, []);
+      const file = sourceFolder(folders, root, nr);
+      return file && path.relative(root, file).split(path.sep);
+    };
+    assert.deepEqual(rel(rootOld, '02')?.slice(1), ['Global_Quiz', 'Global_Quiz.docx']);
+    assert.deepEqual(rel(rootNew, '02')?.slice(1), ['Global_Quiz', 'Global_Quiz.docx']);
+    assert.match(rel(rootOld, '20')[0], /^20_/);
+    assert.match(rel(rootNew, '20')[0], /^9\.2_/);
+    assert.equal(rel(rootNew, '13'), null);
+  } finally {
+    rmSync(rootOld, { recursive: true, force: true });
+    rmSync(rootNew, { recursive: true, force: true });
+  }
 });

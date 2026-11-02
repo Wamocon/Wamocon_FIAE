@@ -51,6 +51,7 @@ import {
   transferErrorText,
 } from '@/components/admin/content-upload/TransferPanel';
 import {
+  componentLabelOf,
   runStatusLabel,
   skipLabel,
 } from '@/components/admin/content-upload/labels';
@@ -603,6 +604,7 @@ export function ReviewView({
             filter={filter}
             counts={counts}
             facets={facets}
+            componentLabel={code => componentLabelOf(options, code)}
             onChange={applyFilter}
           />
           {decidable && (
@@ -869,6 +871,7 @@ export function ReviewView({
           runId={runId}
           groupKey={dialog.key}
           client={client}
+          componentLabel={code => componentLabelOf(options, code)}
           decidable={decidable}
           busy={busy}
           onClose={() => setDialog(null)}
