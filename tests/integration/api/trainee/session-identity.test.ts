@@ -57,6 +57,9 @@ async function load(c: Case, session = traineeSession(ME)) {
       ...actual,
       requireCatalogScopeForUser: forUser,
       requireContentScopeForUser: content,
+      // The evaluations follow the occupation of their report: the scope of
+      // the request is the single FIAE occupation of the trainee here
+      requireCatalogScope: jest.fn(async () => scope),
     };
   });
   const mod = await import(`@/app/api/${c.route}/route`);

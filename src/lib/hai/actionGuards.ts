@@ -9,7 +9,7 @@
  * the occupation filter of the trainee lists (ensureTraineeInCatalog).
  */
 
-import type { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import db from '@/db';
 import { profiles } from '@/db/migrations/schemas/schema';
@@ -23,6 +23,7 @@ import {
   type CatalogRequestLike,
 } from '@/lib/catalog/scope';
 import { ensureTraineeInCatalog } from '@/lib/catalog/trainee-scope';
+import { ensureReportInChosenCatalog } from '@/lib/auth/activity-report-access';
 import type { ActionFailureCode, ActionResult } from './actions';
 import {
   DENIAL_ACTION_NOT_FOUND_TEXT,
@@ -72,6 +73,41 @@ function fromResponse(response: NextResponse): ActionResult {
     );
   }
   return unavailable();
+}
+
+/**
+ * The occupation the person works in (the chosen one, x-catalog, otherwise the
+ * default of the scope): the occupation a new record belongs to, and the one a
+ * lookup by week or by status asks in. Returns the catalog id, or the failed
+ * result (403 foreign occupation, unavailable when the scope cannot be read).
+ */
+export async function requireActionCatalog(
+  actor: SessionUser,
+  request: CatalogRequestLike | null | undefined
+): Promise<{ catalogId: string } | ActionResult> {
+  const scope = await requireCatalogScope(actor, request);
+  if (scope instanceof Response) return fromResponse(scope as NextResponse);
+  return { catalogId: scope.activeCatalogId };
+}
+
+/**
+ * An activity report belongs to one occupation. With an occupation chosen
+ * (x-catalog) trainer level may only act on a report of that occupation. Returns
+ * null when the report lies inside, otherwise the failed result (a foreign
+ * report answers like a missing one).
+ */
+export async function requireReportInChosenCatalog(
+  actor: SessionUser,
+  request: CatalogRequestLike | null | undefined,
+  report: { trainingCatalogId: unknown }
+): Promise<ActionResult | null> {
+  const denied = await ensureReportInChosenCatalog(
+    actor,
+    request ?? {},
+    report,
+    () => NextResponse.json({ error: 'Not found' }, { status: 404 })
+  );
+  return denied ? fromResponse(denied) : null;
 }
 
 /**

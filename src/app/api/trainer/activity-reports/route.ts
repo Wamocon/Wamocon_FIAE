@@ -14,7 +14,7 @@ import {
   profiles,
 } from '@/db/migrations/schemas/schema';
 import { loadPhasePlansForUsers } from '@/lib/catalog/phase-plan-db';
-import { requestedCatalogCode, requireCatalogScope } from '@/lib/catalog/scope';
+import { requireReportCatalogFilter } from '@/lib/auth/activity-report-access';
 import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
 
 // GET /api/trainer/activity-reports?trainerId=...&status=...
@@ -30,9 +30,14 @@ export async function GET(req: NextRequest) {
     // Only the reports of trainees of the own organization (the super admin
     // sees every one) and, with a chosen occupation (x-catalog), of that
     // occupation. The platform-owner flag of an organization does not widen
-    // the list.
-    const traineeScope = await requireTraineeScopeCondition(session, req);
+    // the list. The occupation is the one of the REPORT: a trainee in two
+    // trainings has reports in both, each shows up in its own tab only.
+    const traineeScope = await requireTraineeScopeCondition(session, req, {
+      byEnrollment: false,
+    });
     if (isErrorResponse(traineeScope)) return traineeScope;
+    const reportCatalog = await requireReportCatalogFilter(session, req);
+    if (isErrorResponse(reportCatalog)) return reportCatalog;
 
     const trainees = await db
       .select({
@@ -48,9 +53,8 @@ export async function GET(req: NextRequest) {
     const traineeIds = trainees.map(t => String(t.id));
     const traineeMap = new Map(trainees.map(t => [t.id, t]));
 
-    // A trainee outside the scope (another organization or another occupation
-    // than the chosen one) has no reports in this list. Do not fall back to the
-    // whole list.
+    // A trainee outside the scope (another organization) has no reports in this
+    // list. Do not fall back to the whole list.
     const outsideScope = !!traineeId && !traineeIds.includes(traineeId);
 
     if (traineeIds.length === 0 || outsideScope) {
@@ -67,6 +71,7 @@ export async function GET(req: NextRequest) {
     } else {
       conditions.push(inArray(activityReports.traineeId, traineeIds as any));
     }
+    if (reportCatalog.condition) conditions.push(reportCatalog.condition);
     // A DRAFT is the private work of the trainee, never listed to trainer level
     if (status && ['SUBMITTED', 'APPROVED', 'REJECTED'].includes(status)) {
       conditions.push(eq(activityReports.status, status as any));
@@ -113,14 +118,8 @@ export async function GET(req: NextRequest) {
       ...new Set(reports.map(r => String(r.traineeId))),
     ];
     // A trainee in two trainings is labelled with the plan of the occupation
-    // the list was opened in (the trainer tab), only asked when one was chosen
-    let preferredCatalogId: string | null = null;
-    if (reportTraineeIds.length > 0 && requestedCatalogCode(req)) {
-      const catalogScope = await requireCatalogScope(session, req);
-      if (!(catalogScope instanceof Response)) {
-        preferredCatalogId = catalogScope.activeCatalogId;
-      }
-    }
+    // the list was opened in (the trainer tab), only set when one was chosen
+    const preferredCatalogId = reportCatalog.catalogId;
     const phasePlans =
       reportTraineeIds.length > 0
         ? await loadPhasePlansForUsers(

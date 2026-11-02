@@ -59,6 +59,7 @@ export async function GET(
       report: {
         id: report.id,
         traineeId: report.traineeId,
+        trainingCatalogId: report.trainingCatalogId,
         ausbildungsjahr: report.ausbildungsjahr,
         weekNumber: report.weekNumber,
         year: report.year,
@@ -203,9 +204,11 @@ export async function PUT(
       );
     }
 
-    // Occupation of the report owner: use cases and the phase plan follow it
+    // Occupation of the REPORT (not the one chosen in the tab): use cases, used
+    // hours and the phase plan follow it. The owner must still be allowed it.
     const catalogScope = await requireCatalogScope(session, request);
     if (catalogScope instanceof Response) return catalogScope;
+    const reportCatalogId = String(report.trainingCatalogId);
 
     // Validate actualHours are non-negative numbers
     if (entries && entries.length > 0) {
@@ -254,6 +257,7 @@ export async function PUT(
         .where(
           and(
             inArray(trainingUseCases.id, entryUseCaseIds as any),
+            eq(trainingComponents.trainingCatalogId, reportCatalogId as any),
             allowedCatalogCondition(
               trainingComponents.trainingCatalogId,
               catalogScope
@@ -270,13 +274,15 @@ export async function PUT(
         );
       }
 
-      // Get already-used hours from all non-rejected reports EXCLUDING this one
+      // Get already-used hours from all non-rejected reports of the same
+      // occupation EXCLUDING this one
       const otherReports = await db
         .select({ id: activityReports.id })
         .from(activityReports)
         .where(
           and(
             eq(activityReports.traineeId, report.traineeId as any),
+            eq(activityReports.trainingCatalogId, reportCatalogId as any),
             ne(activityReports.status, 'REJECTED'),
             ne(activityReports.id, id as any)
           )
@@ -387,7 +393,7 @@ export async function PUT(
       .where(eq(profiles.id, report.traineeId as any));
     const phasePlan = traineeProfile?.startOfTrainingDate
       ? await loadPhasePlan(
-          catalogScope.activeCatalogId,
+          reportCatalogId,
           traineeProfile.ausbildungDurationYears
         )
       : null;

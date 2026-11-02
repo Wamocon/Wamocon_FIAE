@@ -6,7 +6,9 @@ import { createTableDb } from '../../../helpers/mockDb';
 import { fakeSession, mockSession } from '../../../helpers/mockNext';
 
 // Report list of the trainer per occupation. A report belongs to the trainee
-// who wrote it, the trainee to the occupation of their enrollment. The tests
+// who wrote it AND to an occupation of its own (activity_reports.training_catalog_id):
+// the list is filtered by the occupation of the report, not by the enrollments
+// of the trainee (a trainee in two trainings has reports in both). The tests
 // run the real catalog scope against a table mock. The mock ignores where(),
 // so the assertions look at the rendered conditions (mock.filters), at the
 // queries that were (not) made and at the answers of the route. The real SQL
@@ -108,30 +110,30 @@ describe('GET /api/trainer/activity-reports per occupation', () => {
     expect(filter.sql).not.toContain('exists');
   });
 
-  it('KfBM selected: only trainees with a KfBM enrollment (no enrollment counts as FIAE)', async () => {
+  it('KfBM selected: only the reports written for KfBM, whatever the enrollments of the trainee are', async () => {
     const { mock, mod } = await load();
     const res = await mod.GET(req(URL_LIST, 'KFBM'));
     expect(res.status).toBe(200);
-    const filter = mock.filters('select', 'profiles');
-    expect(filter.sql).toContain('exists (select 1 from "trainee_enrollments"');
+    const filter = mock.filters('select', 'activity_reports');
     expect(filter.sql).toContain(
-      '"trainee_enrollments"."trainee_id" = "profiles"."id"'
+      '"activity_reports"."training_catalog_id" = $'
     );
-    expect(filter.sql).toContain(
-      '"trainee_enrollments"."training_catalog_id" = $'
-    );
-    expect(filter.sql).not.toContain('not exists');
     expect(filter.params).toContain(KFBM);
     expect(filter.params).not.toContain(FIAE);
+    // the enrollments of the trainee are not asked
+    expect(mock.filters('select', 'profiles').sql).not.toContain(
+      'trainee_enrollments'
+    );
+    expect(selectsFrom(mock, 'trainee_enrollments')).toHaveLength(0);
   });
 
-  it('FIAE selected: FIAE enrollments and trainees without any enrollment', async () => {
+  it('FIAE selected: only the reports written for FIAE', async () => {
     const { mock, mod } = await load();
     const res = await mod.GET(req(URL_LIST, 'FIAE'));
     expect(res.status).toBe(200);
-    const filter = mock.filters('select', 'profiles');
+    const filter = mock.filters('select', 'activity_reports');
     expect(filter.sql).toContain(
-      'not exists (select 1 from "trainee_enrollments"'
+      '"activity_reports"."training_catalog_id" = $'
     );
     expect(filter.params).toContain(FIAE);
     expect(filter.params).not.toContain(KFBM);
@@ -141,7 +143,16 @@ describe('GET /api/trainer/activity-reports per occupation', () => {
     const { mock, mod } = await load();
     const res = await mod.GET(req(`${URL_LIST}?catalog=kfbm`));
     expect(res.status).toBe(200);
-    expect(mock.filters('select', 'profiles').params).toContain(KFBM);
+    expect(mock.filters('select', 'activity_reports').params).toContain(KFBM);
+  });
+
+  it('FIAE regression: without a header the reports are not filtered by occupation', async () => {
+    const { mock, mod } = await load();
+    const res = await mod.GET(req(URL_LIST));
+    expect(res.status).toBe(200);
+    expect(mock.filters('select', 'activity_reports').sql).not.toContain(
+      'training_catalog_id'
+    );
   });
 
   it('labels the phases with the plan of the chosen occupation (a trainee in two trainings)', async () => {
@@ -159,7 +170,7 @@ describe('GET /api/trainer/activity-reports per occupation', () => {
     expect(selectsFrom(mock, 'training_catalogs')).toHaveLength(0);
   });
 
-  it('lists the reports of the trainees of the chosen occupation only', async () => {
+  it('lists the reports of the trainees in scope only', async () => {
     // the filter on profiles leaves k1, the reports are asked for k1 alone
     const { mock, mod } = await load({
       profiles: [trainee('k1')],
@@ -174,7 +185,7 @@ describe('GET /api/trainer/activity-reports per occupation', () => {
     expect(reportFilter.params).not.toContain('t1');
   });
 
-  it('a traineeId of another occupation gives an empty list, not the list of the chosen occupation', async () => {
+  it('a traineeId outside the trainee scope gives an empty list, not the list of the others', async () => {
     const { mock, mod } = await load({ profiles: [trainee('k1')] });
     const res = await mod.GET(req(`${URL_LIST}?traineeId=t1`, 'KFBM'));
     expect(res.status).toBe(200);
@@ -227,7 +238,9 @@ describe('GET /api/trainer/activity-reports per occupation', () => {
     const filter = mock.filters('select', 'profiles');
     expect(filter.sql).toContain('"profiles"."organization_id" = $');
     expect(filter.params).toContain(ORG);
-    expect(filter.sql).toContain('exists (select 1 from "trainee_enrollments"');
+    expect(
+      mock.filters('select', 'activity_reports').params
+    ).toContain(KFBM);
   });
 
   it('refuses an occupation the organization has not enabled (403) before any report is read', async () => {

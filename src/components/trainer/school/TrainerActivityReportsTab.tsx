@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   ClipboardCheck,
@@ -60,6 +61,9 @@ const STATUS_CONFIG = {
 export function TrainerActivityReportsTab() {
   const { profile } = useAuth();
   const { t } = useLanguage();
+  // A report belongs to one occupation: a switch of the occupation tab loads
+  // the list again (the server answers for the chosen occupation)
+  const { catalog } = useRequestCatalog(profile?.id);
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +92,7 @@ export function TrainerActivityReportsTab() {
       }
     }
     loadReports();
-  }, [profile?.id, statusFilter]);
+  }, [profile?.id, statusFilter, catalog]);
 
   const handleReview = async (
     reportId: string,

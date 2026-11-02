@@ -28,6 +28,7 @@ import {
     notifications
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgIdStrict, toHaiRole } from '@/lib/auth-helpers';
+import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
 
 // ============================================================================
 // TYPES
@@ -58,9 +59,15 @@ export interface ProactiveCheck {
  * Run all proactive checks for a user
  *
  * @param userId - User ID to check
+ * @param catalogId - The occupation the person works in (x-catalog). The report
+ *   reminders of a trainee ask in this occupation only, because a report belongs
+ *   to one occupation. Without it the default occupation of the trainee counts.
  * @returns Array of insights
  */
-export async function runProactiveChecks(userId: string): Promise<ProactiveInsight[]> {
+export async function runProactiveChecks(
+    userId: string,
+    catalogId?: string | null
+): Promise<ProactiveInsight[]> {
     const insights: ProactiveInsight[] = [];
 
     try {
@@ -80,7 +87,7 @@ export async function runProactiveChecks(userId: string): Promise<ProactiveInsig
 
         // Run role-specific checks
         if (userRole === 'TRAINEE') {
-            insights.push(...await checkMissingActivityReports(userId));
+            insights.push(...await checkMissingActivityReports(userId, catalogId));
             insights.push(...await checkUpcomingExams(userId));
             insights.push(...await checkLowProgress(userId));
             insights.push(...await suggestNextSteps(userId));
@@ -107,12 +114,24 @@ export async function runProactiveChecks(userId: string): Promise<ProactiveInsig
 // ============================================================================
 
 /**
- * Check for missing activity reports (Tätigkeitsnachweise)
+ * Check for missing activity reports (Tätigkeitsnachweise) of one occupation:
+ * the report of the other training of a trainee in two trainings is not a
+ * reason to remind about this one.
  */
-async function checkMissingActivityReports(userId: string): Promise<ProactiveInsight[]> {
+async function checkMissingActivityReports(
+    userId: string,
+    chosenCatalogId?: string | null
+): Promise<ProactiveInsight[]> {
     const insights: ProactiveInsight[] = [];
 
     try {
+        // Fail closed: without an occupation nothing is asked
+        const catalogId =
+            chosenCatalogId ??
+            (await getCatalogScopeForUserId(userId))?.activeCatalogId ??
+            null;
+        if (!catalogId) return insights;
+
         // Get current week number
         const now = new Date();
         const currentWeek = getWeekNumber(now);
@@ -125,6 +144,7 @@ async function checkMissingActivityReports(userId: string): Promise<ProactiveIns
             .where(
                 and(
                     eq(activityReports.traineeId, userId),
+                    eq(activityReports.trainingCatalogId, catalogId),
                     eq(activityReports.weekNumber, currentWeek),
                     eq(activityReports.year, currentYear)
                 )
@@ -164,6 +184,7 @@ async function checkMissingActivityReports(userId: string): Promise<ProactiveIns
                 .where(
                     and(
                         eq(activityReports.traineeId, userId),
+                        eq(activityReports.trainingCatalogId, catalogId),
                         eq(activityReports.weekNumber, previousWeek),
                         eq(activityReports.year, currentYear)
                     )

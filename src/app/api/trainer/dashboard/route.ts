@@ -237,7 +237,9 @@ async function fetchTrainerDashboardData(
             .where(
               and(
                 eq(activityReports.status, 'SUBMITTED'),
-                inArray(activityReports.traineeId, traineeIds)
+                inArray(activityReports.traineeId, traineeIds),
+                // a report counts in the occupation it was written for
+                catalogCondition(activityReports.trainingCatalogId, scope)
               )
             )
         : Promise.resolve([{ c: 0 }]),
