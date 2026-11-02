@@ -81,7 +81,7 @@ describe('API: aggregate delivers the label of a component', () => {
     ).toEqual([
       ['2-P1', '2.1'],
       ['2-P2', '2.2'],
-      ['INT1', '23'],
+      ['INT1', '14'],
     ]);
   });
 

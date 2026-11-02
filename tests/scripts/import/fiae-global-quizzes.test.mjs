@@ -5,6 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { listComponentFolders } from '../../../scripts/import/fiae-component-folder.mjs';
+import { FINAL_LISTING } from './fiae-listing.mjs';
 import {
   LEFT_OUT,
   QUIZ_OF_FILE,
@@ -241,14 +242,14 @@ test('arguments: the target must be the preview and --apply does not belong to p
   assert.deepEqual(
     parseArgs(['run', 'Ordner', '--target', 'preview', '--files', '3,07'])
       .files,
-    ['03', '07']
+    ['3', '07']
   );
 });
 
-test('--files reads old numbers and labels (9.2 is file 20) and refuses an unknown value', () => {
+test('--files keeps the tokens as typed (plain numbers resolve per scheme) and refuses an unknown value', () => {
   assert.deepEqual(
     parseArgs(['run', 'Ordner', '--target', 'preview', '--files', '2.1,2.2,9.2,7']).files,
-    ['02', '13', '20', '07']
+    ['2.1', '2.2', '9.2', '7']
   );
   const bad = parseArgs(['run', 'Ordner', '--target', 'preview', '--files', '2.3']);
   assert.ok(bad.errors.some(e => /--files/.test(e) && /2\.3/.test(e)));
@@ -266,7 +267,7 @@ test('the Global_Quiz.docx is found by the old and the new folder name, a Vertie
   try {
     for (const [root, names] of [
       [rootOld, ['01_Planen', '02_Informieren', '09_Programmieren', '20_Programmieren (Vertiefung)']],
-      [rootNew, ['1_Planen', '2.1_Informieren', '9.1_Programmieren', '9.2_Programmieren (Vertiefung)']],
+      [rootNew, ['01_Planen', '02.1_Informieren', '09.1_Programmieren', '09.2_Programmieren (Vertiefung)']],
     ])
       for (const n of names) mkdirSync(path.join(root, n));
     const rel = (root, nr) => {
@@ -278,10 +279,33 @@ test('the Global_Quiz.docx is found by the old and the new folder name, a Vertie
     assert.deepEqual(rel(rootOld, '02')?.slice(1), ['Global_Quiz', 'Global_Quiz.docx']);
     assert.deepEqual(rel(rootNew, '02')?.slice(1), ['Global_Quiz', 'Global_Quiz.docx']);
     assert.match(rel(rootOld, '20')[0], /^20_/);
-    assert.match(rel(rootNew, '20')[0], /^9\.2_/);
+    assert.match(rel(rootNew, '20')[0], /^09\.2_/);
     assert.equal(rel(rootNew, '13'), null);
   } finally {
     rmSync(rootOld, { recursive: true, force: true });
     rmSync(rootNew, { recursive: true, force: true });
+  }
+});
+
+test('the final listing: the Global_Quiz.docx of the order index is found by the final folder name (19 is 13_, 13 is 02.2_)', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'fiae-gq-'));
+  try {
+    for (const n of FINAL_LISTING) mkdirSync(path.join(root, n));
+    const { folders, problems, scheme } = listComponentFolders(root);
+    assert.deepEqual(problems, []);
+    assert.equal(scheme, 'new');
+    const dirOf = key => {
+      const file = sourceFolder(folders, root, key);
+      return file && path.relative(root, file).split(path.sep)[0];
+    };
+    assert.match(dirOf('19'), /^13_Inbetriebnehmen/);
+    assert.match(dirOf('13'), /^02\.2_/);
+    assert.match(dirOf('20'), /^09\.2_/);
+    assert.match(dirOf('26'), /^17_Umweltschutz/);
+    // every key of the tables (the order index) has a folder in the final listing
+    for (const key of [...Object.keys(QUIZ_OF_FILE), ...Object.keys(LEFT_OUT)])
+      assert.ok(dirOf(key.padStart(2, '0')), key);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

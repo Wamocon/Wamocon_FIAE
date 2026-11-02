@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
+import { FINAL_LISTING, OLD_LISTING } from './fiae-listing.mjs';
+
 const mod = await import('../../../scripts/import/fiae-documents.mjs');
 const {
   parseArgs,
@@ -70,7 +72,7 @@ test('a dry run is the default and an unknown option is refused', () => {
   assert.deepEqual(
     parseArgs(['run', 'src', '--target', 'preview', '--components', '5,13'])
       .components,
-    ['05', '13']
+    ['5', '13']
   );
 });
 
@@ -302,7 +304,7 @@ test('a task version with a solution part is recognized, one without is not', as
 
 // ---------------------------------------------------------------- numbering of the folders (02.11.2026)
 
-/** A folder tree with the components 2 and 13 (a pair), 1 and 7 (single), named by the given function. */
+/** A folder tree: per order index the folder name, one enabler with a scenario part and a use case. */
 function writeTree(root, names) {
   const dirs = {};
   for (const [nr, name] of Object.entries(names)) {
@@ -310,9 +312,15 @@ function writeTree(root, names) {
     const enabler = path.join(comp, 'Enablers', '01_Grundlagen');
     mkdirSync(path.join(enabler, 'Szenario parts'), { recursive: true });
     writeFileSync(path.join(enabler, '01_Grundlagen.docx'), `main ${nr}`);
-    writeFileSync(path.join(enabler, 'Szenario parts', 'Part1_eins.docx'), `part ${nr}`);
+    writeFileSync(
+      path.join(enabler, 'Szenario parts', 'Part1_eins.docx'),
+      `part ${nr}`
+    );
     mkdirSync(path.join(comp, 'Use_Cases'), { recursive: true });
-    writeFileSync(path.join(comp, 'Use_Cases', '1a_Use-Case_A.docx'), `uc ${nr}`);
+    writeFileSync(
+      path.join(comp, 'Use_Cases', '1a_Use-Case_A.docx'),
+      `uc ${nr}`
+    );
     dirs[nr] = comp;
   }
   return dirs;
@@ -323,53 +331,107 @@ const shape = comps =>
   comps.map(c => ({
     nr: c.nr,
     key: c.key,
-    name: c.name,
-    enablers: c.enablers.map(e => [e.key, e.parts.map(p => p.n), e.main !== null]),
+    enablers: c.enablers.map(e => [
+      e.key,
+      e.parts.map(p => p.n),
+      e.main !== null,
+    ]),
     useCases: c.useCases.map(u => u.key),
   }));
 
-test('the old and the new folder names lead to the same plan', () => {
+test('the old and the final folder names lead to the same plan', () => {
   const oldRoot = mkdtempSync(path.join(tmpdir(), 'fiae-old-'));
   const newRoot = mkdtempSync(path.join(tmpdir(), 'fiae-new-'));
   try {
+    // order index -> name: 1 and 7 single, 2 and 13 a pair, 19 Speicherlösungen, 26 Umweltschutz
     writeTree(oldRoot, {
       1: '01_Planen',
       2: '02_Informieren und Beraten',
       7: '07_Erbringen',
       13: '13_Informieren und Beraten (Vertiefung)',
+      19: '19_Inbetriebnehmen von Speicherlösungen',
+      26: '26_Umweltschutz',
     });
     writeTree(newRoot, {
-      1: '1_Planen',
-      2: '2.1_Informieren und Beraten',
-      7: '7_Erbringen',
-      13: '2.2_Informieren und Beraten (Vertiefung)',
+      1: '01_Planen',
+      2: '02.1_Informieren und Beraten',
+      7: '07_Erbringen',
+      13: '02.2_Informieren und Beraten (Vertiefung)',
+      19: '13_Inbetriebnehmen von Speicherlösungen',
+      26: '17_Umweltschutz',
     });
     const a = readSource(oldRoot);
     const b = readSource(newRoot);
     assert.deepEqual(shape(a), shape(b));
-    assert.deepEqual(a.map(c => c.nr), [1, 2, 7, 13]);
-    assert.equal(b[1].name, '2.1 (Ordner 02)');
-    assert.equal(b[3].name, '2.2 (Ordner 13)');
+    assert.deepEqual(
+      a.map(c => c.nr),
+      [1, 2, 7, 13, 19, 26]
+    );
+    assert.deepEqual(
+      a.map(c => c.scheme),
+      Array(6).fill('old')
+    );
+    assert.deepEqual(
+      b.map(c => c.scheme),
+      Array(6).fill('new')
+    );
+    // the reports name the label and, in brackets, the folder number of the delivery
+    assert.equal(a[3].name, '2.2 (Ordner 13)');
+    assert.equal(b[3].name, '2.2 (Ordner 02.2)');
+    assert.equal(a[4].name, '13 (Ordner 19)');
+    assert.equal(b[4].name, '13 (Ordner 13)');
+    assert.equal(b[5].name, '17 (Ordner 17)');
   } finally {
     rmSync(oldRoot, { recursive: true, force: true });
     rmSync(newRoot, { recursive: true, force: true });
   }
 });
 
-test('both spellings in one folder work and a folder of the new spelling is matched to its course', () => {
+test('"13_" is a Vertiefung in an old delivery and Speicherlösungen in a final one', () => {
+  const oldRoot = mkdtempSync(path.join(tmpdir(), 'fiae-old-'));
+  const newRoot = mkdtempSync(path.join(tmpdir(), 'fiae-new-'));
+  try {
+    mkdirSync(path.join(oldRoot, '13_Foo'));
+    mkdirSync(path.join(newRoot, '13_Foo'));
+    mkdirSync(path.join(newRoot, '02.1_Bar'));
+    assert.deepEqual(
+      readSource(oldRoot).map(c => [c.nr, c.key]),
+      [[13, '13']]
+    );
+    assert.deepEqual(
+      readSource(newRoot).map(c => [c.nr, c.key]),
+      [
+        [2, '02'],
+        [19, '19'],
+      ]
+    );
+  } finally {
+    rmSync(oldRoot, { recursive: true, force: true });
+    rmSync(newRoot, { recursive: true, force: true });
+  }
+});
+
+test('a folder of the final numbering is matched to its course', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'fiae-mix-'));
   try {
     writeTree(root, {
-      2: '2.1_Informieren und Beraten von Kunden (§4 Absatz 2 Nr 2)',
-      13: '13_Informieren und Beraten von Kunden und Kundinnen',
+      2: '02.1_Informieren und Beraten von Kunden (§4 Absatz 2 Nr 2)',
+      13: '02.2_Informieren und Beraten von Kunden und Kundinnen',
     });
     const comps = readSource(root);
-    assert.deepEqual(comps.map(c => c.key), ['02', '13']);
+    assert.deepEqual(
+      comps.map(c => c.key),
+      ['02', '13']
+    );
     const { map, problems } = mapComponents(comps, [
-      { id: 'a', title: 'Informieren und Beraten von Kunden (§ 4 Abs. 2 Nr. 2)' },
+      {
+        id: 'a',
+        title: 'Informieren und Beraten von Kunden (§ 4 Abs. 2 Nr. 2)',
+      },
       {
         id: 'b',
-        title: 'Informieren und Beraten von Kunden (Vertiefung) (§ 4 Abs. 2 Nr. 2 J2)',
+        title:
+          'Informieren und Beraten von Kunden (Vertiefung) (§ 4 Abs. 2 Nr. 2 J2)',
       },
     ]);
     assert.deepEqual(problems, []);
@@ -380,28 +442,83 @@ test('both spellings in one folder work and a folder of the new spelling is matc
   }
 });
 
-test('an unknown pattern or two folders for one component stop the read with a message', () => {
+test('the final listing of 26 folders is read completely, the old listing too', () => {
+  const finalRoot = mkdtempSync(path.join(tmpdir(), 'fiae-final-'));
+  const oldRoot = mkdtempSync(path.join(tmpdir(), 'fiae-old26-'));
+  try {
+    for (const name of FINAL_LISTING) mkdirSync(path.join(finalRoot, name));
+    for (const name of OLD_LISTING) mkdirSync(path.join(oldRoot, name));
+    const all = Array.from({ length: 26 }, (_, i) => i + 1);
+    const f = readSource(finalRoot);
+    const o = readSource(oldRoot);
+    assert.deepEqual(
+      f.map(c => c.nr),
+      all
+    );
+    assert.deepEqual(
+      o.map(c => c.nr),
+      all
+    );
+    // the final names: 13 is order index 19, 17 is 26
+    assert.equal(f[18].name, '13 (Ordner 13)');
+    assert.equal(f[25].name, '17 (Ordner 17)');
+    assert.equal(f[12].name, '2.2 (Ordner 02.2)');
+  } finally {
+    rmSync(finalRoot, { recursive: true, force: true });
+    rmSync(oldRoot, { recursive: true, force: true });
+  }
+});
+
+test('an unknown pattern, a mix of both numberings or two folders for one component stop the read with a message', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'fiae-bad-'));
   try {
     mkdirSync(path.join(root, '2.3_Falsch'));
-    assert.throws(() => readSource(root), /2\.3_Falsch.*not clear|not clear.*2\.3_Falsch/);
+    assert.throws(() => readSource(root), /not clear.*2\.3_Falsch/);
     rmSync(path.join(root, '2.3_Falsch'), { recursive: true });
     mkdirSync(path.join(root, '13.1_Falsch'));
     assert.throws(() => readSource(root), /13\.1_Falsch/);
     rmSync(path.join(root, '13.1_Falsch'), { recursive: true });
-    mkdirSync(path.join(root, '02_Informieren'));
-    mkdirSync(path.join(root, '2.1_Informieren'));
-    assert.throws(() => readSource(root), /Two folders for the component 2\.1 \(Ordner 02\)/);
+    // old plain numbers next to a dot notation: the delivery is final, so 09_ and 20_ are a mix
+    mkdirSync(path.join(root, '02.1_Informieren'));
+    mkdirSync(path.join(root, '09_Programmieren'));
+    mkdirSync(path.join(root, '20_Programmieren (Vertiefung)'));
+    assert.throws(
+      () => readSource(root),
+      /09_Programmieren.*not allowed in the final numbering.*20_Programmieren/
+    );
+    rmSync(path.join(root, '09_Programmieren'), { recursive: true });
+    rmSync(path.join(root, '20_Programmieren (Vertiefung)'), {
+      recursive: true,
+    });
+    mkdirSync(path.join(root, '2.1_Doppelt'));
+    assert.throws(
+      () => readSource(root),
+      /Two folders for the component 2\.1 \(Ordner 02\.1\)/
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('--components reads old numbers and labels and refuses an unknown value', () => {
+test('--components keeps the tokens as typed and refuses a value that is no number', () => {
   assert.deepEqual(
-    parseArgs(['run', 'src', '--target', 'preview', '--components', '2.1,2.2,5']).components,
-    ['02', '13', '05']
+    parseArgs([
+      'run',
+      'src',
+      '--target',
+      'preview',
+      '--components',
+      '2.1,2.2,5,13',
+    ]).components,
+    ['2.1', '2.2', '5', '13']
   );
-  const bad = parseArgs(['run', 'src', '--target', 'preview', '--components', '2.3']);
+  const bad = parseArgs([
+    'run',
+    'src',
+    '--target',
+    'preview',
+    '--components',
+    '2.3',
+  ]);
   assert.ok(bad.errors.some(e => /--components/.test(e) && /2\.3/.test(e)));
 });
