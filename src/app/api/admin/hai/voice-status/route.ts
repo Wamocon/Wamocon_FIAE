@@ -60,13 +60,10 @@ export async function GET(req: NextRequest) {
     models = checked;
     if (!checked.reachable) {
       haus = { id: 'haus', status: 'disturbed', reason: 'UNREACHABLE' };
-    } else if (checked.sttOffered === false || checked.ttsOffered === false) {
-      haus = {
-        id: 'haus',
-        status: 'not_configured',
-        reason: 'MODEL_NOT_OFFERED',
-      };
     } else {
+      // A model that is not in the list is no proof: Open WebUI does not list its
+      // audio engines. Whether recognition and speech really work shows in use, and
+      // a failure marks the provider as disturbed.
       const failure = disturbedReason('haus');
       haus = failure
         ? { id: 'haus', status: 'disturbed', reason: failure }
