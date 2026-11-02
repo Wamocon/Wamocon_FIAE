@@ -99,6 +99,29 @@ export function extractBearerToken(request: RequestLike): string | null {
   return token ? token : null;
 }
 
+type AuthErrorLike = {
+  status?: number;
+  code?: string;
+  name?: string;
+  message?: string;
+} | null;
+
+/** Rate limit, server error or no answer from the Auth service: not the token's fault. */
+function isTransientAuthError(error: AuthErrorLike): boolean {
+  if (!error) return false;
+  if (error.name === 'AuthRetryableFetchError') return true;
+  const status = error.status;
+  return status === 0 || status === 429 || (status != null && status >= 500);
+}
+
+/** What the log line says about a failed verification, never the token. */
+function describeAuthError(error: AuthErrorLike): string {
+  if (!error) return 'no user in the answer';
+  return [error.status ?? '-', error.code ?? error.name ?? '-', error.message]
+    .filter(part => part !== undefined)
+    .join(' | ');
+}
+
 async function verifyAccessToken(
   token: string
 ): Promise<VerifiedToken | AuthFailure> {
@@ -129,6 +152,16 @@ async function verifyAccessToken(
     });
     const { data, error } = await supa.auth.getUser(token);
     if (error || !data?.user?.id) {
+      // A failure of Supabase itself (network, rate limit, 5xx) says nothing
+      // about the token and must not look like a rejected login
+      if (isTransientAuthError(error)) {
+        console.error(
+          '[session] Supabase Auth unavailable:',
+          describeAuthError(error)
+        );
+        return { ok: false, status: 503, error: 'Authentication unavailable' };
+      }
+      console.warn('[session] token rejected:', describeAuthError(error));
       return { ok: false, status: 401, error: 'Unauthorized' };
     }
     const user: VerifiedToken = {

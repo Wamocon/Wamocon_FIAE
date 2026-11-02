@@ -8,10 +8,11 @@ import {
 import { supabase } from '@/lib/supabase';
 
 jest.mock('@/lib/supabase', () => ({
-  supabase: { auth: { getSession: jest.fn() } },
+  supabase: { auth: { getSession: jest.fn(), refreshSession: jest.fn() } },
 }));
 
 const getSession = supabase.auth.getSession as jest.Mock;
+const refreshSession = supabase.auth.refreshSession as jest.Mock;
 const fetchMock = jest.fn();
 
 function sentHeaders(call = 0): Headers {
@@ -191,6 +192,123 @@ describe('authFetch', () => {
     it('does not hold a request to another origin', async () => {
       await authFetch('https://example.org/x');
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('a 401 for the token authFetch attached', () => {
+    const unauthorized = { ok: false, status: 401 };
+
+    it('repeats the request once with the token another tab stored', async () => {
+      getSession
+        .mockResolvedValueOnce({ data: { session: { access_token: 'tok-1' } } })
+        .mockResolvedValueOnce({
+          data: { session: { access_token: 'tok-2' } },
+        });
+      fetchMock
+        .mockResolvedValueOnce(unauthorized)
+        .mockResolvedValueOnce({ ok: true, status: 200 });
+      const res = await authFetch('/api/x', { method: 'POST', body: '{}' });
+      expect(res).toEqual({ ok: true, status: 200 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(sentHeaders(0).get('authorization')).toBe('Bearer tok-1');
+      expect(sentHeaders(1).get('authorization')).toBe('Bearer tok-2');
+      expect(refreshSession).not.toHaveBeenCalled();
+    });
+
+    it('refreshes the session when the stored token is the refused one', async () => {
+      refreshSession.mockResolvedValue({
+        data: { session: { access_token: 'tok-3' } },
+      });
+      fetchMock
+        .mockResolvedValueOnce(unauthorized)
+        .mockResolvedValueOnce({ ok: true, status: 200 });
+      await authFetch('/api/x');
+      expect(refreshSession).toHaveBeenCalledTimes(1);
+      expect(sentHeaders(1).get('authorization')).toBe('Bearer tok-3');
+    });
+
+    it('shares one refresh between parallel refused requests', async () => {
+      refreshSession.mockResolvedValue({
+        data: { session: { access_token: 'tok-3' } },
+      });
+      fetchMock.mockImplementation(async (_url: string, init: RequestInit) =>
+        new Headers(init.headers).get('authorization') === 'Bearer tok-3'
+          ? { ok: true, status: 200 }
+          : unauthorized
+      );
+      const results = await Promise.all([
+        authFetch('/api/a'),
+        authFetch('/api/b'),
+        authFetch('/api/c'),
+      ]);
+      expect(results.map(r => r.status)).toEqual([200, 200, 200]);
+      expect(refreshSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns the 401 when no new token comes', async () => {
+      refreshSession.mockResolvedValue({ data: { session: null } });
+      fetchMock.mockResolvedValue(unauthorized);
+      const res = await authFetch('/api/x');
+      expect(res.status).toBe(401);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns the 401 when the refresh fails', async () => {
+      refreshSession.mockRejectedValue(new Error('network'));
+      fetchMock.mockResolvedValue(unauthorized);
+      const res = await authFetch('/api/x');
+      expect(res.status).toBe(401);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks only once, a second 401 is returned as it is', async () => {
+      refreshSession.mockResolvedValue({
+        data: { session: { access_token: 'tok-3' } },
+      });
+      fetchMock.mockResolvedValue(unauthorized);
+      const res = await authFetch('/api/x');
+      expect(res.status).toBe(401);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('leaves a 401 alone when nobody is signed in', async () => {
+      getSession.mockResolvedValue({ data: { session: null } });
+      fetchMock.mockResolvedValue(unauthorized);
+      const res = await authFetch('/api/x');
+      expect(res.status).toBe(401);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(refreshSession).not.toHaveBeenCalled();
+    });
+
+    it('leaves a 401 alone for a token the caller set itself', async () => {
+      fetchMock.mockResolvedValue(unauthorized);
+      await authFetch('/api/x', { headers: { Authorization: 'Bearer mine' } });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(refreshSession).not.toHaveBeenCalled();
+    });
+
+    it('does not repeat a request with a stream as body', async () => {
+      fetchMock.mockResolvedValue(unauthorized);
+      // jsdom has no ReadableStream, a stand-in is enough for the check
+      class FakeStream {}
+      (global as any).ReadableStream = FakeStream;
+      try {
+        await authFetch('/api/x', {
+          method: 'POST',
+          body: new FakeStream() as any,
+        });
+      } finally {
+        delete (global as any).ReadableStream;
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(refreshSession).not.toHaveBeenCalled();
+    });
+
+    it('does not touch the session for another origin', async () => {
+      fetchMock.mockResolvedValue(unauthorized);
+      await authFetch('https://example.org/x');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(refreshSession).not.toHaveBeenCalled();
     });
   });
 });
