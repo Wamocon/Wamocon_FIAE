@@ -16,6 +16,8 @@ Die Texte und Kategorien stehen an einer Stelle: `src/lib/hai/denial.ts` (rein, 
 
 ## 2. Die Kategorien
 
+Zehn Kategorien (seit dem 02.11.2026 mit `AUSWAHL`).
+
 | Kategorie | Bedeutung in Klartext | Wo sie im Text steht |
 |---|---|---|
 | `ROLLE` | nicht für deine Rolle vorgesehen | "für deine Rolle", bei Seiten zusätzlich der Bereich grob (Trainerbereich, Verwaltungsbereich der Administratoren) |
@@ -26,6 +28,7 @@ Die Texte und Kategorien stehen an einer Stelle: `src/lib/hai/denial.ts` (rein, 
 | `ORGANISATION_PLAN` | in deiner Organisation oder deinem Plan nicht enthalten | "in deiner Organisation oder deinem Plan nicht enthalten" |
 | `SCHALTER_AUS` | für deine Organisation ausgeschaltet | "für deine Organisation ausgeschaltet" |
 | `ZUSTAENDIGKEIT` | nur für die eigenen Auszubildenden | "Zuständigkeit", "nur zu den eigenen Auszubildenden" |
+| `AUSWAHL` | nur zum ausgewählten Beruf (Reiter) beantwortet, der andere eigene Beruf steht auf dem anderen Reiter | "hast gerade ... ausgewählt", "Wechsle oben auf den Reiter ..." |
 | `UMFANG` | in deinen freigeschalteten Inhalten nichts gefunden (das heißt nicht, dass es nichts gibt) | "in deinen freigeschalteten Inhalten", "das heißt aber nicht, dass es ihn nicht gibt" |
 
 Dazu zwei Fälle ohne Kategorie, weil sie keine Berechtigung sind und das im Text auch so stehen soll:
@@ -112,6 +115,19 @@ Die Hinweise sind feste Konstanten (`ACCESS_REASONS` in `denial.ts`). Es gelangt
 - **`useHaiVoice`** und die Sprachclients: unverändert. Eine gesprochene Frage läuft über den Chat und zeigt dieselben Texte.
 - **`HaiNavigationCard`**: zeigt nur ein bereits geprüftes Angebot, ein Pfad außerhalb der Liste wird nie als Karte gezeigt. Es gibt hier keinen Fehlerfall mit Berechtigung.
 
+### 3.5 Auswahl des Berufs (Kategorie AUSWAHL, 02.11.2026)
+
+Wählt die Person in der App einen Beruf (Reiter, Header `x-catalog`), arbeitet die HAI nur in diesem Beruf (`docs/hai-persona-per-occupation.md`). Fragt sie in der Auswahl nach dem anderen Beruf, den sie auch hat, antwortet die Pipeline vor Suche und Modell mit einem festen Text (`denialSelectionText` in `denial.ts`, deutsch und englisch, `hai.denial.selection` in den Locale-Dateien):
+
+> Du hast gerade FIAE ausgewählt, deshalb antworte ich hier nur dazu. Wechsle oben auf den Reiter KfBM, dann helfe ich dir auch dazu.
+
+| Fall | Stelle im Code | Heute | Neu | Kategorie |
+|---|---|---|---|---|
+| FIAE gewählt, Frage nach KfBM (oder umgekehrt) | `ragPipeline.personaRefusal`, `persona.unselectedOccupationNamed`, Persona-Feld `unselectedOwn` | die HAI antwortete mit Inhalten beider Berufe | fester Text mit beiden eigenen Berufsnamen, kein Modellaufruf, keine Suche | `AUSWAHL` |
+| Frage nach einem Beruf, den die Person nicht hat | `personaRefusal`, `isForeignOccupationQuestion` | `BERUF`-Text | unverändert, wird zuerst geprüft | `BERUF` |
+
+Die Namen sind die der Reiter (Kurzname des Brandings, sonst der Code) und werden auf Buchstaben, Ziffern, Leerzeichen und Bindestrich bereinigt. Es erscheinen nur die Namen der beiden eigenen Berufe, nie ein Inhalt, ein Titel oder eine Kennung.
+
 ## 4. Sicherheitsgrenze
 
 Die Begründung darf nichts verraten, was die Person nicht wissen darf. Sie sagt, dass etwas nicht verfügbar ist und warum, in einer groben Kategorie, und nennt nie Namen, Kennungen, Inhalte oder Zahlen eines fremden Berufs, eines Trainerbereichs oder einer anderen Person.
@@ -119,6 +135,7 @@ Die Begründung darf nichts verraten, was die Person nicht wissen darf. Sie sagt
 - **Fremder Beruf:** `BERUF` nennt, dass es nicht zur Ausbildung gehört, nie den Titel und nie den Namen des anderen Berufs. Die Fremdberufserkennung (Persona) bleibt vor Suche und Modell.
 - **Navigation:** Bei einer Seite eines anderen Bereichs nennt der Text den Bereich grob (Trainerbereich, Verwaltungsbereich der Administratoren), nie den Namen einer Seite. Die Beispiele sind Seiten der eigenen Ebene. Eine unbekannte Seite sagt "kenne ich nicht" und nennt keinen Berechtigungsgrund. Ein gesperrter Enabler nennt nur Titel, die die Seite dem Azubi ohnehin zeigt.
 - **Lösungsschutz:** unverändert streng. Der Text sagt, dass es die Lösung nicht gibt und warum (Regel), nie einen Teil der Lösung. Die feste Ablehnung steht vor Suche und Modell.
+- **Auswahl:** Der Text der Kategorie `AUSWAHL` nennt nur die beiden Berufe, die die Person selbst hat (die Reiter, die sie sieht). Ein Beruf, den sie nicht hat, bleibt `BERUF` ohne Namen. Der Sicherheitstest (`tests/unit/hai/denial.test.ts`, `ragPipeline.persona.test.ts`) prüft, dass keine anderen Namen und keine Inhalte vorkommen.
 - **Fehlend gleich fremd:** Ein Eintrag, den es nicht gibt, und einer eines anderen Berufs oder einer anderen Organisation bekommen denselben Text (`UMFANG`, "in deinen freigeschalteten Inhalten ... nicht gefunden, das heißt aber nicht, dass es ihn nicht gibt"). So lässt sich daraus nicht schließen, ob es ihn anderswo gibt.
 - **Rolle, Beruf und Freischaltung** kommen weiter vom Server (Datenbank und Sitzung), nie aus der Nachricht. Die Hinweise an das Modell hängen an der Audience aus der Datenbank, eine behauptete Rolle ändert sie nicht.
 - **Nur feste Texte im Prompt:** Der Abschnitt "Begründung bei Zugriffsgrenzen" enthält nur Konstanten.
@@ -137,6 +154,7 @@ Tests dazu: `tests/unit/hai/denial.test.ts` (jeder Text: Grund genannt, Alternat
 | Quiz-Modus: `PRO_REQUIRED`, `COURSE_NOT_ASSIGNED`, Fehlertexte der Karte | `tests/integration/api/hai/quiz-mode.test.ts`, `tests/unit/hai/quizMode.client.test.ts`, `tests/unit/components/hai/HaiQuizCard.test.tsx` |
 | Browser: Grund statt "Fehler" im Chat und in der Aktionskarte | `tests/unit/components/hai/HaiProvider.test.tsx` |
 | Lösungsschutz | `tests/unit/hai/solutionRequest.test.ts` |
+| Auswahl des Berufs: Persona, Hinweis "Reiter wechseln", Suche in einem Katalog, Titel, Quiz-Modus gleich | `tests/unit/hai/persona.test.ts`, `personaAccess.test.ts`, `retrievalAccess.test.ts`, `ragPipeline.persona.test.ts`, `tests/integration/api/hai/chat-catalog-choice.test.ts`, `occupation-follows-choice.test.ts` |
 | Prüfset: Fälle DR-01 bis DR-06 mit `expected.reason`, Bewertung `missing_reason` | `tests/unit/hai/golden/hai-golden-set.json`, `goldenSet.test.ts`, `goldenSet.pipeline.test.ts`, `docs/hai-golden-set.md` |
 
 ## 6. Wo man neue Fälle ergänzt

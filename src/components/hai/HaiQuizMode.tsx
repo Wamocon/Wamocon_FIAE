@@ -95,9 +95,15 @@ export function HaiQuizModeProvider({
         question: result.question,
         total: result.total,
         remaining: result.remaining,
+        occupation: result.occupation,
       });
     } else if (result.kind === 'empty') {
-      dispatch({ type: 'empty', reason: result.reason, total: result.total });
+      dispatch({
+        type: 'empty',
+        reason: result.reason,
+        total: result.total,
+        occupation: result.occupation,
+      });
     } else {
       dispatch({ type: 'failed', errorKey: result.errorKey });
     }

@@ -70,6 +70,21 @@ const optionButtons = () =>
     .getAllByRole('button')
     .filter(b => b.getAttribute('data-option-id') !== null);
 
+describe('HaiQuizCard: the occupation', () => {
+  it('names the occupation while a question is on screen', () => {
+    setup({ occupation: 'FIAE' });
+    expect(screen.getByTestId('hai-quiz-occupation').textContent).toBe(
+      'Quiz: FIAE'
+    );
+    expect(screen.queryByTestId('hai-quiz-summary-occupation')).toBeNull();
+  });
+
+  it('shows no line while the server has not named one', () => {
+    setup();
+    expect(screen.queryByTestId('hai-quiz-occupation')).toBeNull();
+  });
+});
+
 describe('optionIndexForKey', () => {
   it.each([
     ['1', 3, 0],
@@ -402,6 +417,21 @@ describe('HaiQuizCard: the summary', () => {
     enablerHref: href,
     correct,
     solutionWithheld: false,
+  });
+
+  it('names the occupation of the quiz on the card and in the summary', () => {
+    setup({
+      phase: 'summary',
+      question: null,
+      occupation: 'KfBM',
+      attempts: [attempt('a', 'e1', 'Rechnung', true, null)],
+    });
+    expect(screen.getByTestId('hai-quiz-occupation').textContent).toBe(
+      'Quiz: KfBM'
+    );
+    expect(screen.getByTestId('hai-quiz-summary-occupation').textContent).toBe(
+      'Quiz: KfBM'
+    );
   });
 
   it('shows x of y right and the enablers to repeat with a link', () => {

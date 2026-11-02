@@ -18,7 +18,12 @@ jest.mock('@/lib/db-retry', () => ({
 }));
 
 import { loadHaiPersona } from '@/lib/hai/personaAccess';
-import { FIAE_PERSONA, NEUTRAL_PERSONA } from '@/lib/hai/persona';
+import {
+  FIAE_PERSONA,
+  NEUTRAL_PERSONA,
+  isForeignOccupationQuestion,
+  unselectedOccupationNamed,
+} from '@/lib/hai/persona';
 import { FIAE_CATALOG, KFBM_CATALOG } from './fixtures/kfbmPersona';
 
 const access = (
@@ -67,28 +72,68 @@ describe('loadHaiPersona', () => {
     expect(persona.examModeTitle).not.toContain('Teil 1');
   });
 
-  it('puts the occupation the user has chosen first, for both orders', async () => {
+  it('without a choice the persona speaks about all occupations of the user (merged)', async () => {
     const both = access([KFBM_CATALOG.id, FIAE_CATALOG.id]);
-    // chosen FIAE: the base is the FIAE persona, both occupations are named
-    const fiae = await loadHaiPersona(both, undefined, 'fiae');
-    expect(fiae.source).toBe('fiae-default');
-    expect(fiae.occupationName.startsWith('Fachinformatik')).toBe(true);
-    expect(fiae.occupationName).toContain('Büromanagement');
-    // chosen KFBM (any case): the KfBM persona is the base
-    const kfbm = await loadHaiPersona(both, undefined, ' KfBM ');
-    expect(kfbm.source).toBe('catalog-settings');
-    expect(kfbm.occupationName.startsWith('Kaufleute')).toBe(true);
-    expect(kfbm.occupationName).toContain('Fachinformatik');
+    const merged = await loadHaiPersona(both);
+    expect(merged.occupationName).toContain('Büromanagement');
+    expect(merged.occupationName).toContain('Fachinformatik');
+    expect(merged.unselectedOwn).toEqual([]);
+    expect(merged.chosenLabel).toBeNull();
   });
 
-  it('ignores a chosen occupation the user does not have: no access is gained, nothing is lost', async () => {
+  it('FIAE chosen: the persona of FIAE alone, a KfBM question is the answer "switch the tab"', async () => {
+    const both = access([KFBM_CATALOG.id, FIAE_CATALOG.id]);
+    const fiae = await loadHaiPersona(both, undefined, 'fiae');
+    expect(fiae.source).toBe('fiae-default');
+    expect(fiae.occupationName).toBe('Fachinformatik');
+    expect(fiae.chosenLabel).toBe('FIAE');
+    expect(fiae.unselectedOwn.map(u => u.name)).toEqual(['KfBM']);
+    expect(
+      unselectedOccupationNamed('Erkläre KfBM Lernfeld 3', fiae)?.name
+    ).toBe('KfBM');
+    expect(isForeignOccupationQuestion('Erkläre KfBM Lernfeld 3', fiae)).toBe(
+      false
+    );
+  });
+
+  it('KfBM chosen (any case, with blanks): the persona of KfBM alone, a FIAE question is "switch the tab"', async () => {
+    const both = access([FIAE_CATALOG.id, KFBM_CATALOG.id]);
+    const kfbm = await loadHaiPersona(both, undefined, ' KfBM ');
+    expect(kfbm.source).toBe('catalog-settings');
+    expect(kfbm.occupationName).toBe('Kaufleute für Büromanagement');
+    expect(kfbm.chosenLabel).toBe('KfBM');
+    expect(kfbm.unselectedOwn.map(u => u.name)).toEqual(['FIAE']);
+    expect(
+      unselectedOccupationNamed('Wie funktioniert Fachinformatik?', kfbm)?.name
+    ).toBe('FIAE');
+  });
+
+  it('follows the access that the choice already narrowed: the other own occupation is unselected', async () => {
+    // resolveRetrievalAccess hands over one catalog and the full list next to it
+    const narrowed = {
+      ...access([FIAE_CATALOG.id]),
+      allowedCatalogIds: [FIAE_CATALOG.id, KFBM_CATALOG.id],
+    };
+    const persona = await loadHaiPersona(narrowed);
+    expect(persona.occupationName).toBe('Fachinformatik');
+    expect(persona.unselectedOwn.map(u => u.name)).toEqual(['KfBM']);
+    expect(persona.foreignMarkers).not.toContain('kfbm');
+  });
+
+  it('ignores a chosen code that is not one of the occupations of the user: no right is gained, nothing is lost', async () => {
+    // KfBM only, "FIAE" chosen: still the KfBM persona, nothing of FIAE
     const only = await loadHaiPersona(
       access([KFBM_CATALOG.id]),
       undefined,
       'FIAE'
     );
     expect(only.source).toBe('catalog-settings');
-    expect(only.occupationName).not.toContain('Fachinformatik und');
+    expect(only.occupationName).toBe('Kaufleute für Büromanagement');
+    expect(only.unselectedOwn).toEqual([]);
+    expect(isForeignOccupationQuestion('Erkläre FIAE Lernfeld 6', only)).toBe(
+      true
+    );
+    // both occupations, an unknown code: merged as without a choice
     const both = await loadHaiPersona(
       access([KFBM_CATALOG.id, FIAE_CATALOG.id]),
       undefined,
@@ -96,6 +141,20 @@ describe('loadHaiPersona', () => {
     );
     expect(both.occupationName).toContain('Büromanagement');
     expect(both.occupationName).toContain('Fachinformatik');
+    expect(both.unselectedOwn).toEqual([]);
+  });
+
+  it('a user with FIAE only gets the same persona with and without the code', async () => {
+    const plain = await loadHaiPersona(access([FIAE_CATALOG.id]));
+    const chosen = await loadHaiPersona(
+      access([FIAE_CATALOG.id]),
+      undefined,
+      'FIAE'
+    );
+    expect(chosen.refusalText).toBe(plain.refusalText);
+    expect(chosen.refusalText).toBe(FIAE_PERSONA.refusalText);
+    expect(chosen.unselectedOwn).toEqual([]);
+    expect(chosen.chosenLabel).toBeNull();
   });
 
   it('is neutral when the catalogs of the access are unknown', async () => {

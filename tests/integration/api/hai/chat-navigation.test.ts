@@ -116,6 +116,7 @@ async function load(
   } else {
     jest.doMock('@/lib/hai/retrievalAccess', () => ({
       __esModule: true,
+      ...(jest.requireActual('@/lib/hai/retrievalAccess') as object),
       resolveRetrievalAccess: async () => ({
         catalogIds: [FIAE_CATALOG_ID],
         audience: 'trainee',

@@ -33,6 +33,7 @@ import {
   options,
   questions,
   quizzes,
+  trainingCatalogs,
 } from '@/db/migrations/schemas/schema';
 import type { SessionUser } from '@/lib/auth/session';
 import {
@@ -52,9 +53,39 @@ import {
   requireQuizOpen,
 } from '@/lib/catalog/progression-db';
 import { DENIAL_CODES } from '../denial';
+import { tabNameOf } from '../persona';
 import type { QuizCandidate, QuizQuestionSource } from './logic';
 
 const unique = <T>(values: T[]): T[] => Array.from(new Set(values));
+
+/**
+ * The name of the occupation the quiz is about, as the tab of the app shows it
+ * (short name of the branding or the code), or null. It is the occupation of
+ * the scope the other functions of this module use (the request's x-catalog,
+ * else the first occupation of a trainee), so the card can say which one it is.
+ */
+export async function loadOccupationLabel(
+  session: Pick<SessionUser, 'id'>,
+  req: CatalogRequestLike
+): Promise<string | null> {
+  try {
+    const scope = await requireCatalogScopeForUser(session.id, req);
+    if (scope instanceof Response) return null;
+    const [row] = await db
+      .select({
+        id: trainingCatalogs.id,
+        code: trainingCatalogs.code,
+        title: trainingCatalogs.title,
+        settings: trainingCatalogs.settings,
+      })
+      .from(trainingCatalogs)
+      .where(eq(trainingCatalogs.id, scope.activeCatalogId))
+      .limit(1);
+    return row ? tabNameOf(row) : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Page of an enabler for the summary. Only a trainee has one. */
 export function enablerHrefFor(
