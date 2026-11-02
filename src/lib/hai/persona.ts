@@ -546,6 +546,60 @@ function collapseSpelledLetters(value: string): string {
 // Resolve
 // ============================================================================
 
+/** "A", "A und B", "A, B und C" (without duplicates and empty entries). */
+function joinNames(values: string[]): string {
+  const list = unique(values.map(v => v.trim()).filter(Boolean));
+  if (list.length <= 1) return list[0] ?? '';
+  return `${list.slice(0, -1).join(', ')} und ${list[list.length - 1]}`;
+}
+
+/**
+ * One persona for a user with several occupations. The persona of the primary
+ * occupation (the one first in the list) is the base. Everything that names the
+ * occupation, the topics, the exams and the refusal speaks about ALL the
+ * occupations of the user: the search reads the content of every training of
+ * the user, so a persona that names only one would refuse the other one and
+ * still show its content (found in the Preview on 02.11.2026).
+ */
+function mergePersonas(personas: HaiPersona[]): HaiPersona {
+  const [primary] = personas;
+  const names = joinNames(personas.map(p => p.occupationName));
+  const fields = joinNames(personas.map(p => p.generalTopic));
+  const examTitles = unique(personas.map(p => p.examModeTitle));
+  const refusal = `Das liegt leider außerhalb meines Fachgebiets. 🦈 Ich bin spezialisiert auf deine Ausbildungen (${names}): Lernfelder, Enabler, Prüfungsvorbereitung und alles rund um deine Ausbildung. Wie kann ich dir dabei helfen?`;
+  const glossary: HaiGlossaryEntry[] = [];
+  for (const entry of personas.flatMap(p => [...p.glossary])) {
+    if (!glossary.some(g => g.term === entry.term)) glossary.push(entry);
+  }
+  const rules = unique(
+    personas.map(p => p.sourceRule).filter((r): r is string => !!r)
+  );
+  return {
+    ...primary,
+    occupationName: names,
+    intro: `für Auszubildende in den Berufen ${names}`,
+    glossary,
+    traineeTopics: unique(personas.flatMap(p => [...p.traineeTopics])),
+    trainerTopics: unique(personas.flatMap(p => [...p.trainerTopics])),
+    showTrainerTopics: personas.some(p => p.showTrainerTopics),
+    forbiddenLine: `**VERBOTEN:** Allgemeinwissen, Unterhaltung, Persönliches, Politik, Religion, Wetter, private Einkäufe, Kreatives Schreiben, allgemeine Mathematik, also alles ohne Bezug zu den Berufen ${names}.`,
+    refusalPrompt: refusal,
+    refusalText: refusal,
+    sourceRule: rules.length > 0 ? rules.join('\n') : null,
+    generalTopic: fields,
+    noContextTopicLabel: `Allgemeine Fachthemen zu ${fields}`,
+    expertiseLabel: `Fachwissen zu ${fields}`,
+    examModeTitle: examTitles.join(' / '),
+    examSentence: `Der Nutzer bereitet sich auf eine Prüfung vor, die zu einem seiner Berufe gehört (${joinNames(examTitles)}).`,
+    examLevelLabel: unique(personas.map(p => p.examLevelLabel)).join(' / '),
+    quizDefaultTopic: `Allgemeine Kenntnisse in ${fields}`,
+    greeting: `Ahoi! 🦈 Ich bin **HAI.ai**, dein Lernbegleiter für ${fields}.
+
+Wie kann ich dir helfen?`,
+    codeHelp: personas.some(p => p.codeHelp),
+  };
+}
+
 /**
  * Persona for one turn of the chat. Server side only: the catalogs, the role
  * and the phase come from the database, never from the client.
@@ -571,8 +625,23 @@ export function resolveHaiPersona(input: ResolveHaiPersonaInput): HaiPersona {
     )
   );
 
+  // Several occupations: one persona that speaks about all of them
+  const base =
+    catalogs.length > 1
+      ? mergePersonas([
+          persona,
+          ...catalogs
+            .slice(1)
+            .map(c =>
+              isFiae(c)
+                ? { ...FIAE_PERSONA }
+                : buildOccupationPersona(c, input.role, input.phase)
+            ),
+        ])
+      : persona;
+
   return {
-    ...persona,
+    ...base,
     offTopicContextWords: contextWords,
     foreignMarkers: foreignMarkersFor(catalogs, input.otherCatalogs ?? []),
   };
