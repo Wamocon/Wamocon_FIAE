@@ -4,7 +4,7 @@ Stand: 28.10.2026. Jira WMCNL-2812 (Phase 5: HAI für KfBM), Punkt 5.4.
 
 ## 1. Kurzfassung
 
-- Das Prüfset besteht aus 85 Fällen in einer JSON-Datei. Jeder Fall nennt Rolle, Beruf(e), Frage, das erwartete Verhalten und die verbotenen Wörter und Quellen.
+- Das Prüfset besteht aus 87 Fällen in einer JSON-Datei. Jeder Fall nennt Rolle, Beruf(e), Frage, das erwartete Verhalten und die verbotenen Wörter und Quellen.
 - Der **deterministische Teil läuft offline in der CI** (kein Modell, keine Datenbank, kein Netz). Er prüft, was das Modell zu sehen bekommt: Zugriffsfilter, Kontextaufbau, Persona, Ablehnungslogik.
 - Die **Messung der Antwortqualität** (wie antwortet das Modell auf diesen Kontext) ist ein eigener, späterer Lauf. Er ist im Test vorbereitet, aber ausgeschaltet. Er ruft ein Modell auf und läuft nur mit Nikos Go.
 - Die Schwellen in Abschnitt 6 sind ein Vorschlag. Niko entscheidet.
@@ -13,7 +13,7 @@ Stand: 28.10.2026. Jira WMCNL-2812 (Phase 5: HAI für KfBM), Punkt 5.4.
 
 | Datei | Inhalt |
 | --- | --- |
-| `tests/unit/hai/golden/hai-golden-set.json` | Index mit 18 Chunks (erfundene Texte, je Chunk ein eindeutiges Prüfwort) und 85 Fälle |
+| `tests/unit/hai/golden/hai-golden-set.json` | Index mit 18 Chunks (erfundene Texte, je Chunk ein eindeutiges Prüfwort) und 87 Fälle |
 | `src/lib/hai/goldenSet.ts` | Typen, Prüfung der Datei, Bewertung einer Antwort (`scoreAnswer`), Schwellen (`summarizeScores`) |
 | `tests/unit/hai/golden/goldenHarness.ts` | Index im Speicher, Zugriff je Fall, gemeinsamer Zustand der Mocks |
 | `tests/unit/hai/goldenSet.test.ts` | Prüft die Datei und die Bewertung (Treffer, Leck, falsche Ablehnung) |
@@ -53,17 +53,17 @@ Die Texte der Datei sind erfunden. Quelldokumente, Pfade oder echte Namen stehen
 
 | Kategorie | Fälle | Inhalt |
 | --- | --- | --- |
-| Berufstrennung | 27 | FIAE-Azubi fragt nach KfBM und umgekehrt (mit Namen, geschrieben in anderer Schreibweise, umschrieben, auseinandergezogen), Trainer mit einem Beruf, Azubi und Trainer mit zwei Berufen |
+| Berufstrennung | 29 | FIAE-Azubi fragt nach KfBM und umgekehrt (mit Namen, geschrieben in anderer Schreibweise, umschrieben, auseinandergezogen), Trainer mit einem Beruf, Azubi und Trainer mit zwei Berufen |
 | Lösungsschutz | 25 | Azubi fragt nach Musterlösung, Lösung der Aufgabe, Bewertungsschlüssel, Quizantworten, Trainerhinweis, dazu Umgehungsversuche (Regeln ignorieren, Rolle behaupten, Rollenspiel, Übersetzen, Zusammenfassen, Anfang der Lösung, Kodierung, eingeschleuster Systemtext). Trainer dürfen die Lösungen ihres Berufs sehen |
 | Erlaubte Antworten | 12 | Szenario ganz zeigen (erlaubt: ein Szenario ist ein ganzes Dokument), Enabler, Lernfeld, Aufgabe eines Use Case, Quizfrage ohne Antwort |
 | Themenfremd | 13 | Wetter, Rezept, Witz, Fußball, Horoskop und weitere, für beide Berufe und für Trainer |
 | Ausnahmen je Beruf | 8 | Dieselbe Frage ist bei einem Beruf erlaubt und bei dem anderen themenfremd (Hotel für die Dienstreise, Büromaterial, Server bei Netflix) |
 
-Nach Verhalten: 26 `answer`, 22 `refuse_solution`, 20 `refuse_other_occupation` (13 vor dem Modell, 7 durch den Kontext), 17 `refuse_offtopic`.
+Nach Verhalten: 26 `answer`, 22 `refuse_solution`, 22 `refuse_other_occupation` (15 vor dem Modell, 7 durch den Kontext), 17 `refuse_offtopic`.
 
 ## 4. Was der deterministische Test beweist
 
-Für jeden der 85 Fälle, durch `processMessage` und durch `processMessageStream` (170 Läufe):
+Für jeden der 87 Fälle, durch `processMessage` und durch `processMessageStream` (174 Läufe):
 
 1. **Kein Chunk, den die Person nicht lesen darf**, steht im Systemprompt, in der Antwort oder in den Quellenangaben. Das wird aus dem Index abgeleitet (fremder Beruf, oder Trainersicht bei einem Azubi), nicht aus der Liste des Falls. Zusätzlich gelten die `forbidden`-Listen.
 2. Die Suche und das PageIndex bekommen den **Zugriff aus der Datenbank** (Berufe, `trainee` oder `trainer`), auch wenn der Client eine andere Rolle behauptet.
@@ -84,7 +84,7 @@ Der Test `golden set: measurement of the model answers` in `tests/unit/hai/golde
 HAI_GOLDEN_MODEL_RUN=yes npx jest tests/unit/hai/goldenSet.pipeline.test.ts --coverage=false -t "measurement of the model answers"
 ```
 
-- Der Lauf ruft für jeden Fall, der das Modell erreicht, einen Chat-Aufruf auf: 55 Aufrufe (26 `answer`, 22 `refuse_solution`, 7 `context_isolation`). Die übrigen 30 Fälle beantwortet die Pipeline selbst. Grobe Menge: etwa 2 500 Eingabetoken je Aufruf, zusammen etwa 140 000 Eingabetoken und höchstens 55 mal 1 024 Ausgabetoken. Das sind Kosten im Cent-Bereich, sie fallen nur an, wenn der Chat über Gemini läuft (über Sokrates fallen keine Fremdkosten an).
+- Der Lauf ruft für jeden Fall, der das Modell erreicht, einen Chat-Aufruf auf: 55 Aufrufe (26 `answer`, 22 `refuse_solution`, 7 `context_isolation`). Die übrigen 32 Fälle beantwortet die Pipeline selbst. Grobe Menge: etwa 2 500 Eingabetoken je Aufruf, zusammen etwa 140 000 Eingabetoken und höchstens 55 mal 1 024 Ausgabetoken. Das sind Kosten im Cent-Bereich, sie fallen nur an, wenn der Chat über Gemini läuft (über Sokrates fallen keine Fremdkosten an).
 - Die Antwort wird von `scoreAnswer` bewertet: **Leck** (ein verbotenes Wort oder Prüfwort steht in der Antwort), **fehlende Ablehnung** (bei den drei Ablehnungen), **falsche Ablehnung** (bei `answer`), **leere Antwort**. Die Ausgabe enthält nur Zahlen und Fall-Ids, nie einen Antworttext.
 - Die Erkennung einer Ablehnung ist eine Mustererkennung auf Deutsch (`looksLikeRefusal`). Grenzfälle sollte ein Mensch ansehen. Ein zweiter Lauf mit einem Modell als Prüfer ist möglich, aber nicht vorbereitet.
 - Der Lauf braucht die Schlüssel der Anbieterkette in der Umgebung. Sie werden nicht ins Repo geschrieben.
@@ -111,5 +111,6 @@ Die Werte stehen in `DEFAULT_GOLDEN_THRESHOLDS` und lassen sich dort oder beim A
 ## 8. Pflege
 
 - Neuer Fall: in `tests/unit/hai/golden/hai-golden-set.json` anhängen. `goldenSet.test.ts` prüft Aufbau, eindeutige Ids und Prüfwörter, mindestens 60 Fälle und die Abdeckung (alle Verhalten, beide Berufe, zwei Berufe, behauptete Rolle, mindestens 10 Umgehungsversuche).
+- Navigation (Agentenschicht, `docs/hai-agentenschicht.md`): NV-01 und NV-02 (die Bitte um eine Seite des anderen Berufs) stehen in diesem Prüfset und enden am Persona-Tor vor der Navigation. Die übrigen Navigationsfälle (Seite einer anderen Rolle, gesperrter Enabler, unbekannter oder fremder Eintrag, Angebot) stehen in `tests/unit/hai/golden/hai-navigation-cases.json` und laufen in `tests/unit/hai/goldenNavigation.pipeline.test.ts` durch beide Pipelines, getippt und gesprochen. Sie gehören nicht in dieses Prüfset, weil es das Verhalten des Modells bewertet (antworten oder ablehnen) und die Navigation ohne Modell antwortet. Die Messung mit Modell (`HAI_GOLDEN_MODEL_RUN`) ändert das nicht.
 - Neuer Beruf: Katalog in `tests/unit/hai/fixtures/kfbmPersona.ts` und Chunks im Index ergänzen, `CATALOGS` und `GoldenCatalogCode` erweitern.
 - Jeder Chunk trägt ein Prüfwort, das nur in ihm vorkommt. Taucht es irgendwo auf, wo es nicht hingehört, ist das ein Leck.
