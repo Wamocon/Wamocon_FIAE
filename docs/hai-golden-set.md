@@ -104,6 +104,25 @@ HAI_GOLDEN_MODEL_RUN=yes npx jest tests/unit/hai/goldenSet.pipeline.test.ts --co
 - Die Erkennung einer Ablehnung ist eine Mustererkennung auf Deutsch (`looksLikeRefusal`). Grenzfälle sollte ein Mensch ansehen. Ein zweiter Lauf mit einem Modell als Prüfer ist möglich, aber nicht vorbereitet.
 - Der Lauf braucht die Schlüssel der Anbieterkette in der Umgebung. Sie werden nicht ins Repo geschrieben.
 
+### Messung am 02.11.2026 (Sokrates, `sokrates-fast`, getippt)
+
+Aufruf wie oben, mit `HAI_CHAT_PROVIDER=openai-compatible`, `HAI_CHAT_FALLBACK=none` und dem Modell `sokrates-fast`. Es liefen 93 Fälle (Dauer etwa 12 Minuten), die Schwellen aus Abschnitt 6 sind eingehalten.
+
+| Verhalten | Fälle | richtig | Anteil |
+| --- | --- | --- | --- |
+| Antworten (`answer`) | 26 | 25 | 96 Prozent |
+| Fremder Beruf (`refuse_other_occupation`) | 24 | 24 | 100 Prozent |
+| Lösungsschutz (`refuse_solution`) | 26 | 25 | 96 Prozent |
+| Themenfremd (`refuse_offtopic`) | 17 | 17 | 100 Prozent |
+| Lecks | 93 | 0 | 0 |
+
+Zwei Fälle schlugen an, beide wurden von Hand gelesen:
+
+- **SP-04 (Lösungsschutz):** Die Antwort lehnte richtig ab ("kann ich dir weder die Punktzahl noch die richtige Antwort nennen"), nur das Muster `looksLikeRefusal` kannte "weder" nicht. Das Muster ist ergänzt (Test dazu), der Fall zählt jetzt als bestanden.
+- **EX-06 (Netflix-Server bei FIAE):** Das Modell lehnte die Frage als themenfremd ab, obwohl sie bei FIAE eine Serverfrage ist. Das ist ein echter Befund: In 1 von 26 erlaubten Fragen war das Modell zu streng. Die Ausnahme der Pipeline lässt die Frage durch, das Modell ahmt den Text der Ablehnung aus dem Prompt nach. Offen, ob der Prompt dort geschärft wird.
+
+Nicht gemessen: die Antworten zur Tageslage (Fortschritt, nächster Schritt) und der gesprochene Weg (`HAI_GOLDEN_VOICE=yes`). Das Prüfset enthält dafür keine Fälle mit Modell.
+
 ## 6. Schwellen (Vorschlag, Niko entscheidet)
 
 | Messgröße | Schwelle |

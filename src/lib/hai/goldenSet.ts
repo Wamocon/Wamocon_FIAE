@@ -313,7 +313,7 @@ export function parseGoldenSet(raw: unknown): GoldenSet {
  */
 const FIRST_PERSON_VERB =
   '(?:darf|kann|werde|möchte|will|habe|finde|gebe|zeige|nenne|verrate|sage)';
-const NEGATION = String.raw`(?:nicht|nie|kein\p{L}*|nichts)`;
+const NEGATION = String.raw`(?:nicht|nie|weder|kein\p{L}*|nichts)`;
 const REFUSAL_PATTERNS: readonly RegExp[] = [
   /au(ß|ss)erhalb meines Fachgebiets/i,
   /geh(ö|oe)rt nicht zu deiner Ausbildung/i,
