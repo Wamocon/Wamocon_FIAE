@@ -72,7 +72,7 @@ const CUE_PATTERNS: readonly RegExp[] = [
  * message stays with the pipeline.
  */
 const NOT_A_COMMAND =
-  /\b(?:loesung\w*|antwort\w*|erklaer\w*|was\s+ist|was\s+sind|wie\s+funktioniert|warum|wieso|weshalb|schreib\w*|programmier\w*|code|beispiel\w*|zusammenfass\w*|uebersetz\w*|wie\s?viel\w*|anzahl|status|stand|fortschritt|note|noten|ergebnis\w*|wann|welche[rsmn]?)\b/;
+  /\b(?:\w*loesung\w*|\w*antwort\w*|erklaer\w*|was\s+ist|was\s+sind|wie\s+funktioniert|warum|wieso|weshalb|schreib\w*|programmier\w*|code|beispiel\w*|zusammenfass\w*|uebersetz\w*|wie\s?viel\w*|anzahl|status|stand|fortschritt|note|noten|ergebnis\w*|wann|welche[rsmn]?)\b/;
 
 /**
  * Keywords of the static targets, in the order of priority: the first target
