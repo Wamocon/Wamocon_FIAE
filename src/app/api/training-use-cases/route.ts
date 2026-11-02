@@ -10,6 +10,7 @@ import {
   publicCatalogHeaders,
   resolvePublicCatalog,
 } from '@/lib/catalog/public';
+import { getComponentLabel } from '@/lib/catalog/component-label';
 
 // Public list of the training use cases of one active catalog
 // (?catalog=CODE, default FIAE). The catalog is part of the URL, so shared
@@ -36,6 +37,7 @@ export async function GET(req: Request) {
         createdAt: trainingUseCases.createdAt,
         componentCode: trainingComponents.code,
         componentTitle: trainingComponents.title,
+        componentOrderIndex: trainingComponents.orderIndex,
       })
       .from(trainingUseCases)
       .innerJoin(
@@ -56,6 +58,12 @@ export async function GET(req: Request) {
       createdAt: uc.createdAt,
       component: {
         code: uc.componentCode,
+        // what people see (FIAE: 2.1, 2.2, ...); the code stays the key
+        label: getComponentLabel({
+          catalogCode: catalog.code,
+          code: uc.componentCode,
+          orderIndex: uc.componentOrderIndex,
+        }),
         title: uc.componentTitle,
       },
     }));

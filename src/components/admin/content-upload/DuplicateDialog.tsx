@@ -24,6 +24,8 @@ type Props = {
   runId: string;
   groupKey: string;
   client: ReviewClient;
+  /** What people see for a component code (FIAE: 2.1), the code itself by default. */
+  componentLabel?: (code: string) => string;
   /** The run is in review: the choice may be saved. */
   decidable: boolean;
   busy: boolean;
@@ -43,6 +45,7 @@ export function DuplicateDialog({
   runId,
   groupKey,
   client,
+  componentLabel,
   decidable,
   busy,
   onDecide,
@@ -93,7 +96,7 @@ export function DuplicateDialog({
       <h2 id={titleId} className="text-foreground text-xl font-bold">
         {loaded
           ? t('contentUpload.duplicate.title', {
-              label: describeAssignment(t, loaded.label),
+              label: describeAssignment(t, loaded.label, componentLabel),
               count: loaded.members.length,
             })
           : t('contentUpload.duplicate.titleShort')}

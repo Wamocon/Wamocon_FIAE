@@ -43,6 +43,8 @@ import {
 interface TrainingComponent {
   id: string;
   code: string;
+  /** What people see (FIAE: 2.1, 2.2, ...), the code stays the key. */
+  label?: string;
   title: string;
   description: string | null;
   totalWeeks: number;
@@ -2321,7 +2323,7 @@ function ComponentItem({
           </p>
           <p className="text-muted-foreground text-xs">
             {componentHoursLabel(
-              component.code,
+              component.label ?? component.code,
               component.totalHours,
               t('reports.hoursTotal')
             )}

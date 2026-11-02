@@ -1,4 +1,6 @@
 // FIAE global quizzes of the Word delivery (06-01-26 LFA\FIAE\Komponenten\<nn>_...\Global_Quiz\Global_Quiz.docx) into the Preview.
+// The folder number is the order index of the component, written old (02_, 13_) or new (2.1_, 2.2_), see
+// fiae-component-folder.mjs. The keys of QUIZ_OF_FILE and LEFT_OUT and the option --files use that number.
 // The Preview has 22 global quizzes, one per subject area (§ 4 ...), the delivery has one file per component.
 // A file is matched to the quiz of its subject area and compared with it question by question (the first
 // 60 letters of the question, then the options and the right answer):
@@ -23,8 +25,14 @@
 // Connection: DB_CONNECTION_STRING (role app_preview_migrator) from the environment. The script prints
 // no key and no connection string.
 
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+
+import {
+  describeComponent,
+  listComponentFolders,
+  parseComponentList,
+} from './fiae-component-folder.mjs';
 
 import {
   docxParagraphs,
@@ -102,7 +110,10 @@ export function parseArgs(argv) {
     else if (a === '--out') out.out = value(i++, a);
     else if (a === '--files') {
       const v = value(i++, a);
-      out.files = v ? v.split(',').map(x => x.trim().padStart(2, '0')) : null;
+      // old numbers (05, 13) and labels (2.1, 2.2) both work, an unknown one is an error
+      const list = v ? parseComponentList(v) : null;
+      out.files = list ? list.keys : null;
+      list?.errors.forEach(e => out.errors.push(`--files: ${e}`));
     } else if (a.startsWith('--')) out.errors.push(`Unknown option ${a}.`);
     else rest.push(a);
   }
@@ -173,12 +184,14 @@ export function planQuiz(questions, issues, existing) {
   };
 }
 
-const sourceFolder = (root, nr) => {
-  const dir = readdirSync(root, { withFileTypes: true }).find(
-    d => d.isDirectory() && d.name.startsWith(`${nr}_`)
-  );
+/**
+ * The Global_Quiz.docx of the component with the folder number `nr` (the order index with two digits).
+ * The folder is found by its number in the old spelling (02_, 13_) or the new one (2.1_, 2.2_).
+ */
+export const sourceFolder = (folders, root, nr) => {
+  const dir = folders.find(f => f.key === nr);
   return dir
-    ? path.join(root, dir.name, 'Global_Quiz', 'Global_Quiz.docx')
+    ? path.join(root, dir.dirName, 'Global_Quiz', 'Global_Quiz.docx')
     : null;
 };
 
@@ -297,29 +310,48 @@ async function execute(args, client) {
     console.error(`Refused: ${args.source} does not exist.`);
     return 1;
   }
+  const { folders, problems } = listComponentFolders(args.source);
+  if (problems.length) {
+    console.error(
+      `Refused: the component folders are not clear: ${problems.join(' ')}`
+    );
+    return 1;
+  }
   const quizzes = await loadQuizzes(client);
   const plan = [];
   const gaps = [];
-  for (const [nr, why] of Object.entries(LEFT_OUT))
-    if (!args.files || args.files.includes(nr.padStart(2, '0')))
-      gaps.push({ file: nr, why });
+  for (const [nr, why] of Object.entries(LEFT_OUT)) {
+    const key = nr.padStart(2, '0');
+    if (!args.files || args.files.includes(key))
+      gaps.push({ file: key, component: describeComponent(key), why });
+  }
   for (const [nr, label] of Object.entries(QUIZ_OF_FILE)) {
     const key = String(nr).padStart(2, '0');
     if (args.files && !args.files.includes(key)) continue;
-    const file = sourceFolder(args.source, key);
+    const name = describeComponent(key);
+    const file = sourceFolder(folders, args.source, key);
     if (!file || !existsSync(file)) {
-      gaps.push({ file: key, why: 'no Global_Quiz.docx in the folder' });
+      gaps.push({
+        file: key,
+        component: name,
+        why: 'no Global_Quiz.docx in the folder',
+      });
       continue;
     }
     const quiz = quizzes.find(z => norm(z.title).startsWith(norm(label)));
     if (!quiz) {
-      gaps.push({ file: key, why: `no quiz "${label}" in the Preview` });
+      gaps.push({
+        file: key,
+        component: name,
+        why: `no quiz "${label}" in the Preview`,
+      });
       continue;
     }
     const read = parseGlobalQuiz(await docxParagraphs(readFileSync(file)));
     const result = planQuiz(read.questions, read.issues, quiz.questions);
     plan.push({
       file: key,
+      component: name,
       label,
       quiz,
       read,
@@ -342,14 +374,15 @@ async function execute(args, client) {
       ? `; not readable: ${p.read.issues.length} (${[...new Set(p.read.issues.map(i => i.code))].join(', ')})`
       : '';
     console.log(
-      `  - ${p.file} ${p.label.slice(0, 40)}: ${r.status} ${detail}${issues}`
+      `  - ${p.component} ${p.label.slice(0, 40)}: ${r.status} ${detail}${issues}`
     );
   }
-  for (const g of gaps) console.log(`  - left out ${g.file}: ${g.why}`);
+  for (const g of gaps) console.log(`  - left out ${g.component}: ${g.why}`);
 
   const summary = {
     plan: plan.map(p => ({
       file: p.file,
+      component: p.component,
       quiz: p.quiz.title,
       status: p.result.status,
       readable: p.read.questions.length,
@@ -390,7 +423,7 @@ async function execute(args, client) {
         await client.query('rollback');
         report.blocked.push({ file: p.file, quizId, answers });
         console.error(
-          `Quiz ${p.file} left as it was: ${answers} test answers on questions that would change.`
+          `Quiz ${p.component} left as it was: ${answers} test answers on questions that would change.`
         );
         continue;
       }
@@ -449,7 +482,7 @@ async function execute(args, client) {
       failed++;
       report.changed = report.changed.filter(c => c.quizId !== quizId);
       console.error(
-        `Quiz ${p.file} failed and was left as it was: ${err?.message}`
+        `Quiz ${p.component} failed and was left as it was: ${err?.message}`
       );
     }
   }

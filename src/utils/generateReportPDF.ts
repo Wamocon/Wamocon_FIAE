@@ -24,6 +24,8 @@ interface TrainingUseCase {
 interface TrainingComponent {
   id: string;
   code: string;
+  /** What people see (FIAE: 2.1, 2.2, ...), the code stays the key. */
+  label?: string;
   title: string;
 }
 
@@ -419,7 +421,7 @@ export async function generateActivityReportPDF(
     }
 
     return [
-      component?.code || '-',
+      component?.label || component?.code || '-',
       `${useCase?.letter || '-'}) ${useCase?.description || 'Unbekannt'}`,
       `${entry.actualHours}`,
       gradeText(entry.traineeGrade),

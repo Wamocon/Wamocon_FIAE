@@ -1283,3 +1283,93 @@ describe('ReviewView: originals for the trainees', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('ReviewView: the label of a FIAE component', () => {
+  // FIAE shows 2.1 and 2.2 for the components 2-P1 and 2-P2, the code stays the value of the assignment
+  const FIAE_OPTIONS = {
+    docTypes: ['enabler', 'quiz', 'pdf_original'],
+    quizLevels: ['low'],
+    components: [
+      {
+        code: '2-P1',
+        label: '2.1',
+        title: 'Informieren',
+        isNew: false,
+        enablers: [],
+      },
+      {
+        code: '2-P2',
+        label: '2.2',
+        title: 'Informieren (Vertiefung)',
+        isNew: false,
+        enablers: [],
+      },
+    ],
+  };
+
+  async function openFiae() {
+    const client = fakeClient();
+    client.options.mockResolvedValue(FIAE_OPTIONS);
+    const rows = [
+      rowDto({
+        band: 'high',
+        fileName: 'F_Text.docx',
+        effective: {
+          docType: 'enabler',
+          componentCode: '2-P2',
+          enablerCode: null,
+          quizLevel: null,
+        },
+      }),
+    ];
+    return open(client, fakeUpload(), rows, {
+      facets: { components: ['2-P1', '2-P2'], docTypes: ['enabler'] },
+    });
+  }
+
+  it('shows the label in the component select of the details and keeps the code as value', async () => {
+    const { user, rows } = await openFiae();
+    await user.click(
+      screen.getByRole('button', { name: 'Details zu F_Text.docx anzeigen' })
+    );
+    const details = document.getElementById(`details-${rows[0].id}`)!;
+    const select = within(details).getByLabelText(
+      'Komponente'
+    ) as HTMLSelectElement;
+    const options = [...select.options].map(o => [o.value, o.textContent]);
+    expect(options).toEqual([
+      ['', 'Bitte wählen'],
+      ['2-P1', '2.1 Informieren'],
+      ['2-P2', '2.2 Informieren (Vertiefung)'],
+    ]);
+    expect(select.value).toBe('2-P2');
+  });
+
+  it('shows the label in the filter, in the proposal text and in the dialog for a selection', async () => {
+    const { user } = await openFiae();
+    const filter = screen.getByLabelText('Komponente') as HTMLSelectElement;
+    // the labels come with the options of the run, a moment after the list
+    await waitFor(() =>
+      expect([...filter.options].map(o => [o.value, o.textContent])).toEqual([
+        ['', 'Alle'],
+        ['2-P1', '2.1'],
+        ['2-P2', '2.2'],
+      ])
+    );
+    expect(within(rowOf('F_Text.docx')).getByText(/Enabler.*2\.2/)).toBeInTheDocument();
+    expect(within(rowOf('F_Text.docx')).queryByText(/2-P2/)).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Datei F_Text.docx auswählen' })
+    );
+    await user.click(screen.getByRole('button', { name: 'Zuordnung ändern' }));
+    const dialog = screen.getByRole('dialog', { name: 'Zuordnung ändern' });
+    const component = within(dialog).getByLabelText(
+      'Komponente'
+    ) as HTMLSelectElement;
+    expect([...component.options].map(o => o.textContent)).toEqual([
+      'Nicht ändern',
+      '2.1 Informieren',
+      '2.2 Informieren (Vertiefung)',
+    ]);
+  });
+});
