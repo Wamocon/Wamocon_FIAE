@@ -123,7 +123,8 @@ export async function POST(req: NextRequest) {
       title,
       notes,
       description,
-      sendInvitation = true,
+      // No invitation unless the caller asks for it (WMCNL-3017)
+      sendInvitation = false,
       examSubType,
     } = body;
 
