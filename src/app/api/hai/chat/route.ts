@@ -154,11 +154,11 @@ async function getPreviousMessages(
 
   const storedSummary =
     session.length > 0 &&
-      session[0].metadata &&
-      typeof session[0].metadata === 'object' &&
-      'conversationSummary' in (session[0].metadata as Record<string, unknown>)
+    session[0].metadata &&
+    typeof session[0].metadata === 'object' &&
+    'conversationSummary' in (session[0].metadata as Record<string, unknown>)
       ? ((session[0].metadata as Record<string, unknown>)
-        .conversationSummary as string)
+          .conversationSummary as string)
       : undefined;
 
   const messages = await db
@@ -429,20 +429,20 @@ async function updateAssistantMessage(
 
   const existingMeta =
     current.length > 0 &&
-      current[0].metadata &&
-      typeof current[0].metadata === 'object'
+    current[0].metadata &&
+    typeof current[0].metadata === 'object'
       ? (current[0].metadata as Record<string, unknown>)
       : {};
 
   // Update the last version entry with the actual content
   const versions = Array.isArray(existingMeta.versions)
     ? [
-      ...(existingMeta.versions as Array<{
-        content: string;
-        citations: unknown[];
-        createdAt: string;
-      }>),
-    ]
+        ...(existingMeta.versions as Array<{
+          content: string;
+          citations: unknown[];
+          createdAt: string;
+        }>),
+      ]
     : [];
 
   if (versions.length > 0) {
@@ -752,24 +752,24 @@ export async function POST(req: NextRequest) {
 
       const existingMetadata =
         messageRecord[0].metadata &&
-          typeof messageRecord[0].metadata === 'object'
+        typeof messageRecord[0].metadata === 'object'
           ? (messageRecord[0].metadata as Record<string, unknown>)
           : {};
 
       // Build user message version history in metadata
       const userVersions = Array.isArray(existingMetadata.versions)
         ? [
-          ...(existingMetadata.versions as Array<{
-            content: string;
-            createdAt: string;
-          }>),
-        ]
+            ...(existingMetadata.versions as Array<{
+              content: string;
+              createdAt: string;
+            }>),
+          ]
         : [
-          {
-            content: messageRecord[0].content,
-            createdAt: messageRecord[0].createdAt.toISOString(),
-          },
-        ];
+            {
+              content: messageRecord[0].content,
+              createdAt: messageRecord[0].createdAt.toISOString(),
+            },
+          ];
 
       // Only add new version if content actually changed
       const lastUserVersion = userVersions[userVersions.length - 1];
@@ -826,25 +826,25 @@ export async function POST(req: NextRequest) {
         // Save old assistant content as version in its metadata
         const assistantMeta =
           assistantAfter[0].metadata &&
-            typeof assistantAfter[0].metadata === 'object'
+          typeof assistantAfter[0].metadata === 'object'
             ? (assistantAfter[0].metadata as Record<string, unknown>)
             : {};
 
         const assistantVersions = Array.isArray(assistantMeta.versions)
           ? [
-            ...(assistantMeta.versions as Array<{
-              content: string;
-              citations: unknown[];
-              createdAt: string;
-            }>),
-          ]
+              ...(assistantMeta.versions as Array<{
+                content: string;
+                citations: unknown[];
+                createdAt: string;
+              }>),
+            ]
           : [
-            {
-              content: assistantAfter[0].content,
-              citations: assistantAfter[0].citations || [],
-              createdAt: assistantAfter[0].createdAt.toISOString(),
-            },
-          ];
+              {
+                content: assistantAfter[0].content,
+                citations: assistantAfter[0].citations || [],
+                createdAt: assistantAfter[0].createdAt.toISOString(),
+              },
+            ];
 
         // Add empty placeholder for the new version (will be filled after streaming)
         assistantVersions.push({
@@ -909,6 +909,8 @@ export async function POST(req: NextRequest) {
       conversationSummary: storedSummary,
       crossSessionMemory,
       voice: wantsVoice,
+      // the admin level comes from the session, only for the navigation pages
+      isAdmin: me.isAdmin,
       trainingScope: buildHaiTrainingScope({
         role: userRole,
         startOfTrainingDate: user[0].startOfTrainingDate,
@@ -992,7 +994,7 @@ export async function POST(req: NextRequest) {
                   updatedAt: new Date(),
                 })
                 .where(eq(haiChatSessions.id, sessionId))
-                .catch(() => { });
+                .catch(() => {});
             }
 
             // Periodically generate and save conversation summary (every 10 messages)
@@ -1008,7 +1010,7 @@ export async function POST(req: NextRequest) {
                 allMsgs.messages,
                 storedSummary
               );
-              saveSessionSummary(sessionId, summary, facts).catch(() => { });
+              saveSessionSummary(sessionId, summary, facts).catch(() => {});
             } else if (msgCount <= 4) {
               // Early fact extraction for new sessions — save key facts
               // immediately so cross-session memory works from the start
@@ -1021,7 +1023,7 @@ export async function POST(req: NextRequest) {
               if (earlyFacts.length > 0) {
                 const earlySummary = generateLocalSummary(earlyMsgs.messages);
                 saveSessionSummary(sessionId, earlySummary, earlyFacts).catch(
-                  () => { }
+                  () => {}
                 );
               }
             }
@@ -1035,6 +1037,7 @@ export async function POST(req: NextRequest) {
                   citations: result.citations,
                   intent: result.intent,
                   pendingAction: result.pendingAction,
+                  navigationOffer: result.navigationOffer,
                 })}\n\n`
               )
             );
@@ -1042,14 +1045,13 @@ export async function POST(req: NextRequest) {
           } catch (error) {
             console.error('HAI.ai stream error:', error);
             const lang = req.headers.get('x-language') || 'de';
-            const errorMsg = lang === 'en'
-              ? 'An internal error occurred. Please try again later.'
-              : 'Ein interner Fehler ist aufgetreten. Bitte versuche es später erneut.';
+            const errorMsg =
+              lang === 'en'
+                ? 'An internal error occurred. Please try again later.'
+                : 'Ein interner Fehler ist aufgetreten. Bitte versuche es später erneut.';
 
             controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ error: errorMsg })}\n\n`
-              )
+              encoder.encode(`data: ${JSON.stringify({ error: errorMsg })}\n\n`)
             );
             controller.close();
           }
@@ -1113,7 +1115,7 @@ export async function POST(req: NextRequest) {
           updatedAt: new Date(),
         })
         .where(eq(haiChatSessions.id, sessionId))
-        .catch(() => { });
+        .catch(() => {});
     }
 
     // Periodically generate and save conversation summary (every 10 messages)
@@ -1129,7 +1131,7 @@ export async function POST(req: NextRequest) {
         allMsgsNonStream.messages,
         storedSummary
       );
-      saveSessionSummary(sessionId, summaryNonStream, factsNS).catch(() => { });
+      saveSessionSummary(sessionId, summaryNonStream, factsNS).catch(() => {});
     } else if (msgCountNonStream <= 4) {
       // Early fact extraction for new sessions
       const earlyMsgsNS = await getPreviousMessages(sessionId, 10);
@@ -1141,7 +1143,7 @@ export async function POST(req: NextRequest) {
       if (earlyFactsNS.length > 0) {
         const earlySummaryNS = generateLocalSummary(earlyMsgsNS.messages);
         saveSessionSummary(sessionId, earlySummaryNS, earlyFactsNS).catch(
-          () => { }
+          () => {}
         );
       }
     }
@@ -1154,18 +1156,20 @@ export async function POST(req: NextRequest) {
       intent: result.intent,
       quizState: result.quizState,
       pendingAction: result.pendingAction,
+      navigationOffer: result.navigationOffer,
     });
   } catch (error) {
     console.error('HAI.ai chat error:', error);
     const lang = req.headers.get('x-language') || 'de';
-    const errorMsg = lang === 'en'
-      ? 'An internal error occurred. Please try again later.'
-      : 'Ein interner Fehler ist aufgetreten. Bitte versuche es später erneut.';
+    const errorMsg =
+      lang === 'en'
+        ? 'An internal error occurred. Please try again later.'
+        : 'Ein interner Fehler ist aufgetreten. Bitte versuche es später erneut.';
 
     return NextResponse.json(
       {
         error: errorMsg,
-        errorKey: 'hai.error.somethingWrong'
+        errorKey: 'hai.error.somethingWrong',
       },
       { status: 500 }
     );
