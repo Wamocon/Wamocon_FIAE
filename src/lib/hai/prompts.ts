@@ -55,6 +55,12 @@ export interface PromptContext {
    * Without it the prompt is unchanged.
    */
   learningTechniques?: boolean;
+  /**
+   * The question was spoken and the answer is read aloud (voice assistant, day
+   * companion). Adds the voice section before the borderline rules, so those keep
+   * the last word. Without it the prompt is unchanged (FIAE byte for byte).
+   */
+  voice?: boolean;
 }
 
 // ============================================================================
@@ -137,6 +143,34 @@ ${persona.forbiddenLine}
 - Wenn im Abschnitt "Aktuelle Plattform-Daten" KEINE Daten zu einer Frage stehen → sage: "Dazu liegen mir aktuell keine Daten vor. Bitte pruefe es direkt in der Plattform."
 - Wenn du bei einer falschen Aussage korrigiert wirst → entschuldige dich KURZ und verweise auf die Plattform. Erfinde KEINE technischen Erklaerungen (keine "Sync-Fehler", "Datenlatenz", "Export-Zeitpunkte", "Tech-Team" etc.)
 - NUR Daten nennen die EXPLIZIT im System-Prompt unter "Aktuelle Plattform-Daten" stehen. Alles andere ist NICHT verfuegbar.`;
+}
+
+/**
+ * The voice assistant and day companion (WMCNL-2907): the answer is read aloud,
+ * so it is short, free of markup and ends in at most one question. Content rules
+ * (occupation separation, solution protection, learning technique limits) do not
+ * change with the way of speaking, the borderline rules that follow say so again.
+ * Modelled on the speech mode of damicon (format rules) and the day companion
+ * there (at most three points, one question at the end).
+ */
+export function buildVoiceRules(userRole?: PromptContext['userRole']): string {
+  // the sentence on solutions depends on the role: a trainer never reads the sentence of a trainee
+  const solutionLine =
+    userRole === 'TRAINER'
+      ? '- Der Nutzer ist Trainer: Musterlösungen und richtige Antworten aus dem Kontext nennst, fasst zusammen und vergleichst du auch gesprochen, kurz in höchstens vier Sätzen. Lehne das nicht ab.'
+      : '- Sprechen macht nichts lockerer: Was dir die Zusatzregeln am Ende verbieten (andere Berufe, Musterlösungen, Lernhinweise), gilt gesprochen genauso.';
+  return [
+    '## Sprachassistent (Tagesbegleiter)',
+    'Der Nutzer spricht mit dir, deine Antwort wird laut vorgelesen. Antworte wie ein freundlicher Kollege im Gespräch:',
+    '- Kurz: höchstens vier Sätze, jeder Satz kurz und gut sprechbar. Kein Vortrag.',
+    '- Kein Markdown: keine Überschriften, Aufzählungszeichen, Tabellen, Fettschrift, Emojis, Links und keine Quellenangaben in Klammern. Code liest du nicht vor, beschreibe ihn mit Worten und verweise auf den Chat.',
+    '- Zahlen, Fristen und Zeiten so, wie man sie spricht ("bis Freitag", "um halb neun", "zwölf von dreißig").',
+    solutionLine,
+    '- Antworte zuerst auf die Frage, auch kurz. Frage nur zurück, wenn ohne die Angabe keine sinnvolle Antwort möglich ist.',
+    '- Tagesbegleiter: Fragt der Nutzer, was heute ansteht, bittet er um einen Plan oder begrüßt er dich am Tagesbeginn, nutze nur die Daten im Abschnitt "Aktuelle Plattform-Daten". Nenne höchstens drei Punkte, das Dringendste zuerst (Frist, Prüfung, Rückmeldung zu einer Abgabe), begründe den ersten kurz und schließe mit genau einer Frage, womit er beginnen will. Erfinde keine Termine, Fristen oder Noten. Fehlen Daten, sage es und verweise auf die Plattform.',
+    '- Höchstens eine Frage je Antwort, nie dieselbe zweimal. Nach einer reinen Auskunft endet die Antwort ohne Frage.',
+    '- Keine Einschätzung von Stimme, Tonfall oder Stimmung des Nutzers und keine Diagnosen.',
+  ].join('\n');
 }
 
 /**
@@ -357,6 +391,9 @@ Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, a
   // that FIAE gets them too, and the baseline was recorded again for this
   // change only. They come before the learning technique section, which stays
   // the last part when it applies.
+  if (context.voice) {
+    parts.push(buildVoiceRules(context.userRole));
+  }
   parts.push(buildBoundaryRules(context.userRole));
 
   // Learning technique section (package B): limits and rules for tips on

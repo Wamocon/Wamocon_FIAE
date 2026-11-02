@@ -13,6 +13,7 @@ import { useHai } from './HaiProvider';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { HaiMessage } from './HaiMessage';
 import { HaiSessionList } from './HaiSessionList';
+import { HaiVoiceControl } from './HaiVoiceControl';
 import { HaiLogoBanner, HaiLogoInline } from './HaiLogoBanner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -138,6 +139,7 @@ function ChatWidget() {
 
       {/* Input */}
       <div className="rounded-b-2xl border-t border-white/10 bg-[#161b22] p-3">
+        <HaiVoiceControl />
         <div className="relative">
           <textarea
             value={inputValue}
@@ -386,6 +388,7 @@ function ChatFull() {
           {/* Input Area */}
           <div className="bg-black/20 p-4 md:p-6">
             <div className="relative mx-auto max-w-3xl">
+              <HaiVoiceControl />
               <div className="relative rounded-2xl border border-white/5 bg-[#161b22]/50 shadow-lg transition-all duration-200 focus-within:border-cyan-500/30 focus-within:bg-black/40 focus-within:ring-1 focus-within:ring-cyan-500/30">
                 <textarea
                   ref={inputRef}

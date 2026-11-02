@@ -84,6 +84,21 @@ describe('HaiProvider calls the HAI routes with the session token', () => {
     expect(plainFetch).not.toHaveBeenCalled();
   });
 
+  it('sends no voice flag for a typed question and voice true for a spoken one', async () => {
+    await act(async () => {
+      await hai.sendMessage('Getippt');
+      await hai.sendMessage('Gesprochen', { voice: true });
+      await hai.sendMessage('Nicht wahr', { voice: false });
+    });
+    const bodies = authFetchMock.mock.calls
+      .filter(([url]) => String(url) === '/api/hai/chat')
+      .map(([, init]) => JSON.parse(String(init!.body)));
+    expect(bodies).toHaveLength(3);
+    expect(bodies[0]).not.toHaveProperty('voice');
+    expect(bodies[1]).toMatchObject({ message: 'Gesprochen', voice: true });
+    expect(bodies[2]).not.toHaveProperty('voice');
+  });
+
   it('loads, searches, renames, deletes and opens sessions through authFetch', async () => {
     await act(async () => {
       await hai.refreshSessions();
