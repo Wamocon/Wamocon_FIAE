@@ -299,3 +299,109 @@ test('a task version with a solution part is recognized, one without is not', as
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------- numbering of the folders (02.11.2026)
+
+/** A folder tree with the components 2 and 13 (a pair), 1 and 7 (single), named by the given function. */
+function writeTree(root, names) {
+  const dirs = {};
+  for (const [nr, name] of Object.entries(names)) {
+    const comp = path.join(root, name);
+    const enabler = path.join(comp, 'Enablers', '01_Grundlagen');
+    mkdirSync(path.join(enabler, 'Szenario parts'), { recursive: true });
+    writeFileSync(path.join(enabler, '01_Grundlagen.docx'), `main ${nr}`);
+    writeFileSync(path.join(enabler, 'Szenario parts', 'Part1_eins.docx'), `part ${nr}`);
+    mkdirSync(path.join(comp, 'Use_Cases'), { recursive: true });
+    writeFileSync(path.join(comp, 'Use_Cases', '1a_Use-Case_A.docx'), `uc ${nr}`);
+    dirs[nr] = comp;
+  }
+  return dirs;
+}
+
+/** What a plan sees of a source: component, enablers, parts and use cases, without the folder names. */
+const shape = comps =>
+  comps.map(c => ({
+    nr: c.nr,
+    key: c.key,
+    name: c.name,
+    enablers: c.enablers.map(e => [e.key, e.parts.map(p => p.n), e.main !== null]),
+    useCases: c.useCases.map(u => u.key),
+  }));
+
+test('the old and the new folder names lead to the same plan', () => {
+  const oldRoot = mkdtempSync(path.join(tmpdir(), 'fiae-old-'));
+  const newRoot = mkdtempSync(path.join(tmpdir(), 'fiae-new-'));
+  try {
+    writeTree(oldRoot, {
+      1: '01_Planen',
+      2: '02_Informieren und Beraten',
+      7: '07_Erbringen',
+      13: '13_Informieren und Beraten (Vertiefung)',
+    });
+    writeTree(newRoot, {
+      1: '1_Planen',
+      2: '2.1_Informieren und Beraten',
+      7: '7_Erbringen',
+      13: '2.2_Informieren und Beraten (Vertiefung)',
+    });
+    const a = readSource(oldRoot);
+    const b = readSource(newRoot);
+    assert.deepEqual(shape(a), shape(b));
+    assert.deepEqual(a.map(c => c.nr), [1, 2, 7, 13]);
+    assert.equal(b[1].name, '2.1 (Ordner 02)');
+    assert.equal(b[3].name, '2.2 (Ordner 13)');
+  } finally {
+    rmSync(oldRoot, { recursive: true, force: true });
+    rmSync(newRoot, { recursive: true, force: true });
+  }
+});
+
+test('both spellings in one folder work and a folder of the new spelling is matched to its course', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'fiae-mix-'));
+  try {
+    writeTree(root, {
+      2: '2.1_Informieren und Beraten von Kunden (§4 Absatz 2 Nr 2)',
+      13: '13_Informieren und Beraten von Kunden und Kundinnen',
+    });
+    const comps = readSource(root);
+    assert.deepEqual(comps.map(c => c.key), ['02', '13']);
+    const { map, problems } = mapComponents(comps, [
+      { id: 'a', title: 'Informieren und Beraten von Kunden (§ 4 Abs. 2 Nr. 2)' },
+      {
+        id: 'b',
+        title: 'Informieren und Beraten von Kunden (Vertiefung) (§ 4 Abs. 2 Nr. 2 J2)',
+      },
+    ]);
+    assert.deepEqual(problems, []);
+    assert.equal(map.get(2).id, 'a');
+    assert.equal(map.get(13).id, 'b');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('an unknown pattern or two folders for one component stop the read with a message', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'fiae-bad-'));
+  try {
+    mkdirSync(path.join(root, '2.3_Falsch'));
+    assert.throws(() => readSource(root), /2\.3_Falsch.*not clear|not clear.*2\.3_Falsch/);
+    rmSync(path.join(root, '2.3_Falsch'), { recursive: true });
+    mkdirSync(path.join(root, '13.1_Falsch'));
+    assert.throws(() => readSource(root), /13\.1_Falsch/);
+    rmSync(path.join(root, '13.1_Falsch'), { recursive: true });
+    mkdirSync(path.join(root, '02_Informieren'));
+    mkdirSync(path.join(root, '2.1_Informieren'));
+    assert.throws(() => readSource(root), /Two folders for the component 2\.1 \(Ordner 02\)/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('--components reads old numbers and labels and refuses an unknown value', () => {
+  assert.deepEqual(
+    parseArgs(['run', 'src', '--target', 'preview', '--components', '2.1,2.2,5']).components,
+    ['02', '13', '05']
+  );
+  const bad = parseArgs(['run', 'src', '--target', 'preview', '--components', '2.3']);
+  assert.ok(bad.errors.some(e => /--components/.test(e) && /2\.3/.test(e)));
+});

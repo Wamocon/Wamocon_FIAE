@@ -23,6 +23,7 @@ import path from 'node:path';
 
 import { mapComponents, matchEnablers, readSource } from './fiae-documents.mjs';
 import { docxLines, norm, parseQuizLines, stemKey } from './fiae-quiz-parse.mjs';
+import { parseComponentList } from './fiae-component-folder.mjs';
 import {
   openVerifiedClient,
   prepareConnection,
@@ -64,7 +65,10 @@ export function parseArgs(argv) {
     else if (a === '--out') out.out = value(i++, a);
     else if (a === '--components') {
       const v = value(i++, a);
-      out.components = v ? v.split(',').map(x => x.trim().padStart(2, '0')) : null;
+      // old numbers (05, 13) and labels (2.1, 2.2) both work, an unknown one is an error
+      const list = v ? parseComponentList(v) : null;
+      out.components = list ? list.keys : null;
+      list?.errors.forEach(e => out.errors.push(`--components: ${e}`));
     } else if (a.startsWith('--')) out.errors.push(`Unknown option ${a}.`);
     else rest.push(a);
   }
@@ -229,7 +233,7 @@ async function execute(args, client) {
     for (let i = 0; i < comp.enablers.length; i++) {
       const fe = comp.enablers[i];
       const hit = matched.get(i);
-      const label = `${comp.key}/${fe.key}`;
+      const label = `${comp.name} / ${fe.key}`;
       if (!hit) {
         plan.counts.noEnabler++;
         plan.gaps.noEnabler.push(`${label} ${fe.folder}`);
