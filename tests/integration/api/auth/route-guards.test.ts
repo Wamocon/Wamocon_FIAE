@@ -215,26 +215,24 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
 
   it('lists every exported HAI handler in the table', () => {
     // A new method on a HAI route without a guard entry fails here
-    const dir = path.join(process.cwd(), 'src/app/api/hai');
+    const root = path.join(process.cwd(), 'src/app/api/hai');
     const found: string[] = [];
-    // Nested folders count too (hai/quiz-mode/next)
-    const walk = (folder: string, route: string) => {
-      const file = path.join(folder, 'route.ts');
-      if (fs.existsSync(file)) {
-        const source = fs.readFileSync(file, 'utf8');
-        for (const m of source.matchAll(
-          /export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\b/g
-        )) {
-          found.push(`${m[1]} ${route}`);
-        }
-      }
-      for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
+    // every depth: hai/voice/haus/speech is a handler of the HAI as well
+    const walk = (dir: string, prefix: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         if (entry.isDirectory()) {
-          walk(path.join(folder, entry.name), `${route}/${entry.name}`);
+          walk(path.join(dir, entry.name), `${prefix}/${entry.name}`);
+        } else if (entry.name === 'route.ts') {
+          const source = fs.readFileSync(path.join(dir, entry.name), 'utf8');
+          for (const m of source.matchAll(
+            /export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\b/g
+          )) {
+            found.push(`${m[1]} ${prefix}`);
+          }
         }
       }
     };
-    walk(dir, 'hai');
+    walk(root, 'hai');
     const listed = GUARDED_ROUTES.filter(r => r.route.startsWith('hai/')).map(
       r => `${r.method} ${r.route}`
     );

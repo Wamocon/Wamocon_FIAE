@@ -1216,6 +1216,41 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   { route: 'hai/voice', method: 'GET', guard: 'user', params: [] },
   { route: 'hai/quiz-mode/next', method: 'POST', guard: 'user', params: [] },
   { route: 'hai/quiz-mode/answer', method: 'POST', guard: 'user', params: [] },
+  // the voice providers (Soniox, Sokrates): every route also checks the switch of
+  // the organization (403 VOICE_DISABLED), see tests/integration/api/hai/voice-*.test.ts
+  { route: 'hai/voice/config', method: 'GET', guard: 'user', params: [] },
+  {
+    route: 'hai/voice/soniox-token',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'hai/voice/haus/transcribe',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  { route: 'hai/voice/haus/speech', method: 'POST', guard: 'user', params: [] },
+  // the HAI admin page: only the platform admin
+  {
+    route: 'admin/hai/settings',
+    method: 'GET',
+    guard: 'superAdmin',
+    params: [],
+  },
+  {
+    route: 'admin/hai/settings',
+    method: 'PUT',
+    guard: 'superAdmin',
+    params: [],
+  },
+  {
+    route: 'admin/hai/voice-status',
+    method: 'GET',
+    guard: 'superAdmin',
+    params: [],
+  },
   { route: 'hai/embed', method: 'POST', guard: 'haiIndex', params: [] },
   { route: 'hai/embed', method: 'GET', guard: 'haiIndex', params: [] },
   { route: 'hai/embed', method: 'DELETE', guard: 'haiIndex', params: [] },
