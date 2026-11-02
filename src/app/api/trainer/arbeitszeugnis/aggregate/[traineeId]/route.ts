@@ -10,10 +10,13 @@ import {
     profiles,
     weeklyEvaluations,
     weeklySoftskillRatings,
-    mesSoftskillCriteria
+    mesSoftskillCriteria,
+    TRAINING_CATALOG_IDS
 } from '@/db/migrations/schemas/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
 import { getTrainingYearDateRange } from '@/lib/ausbildung/duration';
+import { FIAE_CATALOG_CODE } from '@/lib/catalog/branding';
+import { getComponentLabel } from '@/lib/catalog/component-label';
 
 interface SoftSkillRating {
     criterionId: string;
@@ -110,6 +113,7 @@ export async function GET(
                 componentCode: trainingComponents.code,
                 componentTitle: trainingComponents.title,
                 componentOrderIndex: trainingComponents.orderIndex,
+                componentCatalogId: trainingComponents.trainingCatalogId,
                 reportPeriodStart: activityReports.periodStart,
             })
             .from(activityReportUseCaseEntries)
@@ -130,6 +134,7 @@ export async function GET(
         const componentMap = new Map<string, {
             componentId: string;
             componentCode: string;
+            componentLabel: string;
             componentTitle: string;
             orderIndex: number;
             useCases: Array<{
@@ -154,6 +159,15 @@ export async function GET(
                 componentMap.set(key, {
                     componentId: entry.componentId,
                     componentCode: entry.componentCode,
+                    // what people see (FIAE: 2.1, 2.2, ...); the code stays the key
+                    componentLabel: getComponentLabel({
+                        catalogCode:
+                            entry.componentCatalogId === TRAINING_CATALOG_IDS.FIAE
+                                ? FIAE_CATALOG_CODE
+                                : null,
+                        code: entry.componentCode,
+                        orderIndex: entry.componentOrderIndex,
+                    }),
                     componentTitle: entry.componentTitle,
                     orderIndex: entry.componentOrderIndex,
                     useCases: [],
@@ -192,6 +206,7 @@ export async function GET(
             .map(comp => ({
                 componentId: comp.componentId,
                 componentCode: comp.componentCode,
+                componentLabel: comp.componentLabel,
                 componentTitle: comp.componentTitle,
                 useCases: comp.useCases,
                 totalHours: comp.totalHours,

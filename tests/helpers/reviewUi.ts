@@ -155,6 +155,7 @@ export const OPTIONS: ReviewOptions = {
   components: [
     {
       code: 'K1',
+      label: 'K1',
       title: 'Erfundenes Thema',
       isNew: false,
       enablers: [
@@ -164,6 +165,7 @@ export const OPTIONS: ReviewOptions = {
     },
     {
       code: 'K12',
+      label: 'K12',
       title: null,
       isNew: false,
       enablers: [{ code: 'K12-a', title: null, isNew: false }],

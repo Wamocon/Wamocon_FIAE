@@ -55,6 +55,8 @@ interface Trainee {
 interface ComponentData {
   componentId: string;
   componentCode: string;
+  /** What people see (FIAE: 2.1, 2.2, ...), the code stays the key. */
+  componentLabel?: string;
   componentTitle: string;
   averageGrade: number | null;
   finalGrade: number | null;
@@ -1596,9 +1598,10 @@ export function ArbeitszeugnisGenerator() {
                   <div className="flex-1">
                     <p className="font-medium">{comp.componentTitle}</p>
                     <p className="text-muted-foreground text-xs">
-                      {comp.componentCode} • {comp.totalHours}{' '}
-                      {t('arbeitszeugnis.hours')} • {comp.gradedCount}/
-                      {comp.totalUseCases} {t('arbeitszeugnis.graded')}
+                      {comp.componentLabel ?? comp.componentCode} •{' '}
+                      {comp.totalHours} {t('arbeitszeugnis.hours')} •{' '}
+                      {comp.gradedCount}/{comp.totalUseCases}{' '}
+                      {t('arbeitszeugnis.graded')}
                     </p>
                   </div>
                   <span

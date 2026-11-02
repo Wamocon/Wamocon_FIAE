@@ -18,6 +18,7 @@ import { StockBadge } from '@/components/admin/content-upload/StockBadge';
 import { KiBadge } from '@/components/admin/content-upload/KiBadge';
 import {
   KIND_KEYS,
+  componentLabelOf,
   fileCodeLabel,
   formatBytes,
   formatDate,
@@ -36,8 +37,15 @@ import {
 
 type Translate = ReturnType<typeof useLanguage>['t'];
 
-/** "Quiz leicht, K1-a": the type and assignment of a file in one phrase. */
-export function describeAssignment(t: Translate, a: AssignmentDto): string {
+/**
+ * "Quiz leicht, K1-a": the type and assignment of a file in one phrase.
+ * `componentLabel` turns a component code into what people see (FIAE: 2.1).
+ */
+export function describeAssignment(
+  t: Translate,
+  a: AssignmentDto,
+  componentLabel: (code: string) => string = code => code
+): string {
   if (!a.docType) return '';
   const head = [
     typeLabel(t, a.docType),
@@ -45,7 +53,9 @@ export function describeAssignment(t: Translate, a: AssignmentDto): string {
   ]
     .filter(Boolean)
     .join(' ');
-  const where = a.enablerCode ?? a.componentCode;
+  const where =
+    a.enablerCode ??
+    (a.componentCode ? componentLabel(a.componentCode) : a.componentCode);
   return where ? `${head}, ${where}` : head;
 }
 
@@ -141,6 +151,7 @@ export function ReviewTable({
     selectable.length > 0 && selectable.every(r => selected.has(r.id));
   const someOnPage = selectable.some(r => selected.has(r.id));
   const headBox = useRef<HTMLInputElement>(null);
+  const componentLabel = (code: string) => componentLabelOf(options, code);
   useEffect(() => {
     if (headBox.current)
       headBox.current.indeterminate = someOnPage && !allOnPage;
@@ -215,6 +226,7 @@ export function ReviewTable({
                 onToggleExpand={onToggleExpand}
                 onDecide={onDecide}
                 onOpenDuplicate={onOpenDuplicate}
+                componentLabel={componentLabel}
               />
               {expanded.has(row.id) && (
                 <tr
@@ -258,6 +270,7 @@ function Row({
   onToggleExpand,
   onDecide,
   onOpenDuplicate,
+  componentLabel,
 }: {
   row: ReviewRowDto;
   t: Translate;
@@ -270,6 +283,7 @@ function Row({
   onToggleExpand: Props['onToggleExpand'];
   onDecide: Props['onDecide'];
   onOpenDuplicate: Props['onOpenDuplicate'];
+  componentLabel: (code: string) => string;
 }) {
   const canDecide = decidable && DECIDABLE.includes(row.status);
   const meta = [
@@ -283,7 +297,7 @@ function Row({
   const proposalText = row.proposal
     ? row.contents
       ? describeContents(t, row.contents)
-      : describeAssignment(t, row.effective)
+      : describeAssignment(t, row.effective, componentLabel)
     : '';
   const decisionValue = row.decision?.action ?? '';
 
@@ -654,7 +668,7 @@ function AssignmentEditor({
             <option value="">{t('contentUpload.field.choose')}</option>
             {options.components.map(c => (
               <option key={c.code} value={c.code}>
-                {c.code}
+                {c.label}
                 {c.title ? ` ${c.title}` : ''}
                 {c.isNew ? ` (${t('contentUpload.table.new')})` : ''}
               </option>
