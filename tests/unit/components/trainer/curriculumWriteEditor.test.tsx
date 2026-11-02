@@ -21,6 +21,12 @@ jest.mock('@/components/ui/FlipbookViewer', () => ({
   FlipbookViewer: () => null,
 }));
 
+// The learning field page names its breadcrumb (WMCNL-3021), the provider of
+// the app is not part of this test
+jest.mock('@/contexts/BreadcrumbContext', () => ({
+  useBreadcrumbs: () => ({ breadcrumbs: [], setBreadcrumbs: jest.fn() }),
+}));
+
 // React 18 has no use(): resolve the params promise of the page synchronously
 jest.mock('react', () => ({
   ...jest.requireActual('react'),

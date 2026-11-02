@@ -16,6 +16,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
+import { countLabel } from '@/lib/i18n/count-label';
+import { sortQuizzesByNumber } from '@/lib/trainer/quiz-order';
 
 // Minimal shadcn-like primitives for this self-contained demo
 function Dialog({
@@ -457,7 +459,9 @@ export function QuizManagement() {
       const items: QuizListItem[] = (data.quizzes || []).filter(
         (q: any) => q.quiz_type === 'big'
       );
-      setQuizzes(items);
+      // By the number in the title (K1, K2, K6.1, K10), not as the database
+      // returns them (last changed first)
+      setQuizzes(sortQuizzesByNumber(items));
     } catch (e) {
       console.error(e);
     } finally {
@@ -595,10 +599,11 @@ export function QuizManagement() {
             <tbody className="divide-border divide-y">
               {quizzes.map(q => (
                 <tr key={q.id} className="hover:bg-accent/10 transition-colors">
-                  <td className="text-foreground max-w-[250px] px-4 py-3 text-sm font-medium">
+                  <td className="text-foreground max-w-[420px] min-w-[220px] px-4 py-3 text-sm font-medium">
                     <a
                       href={`/trainer/quiz-management/${q.id}`}
-                      className="hover:text-primary block truncate underline"
+                      title={q.title}
+                      className="hover:text-primary line-clamp-2 break-words underline"
                     >
                       {q.title}
                     </a>
@@ -615,7 +620,7 @@ export function QuizManagement() {
                     )}
                   </td>
                   <td className="text-foreground px-4 py-3 text-sm">
-                    {q.assigned_count} {t('quiz.managementTrainees')}
+                    {countLabel(t, 'quiz.managementTraineeCount', q.assigned_count)}
                   </td>
                   <td className="text-foreground px-4 py-3 text-sm">
                     {new Date(q.created_at).toLocaleDateString()}

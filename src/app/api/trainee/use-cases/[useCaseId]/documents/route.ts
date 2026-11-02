@@ -5,7 +5,6 @@ import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import { documentVisibilityCondition } from '@/lib/auth/document-scope';
 import { isTraineeFileReference } from '@/lib/storage/contentPath';
-import { withSignedContentUrls } from '@/lib/storage/contentUrl';
 import db from '@/db';
 import { eq, and, or, ne, sql } from 'drizzle-orm';
 import { contentDocuments, useCases, courseMembers, profiles } from '@/db/migrations/schemas/schema';
@@ -119,12 +118,12 @@ export async function GET(
                     isTraineeFileReference(d.storageUrl) &&
                     !/wordprocessingml|^application\/msword$/i.test(d.mimeType ?? '')
             )
-            .map(({ mimeType: _mimeType, ...rest }) => rest);
+            // A trainee gets no address of a file: the viewer opens the file by the id
+            // of the document (GET /api/trainee/documents/[documentId]/content)
+            .map(({ mimeType: _mimeType, storageUrl: _storageUrl, ...rest }) => rest);
 
-        // The file of the bucket content is handed out as a signed address that
-        // works for an hour, for a public and for a private bucket alike
         return NextResponse.json({ 
-            documents: await withSignedContentUrls(documents, { hideOtherPrivate: true }),
+            documents,
             useCaseTitle: useCase.title 
         });
     } catch (e) {

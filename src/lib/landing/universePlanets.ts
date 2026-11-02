@@ -4,8 +4,9 @@
  * (FIAE and KfBM), the others are announced. Pure data, so the canvas and the
  * tests share it.
  *
- * Only FIAE can be opened: the landing page carries the learning fields of the
- * FIAE training, not those of other occupations.
+ * FIAE and KfBM can be opened: the landing page carries the learning fields of
+ * both trainings (src/lib/landing/universeLearningFields.ts), not those of the
+ * announced occupations.
  */
 
 export interface UniversePlanetDef {
@@ -60,9 +61,9 @@ export const UNIVERSE_PLANETS: readonly UniversePlanetDef[] = [
   },
 ];
 
-/** The planet opens the learning fields when clicked (only FIAE). */
+/** The planet opens the learning fields when clicked (FIAE and KfBM). */
 export function isExplorable(planet: Pick<UniversePlanetDef, 'abbr'>) {
-  return planet.abbr === 'FIAE';
+  return planet.abbr === 'FIAE' || planet.abbr === 'KfBM';
 }
 
 const NAME_KEYS: Record<string, string> = {

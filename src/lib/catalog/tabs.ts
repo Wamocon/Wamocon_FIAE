@@ -47,6 +47,8 @@ export const CATALOG_TAB_PATHS: readonly string[] = [
   '/trainee/quizzes',
   '/trainee/school',
   '/trainee/activity-reports',
+  // Submissions and quiz results of the trainer feedback belong to one training
+  '/trainee/trainer-feedback',
 ];
 
 export function isCatalogTabPath(pathname: string | null | undefined): boolean {

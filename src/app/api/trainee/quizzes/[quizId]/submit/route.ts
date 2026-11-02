@@ -460,7 +460,7 @@ export async function POST(
             userId: uid,
             actorId: traineeId,
             type: 'LESSON_QUIZ_SUBMITTED',
-            title: 'Lesson-Quiz eingereicht',
+            title: 'Themenkreis-Quiz eingereicht',
             message: `Trainee hat ein ${link.difficulty}-Quiz abgegeben: ${enabler.title}`,
             linkUrl: '/trainer/reviews?view=quizzes&onlyPending=true',
             context: {

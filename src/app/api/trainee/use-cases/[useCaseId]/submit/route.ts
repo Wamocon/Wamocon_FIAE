@@ -7,6 +7,13 @@ import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks, no
 import { requireEnablerOpen } from '@/lib/catalog/progression-db';
 import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import {
+  EMPTY_SUBMISSION_CODE,
+  handInOfUseCaseHasContent,
+} from '@/lib/submission-input';
+import { isSubmissionFileEnabled } from '@/lib/submission-file/availability';
+import { openStorage } from '@/lib/submission-file/access';
+import { getFile } from '@/lib/submission-file/service';
 
 // POST submit or update a use-case submission
 // Body: { submissionText?: string, links?: Array<{ url: string, description?: string }> }
@@ -50,6 +57,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
         });
         if (locked) return locked;
       }
+    }
+
+    // A hand-in needs a text, a link with an address or a file. Only white
+    // space counts as empty. The file lives in the storage, so it is asked only
+    // when neither text nor link is there (the page checks the same)
+    let hasFile = false;
+    const hasTextOrLink = handInOfUseCaseHasContent({ submissionText, links });
+    if (!hasTextOrLink && isSubmissionFileEnabled()) {
+      // A storage that does not answer is no file: the hand-in stays refused
+      try {
+        const storage = openStorage();
+        if (!(storage instanceof Response)) {
+          const found = await getFile(
+            { storage },
+            { organizationId: session.organizationId, traineeId, useCaseId }
+          );
+          hasFile = found.ok && !!found.value;
+        }
+      } catch (fileErr) {
+        console.warn('Could not look up the file of the hand-in', fileErr);
+      }
+    }
+    if (!hasTextOrLink && !hasFile) {
+      return NextResponse.json(
+        { error: 'Empty submission', code: EMPTY_SUBMISSION_CODE },
+        { status: 400 }
+      );
     }
 
     const result = await db.transaction(async (tx) => {

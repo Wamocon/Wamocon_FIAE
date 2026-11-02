@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,6 +19,16 @@ import { PageLoader } from '@/components/ui/PageLoader';
 import { authFetch } from '@/lib/authFetch';
 import { SubmissionFileField } from '@/components/trainee/SubmissionFileField';
 import { lockText } from '@/components/trainee/EnablerStateBadge';
+import { handInOfUseCaseHasContent } from '@/lib/submission-input';
+import { traineeDocumentPath } from '@/lib/documentContentPath';
+import { viewerSubtitle } from '@/lib/documentTypeLabel';
+
+// Loaded when a document is opened: the reading view draws the pages itself
+// (pdf.js), so no other page carries it
+const SecurePdfViewer = dynamic(
+  () => import('@/components/ui/SecurePdfViewer'),
+  { ssr: false }
+);
 
 export default function TraineeUseCaseDetailPage() {
   const params = useParams<{ useCaseId: string }>();
@@ -55,7 +66,6 @@ export default function TraineeUseCaseDetailPage() {
     documents: Array<{
       id: string;
       title: string;
-      storageUrl: string;
       documentType: string;
     }>;
   };
@@ -75,6 +85,15 @@ export default function TraineeUseCaseDetailPage() {
     error: queryError,
   } = useApiQuery<UseCaseResponse>(ucUrl);
   const { data: docsData } = useApiQuery<DocsResponse>(docsUrl);
+  // The file of the hand-in (same query as the file field, so it is shared)
+  const fileUrl = useCaseId
+    ? `/api/trainee/use-cases/${useCaseId}/submission-file`
+    : null;
+  const { data: fileData } = useApiQuery<{
+    enabled: boolean;
+    file: unknown | null;
+  }>(fileUrl);
+  const hasFile = !!(fileData?.enabled && fileData.file);
 
   const useCase = ucData?.useCase || null;
   const submission = ucData?.submission || null;
@@ -88,11 +107,11 @@ export default function TraineeUseCaseDetailPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // The open document: its id decides the highlight, the url of the click stays
-  // in the frame (a list that is loaded again carries a new signed url)
+  // The open document: its id decides the highlight and the route that delivers it
   const [selectedPdf, setSelectedPdf] = useState<{
     id: string;
-    url: string;
+    title: string;
+    documentType: string;
   } | null>(null);
 
   // Sync form fields when server data loads/changes
@@ -114,6 +133,13 @@ export default function TraineeUseCaseDetailPage() {
 
   const submit = async () => {
     if (!profile?.id) return setError(t('useCase.profileMissing'));
+    // A hand-in needs a solution text, a link or a file: only white space
+    // counts as empty (the server answers the same)
+    if (!handInOfUseCaseHasContent({ submissionText, links, hasFile })) {
+      setSuccess(null);
+      setError(t('useCase.emptySubmission'));
+      return;
+    }
     setSaving(true);
     setSuccess(null);
     setError(null);
@@ -134,6 +160,9 @@ export default function TraineeUseCaseDetailPage() {
           throw new Error(
             `${t('useCase.locked')} ${lockText(t, answer.reason, answer.lockedBy?.title)}`
           );
+        }
+        if (answer?.code === 'EMPTY_SUBMISSION') {
+          throw new Error(t('useCase.emptySubmission'));
         }
         throw new Error(t('useCase.submitFailed'));
       }
@@ -187,7 +216,11 @@ export default function TraineeUseCaseDetailPage() {
                   setSelectedPdf(prev =>
                     prev?.id === doc.id
                       ? null
-                      : { id: doc.id, url: doc.storageUrl }
+                      : {
+                          id: doc.id,
+                          title: doc.title,
+                          documentType: doc.documentType,
+                        }
                   )
                 }
                 className={`inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 ${selectedPdf?.id === doc.id ? 'bg-accent/15 text-accent border-accent/40 border' : 'bg-primary text-primary-foreground shadow-primary/20 shadow-md hover:scale-[1.02] hover:shadow-lg'}`}
@@ -205,10 +238,9 @@ export default function TraineeUseCaseDetailPage() {
         {selectedPdf && (
           <div className="animate-in fade-in slide-in-from-top-4 mt-4 duration-300">
             <div className="border-accent/30 bg-card relative h-[80vh] w-full overflow-hidden rounded-xl border shadow-2xl">
-              <iframe
-                src={`${selectedPdf.url}#toolbar=0&navpanes=0&view=FitH`}
-                className="h-full w-full"
-                title="PDF Viewer"
+              <SecurePdfViewer
+                src={traineeDocumentPath(selectedPdf.id)}
+                title={`${selectedPdf.title} (${viewerSubtitle(selectedPdf.documentType, t)})`}
               />
             </div>
           </div>
@@ -429,7 +461,8 @@ export default function TraineeUseCaseDetailPage() {
             className="text-muted-foreground hover:text-accent flex items-center gap-2 text-sm font-medium transition-colors"
           >
             <ChevronLeft className="h-4 w-4" />
-            {t('useCase.backToModule')} {useCase.courseTitle || 'Modul'}
+            {t('useCase.backToModule')}{' '}
+            {useCase.courseTitle || t('breadcrumb.module')}
           </Link>
         </div>
       )}

@@ -5,6 +5,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { traineeDisplayName } from '@/lib/trainer/trainee-name';
+import { examsAsBlocks, type CalendarExam } from '@/lib/trainer/calendar-exams';
+import {
+  pickTraineeId,
+  readStoredTraineeId,
+  storeTraineeId,
+} from '@/lib/trainer/calendar-selection';
 import {
   ChevronLeft,
   ChevronRight,
@@ -54,6 +61,7 @@ interface Trainee {
   firstName: string | null;
   lastName: string | null;
   email: string | null;
+  full_name?: string | null;
 }
 
 const BLOCK_CONFIG: Record<
@@ -159,6 +167,8 @@ export function TrainerCalendarTab() {
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [selectedTraineeId, setSelectedTraineeId] = useState<string>('');
   const [blocks, setBlocks] = useState<Block[]>([]);
+  // The exams the trainee entered (school_exams), drawn like blocks of the type EXAM
+  const [exams, setExams] = useState<CalendarExam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -180,8 +190,15 @@ export function TrainerCalendarTab() {
         if (res.ok) {
           const data = await res.json();
           setTrainees(data.trainees || []);
+          // The choice is kept over a switch of the occupation tab when the
+          // trainee is in the new list too, otherwise the first one is taken
           if (data.trainees?.length > 0) {
-            setSelectedTraineeId(data.trainees[0].id);
+            setSelectedTraineeId(
+              pickTraineeId(
+                data.trainees.map((tr: Trainee) => tr.id),
+                readStoredTraineeId()
+              )
+            );
           }
         }
       } catch (e) {
@@ -208,19 +225,33 @@ export function TrainerCalendarTab() {
   useEffect(() => {
     if (!selectedTraineeId) {
       setBlocks([]);
+      setExams([]);
       setLoading(false);
       return;
     }
     async function loadBlocks() {
       setLoading(true);
       try {
-        const res = await authFetch(
-          `/api/trainer/blocks?traineeId=${selectedTraineeId}&year=${selectedYear}`,
-          { cache: 'no-store' }
-        );
+        const [res, examRes] = await Promise.all([
+          authFetch(
+            `/api/trainer/blocks?traineeId=${selectedTraineeId}&year=${selectedYear}`,
+            { cache: 'no-store' }
+          ),
+          authFetch(
+            `/api/trainer/school/exams?traineeId=${selectedTraineeId}`,
+            { cache: 'no-store' }
+          ),
+        ]);
         if (res.ok) {
           const data = await res.json();
           setBlocks(data.blocks || []);
+        }
+        // An exam the trainee entered is part of the calendar (it was missing)
+        if (examRes.ok) {
+          const data = await examRes.json();
+          setExams(data.exams || []);
+        } else {
+          setExams([]);
         }
       } catch (e) {
         setError(t('calendar.error.loadBlocks'));
@@ -230,6 +261,16 @@ export function TrainerCalendarTab() {
     }
     loadBlocks();
   }, [selectedTraineeId, selectedYear]);
+
+  // The blocks of the trainee and, view only, the exams the trainee entered
+  const calendarBlocks = useMemo<Block[]>(() => {
+    const typeLabel = (type: string | null | undefined) => {
+      const key = `exams.type.${String(type ?? '').toLowerCase()}`;
+      const label = t(key);
+      return label === key ? '' : label;
+    };
+    return [...blocks, ...(examsAsBlocks(exams, blocks, typeLabel) as Block[])];
+  }, [blocks, exams, t]);
 
   // Calendar Days (Month View)
   const calendarDays = useMemo(() => {
@@ -255,7 +296,7 @@ export function TrainerCalendarTab() {
         date,
         isCurrentMonth: false,
         isToday: false,
-        blocks: blocks
+        blocks: calendarBlocks
           .filter(b => isDateInBlock(date, b))
           .sort(
             (a, b) =>
@@ -275,7 +316,7 @@ export function TrainerCalendarTab() {
         date,
         isCurrentMonth: true,
         isToday,
-        blocks: blocks
+        blocks: calendarBlocks
           .filter(b => isDateInBlock(date, b))
           .sort(
             (a, b) =>
@@ -293,7 +334,7 @@ export function TrainerCalendarTab() {
         date,
         isCurrentMonth: false,
         isToday: false,
-        blocks: blocks
+        blocks: calendarBlocks
           .filter(b => isDateInBlock(date, b))
           .sort(
             (a, b) =>
@@ -303,7 +344,7 @@ export function TrainerCalendarTab() {
     }
 
     return days;
-  }, [selectedYear, selectedMonth, blocks, viewMode]);
+  }, [selectedYear, selectedMonth, calendarBlocks, viewMode]);
 
   // Week Days (Week View)
   const weekDays = useMemo(() => {
@@ -321,7 +362,7 @@ export function TrainerCalendarTab() {
       days.push({
         date,
         isToday,
-        blocks: blocks
+        blocks: calendarBlocks
           .filter(b => isDateInBlock(date, b))
           .sort(
             (a, b) =>
@@ -330,7 +371,7 @@ export function TrainerCalendarTab() {
       });
     }
     return days;
-  }, [selectedWeek, blocks, viewMode]);
+  }, [selectedWeek, calendarBlocks, viewMode]);
 
   // Navigation Logic
   const goToPrev = () => {
@@ -465,11 +506,14 @@ export function TrainerCalendarTab() {
           <Users className="text-muted-foreground h-5 w-5" />
           <select
             value={selectedTraineeId}
-            onChange={e => setSelectedTraineeId(e.target.value)}
+            onChange={e => {
+              setSelectedTraineeId(e.target.value);
+              storeTraineeId(e.target.value);
+            }}
             className="bg-background border-border text-foreground focus:ring-accent/50 [&_option]:bg-card [&_option]:text-foreground min-w-[200px] rounded-xl border px-4 py-2.5 outline-none focus:ring-2"
           >
             <option value="" className="bg-card text-foreground">
-              Trainee auswählen...
+              {t('trainer.school.calendar.selectTrainee')}
             </option>
             {trainees.map(trainee => (
               <option
@@ -477,9 +521,7 @@ export function TrainerCalendarTab() {
                 value={trainee.id}
                 className="bg-card text-foreground"
               >
-                {trainee.email
-                  ? trainee.email.split('@')[0].split('.').join(' ')
-                  : 'Unbekannt'}
+                {traineeDisplayName(trainee, t('trainer.school.calendar.unknownTrainee'))}
               </option>
             ))}
           </select>
@@ -857,8 +899,8 @@ function AddBlockerModal({
               </h3>
               <p className="text-muted-foreground text-sm">
                 {selectionMode === 'all'
-                  ? `Für alle ${trainees.length} Trainees`
-                  : `Für ${selectedTraineeIds.length} Trainee(s)`}
+                  ? `Für alle ${trainees.length} Azubis`
+                  : `Für ${selectedTraineeIds.length} Azubi(s)`}
               </p>
             </div>
             <button onClick={onClose} className="hover:bg-muted rounded-lg p-2">
@@ -905,9 +947,7 @@ function AddBlockerModal({
                       }
                       className="border-border text-accent rounded"
                     />
-                    <span className="text-sm">
-                      {t.firstName} {t.lastName}
-                    </span>
+                    <span className="text-sm">{traineeDisplayName(t)}</span>
                   </label>
                 ))}
               </div>

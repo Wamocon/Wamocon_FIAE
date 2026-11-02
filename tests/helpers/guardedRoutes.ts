@@ -981,6 +981,13 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     guard: 'trainee',
     params: ['enablerId'],
   },
+  // the bytes of the single scenario PDF of an enabler, for the viewer of a trainee
+  {
+    route: 'trainee/enablers/[enablerId]/scenario/content',
+    method: 'GET',
+    guard: 'trainee',
+    params: ['enablerId'],
+  },
   {
     route: 'trainee/enablers/[enablerId]/quiz',
     method: 'GET',
@@ -1085,6 +1092,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   },
   {
     route: 'trainee/quizzes',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/lesson-quizzes',
     method: 'GET',
     guard: 'user',
     params: [],
@@ -1288,6 +1301,13 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   { route: 'hai/sync', method: 'POST', guard: 'haiIndex', params: [] },
   { route: 'hai/sync', method: 'GET', guard: 'haiIndex', params: [] },
   { route: 'hai/verify-pin', method: 'POST', guard: 'haiIndex', params: [] },
+  // the bytes of the PDF of one learning document, for the viewer of a trainee
+  {
+    route: 'trainee/documents/[documentId]/content',
+    method: 'GET',
+    guard: 'trainee',
+    params: ['documentId'],
+  },
   // the signed address of the file of one document (bucket content)
   {
     route: 'documents/[documentId]/file',

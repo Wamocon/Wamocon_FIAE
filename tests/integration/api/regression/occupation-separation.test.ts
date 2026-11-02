@@ -151,6 +151,13 @@ const TRAINEE_LISTS: ListCase[] = [
     extra: { quizAssignments: [], quizzes: [] },
   },
   {
+    name: 'lesson quiz list',
+    route: 'trainee/lesson-quizzes',
+    url: 'http://localhost/api/trainee/lesson-quizzes',
+    table: 'courses',
+    extra: { courseMembers: [{ userId: 't1', courseId: ID }], courses: [] },
+  },
+  {
     name: 'learning fields',
     route: 'trainee/lernfelder',
     url: 'http://localhost/api/trainee/lernfelder',
@@ -177,6 +184,17 @@ const TRAINEE_LISTS: ListCase[] = [
     url: 'http://localhost/api/trainee/dashboard',
     table: 'course_members',
     extra: { courseMembers: [{ userId: 't1', courseId: ID }], courses: [] },
+  },
+  {
+    name: 'trainer feedback (quiz results)',
+    route: 'trainee/feedback',
+    url: 'http://localhost/api/trainee/feedback',
+    table: 'quiz_submissions',
+    extra: {
+      enablerSubmissions: [],
+      useCaseSubmissions: [],
+      quizSubmissions: [],
+    },
   },
 ];
 
@@ -625,6 +643,10 @@ const COVERED_ELSEWHERE: Record<string, string> = {
     'tests/integration/api/regression/report-catalog-routes.test.ts',
   'trainer/trainees/with-stats':
     'tests/integration/api/regression/report-catalog-routes.test.ts',
+  // The progress of a trainee counts the courses of the chosen occupation (one
+  // figure on every trainer page), tested with the lists in this file
+  'trainer/trainees/[traineeId]/overview':
+    'tests/integration/api/trainer/trainee-progress-routes.test.ts',
   // the insights of the HAI follow the chosen occupation (requireCatalogScope)
   'hai/insights': 'tests/integration/api/hai/insights-occupation.test.ts',
 };
@@ -636,6 +658,12 @@ const SHARES_PARENT_SCOPE: Record<string, string[]> = {
   'trainer/courses/[courseId]/enablers': ['trainer/courses/[courseId]'],
   'trainer/courses/[courseId]/members': ['trainer/courses/[courseId]'],
   'trainer/courses/[courseId]/use-cases': ['trainer/courses/[courseId]'],
+  // the bytes of the scenario PDF for the viewer of a trainee: the scope check of
+  // the enabler page (the separation itself is also tested in
+  // tests/integration/api/trainee/enablers.scenario.content.get.test.ts)
+  'trainee/enablers/[enablerId]/scenario/content': [
+    'trainee/enablers/[enablerId]',
+  ],
   'trainer/enablers/[enablerId]/quiz': ['trainer/enablers/[enablerId]'],
   'trainer/enablers/[enablerId]/quizzes': ['trainer/enablers/[enablerId]'],
   'trainer/enablers/[enablerId]/quizzes/[quizId]': [

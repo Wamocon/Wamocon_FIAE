@@ -11,6 +11,7 @@ import {
   options,
   quizAssignments,
   notifications,
+  profiles,
 } from '@/db/migrations/schemas/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { apiCache } from '@/lib/api-cache';
@@ -56,8 +57,12 @@ export async function GET(
     const traineeScope = await requireTraineeScopeCondition(session, _req);
     if (isErrorResponse(traineeScope)) return traineeScope;
     const assignedRows = await db
-      .select({ traineeId: quizAssignments.traineeId })
+      .select({
+        traineeId: quizAssignments.traineeId,
+        fullName: profiles.fullName,
+      })
       .from(quizAssignments)
+      .leftJoin(profiles, eq(profiles.id, quizAssignments.traineeId))
       .where(
         and(
           eq(quizAssignments.quizId, quizId as any),
@@ -91,6 +96,12 @@ export async function GET(
       quiz_type: qz.quizType === 'LESSON' ? 'mini' : 'big',
       questions: questionsOut,
       assigned_trainee_ids: assignedRows.map(r => String(r.traineeId)),
+      // The names of the assigned trainees (the detail page lists them, the
+      // count in the list of the quizzes is made of the same rows)
+      assigned_trainees: assignedRows.map(r => ({
+        id: String(r.traineeId),
+        full_name: r.fullName ?? '',
+      })),
     });
   } catch (e) {
     console.error('Get quiz error', e);

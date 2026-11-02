@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import { requireEnablerOpen } from '@/lib/catalog/progression-db';
+import {
+  EMPTY_SUBMISSION_CODE,
+  enablerSubmissionHasContent,
+} from '@/lib/submission-input';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { getUserOrgId } from '@/lib/auth-helpers';
@@ -67,6 +71,20 @@ export async function POST(
       courseId: String(e.courseId),
     });
     if (locked) return locked;
+
+    // A summary without text is no summary: only white space counts as empty
+    // (the page checks the same, this is the rule that holds)
+    if (
+      !enablerSubmissionHasContent({
+        solutionText: body?.solutionText,
+        solutions: body?.solutions,
+      })
+    ) {
+      return NextResponse.json(
+        { error: 'Empty submission', code: EMPTY_SUBMISSION_CODE },
+        { status: 400 }
+      );
+    }
 
     // Upsert-like: if trainee already has a submission, update the latest; else insert
     const existing: EnablerSubmission[] = await db

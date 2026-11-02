@@ -125,7 +125,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/trainee/enablers/[enablerId]/documents', () => {
-  it('lists the documents of the enabler with the fields of the page', async () => {
+  it('lists the documents of the enabler with the fields of the page, without the address of the file', async () => {
     const { GET } = await load(asTrainee());
     const res = await GET(request(), ctx());
     expect(res.status).toBe(200);
@@ -138,8 +138,6 @@ describe('GET /api/trainee/enablers/[enablerId]/documents', () => {
           documentType: 'THEORY',
           fileName: 'lehrtext.pdf',
           fileSize: 1234,
-          storageUrl:
-            'https://example.test/storage/v1/object/public/content/a.pdf',
           pageCount: 3,
           orderIndex: 1,
           isOwnOrganization: true,

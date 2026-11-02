@@ -1,16 +1,13 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, eq, inArray } from 'drizzle-orm';
-import {
-  profiles,
-  enablers,
-  courses,
-  enablerCompletions,
-  courseMembers,
-} from '@/db/migrations/schemas/schema';
+import { profiles } from '@/db/migrations/schemas/schema';
 import { cacheHeaders } from '@/lib/api-cache';
 import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
+import {
+  loadTraineeProgress,
+  requireProgressScope,
+} from '@/lib/trainer/trainee-progress';
 
 export async function GET(req: NextRequest) {
   try {
@@ -41,75 +38,16 @@ export async function GET(req: NextRequest) {
 
     const traineeIds = traineeRows.map(t => String(t.id));
 
-    const memberships = traineeIds.length
-      ? await db
-          .select({
-            userId: courseMembers.userId,
-            courseId: courseMembers.courseId,
-          })
-          .from(courseMembers)
-          .where(
-            and(
-              inArray(courseMembers.userId, traineeIds as any),
-              eq(courseMembers.role, 'TRAINEE')
-            )
-          )
-      : [];
-
-    const traineeCourses = new Map<string, string[]>();
-    memberships.forEach(m => {
-      const uid = String(m.userId);
-      const arr = traineeCourses.get(uid) || [];
-      arr.push(String(m.courseId));
-      traineeCourses.set(uid, arr);
-    });
-    const allCourseIds = Array.from(
-      new Set(memberships.map(m => String(m.courseId)))
-    );
-
-    const enablerRows = allCourseIds.length
-      ? await db
-          .select({ courseId: enablers.courseId, id: enablers.id })
-          .from(enablers)
-          .where(inArray(enablers.courseId, allCourseIds as any))
-      : [];
-
-    const courseEnablers = new Map<string, string[]>();
-    enablerRows.forEach(e => {
-      const cid = String(e.courseId);
-      const arr = courseEnablers.get(cid) || [];
-      arr.push(String(e.id));
-      courseEnablers.set(cid, arr);
-    });
-
-    const allEnablerIds = Array.from(
-      new Set(enablerRows.map(e => String(e.id)))
-    );
-    const completedMap = new Map<string, number>();
-    if (allEnablerIds.length > 0 && traineeIds.length > 0) {
-      const rows = await db
-        .select({ traineeId: enablerCompletions.traineeId, c: count() })
-        .from(enablerCompletions)
-        .where(
-          and(
-            inArray(enablerCompletions.enablerId, allEnablerIds as any),
-            inArray(enablerCompletions.traineeId, traineeIds as any)
-          )
-        )
-        .groupBy(enablerCompletions.traineeId);
-      rows.forEach(r => completedMap.set(String(r.traineeId), Number(r.c)));
-    }
+    // Progress and number of courses: ONE figure for every trainer page
+    // (src/lib/trainer/trainee-progress.ts), counted over the courses of the
+    // chosen occupation only (the tab FIAE never counts the courses of KfBM)
+    const scope = await requireProgressScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+    const progress = await loadTraineeProgress(traineeIds, scope);
 
     const response = {
       trainees: traineeRows.map(t => {
-        const uid = String(t.id);
-        const courseIdsForTrainee = traineeCourses.get(uid) || [];
-        const enablerIdsForTrainee = courseIdsForTrainee.flatMap(
-          cid => courseEnablers.get(cid) || []
-        );
-        const total = enablerIdsForTrainee.length;
-        const completed = completedMap.get(uid) || 0;
-        const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+        const own = progress.byTrainee.get(String(t.id));
         return {
           id: t.id,
           firstName: t.firstName,
@@ -123,8 +61,8 @@ export async function GET(req: NextRequest) {
           assigned_trainer_id: t.assignedTrainerId,
           ausbildungDurationYears: t.ausbildungDurationYears ?? 3,
           ausbildung_duration_years: t.ausbildungDurationYears ?? 3,
-          progress: pct,
-          coursesCount: courseIdsForTrainee.length,
+          progress: own?.pct ?? 0,
+          coursesCount: own?.courses.size ?? 0,
           isActive: Boolean(t.isActive),
           trainerActivated: Boolean(t.trainerActivated),
         };

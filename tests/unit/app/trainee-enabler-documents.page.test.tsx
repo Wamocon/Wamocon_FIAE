@@ -8,6 +8,11 @@ import { useApiQuery } from '@/lib/hooks/useApiQuery';
 // call, and not from the trainer route, which answers a trainee with 403. A
 // row without a file is no link. The LIGHT plan hides the shared teaching
 // texts.
+//
+// Document protection (WMCNL-2872, 2873, 2891): the page holds no address of a
+// file. The viewer is opened with the route of the document (its id), the slides
+// are not offered, there is one button per document and no download or link to
+// a file. The subtitle of the viewer names the kind of document (WMCNL-2932).
 
 const mockPlan = { value: 'PRO' as 'PRO' | 'LIGHT' };
 const openPdf = jest.fn();
@@ -27,6 +32,7 @@ jest.mock('@/components/ui/FlipbookViewer', () => ({
   useFlipbookViewer: () => ({
     title: '',
     pdfUrl: '',
+    subtitle: '',
     isOpen: false,
     openPdf: (...args: unknown[]) => openPdf(...args),
     closePdf: jest.fn(),
@@ -45,16 +51,23 @@ const useApiQueryMock = useApiQuery as jest.MockedFunction<typeof useApiQuery>;
 const doc = (overrides: Record<string, unknown>) => ({
   id: 'd',
   title: 'Doc',
-  storageUrl: 'https://files.test/doc.pdf',
   documentType: 'THEORY',
   isOwnOrganization: false,
   ...overrides,
 });
 
-function mockQueries(documents: unknown[]) {
+function mockQueries(
+  documents: unknown[],
+  enablerOverrides: Record<string, unknown> = {}
+) {
   // stable objects: the page syncs its form state in an effect on the data
   const enablerData = {
-    enabler: { id: 'e1', title: 'Enabler One', isActive: false },
+    enabler: {
+      id: 'e1',
+      title: 'Enabler One',
+      isActive: false,
+      ...enablerOverrides,
+    },
     submission: null,
   };
   const quizzesData = { quizzes: [] };
@@ -94,13 +107,11 @@ describe('enabler documents on the page of a trainee', () => {
         id: 'b',
         title: 'Szenario: Part2 Datenbank',
         documentType: 'EXERCISE',
-        storageUrl: 'https://files.test/b.pdf',
       }),
       doc({
         id: 'c',
         title: 'Szenario: Part1 Netzwerk',
         documentType: 'EXERCISE',
-        storageUrl: 'https://files.test/c.pdf',
       }),
     ]);
     renderWithProviders(<TraineeEnablerPage />);
@@ -120,31 +131,106 @@ describe('enabler documents on the page of a trainee', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Lehrtext Grundlagen' })
     );
+    // the route of the document and the kind of document, no address of a file
     expect(openPdf).toHaveBeenCalledWith(
       'Lehrtext Grundlagen',
-      'https://files.test/doc.pdf'
+      '/api/trainee/documents/a/content',
+      'Theorie-Dokument'
     );
   });
 
-  it('shows no button for a row without a file, even if the route sent one', () => {
+  it('opens a scenario part with its own route and the subtitle "Szenario", not "Theorie-Dokument"', () => {
     mockQueries([
-      doc({ id: 'a', title: 'Mit Datei' }),
-      doc({ id: 'b', title: 'Leere Adresse', storageUrl: '' }),
-      doc({ id: 'c', title: 'Nur Leerzeichen', storageUrl: '   ' }),
       doc({
-        id: 'd',
-        title: 'Szenario: Part9 Ohne Datei',
+        id: 'c',
+        title: 'Szenario: Part1 Netzwerk',
         documentType: 'EXERCISE',
-        storageUrl: '',
+      }),
+    ]);
+    renderWithProviders(<TraineeEnablerPage />);
+    const part = screen
+      .getAllByRole('button')
+      .find(b => (b.textContent || '').endsWith('PDF'))!;
+    fireEvent.click(part);
+    expect(openPdf).toHaveBeenCalledTimes(1);
+    expect(openPdf.mock.calls[0][1]).toBe('/api/trainee/documents/c/content');
+    expect(openPdf.mock.calls[0][2]).toBe('Szenario');
+  });
+
+  it('opens the single scenario PDF of the enabler by the enabler, not by an address', () => {
+    mockQueries([], { hasScenarioPdf: true });
+    renderWithProviders(<TraineeEnablerPage />);
+    fireEvent.click(screen.getByRole('button', { name: /Szenario/i }));
+    expect(openPdf).toHaveBeenCalledTimes(1);
+    expect(openPdf.mock.calls[0][1]).toBe(
+      '/api/trainee/enablers/e1/scenario/content'
+    );
+    expect(openPdf.mock.calls[0][2]).toBe('Szenario');
+  });
+
+  it('has no download, no PPT link and no link to a file; the video link stays', () => {
+    mockQueries(
+      [
+        doc({ id: 'a', title: 'Lehrtext Grundlagen' }),
+        doc({
+          id: 'b',
+          title: 'Szenario: Part1 Netzwerk',
+          documentType: 'EXERCISE',
+        }),
+      ],
+      {
+        // an older answer or a manipulated one: the page does not offer it
+        pptUrl: 'https://files.test/slides.pptx',
+        videoUrl: 'https://video.test/watch?v=1',
+      }
+    );
+    const { container } = renderWithProviders(<TraineeEnablerPage />);
+    expect(container.querySelector('a[download]')).toBeNull();
+    expect(container.innerHTML).not.toContain('slides.pptx');
+    expect(screen.queryByText('PPT öffnen')).not.toBeInTheDocument();
+    const links = [...container.querySelectorAll('a[href]')].map(a =>
+      a.getAttribute('href')
+    );
+    expect(links).toContain('https://video.test/watch?v=1');
+    expect(
+      links.filter(href => /\.(pdf|pptx?|docx?)$/i.test(href ?? ''))
+    ).toEqual([]);
+  });
+
+  it('has exactly one button per document', () => {
+    mockQueries([
+      doc({ id: 'a', title: 'Lehrtext Grundlagen' }),
+      doc({ id: 'b', title: 'Lehrtext Vertiefung' }),
+      doc({
+        id: 'c',
+        title: 'Szenario: Part1 Netzwerk',
+        documentType: 'EXERCISE',
       }),
     ]);
     renderWithProviders(<TraineeEnablerPage />);
     expect(
+      screen.getAllByRole('button', { name: 'Lehrtext Grundlagen' })
+    ).toHaveLength(1);
+    expect(
+      screen.getAllByRole('button', { name: 'Lehrtext Vertiefung' })
+    ).toHaveLength(1);
+    const parts = screen
+      .getAllByRole('button')
+      .filter(b => (b.textContent || '').endsWith('PDF'));
+    expect(parts).toHaveLength(1);
+  });
+
+  it('shows no scenario button when the enabler has no scenario PDF and no scenario part', () => {
+    mockQueries([doc({ id: 'a', title: 'Mit Datei' })], {
+      hasScenarioPdf: false,
+    });
+    renderWithProviders(<TraineeEnablerPage />);
+    expect(
       screen.getByRole('button', { name: 'Mit Datei' })
     ).toBeInTheDocument();
-    expect(screen.queryByText('Leere Adresse')).not.toBeInTheDocument();
-    expect(screen.queryByText('Nur Leerzeichen')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Ohne Datei/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Szenario/i })
+    ).not.toBeInTheDocument();
   });
 
   it('PRO shows the shared teaching texts, LIGHT only the own ones', () => {

@@ -1,6 +1,7 @@
 import {
   documentTypeLabel,
   documentTypeLabelKey,
+  viewerSubtitle,
 } from '@/lib/documentTypeLabel';
 import de from '@/locales/de.json';
 import en from '@/locales/en.json';
@@ -42,5 +43,36 @@ describe('documentTypeLabel', () => {
     expect(documentTypeLabel('SOMETHING_NEW', t)).toBe('SOMETHING_NEW');
     expect(documentTypeLabel(undefined, t)).toBe('');
     expect(documentTypeLabelKey(null)).toBeNull();
+  });
+});
+
+// The line under the title of the viewer (WMCNL-2932, WMCNL-3005): it used to say
+// "Theorie-Dokument" for every PDF, also for a scenario and a model solution.
+describe('viewerSubtitle', () => {
+  const t = (key: string) => (de as Record<string, string>)[key];
+
+  it('keeps "Theorie-Dokument" for a theory text', () => {
+    expect(viewerSubtitle('THEORY', t)).toBe('Theorie-Dokument');
+  });
+
+  it('names a scenario, a task and a model solution by what they are', () => {
+    expect(viewerSubtitle('EXERCISE', t)).toBe('Szenario');
+    expect(viewerSubtitle('TRAINEE_QUESTION', t)).toBe('Aufgabe');
+    expect(viewerSubtitle('TRAINER_SOLUTION', t)).toBe('Musterlösung');
+  });
+
+  it('is neutral for a type that is unknown or unset', () => {
+    expect(viewerSubtitle(null, t)).toBe('Dokument');
+    expect(viewerSubtitle(undefined, t)).toBe('Dokument');
+    expect(viewerSubtitle('SOMETHING_NEW', t)).toBe('Dokument');
+  });
+
+  it('has a text in German and English', () => {
+    const tEn = (key: string) => (en as Record<string, string>)[key];
+    for (const type of [...TYPES, null]) {
+      expect(viewerSubtitle(type, t)).toBeTruthy();
+      expect(viewerSubtitle(type, tEn)).toBeTruthy();
+    }
+    expect(viewerSubtitle('EXERCISE', tEn)).toBe('Scenario');
   });
 });

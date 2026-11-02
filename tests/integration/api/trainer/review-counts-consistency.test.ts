@@ -178,3 +178,70 @@ describe('quiz list', () => {
     expect((await res.json()).submissions).toHaveLength(1);
   });
 });
+
+// WMCNL-2924: the open reviews of the lists (lesson and use cases) came in the
+// order of the database. They are listed newest first now.
+describe('reviews list: newest first', () => {
+  const enablerRow = (id: string, submittedAt: string) => ({
+    id,
+    enablerId: 'e1',
+    traineeId: T1,
+    solutionText: null,
+    solutions: null,
+    trainerFeedback: null,
+    feedbacks: null,
+    status: 'PENDING',
+    submittedAt: new Date(submittedAt),
+    attemptNumber: 1,
+  });
+  const ucRow = (id: string, submittedAt: string) => ({
+    id,
+    useCaseId: 'u1',
+    traineeId: T1,
+    submissionText: null,
+    status: 'PENDING',
+    submittedAt: new Date(submittedAt),
+    attemptNumber: 1,
+  });
+
+  async function load() {
+    const { mod } = await loadScoped('trainer/reviews/route', {
+      tables: {
+        ...tables(),
+        enablerSubmissions: [
+          enablerRow('a', '2026-10-28T10:00:00Z'),
+          enablerRow('b', '2026-11-02T08:00:00Z'),
+          enablerRow('c', '2026-10-30T12:00:00Z'),
+        ],
+        useCaseSubmissions: [
+          ucRow('x', '2026-10-01T10:00:00Z'),
+          ucRow('y', '2026-11-01T10:00:00Z'),
+          ucRow('z', '2026-10-15T10:00:00Z'),
+        ],
+      },
+    });
+    const res = await mod.GET(
+      scopeReq(`${API}/reviews?onlyPending=true`, { header: 'KFBM' })
+    );
+    expect(res.status).toBe(200);
+    return res.json();
+  }
+
+  it('lists the lesson submissions newest first', async () => {
+    const body = await load();
+    expect(body.enablerSubmissions.map((r: any) => r.id)).toEqual([
+      'b',
+      'c',
+      'a',
+    ]);
+  });
+
+  it('lists the use case submissions newest first', async () => {
+    const body = await load();
+    expect(body.useCaseSubmissions.map((r: any) => r.id)).toEqual([
+      'y',
+      'z',
+      'x',
+    ]);
+  });
+});

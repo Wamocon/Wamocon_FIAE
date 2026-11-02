@@ -1,15 +1,13 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, eq, inArray, sql } from 'drizzle-orm';
-import {
-  profiles,
-  enablers,
-  enablerCompletions,
-  courseMembers,
-  activityReports,
-} from '@/db/migrations/schemas/schema';
+import { and, count, inArray } from 'drizzle-orm';
+import { profiles, activityReports } from '@/db/migrations/schemas/schema';
 import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
+import {
+  loadTraineeProgress,
+  requireProgressScope,
+} from '@/lib/trainer/trainee-progress';
 import { requireReportCatalogFilter } from '@/lib/auth/activity-report-access';
 
 /**
@@ -92,77 +90,16 @@ export async function GET(req: NextRequest) {
       statsMap.set(tid, existing);
     });
 
-    // Get course memberships for progress calculation
-    const memberships = await db
-      .select({
-        userId: courseMembers.userId,
-        courseId: courseMembers.courseId,
-      })
-      .from(courseMembers)
-      .where(
-        and(
-          inArray(courseMembers.userId, traineeIds as any),
-          eq(courseMembers.role, 'TRAINEE')
-        )
-      );
-
-    const traineeCourses = new Map<string, string[]>();
-    memberships.forEach(m => {
-      const uid = String(m.userId);
-      const arr = traineeCourses.get(uid) || [];
-      arr.push(String(m.courseId));
-      traineeCourses.set(uid, arr);
-    });
-
-    const allCourseIds = Array.from(
-      new Set(memberships.map(m => String(m.courseId)))
-    );
-
-    const enablerRows = allCourseIds.length
-      ? await db
-          .select({ courseId: enablers.courseId, id: enablers.id })
-          .from(enablers)
-          .where(inArray(enablers.courseId, allCourseIds as any))
-      : [];
-
-    const courseEnablers = new Map<string, string[]>();
-    enablerRows.forEach(e => {
-      const cid = String(e.courseId);
-      const arr = courseEnablers.get(cid) || [];
-      arr.push(String(e.id));
-      courseEnablers.set(cid, arr);
-    });
-
-    // Get enabler completions
-    const allEnablerIds = Array.from(
-      new Set(enablerRows.map(e => String(e.id)))
-    );
-    const completedMap = new Map<string, number>();
-
-    if (allEnablerIds.length > 0) {
-      const rows = await db
-        .select({ traineeId: enablerCompletions.traineeId, c: count() })
-        .from(enablerCompletions)
-        .where(
-          and(
-            inArray(enablerCompletions.enablerId, allEnablerIds as any),
-            inArray(enablerCompletions.traineeId, traineeIds as any)
-          )
-        )
-        .groupBy(enablerCompletions.traineeId);
-      rows.forEach(r => completedMap.set(String(r.traineeId), Number(r.c)));
-    }
+    // Progress: the one figure of every trainer page, over the courses of the
+    // chosen occupation (src/lib/trainer/trainee-progress.ts)
+    const scope = await requireProgressScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+    const progress = await loadTraineeProgress(traineeIds, scope);
 
     // Build final response
     const trainees = traineeRows.map(t => {
       const uid = String(t.id);
-      const courseIdsForTrainee = traineeCourses.get(uid) || [];
-      const enablerIdsForTrainee = courseIdsForTrainee.flatMap(
-        cid => courseEnablers.get(cid) || []
-      );
-      const total = enablerIdsForTrainee.length;
-      const completed = completedMap.get(uid) || 0;
-      const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+      const pct = progress.byTrainee.get(uid)?.pct ?? 0;
       const stats = statsMap.get(uid) || { approved: 0, pending: 0 };
 
       return {

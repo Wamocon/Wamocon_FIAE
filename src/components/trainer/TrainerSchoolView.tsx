@@ -4,6 +4,7 @@ import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
     Calendar,
@@ -49,6 +50,9 @@ const TABS: TabConfig[] = [
 export function TrainerSchoolView() {
     const { profile } = useAuth();
     const { t } = useLanguage();
+    // "verwalten" only for somebody who can change the curriculum, the others
+    // see the learning fields and their use cases (view only)
+    const canEditCurriculum = useIsSuperAdmin();
     const searchParams = useSearchParams();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<TabId>('lernfelder');
@@ -178,7 +182,9 @@ export function TrainerSchoolView() {
                     })}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2 px-1">
-                    {t(TABS.find(tab => tab.id === activeTab)?.descriptionKey || '')}
+                    {activeTab === 'lernfelder' && !canEditCurriculum
+                        ? t('trainer.school.tabs.lernfelderDescReadOnly')
+                        : t(TABS.find(tab => tab.id === activeTab)?.descriptionKey || '')}
                 </p>
             </div>
 

@@ -149,7 +149,7 @@ export async function PATCH(
             type: 'ENABLER_ACTIVATED',
             title: 'Neuer Enabler aktiviert',
             message: `Ein Enabler wurde aktiviert: ${row0.title}`,
-            linkUrl: '/trainee/modules',
+            linkUrl: `/trainee/modules/${row0.courseId}`,
             context: { enablerId, courseId: row0.courseId },
             organizationId,
           }));

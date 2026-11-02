@@ -396,8 +396,13 @@ export default function TraineeDashboard() {
                         />
                       </div>
                       <div className="mt-3 flex items-center justify-between">
+                        {/* The counts the percentage is made of (the old
+                            "0% → x%" explained nothing) */}
                         <span className="text-muted-foreground text-sm">
-                          0% → {module.progress ?? 0}%
+                          {t('courses.completed', {
+                            completed: module.completedCount ?? 0,
+                            total: module.enablerCount ?? 0,
+                          })}
                         </span>
                         <span
                           className={`text-lg font-bold ${module.progress === 100 ? 'text-green-500' : 'text-accent'}`}

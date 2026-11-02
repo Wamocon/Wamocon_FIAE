@@ -7,6 +7,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useBreadcrumbs } from '@/contexts/BreadcrumbContext';
+import { joinHardLineBreaks } from '@/lib/text/paragraphs';
 import {
   ArrowLeft,
   Layers,
@@ -51,6 +53,7 @@ export default function LernfeldDetailPage({
   const { t } = useLanguage();
   const { profile } = useAuth();
   const canEditCurriculum = useIsSuperAdmin();
+  const { breadcrumbs, setBreadcrumbs } = useBreadcrumbs();
   const [lernfeld, setLernfeld] = useState<Lernfeld | null>(null);
   const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +84,19 @@ export default function LernfeldDetailPage({
         setLoading(false);
       });
   }, [id]);
+
+  // The title of the page names the learning field (it said only "Details")
+  useEffect(() => {
+    if (!lernfeld) return;
+    const href = `/trainer/lernfelder/${id}`;
+    const label = `${lernfeld.label}: ${lernfeld.title}`;
+    const current = breadcrumbs.find(item => item.href === href);
+    if (current && current.label !== label) {
+      setBreadcrumbs(
+        breadcrumbs.map(item => (item.href === href ? { ...item, label } : item))
+      );
+    }
+  }, [lernfeld, id, breadcrumbs, setBreadcrumbs]);
 
   const handleUpdate = async () => {
     if (!editTitle || !lernfeld) return;
@@ -174,7 +190,7 @@ export default function LernfeldDetailPage({
               </h1>
               {lernfeld.description && (
                 <p className="text-muted mt-2 max-w-2xl whitespace-pre-line">
-                  {lernfeld.description}
+                  {joinHardLineBreaks(lernfeld.description)}
                 </p>
               )}
             </div>
@@ -217,6 +233,14 @@ export default function LernfeldDetailPage({
               <div
                 key={uc.id}
                 onClick={() => router.push(`/trainer/use-cases/${uc.id}`)}
+                role="link"
+                tabIndex={0}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    router.push(`/trainer/use-cases/${uc.id}`);
+                  }
+                }}
                 className="group bg-muted/20 hover:bg-muted/30 border-accent/10 hover:border-accent/30 flex cursor-pointer items-center justify-between rounded-xl border p-4 transition-colors"
               >
                 <div className="min-w-0 flex-1">

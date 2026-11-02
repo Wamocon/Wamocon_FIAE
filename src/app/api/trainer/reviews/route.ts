@@ -14,6 +14,7 @@ import { requireCatalogScope } from '@/lib/catalog/scope';
 import {
   enablerSubmissionsWhere,
   reviewableCourseIds,
+  newestFirst,
   submissionsOfUseCasesWhere,
 } from '@/lib/trainer/pending-reviews';
 
@@ -180,8 +181,8 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      enablerSubmissions: enablerRows,
-      useCaseSubmissions: useCaseRows,
+      enablerSubmissions: newestFirst(enablerRows),
+      useCaseSubmissions: newestFirst(useCaseRows),
     });
   } catch (e) {
     console.error('Trainer reviews GET error', e);

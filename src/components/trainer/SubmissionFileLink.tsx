@@ -5,6 +5,7 @@ import { Paperclip } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { authFetch } from '@/lib/authFetch';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { readLinkAnswers } from '@/lib/submission-file/readLink';
 
 // The optional file of a use case submission (trainer side). One check per page whether
 // the feature is on (the answer is cached by the query), then a button per submission.
@@ -35,6 +36,11 @@ export function SubmissionFileLink({ submissionId }: { submissionId: string }) {
       }
       if (!json.file?.url) {
         setState('none');
+        return;
+      }
+      // A link that the storage refuses (503) is said here, not lost in the background
+      if (!(await readLinkAnswers(json.file.url))) {
+        setState('failed');
         return;
       }
       setState('idle');

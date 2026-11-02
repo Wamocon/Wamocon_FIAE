@@ -6,6 +6,7 @@ import { enablers, courseMembers, enablerSubmissions, EnablerSubmission } from '
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import { getEnablerProgression } from '@/lib/catalog/progression-db';
 import { withSignedContentFields } from '@/lib/storage/contentUrl';
+import { isTraineeFileReference } from '@/lib/storage/contentPath';
 
 // GET trainee-facing enabler detail (title, description, ppt, video)
 // The data of the session user, a traineeId or userId in the query is ignored.
@@ -61,28 +62,30 @@ export async function GET(
         }
       : { state: 'open', locked: false, reason: null, lockedBy: null };
 
-    // A file of the bucket content (scenario PDF, slides, a video that was
-    // uploaded) is handed out as a signed address, a link to another host stays
+    // The video is a link to watch (or a video that was uploaded: a signed
+    // address, a link to another host stays). The scenario PDF is no address for
+    // a trainee, only the fact that there is one: the viewer reads it from
+    // GET /api/trainee/enablers/[id]/scenario/content. The slides (ppt_url) are a
+    // file to take away and are not offered to a trainee at all.
     const [links] = await withSignedContentFields(
-      [
-        {
-          scenarioPdfUrl: e.scenarioPdfUrl,
-          pptUrl: e.pptUrl,
-          videoUrl: e.videoUrl,
-        },
-      ],
-      ['scenarioPdfUrl', 'pptUrl', 'videoUrl'],
+      [{ videoUrl: e.videoUrl }],
+      ['videoUrl'],
       { hideOtherPrivate: true }
     );
+    const hasScenarioPdf =
+      typeof e.scenarioPdfUrl === 'string' &&
+      e.scenarioPdfUrl.trim() !== '' &&
+      isTraineeFileReference(e.scenarioPdfUrl);
 
     return NextResponse.json({
       progression,
       enabler: {
         id: e.id,
+        // The page links back to the course (Fragenkomplex) of the enabler
+        courseId: e.courseId,
         title: e.title,
         descriptionText: e.descriptionText,
-        scenarioPdfUrl: links.scenarioPdfUrl,
-        pptUrl: links.pptUrl,
+        hasScenarioPdf,
         videoUrl: links.videoUrl,
         isActive: e.isActive,
         durationValue: e.durationValue,
