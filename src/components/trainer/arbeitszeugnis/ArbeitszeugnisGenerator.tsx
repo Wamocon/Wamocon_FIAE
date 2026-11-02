@@ -797,10 +797,10 @@ export function ArbeitszeugnisGenerator() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      toast.success('PDF erfolgreich heruntergeladen');
+      toast.success(t('arbeitszeugnis.downloadSuccess'));
     } catch (err) {
       console.error('Error re-downloading certificate:', err);
-      toast.error('Fehler beim Herunterladen des Zeugnisses');
+      toast.error(t('arbeitszeugnis.downloadError'));
     } finally {
       setRedownloading(false);
     }
@@ -822,7 +822,7 @@ export function ArbeitszeugnisGenerator() {
       const certificates = data.certificates || [];
 
       if (certificates.length === 0) {
-        toast.error('Keine Zeugnisse gefunden');
+        toast.error(t('arbeitszeugnis.noCertificates'));
         return;
       }
 
@@ -953,11 +953,14 @@ export function ArbeitszeugnisGenerator() {
       }
 
       toast.success(
-        `${successCount} von ${certificates.length} Zeugnisse erfolgreich heruntergeladen`
+        t('arbeitszeugnis.bulkDownloadSuccess', {
+          done: successCount,
+          total: certificates.length,
+        })
       );
     } catch (err) {
       console.error('Error bulk downloading certificates:', err);
-      toast.error('Fehler beim Herunterladen der Zeugnisse');
+      toast.error(t('arbeitszeugnis.bulkDownloadError'));
     } finally {
       setBulkDownloading(false);
       setBulkProgress({ current: 0, total: 0 });
