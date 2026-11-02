@@ -737,6 +737,16 @@ export default function EditCoursePage() {
                             setEnablerScenarioPdfLink(
                               ej.signedLinks?.scenarioPdfUrl || ''
                             );
+                            // The save sends all of these, so they have to be loaded:
+                            // an empty state would switch the lesson off and drop the links
+                            setEnablerPpt(en.pptUrl || '');
+                            setEnablerVideo(en.videoUrl || '');
+                            setEnablerDuration(
+                              en.durationValue != null
+                                ? String(en.durationValue)
+                                : ''
+                            );
+                            setEnablerActive(!!en.isActive);
                           }
                           const ql = await authFetch(
                             `/api/trainer/enablers/${e.id}/quizzes`,
