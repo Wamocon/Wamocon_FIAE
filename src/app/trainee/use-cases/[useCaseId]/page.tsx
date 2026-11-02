@@ -18,6 +18,7 @@ import { PageLoader } from '@/components/ui/PageLoader';
 import { authFetch } from '@/lib/authFetch';
 import { SubmissionFileField } from '@/components/trainee/SubmissionFileField';
 import { lockText } from '@/components/trainee/EnablerStateBadge';
+import { handInOfUseCaseHasContent } from '@/lib/submission-input';
 
 export default function TraineeUseCaseDetailPage() {
   const params = useParams<{ useCaseId: string }>();
@@ -75,6 +76,15 @@ export default function TraineeUseCaseDetailPage() {
     error: queryError,
   } = useApiQuery<UseCaseResponse>(ucUrl);
   const { data: docsData } = useApiQuery<DocsResponse>(docsUrl);
+  // The file of the hand-in (same query as the file field, so it is shared)
+  const fileUrl = useCaseId
+    ? `/api/trainee/use-cases/${useCaseId}/submission-file`
+    : null;
+  const { data: fileData } = useApiQuery<{
+    enabled: boolean;
+    file: unknown | null;
+  }>(fileUrl);
+  const hasFile = !!(fileData?.enabled && fileData.file);
 
   const useCase = ucData?.useCase || null;
   const submission = ucData?.submission || null;
@@ -114,6 +124,13 @@ export default function TraineeUseCaseDetailPage() {
 
   const submit = async () => {
     if (!profile?.id) return setError(t('useCase.profileMissing'));
+    // A hand-in needs a solution text, a link or a file: only white space
+    // counts as empty (the server answers the same)
+    if (!handInOfUseCaseHasContent({ submissionText, links, hasFile })) {
+      setSuccess(null);
+      setError(t('useCase.emptySubmission'));
+      return;
+    }
     setSaving(true);
     setSuccess(null);
     setError(null);
@@ -134,6 +151,9 @@ export default function TraineeUseCaseDetailPage() {
           throw new Error(
             `${t('useCase.locked')} ${lockText(t, answer.reason, answer.lockedBy?.title)}`
           );
+        }
+        if (answer?.code === 'EMPTY_SUBMISSION') {
+          throw new Error(t('useCase.emptySubmission'));
         }
         throw new Error(t('useCase.submitFailed'));
       }
@@ -429,7 +449,8 @@ export default function TraineeUseCaseDetailPage() {
             className="text-muted-foreground hover:text-accent flex items-center gap-2 text-sm font-medium transition-colors"
           >
             <ChevronLeft className="h-4 w-4" />
-            {t('useCase.backToModule')} {useCase.courseTitle || 'Modul'}
+            {t('useCase.backToModule')}{' '}
+            {useCase.courseTitle || t('breadcrumb.module')}
           </Link>
         </div>
       )}

@@ -156,6 +156,56 @@ describe('API: POST /api/trainee/enablers/[enablerId]/submit', () => {
     });
   });
 
+  describe('a summary without text (WMCNL-2925)', () => {
+    const run = async (body: any) => {
+      const { db, writes } = createTableDb({
+        profiles: [orgRow],
+        enablers: [enablerRow],
+        courseMembers: [{ userId: 't1', courseId: 'c1' }],
+        enablerSubmissions: [],
+      });
+      const POST = await importHandlerWithDb(db);
+      const res = await POST(
+        makePost('http://localhost/api/trainee/enablers/e1/submit', body),
+        { params: Promise.resolve({ enablerId: 'e1' }) }
+      );
+      return { res: res as any, writes };
+    };
+
+    it.each([
+      ['nothing at all', {}],
+      ['an empty text', { solutionText: '' }],
+      ['only white space', { solutionText: '  \n\t ' }],
+      ['an empty list', { solutions: [] }],
+      [
+        'a list of blank entries',
+        { solutions: [{ scenarioIndex: 0, text: '   ' }] },
+      ],
+      ['entries without a text', { solutions: [{ scenarioIndex: 0 }, null] }],
+    ])('400 EMPTY_SUBMISSION for %s and nothing is stored', async (_n, body) => {
+      const { res, writes } = await run({ traineeId: 't1', ...body });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: 'Empty submission',
+        code: 'EMPTY_SUBMISSION',
+      });
+      expect(writes('insert', 'enablerSubmissions')).toHaveLength(0);
+      expect(writes('update', 'enablerSubmissions')).toHaveLength(0);
+      expect(writes('insert', 'notifications')).toHaveLength(0);
+    });
+
+    it('takes a list with at least one filled solution', async () => {
+      const { res, writes } = await run({
+        solutions: [
+          { scenarioIndex: 0, text: ' ' },
+          { scenarioIndex: 1, text: 'Meine Lösung' },
+        ],
+      });
+      expect(res.status).toBe(200);
+      expect(writes('insert', 'enablerSubmissions')).toHaveLength(1);
+    });
+  });
+
   it('403 if trainee not member of course', async () => {
     const { db } = createTableDb({
       profiles: [orgRow],
