@@ -1529,7 +1529,7 @@
       "category": "allowed_answer",
       "role": "TRAINEE",
       "occupations": ["KFBM"],
-      "question": "Teste mich zur Beschaffung mit einer Quizfrage.",
+      "question": "Stelle mir eine Quizfrage zur Beschaffung.",
       "expected": {
         "behavior": "answer"
       },

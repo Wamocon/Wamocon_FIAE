@@ -29,6 +29,8 @@ import {
   type NavigationOffer,
 } from '@/lib/hai/navigation/offer';
 import { isAllowedNavigationPath } from '@/lib/hai/navigation/targets';
+import { toQuizStartScope } from '@/lib/hai/quizMode/session';
+import { useHaiQuizMode } from './HaiQuizMode';
 
 // ============================================================================
 // TYPES
@@ -581,6 +583,17 @@ export function HaiProvider({
   // PENDING ACTIONS (confirmation card)
   // ========================================================================
 
+  // The chat answered a request to be quizzed: open the quiz card (the signal
+  // comes from the server pipeline, see lib/hai/quizMode/start.ts)
+  const { start: startQuiz } = useHaiQuizMode();
+  const startQuizFromSignal = useCallback(
+    (raw: unknown) => {
+      const scope = toQuizStartScope(raw);
+      if (scope) startQuiz(scope);
+    },
+    [startQuiz]
+  );
+
   const attachPendingAction = useCallback((messageId: string, raw: unknown) => {
     const pending = toPendingAction(raw);
     if (!pending) return;
@@ -1018,6 +1031,7 @@ export function HaiProvider({
                     event.navigationOffer,
                     false
                   );
+                  startQuizFromSignal(event.quizMode);
                   if (event.sessionId && event.sessionId !== currentSessionId) {
                     setCurrentSessionId(event.sessionId);
                   }
@@ -1062,6 +1076,7 @@ export function HaiProvider({
         } else if (response.ok) {
           const data = await response.json();
           attachNavigationOffer(assistantId, data.navigationOffer, false);
+          startQuizFromSignal(data.quizMode);
 
           if (data.sessionId && data.sessionId !== currentSessionId) {
             setCurrentSessionId(data.sessionId);
@@ -1177,6 +1192,7 @@ export function HaiProvider({
       t,
       attachPendingAction,
       attachNavigationOffer,
+      startQuizFromSignal,
     ]
   );
 
@@ -1353,6 +1369,7 @@ export function HaiProvider({
                     event.navigationOffer,
                     options?.voice === true
                   );
+                  startQuizFromSignal(event.quizMode);
                   // Final event — update with citations and sessionId
                   if (event.sessionId && event.sessionId !== currentSessionId) {
                     setCurrentSessionId(event.sessionId);
@@ -1404,6 +1421,7 @@ export function HaiProvider({
             data.navigationOffer,
             options?.voice === true
           );
+          startQuizFromSignal(data.quizMode);
 
           if (data.sessionId && data.sessionId !== currentSessionId) {
             setCurrentSessionId(data.sessionId);
@@ -1524,6 +1542,7 @@ export function HaiProvider({
       attachPendingAction,
       attachNavigationOffer,
       answerSpokenNavigation,
+      startQuizFromSignal,
     ]
   );
 

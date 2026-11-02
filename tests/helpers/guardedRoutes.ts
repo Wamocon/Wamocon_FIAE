@@ -1214,6 +1214,8 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   { route: 'hai/action', method: 'GET', guard: 'user', params: [] },
   { route: 'hai/insights', method: 'GET', guard: 'user', params: [] },
   { route: 'hai/voice', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/quiz-mode/next', method: 'POST', guard: 'user', params: [] },
+  { route: 'hai/quiz-mode/answer', method: 'POST', guard: 'user', params: [] },
   // the voice providers (Soniox, Sokrates): every route also checks the switch of
   // the organization (403 VOICE_DISABLED), see tests/integration/api/hai/voice-*.test.ts
   { route: 'hai/voice/config', method: 'GET', guard: 'user', params: [] },
