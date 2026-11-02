@@ -26,7 +26,10 @@ import {
   Sparkles,
   Trash2,
   Clock,
+  Pencil,
 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useEscapeKey } from '@/lib/hooks/useEscapeKey';
 import {
   getPhaseMonthRange,
   normalizeDurationYears,
@@ -194,7 +197,34 @@ function formatDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export function BlockCalendar() {
+// Helper to format the time of a date as HH:MM for a time input
+function formatTimeKey(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+// The types a trainee can enter in the form (the list of the form is the same)
+const TRAINEE_BLOCK_TYPES: Block['blockType'][] = [
+  'SCHOOL',
+  'COMPANY',
+  'HOLIDAY',
+  'EXAM',
+  'SONSTIGES',
+];
+
+/**
+ * Whether the trainee may change an entry: an entry of a type the form offers
+ * that no trainer created. Entries a trainer put in the calendar (blockers,
+ * appointments) stay as the trainer made them, like on the server.
+ */
+function isTraineeEditableBlock(
+  block: Pick<Block, 'blockType' | 'createdByTrainerId'>
+): boolean {
+  return (
+    !block.createdByTrainerId && TRAINEE_BLOCK_TYPES.includes(block.blockType)
+  );
+}
+
+export function BlockCalendar({ onChanged }: { onChanged?: () => void } = {}) {
   const { profile } = useAuth();
   const { phaseOneMonthsFor } = useRequestCatalog(profile?.id);
   const { t } = useLanguage();
@@ -238,6 +268,8 @@ export function BlockCalendar() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
+  // The entry being edited (the form of "new entry" filled with its values)
+  const [editingBlock, setEditingBlock] = useState<Block | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const durationYears = normalizeDurationYears(
     profile?.ausbildung_duration_years
@@ -538,6 +570,37 @@ export function BlockCalendar() {
       setBlocks(prev => [...prev, data.block]);
       setShowAddModal(false);
       setSelectedDate(null);
+      onChanged?.();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  // Change an existing entry (WMCNL-2957): date, time, type and texts
+  const handleUpdateBlock = async (blockData: Partial<Block>) => {
+    if (!editingBlock) return;
+    try {
+      const res = await authFetch(
+        `/api/trainee/school/blocks/${editingBlock.id}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(blockData),
+        }
+      );
+
+      if (!res.ok) throw new Error(t('calendar.error.updateBlock'));
+
+      const data = await res.json();
+      // The list holds one year: an entry moved into another year leaves it
+      setBlocks(prev =>
+        prev
+          .map(b => (b.id === editingBlock.id ? { ...b, ...data.block } : b))
+          .filter(b => b.year === selectedYear)
+      );
+      setEditingBlock(null);
+      setSelectedBlock(null);
+      onChanged?.();
     } catch (e: any) {
       setError(e.message);
     }
@@ -553,6 +616,7 @@ export function BlockCalendar() {
 
       setBlocks(prev => prev.filter(b => b.id !== blockId));
       setSelectedBlock(null);
+      onChanged?.();
     } catch (e: any) {
       setError(e.message);
     }
@@ -818,7 +882,15 @@ export function BlockCalendar() {
                     <div
                       className={`border-border/50 mb-4 flex flex-col items-center border-b pb-2`}
                     >
-                      <span className="text-2xl font-bold">
+                      {/* today is marked like in the month view */}
+                      <span
+                        aria-current={dayData.isToday ? 'date' : undefined}
+                        className={`inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl font-bold ${
+                          dayData.isToday
+                            ? 'bg-accent text-accent-foreground'
+                            : ''
+                        }`}
+                      >
                         {dayData.date.getDate()}
                       </span>
                     </div>
@@ -932,8 +1004,9 @@ export function BlockCalendar() {
         </div>
       )}
 
-      {/* Empty State */}
-      {blocks.length === 0 && !loading && (
+      {/* Empty State: only when nothing is to be seen. An exam of the exam
+          list is an entry in the grid too (WMCNL-2958) */}
+      {blocks.length === 0 && exams.length === 0 && !loading && (
         <div className="px-6 py-8 text-center">
           <div className="bg-accent/10 mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl">
             <Sparkles className="text-accent h-7 w-7" />
@@ -969,6 +1042,10 @@ export function BlockCalendar() {
           phaseOneMonths={phaseOneMonthsFor(durationYears)}
           onClose={() => setSelectedBlock(null)}
           onDelete={handleDeleteBlock}
+          onEdit={block => {
+            setSelectedBlock(null);
+            setEditingBlock(block);
+          }}
         />
       )}
 
@@ -981,6 +1058,16 @@ export function BlockCalendar() {
           }}
           onAdd={handleAddBlock}
           initialDate={selectedDate}
+        />
+      )}
+
+      {/* Edit Block Modal: the same form, filled with the entry */}
+      {editingBlock && (
+        <AddBlockModal
+          onClose={() => setEditingBlock(null)}
+          onAdd={handleUpdateBlock}
+          initialDate={null}
+          initialBlock={editingBlock}
         />
       )}
 
@@ -1006,6 +1093,7 @@ function BlockDetailModal({
   phaseOneMonths,
   onClose,
   onDelete,
+  onEdit,
 }: {
   block: Block;
   durationYears: AusbildungDurationYears;
@@ -1013,11 +1101,18 @@ function BlockDetailModal({
   phaseOneMonths?: number;
   onClose: () => void;
   onDelete: (blockId: string) => void;
+  onEdit: (block: Block) => void;
 }) {
   const { t } = useLanguage();
   const config = BLOCK_CONFIG[block.blockType];
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Escape closes the detail like every other dialog (a confirmation on top
+  // of it answers first)
+  useEscapeKey(onClose, !deleting);
+  // What the trainee wrote can be changed, what the trainer put in the
+  // calendar cannot
+  const editable = isTraineeEditableBlock(block);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -1054,6 +1149,7 @@ function BlockDetailModal({
     setDeleting(true);
     await onDelete(block.id);
     setDeleting(false);
+    setConfirmDelete(false);
   };
 
   return createPortal(
@@ -1153,54 +1249,40 @@ function BlockDetailModal({
             </div>
           </div>
 
-          {confirmDelete ? (
-            <div className="bg-destructive/10 border-destructive/20 space-y-3 rounded-xl border p-4">
-              <p className="text-foreground text-sm font-medium">
-                {t('calendar.block.deleteConfirm')}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  className="glass-effect text-foreground flex-1 rounded-lg px-3 py-2 text-sm font-medium"
-                  disabled={deleting}
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="bg-destructive flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white"
-                >
-                  <span className="flex h-4 w-4 items-center justify-center">
-                    {deleting ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </span>
-                  {t('common.delete')}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="bg-destructive/10 hover:bg-destructive/20 text-destructive flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-medium transition"
+            >
+              <Trash2 className="h-4 w-4" />
+              {t('common.delete')}
+            </button>
+            {editable && (
               <button
-                onClick={() => setConfirmDelete(true)}
-                className="bg-destructive/10 hover:bg-destructive/20 text-destructive flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-medium transition"
+                onClick={() => onEdit(block)}
+                className="bg-accent/10 hover:bg-accent/20 text-accent flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-medium transition"
               >
-                <Trash2 className="h-4 w-4" />
-                {t('common.delete')}
+                <Pencil className="h-4 w-4" />
+                {t('common.edit')}
               </button>
-              <button
-                onClick={onClose}
-                className="glass-effect text-foreground hover:bg-muted flex-1 rounded-xl px-4 py-2.5 font-medium transition"
-              >
-                {t('common.close')}
-              </button>
-            </div>
-          )}
+            )}
+            <button
+              onClick={onClose}
+              className="glass-effect text-foreground hover:bg-muted flex-1 rounded-xl px-4 py-2.5 font-medium transition"
+            >
+              {t('common.close')}
+            </button>
+          </div>
         </div>
       </div>
+      {confirmDelete && (
+        <ConfirmDialog
+          message={t('calendar.block.deleteConfirm')}
+          busy={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </div>,
     document.body
   );
@@ -1211,30 +1293,55 @@ function AddBlockModal({
   onClose,
   onAdd,
   initialDate,
+  initialBlock = null,
 }: {
   onClose: () => void;
   onAdd: (data: Partial<Block>) => void;
   initialDate: Date | null;
+  /** An existing entry: the form edits it instead of creating a new one. */
+  initialBlock?: Block | null;
 }) {
   const { t } = useLanguage();
+  useEscapeKey(onClose);
+  const editing = initialBlock !== null;
+  const initialStart = initialBlock ? new Date(initialBlock.startDate) : null;
+  const initialEnd = initialBlock ? new Date(initialBlock.endDate) : null;
   const [startDate, setStartDate] = useState(
-    initialDate
-      ? `${initialDate.getFullYear()}-${String(initialDate.getMonth() + 1).padStart(2, '0')}-${String(initialDate.getDate()).padStart(2, '0')}`
-      : ''
+    initialStart
+      ? formatDateKey(initialStart)
+      : initialDate
+        ? formatDateKey(initialDate)
+        : ''
   );
   const [endDate, setEndDate] = useState(
-    initialDate
-      ? `${initialDate.getFullYear()}-${String(initialDate.getMonth() + 1).padStart(2, '0')}-${String(initialDate.getDate()).padStart(2, '0')}`
-      : ''
+    initialEnd
+      ? formatDateKey(initialEnd)
+      : initialDate
+        ? formatDateKey(initialDate)
+        : ''
   );
-  const [startTime, setStartTime] = useState('08:00');
-  const [endTime, setEndTime] = useState('17:00');
-  const [blockType, setBlockType] = useState<Block['blockType']>('SCHOOL');
-  const [blockNumber, setBlockNumber] = useState('');
-  const [notes, setNotes] = useState('');
-  const [examSubType, setExamSubType] = useState<Block['examSubType']>(null);
-  const [description, setDescription] = useState('');
-  const [inviteeEmails, setInviteeEmails] = useState('');
+  const [startTime, setStartTime] = useState(
+    initialStart ? formatTimeKey(initialStart) : '08:00'
+  );
+  const [endTime, setEndTime] = useState(
+    initialEnd ? formatTimeKey(initialEnd) : '17:00'
+  );
+  const [blockType, setBlockType] = useState<Block['blockType']>(
+    initialBlock?.blockType ?? 'SCHOOL'
+  );
+  const [blockNumber, setBlockNumber] = useState(
+    initialBlock?.blockNumber ? String(initialBlock.blockNumber) : ''
+  );
+  const [notes, setNotes] = useState(initialBlock?.notes ?? '');
+  const [examSubType, setExamSubType] = useState<Block['examSubType']>(
+    initialBlock?.examSubType ?? null
+  );
+  const [description, setDescription] = useState(
+    initialBlock?.description ?? ''
+  );
+  const [inviteeEmails, setInviteeEmails] = useState(
+    initialBlock?.inviteeEmails ?? ''
+  );
   const [error, setError] = useState<string | null>(null);
 
   // Exam sub-type options for dropdown
@@ -1293,7 +1400,8 @@ function AddBlockModal({
       endDate: end.toISOString(),
       blockType,
       blockNumber: blockNumber ? parseInt(blockNumber, 10) : null,
-      title: null,
+      // an entry that has a title (import) keeps it
+      title: initialBlock?.title ?? null,
       notes: notes || null,
       isPersonal: blockType === 'PERSONAL',
       examSubType: blockType === 'EXAM' ? examSubType : null,
@@ -1314,7 +1422,9 @@ function AddBlockModal({
         <div className="border-border border-b p-6">
           <div className="flex items-center justify-between">
             <h3 className="text-foreground text-lg font-bold">
-              {t('calendar.modal.addBlock')}
+              {editing
+                ? t('calendar.modal.editBlock')
+                : t('calendar.modal.addBlock')}
             </h3>
             <button
               onClick={onClose}
@@ -1515,7 +1625,7 @@ function AddBlockModal({
               })()}
             >
               <Check className="h-4 w-4" />
-              {t('common.add')}
+              {editing ? t('common.save') : t('common.add')}
             </button>
             {error && <p className="text-destructive mt-2 text-sm">{error}</p>}
           </div>
@@ -1537,6 +1647,7 @@ function ImportBlocksModal({
   onSuccess: () => void;
 }) {
   const { t } = useLanguage();
+  useEscapeKey(onClose);
   const [csvData, setCsvData] = useState('');
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);

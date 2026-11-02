@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { authFetch } from '@/lib/authFetch';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useEscapeKey } from '@/lib/hooks/useEscapeKey';
 import {
   FileText,
   Plus,
@@ -73,7 +75,7 @@ const EXAM_TYPES = {
   },
 };
 
-export function ExamManager() {
+export function ExamManager({ onChanged }: { onChanged?: () => void } = {}) {
   const { profile } = useAuth();
   const { t } = useLanguage();
   const [exams, setExams] = useState<Exam[]>([]);
@@ -81,6 +83,7 @@ export function ExamManager() {
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [activeView, setActiveView] = useState<'upcoming' | 'past'>('upcoming');
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -131,13 +134,16 @@ export function ExamManager() {
       setShowAddModal(false);
       // Background refresh to ensure data consistency
       loadExams();
+      // The overview cards above the tabs count the exams too
+      onChanged?.();
     } catch (e: any) {
       setError(e.message);
     }
   };
 
+  // Deleting asks in the dialog of the platform, the same everywhere
   const handleDeleteExam = async (examId: string) => {
-    if (!confirm(t('exams.deleteConfirm'))) return;
+    setDeleteTarget(null);
 
     // Optimistic: remove from state immediately
     setExams(prev => prev.filter(e => e.id !== examId));
@@ -149,6 +155,7 @@ export function ExamManager() {
       if (!res.ok) throw new Error(t('exams.error.delete'));
       // Background refresh
       loadExams();
+      onChanged?.();
     } catch (e: any) {
       setError(e.message);
       // Revert on error — re-fetch the full list
@@ -350,7 +357,8 @@ export function ExamManager() {
 
                     {/* Delete */}
                     <button
-                      onClick={() => handleDeleteExam(exam.id)}
+                      onClick={() => setDeleteTarget(exam.id)}
+                      aria-label={t('common.delete')}
                       className="hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg p-2 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -370,6 +378,14 @@ export function ExamManager() {
           onAdd={handleAddExam}
         />
       )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          message={t('exams.deleteConfirm')}
+          onConfirm={() => handleDeleteExam(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -383,6 +399,7 @@ function AddExamModal({
   onAdd: (data: Partial<Exam>) => void;
 }) {
   const { t } = useLanguage();
+  useEscapeKey(onClose);
   const [examDate, setExamDate] = useState('');
   const [subject, setSubject] = useState('');
   const [examType, setExamType] = useState('');
