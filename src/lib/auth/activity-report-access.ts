@@ -22,6 +22,10 @@
  *    with an occupation chosen (x-catalog), trainer level reaches only reports
  *    of that occupation, and a list of a trainee in several occupations shows
  *    the reports of the chosen occupation only (requireReportCatalogFilter).
+ *  - A weekly evaluation belongs to one occupation as well
+ *    (weekly_evaluations.training_catalog_id, the occupation of the report it
+ *    was written for). Lists of evaluations filter by that column
+ *    (ReportCatalogFilter.evaluationCondition).
  *
  * The checks are a first line. Every write also carries the owner or the
  * organization in its own where condition (traineeAccessCondition and the
@@ -86,6 +90,12 @@ export type ReportCatalogFilter = {
    */
   condition: SQL | null;
   /**
+   * The same choice as a condition on weekly_evaluations.training_catalog_id (a
+   * weekly evaluation carries its own occupation), or null if nothing is to be
+   * filtered. It is set exactly when `condition` is set.
+   */
+  evaluationCondition: SQL | null;
+  /**
    * The occupation the caller works in, for new reports and for the checks of a
    * single report. null for trainer level without a choice.
    */
@@ -107,7 +117,7 @@ export async function requireReportCatalogFilter(
   request: CatalogRequestLike
 ): Promise<ReportCatalogFilter | NextResponse> {
   if (session.isTrainerLevel && !requestedCatalogCode(request)) {
-    return { condition: null, catalogId: null };
+    return { condition: null, evaluationCondition: null, catalogId: null };
   }
   const scope = await requireCatalogScope(session, request);
   if (scope instanceof Response) return scope as NextResponse;
@@ -115,21 +125,11 @@ export async function requireReportCatalogFilter(
     condition: scope.selected
       ? catalogCondition(activityReports.trainingCatalogId, scope)
       : null,
+    evaluationCondition: scope.selected
+      ? catalogCondition(weeklyEvaluations.trainingCatalogId, scope)
+      : null,
     catalogId: scope.activeCatalogId,
   };
-}
-
-/**
- * Condition on weekly_evaluations for a chosen occupation: the evaluation
- * belongs to the occupation of the activity report it is linked to. An
- * evaluation without a report cannot be attributed and stays in every
- * occupation. undefined without a condition (nothing to filter).
- */
-export function evaluationReportCatalogCondition(
-  reportCatalog: SQL | null | undefined
-): SQL | undefined {
-  if (!reportCatalog) return undefined;
-  return sql`(${weeklyEvaluations.activityReportId} is null or exists (select 1 from ${activityReports} where ${activityReports.id} = ${weeklyEvaluations.activityReportId} and ${reportCatalog}))`;
 }
 
 /**

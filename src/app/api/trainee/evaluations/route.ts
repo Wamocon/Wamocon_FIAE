@@ -10,15 +10,15 @@ import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { resolveTraineeForRead } from '@/lib/auth/trainee-data-access';
 import {
-  evaluationReportCatalogCondition,
   requireReportCatalogFilter,
 } from '@/lib/auth/activity-report-access';
 
 // GET: Fetch trainee's evaluations
 // A trainee gets their own evaluations (a userId in the query is ignored), a
 // trainer-level caller gets the ones of a trainee in their organization scope.
-// An evaluation belongs to the occupation of its activity report: with an
-// occupation chosen (or a trainee in several occupations) only those count.
+// An evaluation belongs to one occupation (weekly_evaluations.training_catalog_id):
+// with an occupation chosen (or a trainee in several occupations) only those
+// count.
 export async function GET(request: NextRequest) {
   const session = await requireUser(request);
   if (isErrorResponse(session)) return session;
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
           .where(
             and(
               eq(weeklyEvaluations.traineeId, userId),
-              evaluationReportCatalogCondition(reportCatalog.condition)
+              reportCatalog.evaluationCondition ?? undefined
             )
           )
           .orderBy(
@@ -93,13 +93,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if evaluation already exists for this week
+    // A trainee in several occupations works in ONE (x-catalog, otherwise the
+    // first enrollment): the evaluation of this week is the one of that
+    // occupation, never the one of the other occupation
+    const reportCatalog = await requireReportCatalogFilter(session, request);
+    if (isErrorResponse(reportCatalog)) return reportCatalog;
+
+    // Check if evaluation already exists for this week in this occupation
     const existingEvaluation = await db
       .select()
       .from(weeklyEvaluations)
       .where(
         and(
           eq(weeklyEvaluations.traineeId, userId),
+          reportCatalog.catalogId
+            ? eq(weeklyEvaluations.trainingCatalogId, reportCatalog.catalogId)
+            : undefined,
           eq(weeklyEvaluations.weekNumber, weekNumber),
           eq(weeklyEvaluations.year, year)
         )
