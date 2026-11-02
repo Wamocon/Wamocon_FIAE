@@ -34,6 +34,8 @@ import {
 } from 'lucide-react';
 import { lockText } from '@/components/trainee/EnablerStateBadge';
 import { PASS_THRESHOLD } from '@/lib/catalog/progression';
+import { hasText } from '@/lib/submission-input';
+import { capitalizeFirst, themenkreisDescription } from '@/lib/display-text';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -170,6 +172,8 @@ export default function TraineeEnablerPage() {
     Array<{ scenarioIndex: number; text: string }>
   >([]);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  // The reason a summary was not taken, shown at the form (not instead of the page)
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   // Submission state for edit/status tracking
   const [submission, setSubmission] = useState<{
@@ -236,6 +240,8 @@ export default function TraineeEnablerPage() {
     try {
       const body = await r.clone().json();
       if (body?.code === 'ENABLER_LOCKED') return t('progression.locked403');
+      if (body?.code === 'EMPTY_SUBMISSION')
+        return t('enablerPage.emptySummary');
     } catch {
       // no JSON body
     }
@@ -387,8 +393,15 @@ export default function TraineeEnablerPage() {
   const submitSolution = async () => {
     if (!profile?.id || !enablerId || savingSolution)
       return setError(t('enablerPage.profileMissing'));
-    setSavingSolution(true);
     setSaveSuccess(null);
+    setSummaryError(null);
+    // A summary without text is no summary: only white space counts as empty
+    // (the server answers the same)
+    if (!solutions.some(s => hasText(s.text))) {
+      setSummaryError(t('enablerPage.emptySummary'));
+      return;
+    }
+    setSavingSolution(true);
     setError(null);
     try {
       // Filter out empty solutions and send only filled ones
@@ -420,7 +433,7 @@ export default function TraineeEnablerPage() {
       );
       if (enablerUrl) queryClient.invalidateQueries({ queryKey: [enablerUrl] });
     } catch (e: any) {
-      setError(e?.message || t('error.unknown'));
+      setSummaryError(e?.message || t('error.unknown'));
     } finally {
       setSavingSolution(false);
     }
@@ -582,7 +595,9 @@ export default function TraineeEnablerPage() {
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       {/* Enabler header */}
       <div className="border-accent/30 bg-background rounded-3xl border p-5">
-        <h1 className="text-foreground text-2xl font-bold">{enabler.title}</h1>
+        <h1 className="text-foreground text-2xl font-bold">
+          {capitalizeFirst(enabler.title)}
+        </h1>
         {enabler.isActive && enabler.durationValue && enabler.activatedAt && (
           <div className="mt-3 text-sm">
             {(() => {
@@ -608,7 +623,7 @@ export default function TraineeEnablerPage() {
           {enabler.descriptionText && (
             <LinkifyText
               className="text-muted-foreground mt-2"
-              text={String(enabler.descriptionText)}
+              text={themenkreisDescription(String(enabler.descriptionText))}
               preserveLineBreaks
             />
           )}
@@ -879,6 +894,15 @@ export default function TraineeEnablerPage() {
           </div>
         )}
 
+        {summaryError && (
+          <div
+            role="alert"
+            className="rounded-md border border-red-500/40 bg-red-500/10 p-2 text-sm text-red-600 dark:text-red-400"
+          >
+            {summaryError}
+          </div>
+        )}
+
         <div className="mb-2 text-lg font-semibold">
           {t('enablerPage.summaryLabel')}
         </div>
@@ -1048,11 +1072,15 @@ export default function TraineeEnablerPage() {
                     : ''}
                 </div>
               </div>
-              <div className="text-muted-foreground text-sm">
-                {t('enablerPage.questionCounter')
-                  .replace('{current}', String(currentIndex + 1))
-                  .replace('{total}', String(quizContent.questions.length))}
-              </div>
+              {/* The counter belongs to the question by question view, a
+                  result or a review shows all questions at once */}
+              {!result && !reviewMode && (
+                <div className="text-muted-foreground text-sm">
+                  {t('enablerPage.questionCounter')
+                    .replace('{current}', String(currentIndex + 1))
+                    .replace('{total}', String(quizContent.questions.length))}
+                </div>
+              )}
             </div>
 
             {!result && !reviewMode ? (
@@ -1158,7 +1186,9 @@ export default function TraineeEnablerPage() {
               <div className="space-y-3">
                 {(quizLocked || reviewMode) && (
                   <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-600 dark:text-yellow-400">
-                    {t('enablerPage.quizAlreadySubmitted')}
+                    {result && result.feedback.length === 0
+                      ? t('enablerPage.quizAlreadySubmittedNoAnswers')
+                      : t('enablerPage.quizAlreadySubmitted')}
                   </div>
                 )}
                 {result?.score === null ? (
@@ -1208,8 +1238,13 @@ export default function TraineeEnablerPage() {
                     )}
                   </>
                 )}
+                {/* A result without stored answers (a score that came without
+                    its answers) lists no question with an empty answer */}
                 <ul className="space-y-2">
-                  {quizContent.questions.map(q => {
+                  {(result && result.feedback.length === 0
+                    ? []
+                    : quizContent.questions
+                  ).map(q => {
                     const fb = result?.feedback.find(
                       f => String(f.questionId) === String(q.id)
                     );

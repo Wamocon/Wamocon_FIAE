@@ -244,7 +244,7 @@ export async function POST(
         .select({ title: courses.title })
         .from(courses)
         .where(eq(courses.id, courseId as any));
-      const courseName = courseInfo?.title || 'einem Kurs';
+      const courseName = courseInfo?.title || 'einem Fragenkomplex';
       const isTrainer = isTrainerLevelRole(role);
 
       try {
@@ -252,10 +252,10 @@ export async function POST(
           userId,
           actorId: trainerId,
           type: isTrainer ? 'COURSE_CO_TRAINER_ADDED' : 'COURSE_ASSIGNED',
-          title: isTrainer ? 'Als Trainer hinzugefügt' : 'Zu Kurs hinzugefügt',
+          title: isTrainer ? 'Als Trainer hinzugefügt' : 'Zu Fragenkomplex hinzugefügt',
           message: isTrainer
             ? `Du wurdest als Trainer zu "${courseName}" hinzugefügt`
-            : `Du wurdest dem Kurs "${courseName}" zugewiesen`,
+            : `Du wurdest dem Fragenkomplex "${courseName}" zugewiesen`,
           linkUrl: isTrainer
             ? `/trainer/courses/${courseId}`
             : '/trainee/modules',
@@ -274,10 +274,10 @@ export async function POST(
             type: isTrainer ? 'COURSE_CO_TRAINER_ADDED' : 'COURSE_ASSIGNED',
             title: isTrainer
               ? 'Als Trainer hinzugefügt'
-              : 'Zu Kurs hinzugefügt',
+              : 'Zu Fragenkomplex hinzugefügt',
             message: isTrainer
               ? `Du wurdest als Trainer zu "${courseName}" hinzugefügt`
-              : `Du wurdest dem Kurs "${courseName}" zugewiesen`,
+              : `Du wurdest dem Fragenkomplex "${courseName}" zugewiesen`,
             link_url: isTrainer
               ? `/trainer/courses/${courseId}`
               : '/trainee/modules',
@@ -392,13 +392,13 @@ export async function DELETE(
         .select({ title: courses.title })
         .from(courses)
         .where(eq(courses.id, courseId as any));
-      const courseName = courseInfo?.title || 'einem Kurs';
+      const courseName = courseInfo?.title || 'einem Fragenkomplex';
       await db.insert(notifications).values({
         userId,
         actorId: trainerId,
         type: 'COURSE_MEMBER_REMOVED',
-        title: 'Aus Kurs entfernt',
-        message: `Du wurdest aus dem Kurs "${courseName}" entfernt.`,
+        title: 'Aus Fragenkomplex entfernt',
+        message: `Du wurdest aus dem Fragenkomplex "${courseName}" entfernt.`,
         linkUrl:
           isTrainerLevelRole(memberToRemove.role)
             ? '/trainer/courses'

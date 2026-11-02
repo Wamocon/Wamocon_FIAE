@@ -79,6 +79,8 @@ export async function GET(
       progression,
       enabler: {
         id: e.id,
+        // The page links back to the course (Fragenkomplex) of the enabler
+        courseId: e.courseId,
         title: e.title,
         descriptionText: e.descriptionText,
         scenarioPdfUrl: links.scenarioPdfUrl,

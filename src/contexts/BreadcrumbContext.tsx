@@ -82,7 +82,8 @@ export function BreadcrumbProvider({
           else if (prev === 'lessons') label = t('breadcrumb.lesson');
           else if (prev === 'quizzes') label = t('breadcrumb.quiz');
           else if (prev === 'trainees') label = t('breadcrumb.details');
-          else if (prev === 'enablers') label = t('breadcrumb.enablers');
+          // one Themenkreis: singular (the list segment keeps the plural)
+          else if (prev === 'enablers') label = t('breadcrumb.enabler');
           else if (prev === 'content-management') label = t('breadcrumb.details');
           else if (prev === 'use-cases') label = t('breadcrumb.details');
           else if (prev === 'organizations') label = t('breadcrumb.details');
