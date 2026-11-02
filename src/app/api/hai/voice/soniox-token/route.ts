@@ -61,13 +61,15 @@ export async function POST(req: NextRequest) {
     `hai-voice:${me.id}`
   );
   if (!result.ok) {
-    reportProviderFailure('soniox', result.reason);
+    // the failure counts for the function that was asked for: a refused key for
+    // listening does not take speaking away
+    reportProviderFailure('soniox', purpose, result.reason);
     // the status of Soniox is logged, never the request or a key
     console.warn(
       `HAI voice: Soniox key refused (${result.reason}${result.status ? `, HTTP ${result.status}` : ''})`
     );
     return unavailableResponse('UPSTREAM_FAILED', result.reason);
   }
-  reportProviderSuccess('soniox');
+  reportProviderSuccess('soniox', purpose);
   return NextResponse.json(result.grant, { headers: PRIVATE });
 }

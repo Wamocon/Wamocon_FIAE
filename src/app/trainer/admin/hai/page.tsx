@@ -11,7 +11,9 @@ import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import {
   VOICE_FALLBACKS,
   VOICE_PROVIDERS,
+  VOICE_FUNCTIONS,
   type VoiceFallbackId,
+  type VoiceFunction,
   type VoiceProviderId,
 } from '@/lib/hai/voice/settings';
 
@@ -24,8 +26,11 @@ type Status = 'ready' | 'not_configured' | 'disturbed';
 
 type ProviderInfo = {
   id: VoiceProviderId;
+  /** The summary: disturbed as soon as one function is. */
   status: Status;
   reason: string | null;
+  /** The state of listening (stt) and speaking (tts); missing in an older answer. */
+  functions?: Record<VoiceFunction, { status: Status; reason: string | null }>;
   keySet?: boolean;
   region?: 'eu' | 'us' | null;
   reachable?: boolean | null;
@@ -35,7 +40,11 @@ type ProviderInfo = {
 
 type VoiceStatus = {
   providers: Record<VoiceProviderId, ProviderInfo>;
-  effective: { provider: VoiceProviderId; chain: VoiceProviderId[] };
+  effective: {
+    provider: VoiceProviderId;
+    chain: VoiceProviderId[];
+    chains?: Record<VoiceFunction, VoiceProviderId[]>;
+  };
 };
 
 const STATUS_STYLE: Record<Status, string> = {
@@ -107,6 +116,19 @@ export default function AdminHaiPage() {
       : value
         ? t('admin.hai.detail.yes')
         : t('admin.hai.detail.no');
+
+  // the functions of a provider that are disturbed right now (empty when it is
+  // not set up, then the one reason holds for the whole provider)
+  const disturbedFunctions = (info: ProviderInfo): VoiceFunction[] =>
+    info.status === 'disturbed' && info.functions
+      ? VOICE_FUNCTIONS.filter(fn => info.functions![fn].status === 'disturbed')
+      : [];
+
+  // listening and speaking walk different chains while a provider is disturbed in
+  // one function only
+  const chainsDiffer =
+    !!status?.effective.chains &&
+    status.effective.chains.stt.join() !== status.effective.chains.tts.join();
 
   const sameChoice = primary === fallback;
 
@@ -264,11 +286,25 @@ export default function AdminHaiPage() {
         )}
         {status && (
           <>
-            <p className="text-muted mb-4 text-sm">
-              {t('admin.hai.status.effective', {
-                chain: status.effective.chain.map(providerName).join(', '),
-              })}
-            </p>
+            {chainsDiffer ? (
+              <div className="text-muted mb-4 space-y-1 text-sm">
+                {VOICE_FUNCTIONS.map(fn => (
+                  <p key={fn} data-testid={`hai-chain-${fn}`}>
+                    {t(`admin.hai.status.effective.${fn}`, {
+                      chain: status
+                        .effective!.chains![fn].map(providerName)
+                        .join(', '),
+                    })}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted mb-4 text-sm">
+                {t('admin.hai.status.effective', {
+                  chain: status.effective.chain.map(providerName).join(', '),
+                })}
+              </p>
+            )}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {VOICE_PROVIDERS.map(id => {
                 const info = status.providers[id];
@@ -288,10 +324,25 @@ export default function AdminHaiPage() {
                         {t(`admin.hai.status.${info.status}`)}
                       </span>
                     </div>
-                    {info.reason && (
-                      <p className="text-muted mb-2 text-sm">
-                        {reasonText(info.reason)}
-                      </p>
+                    {disturbedFunctions(info).length > 0 ? (
+                      // a failure is per function: say which one is out
+                      <ul className="text-muted mb-2 space-y-1 text-sm">
+                        {disturbedFunctions(info).map(fn => (
+                          <li
+                            key={fn}
+                            data-testid={`hai-disturbed-${id}-${fn}`}
+                          >
+                            {t(`admin.hai.status.function.${fn}`)}:{' '}
+                            {reasonText(info.functions![fn].reason)}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      info.reason && (
+                        <p className="text-muted mb-2 text-sm">
+                          {reasonText(info.reason)}
+                        </p>
+                      )
                     )}
                     <dl className="text-muted space-y-1 text-xs">
                       {info.keySet !== undefined && (

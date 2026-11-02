@@ -947,3 +947,126 @@ describe('the chain of providers', () => {
     expect(t.ctx.resumed).toBe(1);
   });
 });
+
+// The server sends one chain per function (GET /api/hai/voice/config: chains.stt
+// and chains.tts). A provider that is disturbed in one function only is in the
+// chain of the other. These tests build the environment from such chains.
+describe('one chain per function', () => {
+  type Id = 'soniox' | 'haus' | 'browser';
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  async function setup(
+    chains: { stt: Id[]; tts: Id[] },
+    options: Parameters<typeof makeDeps>[0] = {}
+  ) {
+    const t = makeDeps(options);
+    const b = baseEnv();
+    const active: string[] = [];
+    const env = createVoiceEnv({
+      base: b.env,
+      chain: ['soniox', 'haus', 'browser'],
+      chains,
+      deps: t.deps,
+      onActiveProvider: id => active.push(id),
+    });
+    return { t, b, env, active };
+  }
+
+  async function startListening(env: VoiceEnv) {
+    const rec = (await env.createRecognition())!.rec;
+    rec.lang = 'de-DE';
+    rec.start();
+    await jest.advanceTimersByTimeAsync(0);
+    return rec;
+  }
+
+  function speak(env: VoiceEnv, ...pieces: string[]) {
+    const speaker = env.createSpeaker!({ onDone: () => undefined })!;
+    for (const piece of pieces) speaker.say(piece);
+    speaker.end();
+  }
+
+  it('recognition of Sokrates is out, its speech output is in: the browser listens, Sokrates speaks', async () => {
+    const r = await setup({ stt: ['browser'], tts: ['haus', 'browser'] });
+    await startListening(r.env);
+    expect(r.active).toEqual(['browser']);
+    expect(r.b.recognitions).toHaveLength(1);
+    // Sokrates was not asked to listen: no microphone and no recorder for it
+    expect(r.t.calls.getUserMedia).toBe(0);
+    speak(r.env, 'Hallo.');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(r.t.calls.speak).toEqual(['Hallo.']);
+    expect(r.b.spoken).toHaveLength(0);
+  });
+
+  it('speech output of Sokrates is out, its recognition is in: Sokrates listens, the browser speaks', async () => {
+    const r = await setup({ stt: ['haus', 'browser'], tts: ['browser'] });
+    await startListening(r.env);
+    expect(r.active).toEqual(['haus']);
+    expect(r.t.calls.getUserMedia).toBe(1);
+    expect(r.b.recognitions).toHaveLength(0);
+    speak(r.env, 'Hallo.');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(r.t.calls.speak).toEqual([]);
+    expect(r.b.spoken.map(u => u.text)).toEqual(['Hallo.']);
+  });
+
+  it('both are out for Sokrates: both functions use the browser', async () => {
+    const r = await setup({ stt: ['browser'], tts: ['browser'] });
+    // nothing of the cloud is in a chain: the environment of the browser is used
+    expect(r.env.createSpeaker).toBe(r.b.env.createSpeaker);
+    await startListening(r.env);
+    expect(r.b.recognitions).toHaveLength(1);
+    expect(r.t.calls.getUserMedia).toBe(0);
+  });
+
+  it('Soniox is in both chains: a failed token for listening does not take its speech output away', async () => {
+    const r = await setup(
+      { stt: ['soniox', 'browser'], tts: ['soniox', 'browser'] },
+      { tokenFails: true }
+    );
+    await startListening(r.env);
+    expect(r.active).toEqual(['soniox', 'browser']);
+    // Soniox failed in listening; in this test the double fails the token of
+    // speaking too, so the browser speaks. What counts: speaking asked for its own
+    // token, it was not skipped because of the failed listening.
+    speak(r.env, 'Hallo.');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(r.t.calls.tokens).toEqual(['stt', 'tts']);
+    expect(r.b.spoken.map(u => u.text)).toEqual(['Hallo.']);
+  });
+
+  it('Sokrates fails to speak in a conversation: listening stays on Sokrates (own failure sets per function)', async () => {
+    const r = await setup(
+      { stt: ['haus', 'browser'], tts: ['haus', 'browser'] },
+      { speakFails: true }
+    );
+    speak(r.env, 'Hallo.');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(r.b.spoken.map(u => u.text)).toEqual(['Hallo.']);
+    await startListening(r.env);
+    expect(r.active).toEqual(['haus']);
+    expect(r.b.recognitions).toHaveLength(0);
+  });
+
+  it('one chain with a cloud provider is enough to build the chained environment', async () => {
+    const r = await setup({ stt: ['browser'], tts: ['soniox', 'browser'] });
+    expect(r.env).not.toBe(r.b.env);
+  });
+
+  it('without chains the single chain holds for both functions (older server)', async () => {
+    const t = makeDeps();
+    const b = baseEnv();
+    const env = createVoiceEnv({
+      base: b.env,
+      chain: ['haus', 'browser'],
+      deps: t.deps,
+    });
+    await startListening(env);
+    speak(env, 'Hallo.');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(t.calls.getUserMedia).toBe(1);
+    expect(t.calls.speak).toEqual(['Hallo.']);
+  });
+});

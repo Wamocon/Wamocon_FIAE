@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     fileNameFor(audio.type)
   );
   if (!result.ok) {
-    reportProviderFailure('haus', result.reason);
+    reportProviderFailure('haus', 'stt', result.reason);
     console.warn(`HAI voice: Sokrates recognition failed (${result.reason})`);
     return unavailableResponse(
       result.reason === 'MODEL_NOT_OFFERED'
@@ -88,6 +88,6 @@ export async function POST(req: NextRequest) {
       result.reason
     );
   }
-  reportProviderSuccess('haus');
+  reportProviderSuccess('haus', 'stt');
   return NextResponse.json({ text: result.text }, { headers: PRIVATE });
 }

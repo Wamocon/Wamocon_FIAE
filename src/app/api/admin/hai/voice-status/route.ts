@@ -2,10 +2,13 @@
  * HAI admin: the state of every speech provider of the voice assistant.
  *
  * GET /api/admin/hai/voice-status
- *   -> { providers: { soniox, haus, browser }, effective: { provider, chain } }
+ *   -> { providers: { soniox, haus, browser },
+ *        effective: { provider, chain, chains: { stt, tts } } }
  *
  * Only the platform admin. Per provider: `status` (ready, not_configured,
- * disturbed) and `reason`, a stable code that the page turns into a sentence.
+ * disturbed) and `reason`, a stable code that the page turns into a sentence,
+ * and `functions` with the same two fields for listening (stt) and speaking
+ * (tts). `status` is disturbed as soon as one function is, `functions` says which.
  * It says whether the key is set (yes or no) and, for Sokrates, whether the
  * server is reachable and offers the two audio models. It never returns a key,
  * an address, a model name or a voice.
@@ -22,6 +25,8 @@ import {
   disturbedReason,
   providerStates,
   resolveChain,
+  summarize,
+  type FunctionState,
   type ProviderState,
 } from '@/lib/hai/voice/provider';
 import { readVoiceSettings } from '@/lib/hai/voice/settingsStore';
@@ -59,15 +64,25 @@ export async function GET(req: NextRequest) {
     const checked = await hausModelStatus(env);
     models = checked;
     if (!checked.reachable) {
-      haus = { id: 'haus', status: 'disturbed', reason: 'UNREACHABLE' };
+      const down: FunctionState = {
+        status: 'disturbed',
+        reason: 'UNREACHABLE',
+      };
+      haus = summarize('haus', { stt: down, tts: down });
     } else {
       // A model that is not in the list is no proof: Open WebUI does not list its
       // audio engines. Whether recognition and speech really work shows in use, and
-      // a failure marks the provider as disturbed.
-      const failure = disturbedReason('haus');
-      haus = failure
-        ? { id: 'haus', status: 'disturbed', reason: failure }
-        : { id: 'haus', status: 'ready', reason: null };
+      // a failure marks that function of the provider as disturbed.
+      const functionState = (fn: 'stt' | 'tts'): FunctionState => {
+        const failure = disturbedReason('haus', fn);
+        return failure
+          ? { status: 'disturbed', reason: failure }
+          : { status: 'ready', reason: null };
+      };
+      haus = summarize('haus', {
+        stt: functionState('stt'),
+        tts: functionState('tts'),
+      });
     }
   }
 

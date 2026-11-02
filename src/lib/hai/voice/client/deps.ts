@@ -15,7 +15,7 @@ import type { AudioContextLike } from './audio';
 import type { VoiceClientDeps } from './engine';
 import type { MediaStreamLike, RecorderLike, TokenGrant } from './soniox';
 import { ProviderUnavailableError, type VoiceConfig } from './types';
-import { VOICE_PROVIDERS } from '../settings';
+import { VOICE_FUNCTIONS, VOICE_PROVIDERS } from '../settings';
 
 /** What the browser needs to use a cloud provider at all. */
 export function cloudVoiceSupport(
@@ -36,18 +36,31 @@ export function parseVoiceConfig(data: unknown): VoiceConfig | null {
   const value = data as {
     provider?: unknown;
     chain?: unknown;
+    chains?: unknown;
     region?: unknown;
   } | null;
   if (!value || !Array.isArray(value.chain)) return null;
   const known = VOICE_PROVIDERS as readonly string[];
-  const chain = value.chain.filter(
-    (id): id is VoiceConfig['provider'] =>
-      typeof id === 'string' && known.includes(id)
-  );
+  const providersOf = (list: unknown[]) =>
+    list.filter(
+      (id): id is VoiceConfig['provider'] =>
+        typeof id === 'string' && known.includes(id)
+    );
+  const chain = providersOf(value.chain);
   if (chain.length === 0) return null;
+  // the chain per function: used only when both are there and not empty, else
+  // (an older server) `chain` holds for both functions
+  const raw = value.chains as Record<string, unknown> | null | undefined;
+  const parsed = VOICE_FUNCTIONS.map(fn =>
+    Array.isArray(raw?.[fn]) ? providersOf(raw[fn] as unknown[]) : []
+  );
+  const chains = parsed.every(list => list.length > 0)
+    ? { stt: parsed[0], tts: parsed[1] }
+    : undefined;
   return {
     provider: chain[0],
     chain,
+    ...(chains ? { chains } : {}),
     region:
       value.region === 'eu' || value.region === 'us' ? value.region : null,
   };

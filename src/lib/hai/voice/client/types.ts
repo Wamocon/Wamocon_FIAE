@@ -13,10 +13,10 @@
  * @module lib/hai/voice/client/types
  */
 
-import type { VoiceProviderId } from '../settings';
+import type { VoiceFunction, VoiceProviderId } from '../settings';
 import type { SimpleStorage } from '../speech';
 
-export type { VoiceProviderId };
+export type { VoiceFunction, VoiceProviderId };
 
 export interface RecognitionEventLike {
   resultIndex: number;
@@ -93,7 +93,14 @@ export interface VoiceEnv {
 /** What GET /api/hai/voice/config answers. */
 export interface VoiceConfig {
   provider: VoiceProviderId;
+  /** Every provider that is ready for at least one function (also what the consent covers). */
   chain: VoiceProviderId[];
+  /**
+   * The order of the providers per function: listening (stt) and speaking (tts).
+   * A provider that is disturbed in one function only is missing there and stays
+   * in the other. Left out by an older server: `chain` then holds for both.
+   */
+  chains?: Record<VoiceFunction, VoiceProviderId[]>;
   region: 'eu' | 'us' | null;
 }
 
