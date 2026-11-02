@@ -254,13 +254,25 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
 
   // the providers to walk, reduced to what this browser can do (a replaced
   // environment of a test is the browser alone)
+  const reduce = useCallback(
+    (wanted: VoiceProviderId[]) =>
+      wanted.filter(id => (id === 'browser' ? support.browser : support.cloud)),
+    [support]
+  );
   const chain = useMemo<VoiceProviderId[]>(() => {
     if (testEnv !== undefined) return ['browser'];
-    const wanted = voiceConfig?.chain ?? ['browser'];
-    return wanted.filter(id =>
-      id === 'browser' ? support.browser : support.cloud
-    );
-  }, [testEnv, voiceConfig, support]);
+    return reduce(voiceConfig?.chain ?? ['browser']);
+  }, [testEnv, voiceConfig, reduce]);
+  // listening and speaking each have their own chain (a provider that is
+  // disturbed in one function only stays in the other); undefined when the
+  // server does not send them, then `chain` holds for both
+  const chains = useMemo(() => {
+    if (testEnv !== undefined || !voiceConfig?.chains) return undefined;
+    return {
+      stt: reduce(voiceConfig.chains.stt),
+      tts: reduce(voiceConfig.chains.tts),
+    };
+  }, [testEnv, voiceConfig, reduce]);
 
   const [activeProvider, setActiveProvider] = useState<VoiceProviderId>(
     chain[0] ?? 'browser'
@@ -276,10 +288,11 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     return createVoiceEnv({
       base,
       chain,
+      chains,
       deps: chain.some(id => id !== 'browser') ? createCloudDeps() : null,
       onActiveProvider: setActiveProvider,
     });
-  }, [testEnv, chain]);
+  }, [testEnv, chain, chains]);
 
   const [phase, setPhaseState] = useState<VoicePhase>('idle');
   const [interim, setInterim] = useState('');

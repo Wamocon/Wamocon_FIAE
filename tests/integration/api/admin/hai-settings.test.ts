@@ -231,8 +231,16 @@ describe('GET /api/admin/hai/voice-status', () => {
       id: 'browser',
       status: 'ready',
       reason: null,
+      functions: {
+        stt: { status: 'ready', reason: null },
+        tts: { status: 'ready', reason: null },
+      },
     });
-    expect(body.effective).toEqual({ provider: 'browser', chain: ['browser'] });
+    expect(body.effective).toEqual({
+      provider: 'browser',
+      chain: ['browser'],
+      chains: { stt: ['browser'], tts: ['browser'] },
+    });
   });
 
   it('everything set up and reachable: ready, and no value of a variable in the answer', async () => {
@@ -264,6 +272,14 @@ describe('GET /api/admin/hai/voice-status', () => {
       ttsOffered: true,
     });
     expect(body.effective.chain).toEqual(['soniox', 'browser']);
+    expect(body.effective.chains).toEqual({
+      stt: ['soniox', 'browser'],
+      tts: ['soniox', 'browser'],
+    });
+    expect(body.providers.haus.functions).toEqual({
+      stt: { status: 'ready', reason: null },
+      tts: { status: 'ready', reason: null },
+    });
     for (const value of [
       SECRET,
       'whisper-private-model',
@@ -290,6 +306,32 @@ describe('GET /api/admin/hai/voice-status', () => {
       reason: 'UNREACHABLE',
       reachable: false,
     });
+  });
+
+  it('a failure of one function is shown for that function only', async () => {
+    process.env.SONIOX_API_KEY = SECRET;
+    process.env.OPENAI_COMPATIBLE_API_KEY = SECRET;
+    process.env.HAI_STT_HAUS_MODEL = 'whisper-1';
+    process.env.HAI_TTS_HAUS_MODEL = 'tts-1';
+    process.env.HAI_TTS_HAUS_VOICE = 'alloy';
+    global.fetch = (async () =>
+      new Response(
+        JSON.stringify({ data: [{ id: 'whisper-1' }, { id: 'tts-1' }] })
+      )) as unknown as typeof fetch;
+    const r = await load(SUPER);
+    const { reportProviderFailure } = await import('@/lib/hai/voice/provider');
+    reportProviderFailure('haus', 'stt', 'UPSTREAM_UNAVAILABLE');
+    const body = await (await r.status(get())).json();
+    // the summary says disturbed, the functions say which one
+    expect(body.providers.haus).toMatchObject({
+      status: 'disturbed',
+      reason: 'UPSTREAM_UNAVAILABLE',
+      functions: {
+        stt: { status: 'disturbed', reason: 'UPSTREAM_UNAVAILABLE' },
+        tts: { status: 'ready', reason: null },
+      },
+    });
+    expect(body.providers.soniox.status).toBe('ready');
   });
 
   it('Sokrates does not list its audio models: no proof, so it stays ready (Open WebUI hides them)', async () => {
