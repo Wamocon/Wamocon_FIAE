@@ -121,7 +121,7 @@ export async function PATCH(
             type: 'USE_CASE_ACTIVATED',
             title: 'Neuer Use Case aktiviert',
             message: `Ein Use Case wurde aktiviert: ${row0.title}`,
-            linkUrl: '/trainee/modules',
+            linkUrl: `/trainee/modules/${row0.courseId}`,
             context: { useCaseId, courseId: row0.courseId },
             organizationId,
           }));
