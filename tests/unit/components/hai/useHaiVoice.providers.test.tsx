@@ -427,6 +427,61 @@ describe('the answer of GET /api/hai/voice/config', () => {
     ).toEqual({ provider: 'browser', chain: ['browser'], region: null });
   });
 
+  it('an answer of an older server has no chains: the single chain holds for both functions', () => {
+    const parsed = parseVoiceConfig({
+      provider: 'soniox',
+      chain: ['soniox', 'browser'],
+      region: 'eu',
+    });
+    expect(parsed?.chains).toBeUndefined();
+  });
+
+  it('reads the chain per function: listening and speaking apart', () => {
+    expect(
+      parseVoiceConfig({
+        provider: 'soniox',
+        chain: ['soniox', 'haus', 'browser'],
+        chains: {
+          stt: ['haus', 'browser'],
+          tts: ['soniox', 'haus', 'browser'],
+        },
+        region: 'eu',
+      })
+    ).toEqual({
+      provider: 'soniox',
+      chain: ['soniox', 'haus', 'browser'],
+      chains: {
+        stt: ['haus', 'browser'],
+        tts: ['soniox', 'haus', 'browser'],
+      },
+      region: 'eu',
+    });
+  });
+
+  it('drops unknown providers in a chain per function, and ignores chains that are not usable', () => {
+    const base = { chain: ['soniox', 'browser'], region: 'eu' };
+    expect(
+      parseVoiceConfig({
+        ...base,
+        chains: { stt: ['google', 'browser'], tts: ['soniox', 'browser'] },
+      })?.chains
+    ).toEqual({ stt: ['browser'], tts: ['soniox', 'browser'] });
+    for (const chains of [
+      null,
+      'x',
+      {},
+      { stt: ['browser'] },
+      { stt: ['browser'], tts: [] },
+      { stt: ['browser'], tts: ['google'] },
+      { stt: 'browser', tts: ['browser'] },
+    ]) {
+      const parsed = parseVoiceConfig({ ...base, chains });
+      // the single chain is still read
+      expect(parsed?.chain).toEqual(['soniox', 'browser']);
+      expect(parsed?.chains).toBeUndefined();
+    }
+  });
+
   it('is nothing when the answer has no usable chain', () => {
     for (const data of [null, {}, { chain: [] }, { chain: ['google'] }, 'x']) {
       expect(parseVoiceConfig(data)).toBeNull();

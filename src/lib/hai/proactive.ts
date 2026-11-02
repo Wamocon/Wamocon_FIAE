@@ -101,7 +101,7 @@ export async function runProactiveChecks(
             insights.push(...await suggestNextSteps(userId, traineeCatalogId));
         } else if (userRole === 'TRAINER') {
             insights.push(...await checkPendingReviews(userId, catalogId));
-            insights.push(...await checkTraineeProgress(userId));
+            insights.push(...await checkTraineeProgress(userId, catalogId));
         }
 
         // Sort by priority (high first)
@@ -367,11 +367,11 @@ async function suggestNextSteps(
             FROM enablers e
             INNER JOIN courses c ON e.course_id = c.id
             INNER JOIN course_members cm ON c.id = cm.course_id
-            LEFT JOIN enabler_completions ec ON e.id = ec.enabler_id AND ec.user_id = ${userId}
+            LEFT JOIN enabler_completions ec ON e.id = ec.enabler_id AND ec.trainee_id = ${userId}
             WHERE cm.user_id = ${userId}
                 AND c.training_catalog_id = ${catalogId}
                 AND e.is_active = true
-                AND ec.id IS NULL
+                AND ec.enabler_id IS NULL
             ORDER BY e.id, e.created_at
             LIMIT 1
         `);
@@ -474,28 +474,49 @@ async function checkPendingReviews(
 }
 
 /**
- * Check trainee progress (trainer-only)
+ * Check trainee progress (trainer-only), per occupation: the share of the active
+ * enablers of the courses of ONE occupation that a trainee has completed. A
+ * trainee in two trainings is low in one of them without being low in the
+ * other, so the progress of the person as a whole (profiles.overall_progress) is
+ * not used. With an occupation only that one is checked; without one every
+ * occupation is checked and the name carries the code of the occupation.
  */
-async function checkTraineeProgress(trainerId: string): Promise<ProactiveInsight[]> {
+async function checkTraineeProgress(
+    trainerId: string,
+    catalogId?: string | null
+): Promise<ProactiveInsight[]> {
     const insights: ProactiveInsight[] = [];
 
     try {
-        // Find trainees with low progress assigned to this trainer
+        // Find trainees assigned to this trainer with low progress in an occupation
         const lowProgressTrainees = await db.execute(sql`
             SELECT
                 p.id,
                 p.full_name,
-                p.overall_progress
+                tc.code AS catalog_code,
+                ROUND(100.0 * COUNT(DISTINCT ec.enabler_id) / COUNT(DISTINCT e.id)) AS progress
             FROM profiles p
+            INNER JOIN course_members cm ON cm.user_id = p.id
+            INNER JOIN courses c ON c.id = cm.course_id
+            INNER JOIN training_catalogs tc ON tc.id = c.training_catalog_id
+            INNER JOIN enablers e ON e.course_id = c.id AND e.is_active = true
+            LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = p.id
             WHERE p.assigned_trainer_id = ${trainerId}
                 AND p.role = 'TRAINEE'
-                AND p.overall_progress < 30
-            ORDER BY p.overall_progress ASC
+                ${catalogId ? sql`AND c.training_catalog_id = ${catalogId}` : sql``}
+            GROUP BY p.id, p.full_name, tc.code
+            HAVING ROUND(100.0 * COUNT(DISTINCT ec.enabler_id) / COUNT(DISTINCT e.id)) < 30
+            ORDER BY progress ASC
             LIMIT 3
         `);
 
         if ((lowProgressTrainees as any[]).length > 0) {
-            const traineeNames = (lowProgressTrainees as any[]).map((t: any) => t.full_name).join(', ');
+            // Without a chosen occupation the code tells which training is meant
+            const traineeNames = (lowProgressTrainees as any[])
+                .map((t: any) =>
+                    catalogId ? t.full_name : `${t.full_name} (${t.catalog_code})`
+                )
+                .join(', ');
 
             insights.push({
                 type: 'warning',

@@ -18,6 +18,13 @@
 export const VOICE_PROVIDERS = ['soniox', 'haus', 'browser'] as const;
 export type VoiceProviderId = (typeof VOICE_PROVIDERS)[number];
 
+/**
+ * The two things a provider does: listening (speech recognition, 'stt') and
+ * speaking (speech output, 'tts'). A failure is kept per function.
+ */
+export const VOICE_FUNCTIONS = ['stt', 'tts'] as const;
+export type VoiceFunction = (typeof VOICE_FUNCTIONS)[number];
+
 /** The providers that may take over when the main provider fails. */
 export const VOICE_FALLBACKS = ['haus', 'browser'] as const;
 export type VoiceFallbackId = (typeof VOICE_FALLBACKS)[number];

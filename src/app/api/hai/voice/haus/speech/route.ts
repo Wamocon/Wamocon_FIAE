@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
 
   const result = await hausSpeech(tts.config, text.trim());
   if (!result.ok) {
-    reportProviderFailure('haus', result.reason);
+    reportProviderFailure('haus', 'tts', result.reason);
     console.warn(`HAI voice: Sokrates speech failed (${result.reason})`);
     return unavailableResponse(
       result.reason === 'MODEL_NOT_OFFERED'
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       result.reason
     );
   }
-  reportProviderSuccess('haus');
+  reportProviderSuccess('haus', 'tts');
   return new NextResponse(result.audio, {
     status: 200,
     headers: { ...PRIVATE, 'Content-Type': result.contentType },

@@ -42,12 +42,15 @@ import {
 
 const CAPTIONS_KEY = 'hai-voice-mode-captions';
 
+function sameList(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
 function sameConfig(a: VoiceConfig | null, b: VoiceConfig): boolean {
+  if (!a || a.region !== b.region || !sameList(a.chain, b.chain)) return false;
+  if (!a.chains || !b.chains) return !a.chains && !b.chains;
   return (
-    !!a &&
-    a.region === b.region &&
-    a.chain.length === b.chain.length &&
-    a.chain.every((id, i) => id === b.chain[i])
+    sameList(a.chains.stt, b.chains.stt) && sameList(a.chains.tts, b.chains.tts)
   );
 }
 

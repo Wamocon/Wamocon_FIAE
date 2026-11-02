@@ -169,6 +169,7 @@ describe('GET /api/hai/voice/config', () => {
     expect(await res.json()).toEqual({
       provider: 'browser',
       chain: ['browser'],
+      chains: { stt: ['browser'], tts: ['browser'] },
       region: null,
     });
   });
@@ -181,6 +182,7 @@ describe('GET /api/hai/voice/config', () => {
     expect(JSON.parse(text)).toEqual({
       provider: 'soniox',
       chain: ['soniox', 'browser'],
+      chains: { stt: ['soniox', 'browser'], tts: ['soniox', 'browser'] },
       region: 'eu',
     });
     expect(text).not.toContain(SECRET);
@@ -274,7 +276,7 @@ describe('POST /api/hai/voice/soniox-token', () => {
     expect(res.headers.get('cache-control')).toContain('no-store');
   });
 
-  it('Soniox refuses: 503 UPSTREAM_FAILED, and the config then leaves Soniox out for a while', async () => {
+  it('Soniox refuses listening: 503 UPSTREAM_FAILED, and the config leaves Soniox out of the listening chain only', async () => {
     setEnv({ SONIOX_API_KEY: SECRET });
     global.fetch = (async () =>
       new Response('no', { status: 401 })) as unknown as typeof fetch;
@@ -290,7 +292,66 @@ describe('POST /api/hai/voice/soniox-token', () => {
     const config = await (
       await r.config(get('http://localhost/api/hai/voice/config'))
     ).json();
-    expect(config.chain).toEqual(['browser']);
+    // changed on purpose: it used to be ['browser'] for both functions
+    expect(config.chains).toEqual({
+      stt: ['browser'],
+      tts: ['soniox', 'browser'],
+    });
+    // the list older browsers read still holds Soniox: it can still speak
+    expect(config.chain).toEqual(['soniox', 'browser']);
+    expect(config.provider).toBe('soniox');
+  });
+
+  it('Soniox refuses speaking: it leaves the speaking chain only, listening stays', async () => {
+    setEnv({ SONIOX_API_KEY: SECRET });
+    global.fetch = (async () =>
+      new Response('no', { status: 401 })) as unknown as typeof fetch;
+    const r = await load();
+    expect(
+      (await r.token(post('http://localhost/api/x', { purpose: 'tts' }))).status
+    ).toBe(503);
+    const config = await (
+      await r.config(get('http://localhost/api/hai/voice/config'))
+    ).json();
+    expect(config.chains).toEqual({
+      stt: ['soniox', 'browser'],
+      tts: ['browser'],
+    });
+    expect(config.chain).toEqual(['soniox', 'browser']);
+  });
+
+  it('Soniox refuses both: both chains and the list leave it out; a working call of one function frees only that one', async () => {
+    setEnv({ SONIOX_API_KEY: SECRET });
+    let refuse = true;
+    global.fetch = (async () =>
+      refuse
+        ? new Response('no', { status: 401 })
+        : new Response(JSON.stringify({ api_key: 'k' }), {
+            status: 201,
+          })) as unknown as typeof fetch;
+    const r = await load();
+    const ask = (purpose: string) =>
+      r.token(post('http://localhost/api/x', { purpose }));
+    const chains = async () =>
+      (
+        await (
+          await r.config(get('http://localhost/api/hai/voice/config'))
+        ).json()
+      ).chains;
+    expect((await ask('stt')).status).toBe(503);
+    expect((await ask('tts')).status).toBe(503);
+    const both = await (
+      await r.config(get('http://localhost/api/hai/voice/config'))
+    ).json();
+    expect(both.chains).toEqual({ stt: ['browser'], tts: ['browser'] });
+    expect(both.chain).toEqual(['browser']);
+    // Soniox answers again: the call for speaking works, listening is still out
+    refuse = false;
+    expect((await ask('tts')).status).toBe(200);
+    expect(await chains()).toEqual({
+      stt: ['browser'],
+      tts: ['soniox', 'browser'],
+    });
   });
 
   it('limits the calls per person', async () => {
@@ -381,7 +442,7 @@ describe('POST /api/hai/voice/haus/transcribe', () => {
     expect(await res.json()).toEqual({ text: 'Was ist ein Join?' });
   });
 
-  it('a 500 of the speech service behind Open WebUI: 503 UPSTREAM_FAILED, then the config leaves Sokrates out for a while and the browser listens', async () => {
+  it('a 500 of the speech service behind Open WebUI: 503 UPSTREAM_FAILED, then the config leaves Sokrates out of the listening chain for a while (the browser listens), speaking stays', async () => {
     setEnv(HAUS);
     global.fetch = (async () =>
       new Response('{"detail":"Internal Server Error"}', {
@@ -411,7 +472,12 @@ describe('POST /api/hai/voice/haus/transcribe', () => {
     const after = await (
       await r.config(get('http://localhost/api/hai/voice/config'))
     ).json();
-    expect(after.chain).toEqual(['browser']);
+    // changed on purpose: it used to be ['browser'] for both functions
+    expect(after.chains).toEqual({
+      stt: ['browser'],
+      tts: ['haus', 'browser'],
+    });
+    expect(after.chain).toEqual(['haus', 'browser']);
   });
 
   it('Sokrates does not offer the model: 503, the client falls back', async () => {
@@ -532,5 +598,49 @@ describe('POST /api/hai/voice/haus/speech', () => {
     );
     expect(res.status).toBe(503);
     expect(await res.json()).toMatchObject({ code: 'UPSTREAM_FAILED' });
+  });
+
+  it('Sokrates cannot speak: it leaves the speaking chain only, listening stays', async () => {
+    setEnv(HAUS);
+    global.fetch = (async () =>
+      new Response('err', { status: 500 })) as unknown as typeof fetch;
+    const r = await load({
+      settingsRows: [
+        { key: 'voice_provider_primary', value: 'haus' },
+        { key: 'voice_provider_fallback', value: 'browser' },
+      ],
+    });
+    expect(
+      (await r.speech(post('http://localhost/api/x', { text: 'Hallo.' })))
+        .status
+    ).toBe(503);
+    const config = await (
+      await r.config(get('http://localhost/api/hai/voice/config'))
+    ).json();
+    expect(config.chains).toEqual({
+      stt: ['haus', 'browser'],
+      tts: ['browser'],
+    });
+    expect(config.chain).toEqual(['haus', 'browser']);
+  });
+
+  it('Sokrates fails in both functions: both chains and the list end at the browser', async () => {
+    setEnv(HAUS);
+    global.fetch = (async () =>
+      new Response('err', { status: 500 })) as unknown as typeof fetch;
+    const r = await load({
+      settingsRows: [
+        { key: 'voice_provider_primary', value: 'haus' },
+        { key: 'voice_provider_fallback', value: 'browser' },
+      ],
+    });
+    await r.speech(post('http://localhost/api/x', { text: 'Hallo.' }));
+    await r.transcribe(upload(100));
+    const config = await (
+      await r.config(get('http://localhost/api/hai/voice/config'))
+    ).json();
+    expect(config.chains).toEqual({ stt: ['browser'], tts: ['browser'] });
+    expect(config.chain).toEqual(['browser']);
+    expect(config.provider).toBe('browser');
   });
 });
