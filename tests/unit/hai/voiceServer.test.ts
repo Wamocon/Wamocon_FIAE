@@ -459,6 +459,126 @@ describe('Sokrates calls', () => {
     ).toEqual({ ok: false, reason });
   });
 
+  // What was measured on Sokrates (Open WebUI, 02.11.2026): the speech output
+  // answers MP3 whatever response_format says, the recognition answers
+  // { text, filename }, and a failing speech service behind Open WebUI is a 500.
+  describe('Open WebUI as measured', () => {
+    const MP3 = new Uint8Array([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]);
+
+    it('passes MP3 on with its type, also when the type carries a parameter', async () => {
+      const answer = (type: string) =>
+        (async () =>
+          new Response(MP3, {
+            status: 200,
+            headers: { 'Content-Type': type },
+          })) as unknown as typeof fetch;
+      const plain = await hausSpeech(tts, 'Hallo.', answer('audio/mpeg'));
+      expect(plain.ok && plain.contentType).toBe('audio/mpeg');
+      expect(plain.ok && new Uint8Array(plain.audio)).toEqual(MP3);
+      const withParameter = await hausSpeech(
+        tts,
+        'Hallo.',
+        answer('Audio/MPEG; charset=binary')
+      );
+      expect(withParameter.ok && withParameter.contentType).toBe('audio/mpeg');
+    });
+
+    it('still asks for WAV, the server decides what it sends', async () => {
+      const fetchMock = jest.fn(
+        async () =>
+          new Response(MP3, { headers: { 'Content-Type': 'audio/mpeg' } })
+      );
+      await hausSpeech(tts, 'Hallo.', fetchMock as unknown as typeof fetch);
+      const init = (
+        fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+      )[1];
+      expect(JSON.parse(init.body as string).response_format).toBe('wav');
+    });
+
+    it('takes only the text of the answer { text, filename }', async () => {
+      const fetchMock = jest.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ text: ' Was ist ein Join? ', filename: 'a.mp3' })
+          )
+      );
+      const result = await hausTranscribe(
+        stt,
+        new Blob([MP3], { type: 'audio/mpeg' }),
+        'speech.mp3',
+        fetchMock as unknown as typeof fetch
+      );
+      expect(result).toEqual({ ok: true, text: 'Was ist ein Join?' });
+      // the MP3 of the speech output goes into the recognition with its name and type
+      const form = (
+        fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+      )[1].body as FormData;
+      const file = form.get('file') as File;
+      expect(file.name).toBe('speech.mp3');
+      expect(file.type).toBe('audio/mpeg');
+    });
+
+    it('a 500 of the speech service behind Open WebUI is UPSTREAM_UNAVAILABLE, for the recognition and the output', async () => {
+      const broken = jest.fn(
+        async () =>
+          new Response('{"detail":"Internal Server Error"}', { status: 500 })
+      ) as unknown as typeof fetch;
+      expect(
+        await hausTranscribe(stt, new Blob(['a']), 'speech.mp3', broken)
+      ).toEqual({ ok: false, reason: 'UPSTREAM_UNAVAILABLE' });
+      expect(await hausSpeech(tts, 'Hallo.', broken)).toEqual({
+        ok: false,
+        reason: 'UPSTREAM_UNAVAILABLE',
+      });
+    });
+
+    it('the path without /v1 (405 of Open WebUI) is no success and no model problem', async () => {
+      const notAllowed = jest.fn(
+        async () => new Response('', { status: 405 })
+      ) as unknown as typeof fetch;
+      expect(
+        await hausTranscribe(stt, new Blob(['a']), 'speech.mp3', notAllowed)
+      ).toEqual({ ok: false, reason: 'UPSTREAM_UNAVAILABLE' });
+    });
+
+    it('an answer that is not JSON, or has no string text, is UPSTREAM_BAD_ANSWER', async () => {
+      for (const body of ['<html>gateway</html>', '{"text":5}', 'null']) {
+        expect(
+          await hausTranscribe(
+            stt,
+            new Blob(['a']),
+            'speech.mp3',
+            (async () => new Response(body)) as unknown as typeof fetch
+          )
+        ).toEqual({ ok: false, reason: 'UPSTREAM_BAD_ANSWER' });
+      }
+    });
+
+    it('the chain of calls: speech output (MP3) goes into the recognition and the text comes back', async () => {
+      const server = jest.fn(async (url: string) =>
+        url.endsWith('/v1/audio/speech')
+          ? new Response(MP3, { headers: { 'Content-Type': 'audio/mpeg' } })
+          : new Response(
+              JSON.stringify({ text: 'Was ist ein Join?', filename: 'x.mp3' })
+            )
+      );
+      const fetchImpl = server as unknown as typeof fetch;
+      const spoken = await hausSpeech(tts, 'Was ist ein Join?', fetchImpl);
+      if (!spoken.ok) throw new Error('speech');
+      const heard = await hausTranscribe(
+        stt,
+        new Blob([spoken.audio], { type: spoken.contentType }),
+        'speech.mp3',
+        fetchImpl
+      );
+      expect(heard).toEqual({ ok: true, text: 'Was ist ein Join?' });
+      expect(server.mock.calls.map(c => c[0])).toEqual([
+        'https://sokrates.test-qualitaetsmanagement.com/api/v1/audio/speech',
+        'https://sokrates.test-qualitaetsmanagement.com/api/v1/audio/transcriptions',
+      ]);
+    });
+  });
+
   it('treats a network error, an empty audio and an answer without text as failures', async () => {
     const down = jest.fn(async () => {
       throw new Error('offline');

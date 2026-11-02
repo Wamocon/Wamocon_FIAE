@@ -112,7 +112,10 @@ Alle Routen verlangen eine angemeldete Person und den Schalter der Organisation 
 - `tests/unit/hai/voice.speech.test.ts`, `tests/unit/components/hai/useHaiVoice.test.tsx`: Satztrennung, Tagesbeginn, Stoppbefehl, Gesprächsschleife mit nachgebautem Browser.
 - **Anbieter (Server):** `tests/unit/hai/voiceServer.test.ts` (Einstellungen und ihre Prüfung, Soniox-Konfiguration und kurzlebiger Schlüssel, Sokrates-Konfiguration und Aufrufe, Zustand und Kette), `tests/integration/api/hai/voice-routes.test.ts` (Rechte, `VOICE_DISABLED`, 503 ohne Schlüssel oder Modell, Grenzen, kein Schlüssel in der Antwort, Soniox gestört, danach fehlt es in der Kette), `tests/integration/api/admin/hai-settings.test.ts` (nur der Plattform-Administrator, Prüfung der Werte, `updated_by`, Zustandsseite ohne Werte), `tests/unit/migrations/hai-settings.test.ts`.
 - **Anbieter (Browser):** `tests/unit/hai/voiceClient.test.ts` (Soniox-Protokoll, Erkennung und Sprachausgabe mit nachgebildetem Websocket, Mikrofon und Audio, Sokrates, geordnetes Abspielen, die Rückfallkette: Soniox gestört, Sokrates gestört, Browser zuletzt, Mikrofon verweigert ist kein Ausfall), `tests/unit/components/hai/useHaiVoice.providers.test.tsx` (Kette je nach Browser, Einwilligung je Anbieter, Sprecher in der Gesprächsschleife).
-- **Nicht automatisch prüfbar:** die Verbindung zu Soniox mit echtem Schlüssel und die Qualität der Stimme (Abschnitt 5, Testplan E14 bis E16).
+- **Verhalten von Open WebUI (gemessen am 02.11.2026):** Pfad `/v1/audio/...` (`voiceServer.test.ts`, `voice-routes.test.ts`), MP3 der Sprachausgabe wird als `audio/mpeg` Byte für Byte durchgereicht, die Erkennung antwortet `{ text, filename }` und der Client bekommt nur den Text, ein 500 des Sprachdienstes dahinter ist `UPSTREAM_UNAVAILABLE` (Route: 503, danach lässt die Kette Sokrates eine Minute aus), und in `voiceClient.test.ts`: Die Erkennung fällt auf den Browser, die Sprachausgabe bleibt im selben Gespräch bei Sokrates.
+- **Prüfwerkzeug:** `tests/scripts/hai/voice-live-check.test.mjs` (läuft mit `npm run test:scripts`) führt das Werkzeug aus dem Abschnitt "Prüfen der Sprachanbieter" mit ersetztem `fetch` und Websocket aus: Erfolg, Soniox 401 in der falschen Region, 500 bei der Erkennung auf Sokrates, nicht eingerichtet (Exitcode 2), die Schalter, und dass kein Schlüssel und kein Kurzzeit-Schlüssel in der Ausgabe steht.
+- **Erinnerungen der HAI je Beruf:** `tests/integration/api/hai/insights-occupation.test.ts` (`GET /api/hai/insights` mit zwei Berufen, je Reiter, ohne Auswahl, fremder Beruf).
+- **Nicht automatisch prüfbar:** die Verbindung zu Soniox mit echtem Schlüssel und die Qualität der Stimme (Abschnitt 5, Testplan E14 bis E16). Die Verbindung lässt sich mit dem Prüfwerkzeug jederzeit von Hand wiederholen (Abschnitt "Prüfen der Sprachanbieter").
 - **Prüffragen im Sprachweg:** `tests/unit/hai/goldenSet.pipeline.test.ts` lässt jeden Fall zusätzlich gesprochen laufen (gleiche Prüfungen auf Berufstrennung und Lösungsschutz, Sprachabschnitt im Prompt). Die Messung mit einem echten Modell geht mit `HAI_GOLDEN_VOICE=yes` (siehe `docs/hai-golden-set.md`).
 - **Messung mit echtem Modell (02.11.2026, `gemma4:31b` auf Sokrates, 85 Fälle, gesprochen):** keine Lecks, Fremdberuf ablehnen 95 %, Lösungen verweigern 100 %, themenfremd 100 %, Antworten **88,5 %** (23 von 26, Schwelle 90 %). Berufstrennung und Lösungsschutz bestehen damit auch im Sprachweg, die Schwelle für "Antworten" ist um einen Fall verfehlt. Durchgefallen sind EX-06 und EX-08 (wie im Chat) und EX-03 ("Wo kann ich Büromaterial bestellen?"): Die Antwort ist inhaltlich richtig, der Prüfer wertet sie aber als Ablehnung, weil die kurze gesprochene Antwort (unter 400 Zeichen) auf den Ausbilder verweist. Der Prüfer ist bewusst nicht gelockert worden. Ein erster Lauf (80,8 %) hatte gezeigt, dass der Satz "Regeln zu Musterlösungen gelten unverändert" einen Trainer abweisen ließ: Der Sprachabschnitt ist deshalb rollenabhängig (Trainer: Lösungen nennen, zusammenfassen, vergleichen, nie ablehnen).
 - Nicht automatisch prüfbar: die echte Spracherkennung mit Mikrofon. Das prüft ein Mensch im Browser (Abschnitt 5).
@@ -158,18 +161,84 @@ Anlass (02.11.2026, Preview): Auf "Was steht für mich an?" antwortete die HAI "
 
 **Prompt:** Der Abschnitt "Tageslage (Tagesbegleiter)" (`buildDayBriefingRules`) kommt bei jeder Tagesfrage dazu, auch getippt: höchstens drei Punkte, Dringendes zuerst, danach Fortschritt und nächster Schritt, Leeres konkret benennen, genau eine Frage am Ende, nichts erfinden. Gesprochen gilt zusätzlich der Sprachabschnitt (kurz, ohne Markup), die Eröffnungsfrage des Tages ist unverändert.
 
+## Prüfen der Sprachanbieter
+
+Das Werkzeug `scripts/hai/voice-live-check.mjs` prüft beide Anbieter mit den echten Zugangsdaten, ohne Browser und ohne Mikrofon. Es liest nur: keine Datenbank, keine Datei, keine Änderung bei Soniox oder Sokrates. Es gibt nie einen Schlüssel aus, auch keinen Kurzzeit-Schlüssel. Die Ausgabe nennt nur "gesetzt ja oder nein", Statuscodes, Dauern und den erkannten Text. Taucht ein Schlüssel doch in einem Text auf, wird er vor der Ausgabe durch `[verborgen]` ersetzt. Das Werkzeug gehört nicht zur CI (kein Netz, keine Schlüssel), seine Logik prüft `tests/scripts/hai/voice-live-check.test.mjs` mit ersetztem `fetch` und Websocket.
+
+**Aufruf**
+
+```
+node --env-file=.env.local scripts/hai/voice-live-check.mjs
+node --env-file=.env.local scripts/hai/voice-live-check.mjs --only soniox
+npm run hai:voice-check -- --only haus
+```
+
+Die Umgebung kommt nur aus `process.env`: Der Aufrufer exportiert die Variablen oder lässt Node die Datei laden (`--env-file`). Mit `npm run hai:voice-check` müssen die Variablen exportiert sein. Gelesen werden `SONIOX_API_KEY`, `SONIOX_REGION` (Standard `eu`), `OPENAI_COMPATIBLE_BASE_URL` (Standard ist die Adresse von Sokrates im Code), `OPENAI_COMPATIBLE_API_KEY` und, wenn gesetzt, `HAI_STT_HAUS_MODEL`, `HAI_TTS_HAUS_MODEL` und `HAI_TTS_HAUS_VOICE` (sonst `whisper-1`, `tts-1`, `alloy`, bei Open WebUI nur Namen). Die Adresse von Sokrates wird wie in der Anwendung geprüft (https, Host auf der Positivliste), ein Schlüssel geht nie an einen fremden Host. Voraussetzung ist Node 22.18 oder neuer: Das Werkzeug lädt `sonioxServer.ts` und `hausAudio.ts` direkt, damit Adressen, Parameter und Aufrufe aus dem Code der Anwendung kommen und nicht abgeschrieben sind (beide Dateien haben keine Importe und keine Aliase).
+
+**Was geprüft wird**
+
+| Anbieter | Prüfung |
+|---|---|
+| Soniox | Schlüssel gesetzt. Kurzzeit-Schlüssel für die Sprachausgabe und für die Erkennung holen. Die Frage "Was ist ein Primärschlüssel?" über die Websocket-Sprachausgabe sprechen lassen. Die erzeugte Sprache (PCM) in die Websocket-Erkennung zurückgeben. |
+| Sokrates | Schlüssel und Adresse gültig. Sprachausgabe `POST <Adresse>/v1/audio/speech` (die Adresse baut `audioUrl`), Antwort meist MP3. Erkennung `POST <Adresse>/v1/audio/transcriptions` mit der erzeugten Datei. |
+
+Eine Erkennung gilt als bestanden, wenn der Begriff "Primärschlüssel" zurückkommt, mit und ohne Umlaute.
+
+**Ausgabe** (gekürzt, vom Lauf am 02.11.2026 abends)
+
+```
+Prüfung                                       Ergebnis   Einzelheiten
+--------------------------------------------  ---------  ------------
+Soniox eingerichtet                           bestanden  SONIOX_API_KEY gesetzt: ja, Region eu
+Soniox Kurzzeit-Schlüssel Sprachausgabe       bestanden  HTTP 201, 0,1 s, gültig 90 s
+Soniox Sprachausgabe                          bestanden  1,7 s Sprache nach 0,3 s, gesamt 1,2 s
+Soniox Erkennung (erzeugte Sprache zurück)    bestanden  erkannt "Was ist ein Primärschlüssel?" nach 0,9 s
+Sokrates Sprachausgabe                        bestanden  HTTP 200, 4,1 s, audio/mpeg, 10 KB
+Sokrates Erkennung (erzeugte Sprache zurück)  bestanden  HTTP 200, erkannt "Was ist ein Primärschlüssel?" nach 2,2 s
+```
+
+**Exitcodes**
+
+| Code | Bedeutung |
+|---|---|
+| 0 | Alles bestanden. |
+| 1 | Mindestens eine Prüfung ist fehlgeschlagen. Ein Fehlschlag gilt vor "nicht eingerichtet". |
+| 2 | Ein geprüfter Anbieter ist nicht eingerichtet (Variable fehlt, falsche Region, Host nicht erlaubt), oder der Aufruf war falsch. Es wurde keine Anfrage gesendet. |
+
+Mit `--only soniox` oder `--only haus` (auch `--only=haus`) wird nur ein Anbieter geprüft.
+
+**Was ein Fehlschlag heißt**
+
+| Meldung | Bedeutung und Abhilfe |
+|---|---|
+| Soniox, HTTP 401 "gehört zu einem Projekt einer anderen Region" | Der Schlüssel gehört zu einem Soniox-Projekt der anderen Region. Das Werkzeug fragt dazu einmal die andere Region und nennt deren Antwort (Gegenprobe). `SONIOX_REGION` anpassen oder den Schlüssel eines Projekts der gewünschten Region eintragen (für die EU ein EU-Projekt). |
+| Soniox, HTTP 401 "auch dort abgelehnt" | Der Schlüssel ist ungültig oder gesperrt, in keiner Region angenommen. |
+| Soniox "nicht erreichbar" oder anderer Status | Netzwerk, Zeitüberschreitung oder Störung bei Soniox. Die Kette der Anwendung geht in diesem Fall zum nächsten Anbieter. |
+| Soniox "meldet den Fehler N" bei Sprachausgabe oder Erkennung | Die Websocket-Verbindung wurde aufgebaut, Soniox lehnt die Sitzung ab (Modell, Stimme oder Parameter). |
+| Erkennung "Begriff Primärschlüssel nicht erkannt" | Die Kette läuft, aber der Text stimmt nicht. Den ausgegebenen Text ansehen (Sprachmodell, Audioformat). |
+| Sokrates, HTTP 401 oder 403 | Sokrates lehnt `OPENAI_COMPATIBLE_API_KEY` ab. |
+| Sokrates, HTTP 405 | Der Pfad stimmt nicht: Hinter Open WebUI liegen die Audio-Routen unter `/v1/audio/`, die Adresse muss auf `/api` enden. |
+| Sokrates, HTTP 400, 404 oder 422 | Sokrates kennt das Modell oder die Stimme nicht (`HAI_STT_HAUS_MODEL`, `HAI_TTS_HAUS_MODEL`, `HAI_TTS_HAUS_VOICE`). |
+| Sokrates, HTTP 500 bei der Erkennung | Open WebUI antwortet, aber der Sprachdienst dahinter (Spracherkennung) liefert einen Serverfehler. Open WebUI reicht nur weiter, der Fehler liegt auf Sokrates (so war es am Vormittag des 02.11.2026). Die Anwendung nimmt dann für das Zuhören den Browser. |
+| Sokrates, HTTP 500 bei der Sprachausgabe | Dasselbe für den Sprachdienst der Ausgabe. |
+| Sokrates, Antwort nicht in der Form `{text, filename}` | Die Antwort der Erkennung ist kein JSON mit Text, zum Beispiel eine Fehlerseite eines Gateways. |
+
+**Wann prüfen:** nach jeder Änderung der Variablen (lokal mit denselben Werten wie in Vercel), nach einem Schlüsselwechsel, bei einer Störung in der Admin-Seite (Zustand "Gestört") und vor den Prüfschritten E14 bis E17 des Testplans.
+
 ## Messung von Sokrates und Soniox am 02.11.2026
 
-Gemessen von einem Rechner aus mit den echten Zugangsdaten, ohne Browser.
+Gemessen von einem Rechner aus mit den echten Zugangsdaten, ohne Browser. Die Spalte vom Vormittag ist eine Einmalmessung mit einem Wegwerfskript, die Spalte vom Abend stammt vom Prüfwerkzeug aus dem Abschnitt "Prüfen der Sprachanbieter".
 
-| Prüfung | Ergebnis |
-|---|---|
-| Soniox, Schlüssel aus `.env.local` gegen die EU-Adresse (`api.eu.soniox.com`) | 401, der Schlüssel gehört zu einem Projekt der Region US. Für EU braucht es einen Schlüssel eines EU-Projekts. |
-| Soniox, derselbe Schlüssel gegen die US-Adresse | 201, beide Kurzzeit-Schlüssel (Erkennung, Sprachausgabe) kommen. |
-| Soniox, Kette in der US-Region: Sprachausgabe "Was ist ein Primärschlüssel?" und die erzeugte Sprache zurück in die Erkennung | bestanden: 1,6 Sekunden Sprache nach 1,5 s, erkannt "Was ist ein Primärschlüssel?" nach 1,2 s |
-| Sokrates, Modellliste | 22 Modelle, keine Audiomodelle (Open WebUI listet seine Audio-Engines nicht auf) |
-| Sokrates, Sprachausgabe `POST /api/v1/audio/speech` mit `tts-1` und `alloy` | 200, MP3, etwa 1,5 bis 2,5 Sekunden je Satz |
-| Sokrates, Spracherkennung `POST /api/v1/audio/transcriptions` | 500: Open WebUI reicht an einen internen Erkennungsdienst (`192.168.178.64:8790`) weiter, und der antwortet mit einem Serverfehler. Muss auf Sokrates behoben werden. |
-| Sokrates, Pfad `/api/audio/...` ohne `/v1` (so rief der erste Stand den Dienst auf) | 405 |
+| Prüfung | Ergebnis am Vormittag | Erneut gemessen 02.11.2026 abends (Prüfwerkzeug) |
+|---|---|---|
+| Soniox, Schlüssel aus `.env.local` gegen die EU-Adresse (`api.eu.soniox.com`) | 401, der Schlüssel gehört zu einem Projekt der Region US. Für EU braucht es einen Schlüssel eines EU-Projekts. | Beide Kurzzeit-Schlüssel (Erkennung, Sprachausgabe) kommen mit HTTP 201 in etwa 0,1 Sekunden. |
+| Soniox, derselbe Schlüssel gegen die US-Adresse | 201, beide Kurzzeit-Schlüssel (Erkennung, Sprachausgabe) kommen. | Nicht erneut gemessen (das Werkzeug fragt die andere Region nur nach einem 401 als Gegenprobe). |
+| Soniox, Kette: Sprachausgabe "Was ist ein Primärschlüssel?" und die erzeugte Sprache zurück in die Erkennung | Bestanden in der Region US: 1,6 Sekunden Sprache nach 1,5 s, erkannt "Was ist ein Primärschlüssel?" nach 1,2 s. | Bestanden in der Region EU: 1,7 Sekunden Sprache nach 0,3 s (gesamt 1,2 s), erkannt "Was ist ein Primärschlüssel?" nach 0,9 s. |
+| Sokrates, Modellliste | 22 Modelle, keine Audiomodelle (Open WebUI listet seine Audio-Engines nicht auf). | Nicht erneut gemessen (das Werkzeug fragt die Liste nicht, die Kette hängt nicht von ihr ab). |
+| Sokrates, Sprachausgabe `POST /api/v1/audio/speech` mit `tts-1` und `alloy` | 200, MP3, etwa 1,5 bis 2,5 Sekunden je Satz. | 200, `audio/mpeg`, etwa 10 KB, 4,1 Sekunden für den Satz der Prüfung. |
+| Sokrates, Spracherkennung `POST /api/v1/audio/transcriptions` | 500: Open WebUI reicht an einen internen Erkennungsdienst (`192.168.178.64:8790`) weiter, und der antwortet mit einem Serverfehler. Muss auf Sokrates behoben werden. | **Behoben.** 200 in etwa 2 Sekunden (2,2 s) mit der MP3 der Sprachausgabe als Eingabe, erkannt "Was ist ein Primärschlüssel?". Der Fehler 500 vom Sprachdienst auf `192.168.178.64:8790` ist weg. |
+| Sokrates, Pfad `/api/audio/...` ohne `/v1` (so rief der erste Stand den Dienst auf) | 405. | Nicht erneut gemessen (der Server nutzt `/v1`, die Tests sichern den Pfad). |
 
 Folgen: Der Server hängt für Open WebUI jetzt `/v1` an (`audioUrl`) und gibt die echte Antwortart (MP3) weiter. Die Modellprüfung der Admin-Seite meldet "nicht angeboten" nur noch, wenn das feststeht (fehlt ein Eintrag in der Liste, ist der Zustand unbekannt). Variablen in der Preview: `HAI_STT_HAUS_MODEL=whisper-1`, `HAI_TTS_HAUS_MODEL=tts-1`, `HAI_TTS_HAUS_VOICE=alloy` (bei Open WebUI nur Namen, die Engines und Stimmen stellt Sokrates selbst ein). Ob die Stimme Deutsch gut spricht, zeigt der Hörtest (Testplan E12). Fällt die Erkennung auf Sokrates aus, nimmt die Kette für das Zuhören den Browser, die Sprachausgabe kann trotzdem über Sokrates laufen.
+
+**Stand am Abend des 02.11.2026:** Die Spracherkennung auf Sokrates liefert jetzt Text (HTTP 200 in etwa 2 Sekunden, geprüft mit einer MP3 der Sprachausgabe). Der Fehler 500 vom Sprachdienst auf `192.168.178.64:8790` ist behoben. Damit sind beide Anbieter von Anfang bis Ende bestanden: Soniox (Region EU, Standard) und Sokrates (Sprachausgabe und Erkennung). Offen bleibt der Hörtest (Stimme, Aussprache, Testplan E12) und der Test im Browser mit Mikrofon.

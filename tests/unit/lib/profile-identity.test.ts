@@ -230,4 +230,25 @@ describe('mergeProfileReferences', () => {
     expect(references).toContain('trainee_enrollments.trainee_id');
     expect(references.filter(r => !handled.has(r))).toEqual([]);
   });
+
+  it('treats two weekly evaluations of one week as a conflict only inside the same occupation', async () => {
+    const statements = await runMerge();
+    const remove = statements.find(s =>
+      s.sql.startsWith('DELETE FROM "weekly_evaluations"')
+    );
+
+    // A trainee in two trainings has one evaluation per week and occupation.
+    // The old profile loses a row only if the new profile has one for the same
+    // week AND occupation, otherwise the second occupation would be thrown away.
+    expect(remove).toBeDefined();
+    expect(remove!.sql).toContain('keep_row."trainee_id" = $');
+    expect(remove!.sql).toContain(
+      'keep_row."training_catalog_id" = old_row."training_catalog_id"'
+    );
+    expect(remove!.sql).toContain(
+      'keep_row."week_number" = old_row."week_number"'
+    );
+    expect(remove!.sql).toContain('keep_row."year" = old_row."year"');
+    expect(remove!.params).toEqual([OLD_ID, NEW_ID]);
+  });
 });

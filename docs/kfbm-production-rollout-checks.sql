@@ -265,8 +265,8 @@ order by table_name, column_name;
 -- N checks (after a stage, the runbook says which)
 -- ============================================================================
 
--- N01. Ledger against the 40 files of the repository (202606260001 and the 39 files from
--- 20261023100000 to 20261102000300). Expect 0 rows after the release (and after the repair
+-- N01. Ledger against the 41 files of the repository (202606260001 and the 40 files from
+-- 20261023100000 to 20261102000400). Expect 0 rows after the release (and after the repair
 -- of 202606260001). Every row is a file whose version is missing in the ledger: it was not
 -- applied through the pipeline. Every new migration file needs its version in this list,
 -- tests/unit/migrations/rollout-checks-ledger.test.ts fails otherwise.
@@ -283,7 +283,7 @@ with expected(version) as (
          ('20261029000100'), ('20261029000200'), ('20261029000300'),
          ('20261030000100'), ('20261030000200'), ('20261030000300'),
          ('20261101000100'), ('20261101000200'),
-         ('20261102000100'), ('20261102000200'), ('20261102000300')
+         ('20261102000100'), ('20261102000200'), ('20261102000300'), ('20261102000400')
 )
 select e.version as missing_in_ledger
 from expected e
@@ -344,6 +344,9 @@ from (
     -- 20261102000300: an activity report belongs to one occupation (column not null with default FIAE, index per trainee, occupation, year and week)
     ('column activity_reports.training_catalog_id (not null, with default)', exists (select 1 from pg_attribute where attrelid = to_regclass('public.activity_reports') and attname = 'training_catalog_id' and attnotnull and atthasdef and not attisdropped)),
     ('index activity_reports_trainee_catalog_week_idx', to_regclass('public.activity_reports_trainee_catalog_week_idx') is not null),
+    -- 20261102000400: a weekly evaluation belongs to one occupation (column not null with default FIAE, index per trainee, occupation, year and week)
+    ('column weekly_evaluations.training_catalog_id (not null, with default)', exists (select 1 from pg_attribute where attrelid = to_regclass('public.weekly_evaluations') and attname = 'training_catalog_id' and attnotnull and atthasdef and not attisdropped)),
+    ('index weekly_evaluations_trainee_catalog_week_idx', to_regclass('public.weekly_evaluations_trainee_catalog_week_idx') is not null),
     ('enum value user_role SUPER_ADMIN', exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'user_role' and e.enumlabel = 'SUPER_ADMIN')),
     ('PUBLIC cannot create in schema public', not has_schema_privilege('public', 'public', 'CREATE'))
 ) as t(check_name, present)

@@ -307,10 +307,11 @@ describe.each(readCases)('$name', entry => {
     const { res, mock } = await run(entry, { header: 'KFBM' });
     expect(res.status).toBe(200);
     if (entry.catalogOnReport) {
-      // the occupation of the report counts, not the enrollments of the trainee
+      // the occupation of the report (or of the evaluation, which carries its
+      // own training_catalog_id) counts, not the enrollments of the trainee
       const onReport = mock.filters('select', entry.catalogOnReport);
       expect(onReport.sql).toContain(
-        '"activity_reports"."training_catalog_id" = $'
+        `"${entry.catalogOnReport}"."training_catalog_id" = $`
       );
       expect(onReport.params).toContain(KFBM);
       expect(onReport.params).not.toContain(FIAE);

@@ -21,6 +21,7 @@ Die Lernplattform führt jetzt zwei Ausbildungsberufe in einem System: Fachinfor
 - Auswahl und Anzeige der eigenen Berufe, bei mehreren Ausbildungen ein Reiter je Beruf (PR 95, 96, 112, 151, 167).
 - Phasenplan, Berufsschule, Prüfungen und Beschriftungen folgen dem Beruf (PR 98, 111).
 - Ausbildungsnachweise gehören zu einem Beruf: Bei mehreren Ausbildungen zeigt jeder Reiter nur die Nachweise seines Berufs, und für dieselbe Woche lässt sich je Beruf ein Nachweis anlegen. Das gilt auch für die Berufsschul-Ansicht und die HAI-Aktionen.
+- Wochenbewertungen gehören zu einem Beruf: Bei mehreren Ausbildungen gibt es je Woche und Beruf eine Wochenbewertung, Listen, Jahresübersicht und Arbeitszeugnis zählen je Beruf.
 - Reihenfolge der Arbeit: ein Enabler nach dem anderen, Quiz wiederholbar, gesperrte Enabler mit Erklärung und Material, ein Use Case bleibt zu, solange sein Enabler gesperrt ist (PR 168, 202).
 - Lernfeld-Seite mit Enablern und Use Cases (PR 163).
 - Globale Quizze lassen sich abschließen, Freitextfragen ohne Musterantwort werden nicht bewertet (PR 132, 172).
@@ -74,7 +75,7 @@ Die Lernplattform führt jetzt zwei Ausbildungsberufe in einem System: Fachinfor
 
 ## 7. Datenbank und Betrieb
 
-- 39 neue Migrationsdateien von `20261023100000` bis `20261102000300`, rückwärtskompatibel geschrieben. Die jüngste (`20261102000300`) legt den Beruf an den Ausbildungsnachweisen an und füllt vorhandene Nachweise aus ihren Einträgen, der Einschreibung oder FIAE (in Production alle FIAE). Eine Datei (`20261025000000`, Backfill SUPER_ADMIN) hält das Freigabetor an, bis `KFBM_ROLLOUT_APPROVED` gesetzt ist.
+- 40 neue Migrationsdateien von `20261023100000` bis `20261102000400`, rückwärtskompatibel geschrieben. Die jüngsten legen den Beruf an den Ausbildungsnachweisen (`20261102000300`) und an den Wochenbewertungen (`20261102000400`) an und füllen vorhandene Zeilen aus Einträgen, verknüpftem Nachweis, Einschreibung oder FIAE (in Production alle FIAE). Eine Datei (`20261025000000`, Backfill SUPER_ADMIN) hält das Freigabetor an, bis `KFBM_ROLLOUT_APPROVED` gesetzt ist.
 - Release-Strecke mit zwei Schemas: `public` ist Production, `public_preview` die Preview. Ablauf `guard`, `migrate`, `content-sync`, `deploy`, Beschreibung in `docs/release-prozess.md`.
 - Generalprobe am 31.10.2026 auf einem Wegwerf-Container: 34 Migrationen (damals), längste Datei 2,4 Sekunden, Nachchecks N01 bis N09 wie erwartet, FIAE-Übertragung angewendet, zweiter Lauf ohne Änderung, Rückbau erprobt. Die vier später hinzugekommenen Dateien (Check der Lernkarten-Quelle, Schalter Sprachassistent, Tabelle `hai_settings` und die Bereinigung ihres Fremdschlüssels) sind additiv.
 - Rückweg: Sicherung der Datenbank vor dem Fenster, Rückbau der Katalogreihe (`docs/rollback/`), App über "Production Deploy" nur mit dem Release, das die Migrationsdateien kennt.
@@ -91,7 +92,6 @@ Für bestehende FIAE-Azubis bleibt der Weg gleich. Sichtbar neu sind die Reiter 
 - Die HAI braucht Sokrates. Fällt der Server aus, antwortet sie nicht, Lernen und Abgaben laufen weiter.
 - Offene Fehler zur späteren Behebung: WMCNL-2887 (Blocked), FIAE-Regressionsfehler (von Niko angelegt).
 - E-Mail-Bestätigung (WMCNL-2847) wartet auf den SMTP-Zugang von Resend, Schlüsselwechsel und Passwörter folgen nach dem Rollout.
-- Wochenbewertungen sind weiter je Azubi, Woche und Jahr eindeutig, nicht je Beruf. Ein Azubi in zwei Berufen kann für dieselbe Woche zwei Nachweise (je Beruf einen) schreiben, die Wochenbewertung dieser Woche gibt es aber nur einmal. Das betrifft nur Konten mit zwei Ausbildungen, in Production heute niemanden.
 
 ## 10. Reihenfolge im Fenster
 

@@ -162,6 +162,7 @@ async function deleteConflictingRows(
       AND EXISTS (
         SELECT 1 FROM "weekly_evaluations" keep_row
         WHERE keep_row."trainee_id" = ${toProfileId}
+          AND keep_row."training_catalog_id" = old_row."training_catalog_id"
           AND keep_row."week_number" = old_row."week_number"
           AND keep_row."year" = old_row."year"
       )
