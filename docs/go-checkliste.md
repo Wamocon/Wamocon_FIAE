@@ -19,7 +19,7 @@ Stand: 02.11.2026. Ein Blatt für die Entscheidung. Die Einzelheiten stehen im R
 
 | Punkt | Ergebnis |
 |---|---|
-| Migrationsreihe | 36 Dateien von `20261023100000` bis `20261101000200`, Freigabetor am Backfill (`20261025000000`) |
+| Migrationsreihe | 38 Dateien von `20261023100000` bis `20261102000200`, Freigabetor am Backfill (`20261025000000`) |
 | Generalprobe Migrationen | 31.10.2026 auf Wegwerf-Container, längste Datei 2,4 Sekunden, Nachchecks N01 bis N09 wie erwartet, Rückbau erprobt |
 | Generalprobe Schritt 8 | App gegen die Kopie, Smoke S1 bis S6, siehe `docs/probelauf-2026-11-02.md` |
 | Lesende Messung Production | 02.11.2026 wiederholt (V01 bis V14): 3 Azubis, alle freigeschaltet, 8 Konten in `auth.users`, Ledger bereinigt (1 Zeile), keine unerwartete Abweichung zum 31.10.2026 |
