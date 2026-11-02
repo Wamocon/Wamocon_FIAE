@@ -65,6 +65,7 @@ Weitere Hinweise: Das Repository hat 35 Migrationsdateien (eine Basisdatei `2026
 
 **Nachtrag 02.11.2026: zwei weitere Dateien, Plan zeigt 36 statt 34.** Seit dem Stand dieses Abschnitts sind zwei kleine, rückwärtskompatible Migrationen dazugekommen. Sie liegen hinter `GATED_TO` (`20261030000300`) und laufen deshalb ohne Zusatzfreigabe mit, `db push --dry-run` zeigt damit **36 Dateien** (`20261023100000` bis `20261101000200`). Überall, wo dieses Runbook "34 Dateien" erwartet (B1, P14, V-Schritte, Dry-Run), gilt 34 plus diese beiden.
 - `20261101000100_hai_embeddings_learning_technique_source.sql`: erweitert den Check `hai_embeddings_source_type_check` um `learning_technique` (Lernkarten, Paket B). Keine Zeile ändert sich. Vor dem Einlesen der Karten in Production nötig.
+- **HAI in Production:** Ablauf, Reihenfolge nach dem Rollout und Rückweg stehen in `docs/hai-produktivgang.md`, der Test in der Preview in `docs/hai-testplan.md`. Die Neuindexierung (etwa drei Stunden auf Sokrates) kommt nach den Migrationen und der Inhaltsübertragung.
 - `20261101000200_organizations_voice_assistant.sql`: Spalte `organizations.voice_assistant_enabled boolean not null default false` (Sprachassistent, WMCNL-2907). Standard aus, keine Wirkung auf bestehende Abläufe. Der App-Code liest die Spalte nur für gesprochene Fragen und auf der Organisationsseite; die alte App kennt sie nicht und läuft unverändert weiter (A15).
 
 ### 0.3 Die Entscheidungen, die Niko noch braucht
