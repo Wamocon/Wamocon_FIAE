@@ -187,6 +187,15 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([595, 842]); // A4 portrait in points
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    // The same figures as the detail page (the overview of the trainee), not
+    // the figure of the profile request: one progress value per trainee
+    const progressPct = overview?.stats.progressPct ?? trainee?.progress ?? 0;
+    const scores = (overview?.enablerQuizzes ?? [])
+      .map(q => q.lastScore)
+      .filter((v): v is number => typeof v === 'number');
+    const averageScore = scores.length
+      ? `${Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length)}%`
+      : '—';
     const fontSizeHeading = 18;
     const fontSize = 12;
     const left = 50;
@@ -210,7 +219,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     );
     y -= 18;
     page.drawText(
-      `${t('trainee.detail.pdfProgress')} ${trainee?.progress ?? 0}%`,
+      `${t('trainee.detail.pdfProgress')} ${progressPct}%`,
       { x: left, y, size: fontSize, font }
     );
     y -= 26;
@@ -223,18 +232,16 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     });
     y -= 22;
     page.drawText(
-      `${t('trainee.detail.pdfOverallProgress')} ${trainee?.progress ?? 0}%`,
+      `${t('trainee.detail.pdfOverallProgress')} ${progressPct}%`,
       { x: left, y, size: fontSize, font }
     );
     y -= 16;
-    page.drawText(`${t('trainee.detail.pdfModulesCompleted')} —`, {
-      x: left,
-      y,
-      size: fontSize,
-      font,
-    });
+    page.drawText(
+      `${t('trainee.detail.pdfModulesCompleted')} ${overview?.stats.completedEnablers ?? 0}/${overview?.stats.totalEnablers ?? 0}`,
+      { x: left, y, size: fontSize, font }
+    );
     y -= 16;
-    page.drawText(`${t('trainee.detail.pdfAverage')} 82%`, {
+    page.drawText(`${t('trainee.detail.pdfAverage')} ${averageScore}`, {
       x: left,
       y,
       size: fontSize,

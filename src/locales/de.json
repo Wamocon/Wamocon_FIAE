@@ -3103,5 +3103,12 @@
   "hai.voiceMode.listenAgain": "Erneut zuhören",
   "hai.voiceMode.hint": "Sagen Sie „Sprachmodus beenden“ oder drücken Sie Esc, um das Gespräch zu beenden. Ein Tipp auf die HAI unterbricht sie. Alles Gesprochene steht im Chat zum Nachlesen.",
   "hai.voiceMode.mini.label": "Sprachmodus aktiv",
-  "hai.voiceMode.mini.restore": "Sprachmodus wieder groß anzeigen"
+  "hai.voiceMode.mini.restore": "Sprachmodus wieder groß anzeigen",
+  "_comment.trainer_kfbm": "Neue Schlüssel der Fehlerbehebung trainer_kfbm (Jira WMCNL, 02.11.2026), eigener Block für die spätere Zusammenführung",
+  "dashboard.individualProgressHint": "Anzahl der Auszubildenden je Fragenkomplex: abgeschlossen, in Arbeit, nicht begonnen",
+  "dashboard.overallProgressHint": "Durchschnittlicher Fortschritt aller Auszubildenden in Prozent, am Ende der letzten sechs Wochen",
+  "charts.completed": "Abgeschlossen",
+  "charts.inProgress": "In Arbeit",
+  "charts.notStarted": "Nicht begonnen",
+  "charts.traineesAxis": "Azubis"
 }

@@ -17,6 +17,8 @@ import {
   traineeUseCaseOverrides,
 } from '@/db/migrations/schemas/schema';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { catalogCondition } from '@/lib/catalog/scope';
+import { requireProgressScope } from '@/lib/trainer/trainee-progress';
 import { loadCourseProgressions } from '@/lib/catalog/progression-db';
 import type { EnablerProgression } from '@/lib/catalog/progression';
 
@@ -49,14 +51,20 @@ export async function GET(
       .limit(1);
     if (!p) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Courses trainee belongs to
+    // Courses the trainee belongs to, inside the chosen occupation: a trainee
+    // in two trainings is shown with the courses (and the figures) of the tab
+    // that is open, the same set the lists and the dashboard count
+    const scope = await requireProgressScope(session, req);
+    if (isErrorResponse(scope)) return scope;
     const memberCourseRows = await db
       .select({ courseId: courseMembers.courseId })
       .from(courseMembers)
+      .innerJoin(courses, eq(courseMembers.courseId, courses.id))
       .where(
         and(
           eq(courseMembers.userId, traineeId as any),
-          eq(courseMembers.role, 'TRAINEE')
+          eq(courseMembers.role, 'TRAINEE'),
+          scope ? catalogCondition(courses.trainingCatalogId, scope) : undefined
         )
       );
     const courseIds = memberCourseRows.map(r => r.courseId);
