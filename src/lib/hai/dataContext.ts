@@ -60,6 +60,7 @@ export type DataIntent =
     | 'trainee_overview'    // Trainer: "Wie stehen meine Azubis?"
     | 'trainee_detail_query' // Trainer: "Wie steht [Name]?" / "Noten von [Name]"
     | 'learning_query'      // Trainee: tips on learning (quiz scores, next exams)
+    | 'day_briefing'        // "Was steht heute an?" / "Guten Morgen" (day companion)
     | 'none';               // No data intent detected
 
 export interface LiveDataContext {
@@ -171,7 +172,19 @@ const KW_USE_CASE = ['use case', 'use-case', 'usecase', 'fallstudie', 'praktisch
 const KW_REPORT = ['nachweis', 'taetigkeitsnachweis', 'bericht', 'berichtsheft', 'wochenbericht', 'activity report', 'nachweise', 'ausbildungsnachweis', 'wie viele berichte', 'taetigkeit'];
 const KW_NOTIFICATION = ['benachrichtigung', 'neuigkeiten', 'notification', 'neue nachrichten', 'was gibt es neues', 'updates', 'ungelesen', 'inbox'];
 const KW_REVIEW = ['bewerten', 'ausstehend', 'korrigieren', 'review', 'eingereicht', 'submissions', 'pruefe', 'zu bewerten', 'offene abgaben', 'pending', 'was muss ich'];
-const KW_OVERVIEW = ['ueberblick', 'meine azubis', 'wie stehen', 'fortschritt meiner', 'alle azubis', 'azubi-uebersicht', 'meine auszubildenden'];
+// The day at a glance (day companion, voice or chat). Checked first: "was muss ich heute"
+// would otherwise land in the review list of the trainers. Written without umlauts, the
+// message is folded the same way (foldUmlauts).
+const KW_DAY = ['was steht heute an', 'was steht an', 'was steht heute', 'was liegt heute an', 'was liegt an', 'was ansteht', 'mein tag', 'meinen tag', 'tagesplan', 'tageslage', 'tagesstart', 'tagesueberblick', 'guten morgen', 'plan fuer heute', 'plane heute', 'heute dringend', 'heute wichtig', 'was muss ich heute', 'was ist heute wichtig', 'was ist dringend'];
+
+const UMLAUT_FOLD: Record<string, string> = { 'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss' };
+
+/** Lower case with ae, oe, ue, ss: a spoken or typed "für" meets the keyword "fuer". */
+export function foldUmlauts(text: string): string {
+    return text.toLowerCase().replace(/[äöüß]/g, c => UMLAUT_FOLD[c]);
+}
+
+const KW_OVERVIEW =['ueberblick', 'meine azubis', 'wie stehen', 'fortschritt meiner', 'alle azubis', 'azubi-uebersicht', 'meine auszubildenden'];
 
 // ============================================================================
 // NAME EXTRACTION (for trainer → trainee queries)
@@ -227,6 +240,12 @@ function extractPotentialTraineeName(message: string): string | null {
  */
 export function classifyDataIntent(message: string, userRole: UserRole): DataIntent {
     const lower = message.toLowerCase();
+
+    // The day at a glance, for both roles. Only this list reads the message with
+    // folded umlauts (a spoken "für" must meet "fuer"); the older lists keep their
+    // behavior, so a learning question with the word "Prüfung" stays a learning one.
+    const folded = foldUmlauts(message);
+    if (KW_DAY.some(k => folded.includes(k))) return 'day_briefing';
 
     // Trainer-only intents first (more specific)
     if (userRole === 'TRAINER') {
@@ -1439,6 +1458,30 @@ export async function fetchDataContext(
                         const calendar = await fetchCalendar(userId);
                         parts.push(formatCalendar(calendar));
                         intentTokenEstimate = 550;
+                        break;
+                    }
+                    case 'day_briefing': {
+                        // Only what the person sees in the platform anyway, the
+                        // short version: trainees get appointments, report status,
+                        // feedback on submissions and notifications, trainers get
+                        // the open reviews and notifications
+                        if (userRole === 'TRAINER') {
+                            const reviews = await fetchTrainerPendingReviews(userId);
+                            parts.push(formatTrainerReviews(reviews));
+                            const notifs = await fetchNotifications(userId);
+                            parts.push(formatNotifications(notifs));
+                            intentTokenEstimate = 350;
+                        } else {
+                            const calendar = await fetchCalendar(userId);
+                            parts.push(formatCalendar(calendar));
+                            const reports = await fetchReportStatus(userId);
+                            parts.push(formatReports(reports));
+                            const submissions = await fetchTraineeSubmissions(userId);
+                            parts.push(formatSubmissions(submissions));
+                            const notifs = await fetchNotifications(userId);
+                            parts.push(formatNotifications(notifs));
+                            intentTokenEstimate = 900;
+                        }
                         break;
                     }
                     case 'review_query': {

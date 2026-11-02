@@ -100,6 +100,12 @@ export interface PipelineContext {
   crossSessionMemory?: string;
   /** Duration-aware content scope for trainee-facing answers */
   trainingScope?: HaiTrainingScope;
+  /**
+   * The question was spoken and the answer is read aloud (voice assistant). Set by
+   * the chat route after it checked that the organization allows it, never taken
+   * from the text of a message. Same pipeline, same retrieval, same guards.
+   */
+  voice?: boolean;
 }
 
 export interface QuizState {
@@ -724,6 +730,7 @@ export async function processMessage(
       trainingScope: context.trainingScope,
       persona,
       learningTechniques: usesLearningTechniques(userMessage, searchResults),
+      voice: context.voice === true,
     });
 
     // Step 5: Convert previous messages to provider format
@@ -948,6 +955,7 @@ export async function processMessageStream(
       trainingScope: context.trainingScope,
       persona,
       learningTechniques: usesLearningTechniques(userMessage, searchResults),
+      voice: context.voice === true,
     });
 
     // Convert messages to provider format
