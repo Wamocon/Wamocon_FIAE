@@ -55,6 +55,8 @@ export function findBaseCopies(comps, only = null) {
         copies.push({
           deepNr,
           baseNr,
+          deepName: deep.name,
+          baseName: base.name,
           enabler: e.key,
           folder: e.folder,
           baseEnabler: hit.key,
@@ -68,7 +70,7 @@ export function findBaseCopies(comps, only = null) {
 
 /** One line per copy for the report of a run. */
 export const describeCopy = c =>
-  `Kopie des Grundkurses: ${describeComponent(c.deepNr)} / ${c.enabler} ${c.folder} ist byte-gleich mit ${describeComponent(c.baseNr)} / ${c.baseEnabler} (SHA-256 ${c.sha}...)`;
+  `Kopie des Grundkurses: ${c.deepName ?? describeComponent(c.deepNr)} / ${c.enabler} ${c.folder} ist byte-gleich mit ${c.baseName ?? describeComponent(c.baseNr)} / ${c.baseEnabler} (SHA-256 ${c.sha}...)`;
 
 export async function main(argv) {
   const [source, ...extra] = argv;

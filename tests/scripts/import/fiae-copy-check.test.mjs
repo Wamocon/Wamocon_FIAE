@@ -91,11 +91,11 @@ test('the check command reports the copies and answers 1, no copy answers 0, a w
   const original = console.log;
   console.log = (...a) => lines.push(a.join(' '));
   try {
-    enabler(root, '02_Informieren', '01_Grund', 'copy');
-    enabler(root, '2.2_Informieren (Vertiefung)', '01_Grund', 'copy');
+    enabler(root, '02.1_Informieren', '01_Grund', 'copy');
+    enabler(root, '02.2_Informieren (Vertiefung)', '01_Grund', 'copy');
     assert.equal(await main([root]), 1);
     assert.ok(lines.some(l => /Kopie des Grundkurses/.test(l)));
-    enabler(root, '2.2_Informieren (Vertiefung)', '01_Grund', 'an own text');
+    enabler(root, '02.2_Informieren (Vertiefung)', '01_Grund', 'an own text');
     assert.equal(await main([root]), 0);
   } finally {
     console.log = original;
@@ -107,5 +107,34 @@ test('the check command reports the copies and answers 1, no copy answers 0, a w
     assert.equal(await main([]), 2);
   } finally {
     console.error = error;
+  }
+});
+
+test('the final numbering: copies of 3.2 and 11.2 are named with the label and the final folder number', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'fiae-copy-'));
+  try {
+    enabler(root, '03.1_Beurteilen', '02_Eins', 'copy of three');
+    enabler(root, '03.2_Beurteilen', '02_Eins', 'copy of three');
+    enabler(root, '03.2_Beurteilen', '03_Zwei', 'own text');
+    enabler(root, '11.1_Sicherstellen', '01_Plan', 'copy of eleven');
+    enabler(root, '11.2_Sicherstellen', '01_Plan', 'copy of eleven');
+    // a single component is never compared (13 is Speicherlösungen here, not a Vertiefung)
+    enabler(root, '12_Vernetzt', '01_A', 'same');
+    enabler(root, '13_Speicher', '01_A', 'same');
+    const copies = findBaseCopies(readSource(root));
+    assert.deepEqual(
+      copies.map(c => [c.deepNr, c.baseNr, c.enabler]),
+      [
+        [14, 3, '02'],
+        [22, 11, '01'],
+      ]
+    );
+    assert.match(
+      describeCopy(copies[0]),
+      /3\.2 \(Ordner 03\.2\) \/ 02 .*3\.1 \(Ordner 03\.1\)/
+    );
+    assert.match(describeCopy(copies[1]), /11\.2 \(Ordner 11\.2\)/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

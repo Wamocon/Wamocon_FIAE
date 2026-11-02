@@ -48,7 +48,7 @@ describe('component labels in the public lists', () => {
       ['2-P2', 13, '2.2'],
       ['10-P1', 9, '9.1'],
       ['10-P2', 20, '9.2'],
-      ['INT4', 26, '26'],
+      ['INT4', 26, '17'],
     ]);
   });
 
@@ -90,7 +90,7 @@ describe('component labels in the public lists', () => {
     ).toEqual([
       ['3-P1', '3.1'],
       ['3-P2', '3.2'],
-      ['INT1', '23'],
+      ['INT1', '14'],
     ]);
   });
 

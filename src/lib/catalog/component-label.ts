@@ -3,11 +3,13 @@
  *
  * FIAE labels its components like KfBM (K24.1, K24.2): the base component of
  * a pair is "x.1", its Vertiefung is "x.2", and x is the order index of the
- * base component. A component without a Vertiefung keeps its plain number.
+ * base component. The single components are numbered on in one row, so there
+ * are 17 labels in all (final numbering of 02.11.2026).
  *
- *   single:  1, 7, 12, 19, 23, 24, 25, 26
  *   pairs:   2 > 13, 3 > 14, 4 > 15, 5 > 16, 6 > 17, 8 > 18, 9 > 20,
- *            10 > 21, 11 > 22  (label 2.1 and 2.2, 3.1 and 3.2, ...)
+ *            10 > 21, 11 > 22  (order indexes, label 2.1 and 2.2, 3.1 and 3.2, ...)
+ *   single:  order index 1, 7, 12, 19, 23, 24, 25, 26 get the labels
+ *            1, 7, 12, 13, 14, 15, 16, 17
  *
  * This is a label only. The code (the key of the row) and the order index (the
  * phases and the release depend on it) never change, and every lookup, import
@@ -66,6 +68,19 @@ export const FIAE_COMPONENT_PAIRS: ReadonlyArray<readonly [number, number]> = [
   [11, 22],
 ];
 
+/** [order index, label number] of the single components (they are numbered on). */
+export const FIAE_COMPONENT_SINGLES: ReadonlyArray<readonly [number, number]> =
+  [
+    [1, 1],
+    [7, 7],
+    [12, 12],
+    [19, 13],
+    [23, 14],
+    [24, 15],
+    [25, 16],
+    [26, 17],
+  ];
+
 const FIRST_ORDER_INDEX = 1;
 const LAST_ORDER_INDEX = 26;
 
@@ -77,7 +92,12 @@ for (let n = FIRST_ORDER_INDEX; n <= LAST_ORDER_INDEX; n++) {
   const pair = FIAE_COMPONENT_PAIRS.find(
     ([base, deep]) => n === base || n === deep
   );
-  const label = pair ? `${pair[0]}.${n === pair[0] ? 1 : 2}` : String(n);
+  const single = FIAE_COMPONENT_SINGLES.find(
+    ([orderIndex]) => orderIndex === n
+  );
+  const label = pair
+    ? `${pair[0]}.${n === pair[0] ? 1 : 2}`
+    : String(single?.[1] ?? n);
   LABEL_OF_ORDER_INDEX.set(n, label);
   ORDER_INDEX_OF_LABEL.set(label, n);
   ORDER_INDEX_OF_CODE.set(FIAE_COMPONENT_CODES[n], n);
@@ -95,9 +115,9 @@ export function fiaeLabelOfOrderIndex(orderIndex: unknown): string | null {
 }
 
 /**
- * The order index a FIAE label stands for ("2.1" is 2, "2.2" is 13, "7" is 7),
- * null for a text that is no label ("2.3", "13.1", "7.1", "x"). A leading zero
- * is accepted ("02.1", "07").
+ * The order index a FIAE label stands for ("2.1" is 2, "2.2" is 13, "7" is 7,
+ * "13" is 19), null for a text that is no label ("2.3", "13.1", "7.1", "2",
+ * "x"). A leading zero is accepted ("02.1", "07").
  */
 export function fiaeOrderIndexOfLabel(label: string): number | null {
   const text = String(label).trim();
