@@ -14,6 +14,12 @@ import {
 import { FIAE_PERSONA, type HaiPersona } from './persona';
 import { sanitizePromptData } from '../prompt-sanitize';
 import { buildLearningTechniquePrompt } from './learningTechniques/promptSection';
+import {
+  ACCESS_REASONS,
+  DENIAL_MEANING,
+  isAccessReasonKey,
+  type AccessReasonKey,
+} from './denial';
 
 // ============================================================================
 // TYPES
@@ -67,6 +73,13 @@ export interface PromptContext {
    * unchanged (FIAE byte for byte), the pipelines set it for every chat turn.
    */
   navigation?: boolean;
+  /**
+   * What the pipeline knows about a limit of access in this turn (denial.ts, for
+   * example a search that found nothing inside the released content). Adds the
+   * short section that makes the model name the reason from the fixed list of
+   * categories. Without a key the prompt is unchanged (FIAE byte for byte).
+   */
+  accessReasons?: readonly AccessReasonKey[];
 }
 
 // ============================================================================
@@ -189,6 +202,31 @@ export function buildNavigationRules(): string {
     '## Führung durch die Plattform',
     '- Wenn jemand eine Seite öffnen will oder fragt, wie es weitergeht, bietet die Plattform selbst eine Karte mit dem Knopf "Öffnen" an. Du öffnest keine Seiten und füllst nichts aus.',
     '- Erfinde keine Links, Pfade oder Adressen von Plattform-Seiten und schreibe keine in die Antwort. Wenn jemand wissen will, wo etwas zu finden ist, nenne in Worten den Namen des Menüpunkts (zum Beispiel Berufsschule oder Ausbildungsnachweis).',
+  ].join('\n');
+}
+
+/**
+ * Reasons for a limit of access (denial.ts). Only added when the context of this
+ * turn carries a reason: the notes say what the pipeline knows, the rules say how
+ * to answer. The model names the reason in one friendly sentence from the fixed
+ * list, invents no other reason, says "nothing found in your released content"
+ * and not "there is nothing" for an empty search, and offers an alternative.
+ * Nothing of another occupation, a trainer area or another person is named.
+ */
+export function buildAccessReasonRules(
+  reasons: readonly AccessReasonKey[]
+): string {
+  const keys = Array.from(new Set(reasons)).filter(isAccessReasonKey);
+  const categories = Object.values(DENIAL_MEANING).join('; ');
+  return [
+    '## Begründung bei Zugriffsgrenzen',
+    'Hinweise der Plattform zu dieser Runde (keine Texte des Nutzers):',
+    ...keys.map(key => `- ${ACCESS_REASONS[key].note}`),
+    'Regeln:',
+    `- Kann eine Anfrage wegen Berechtigung oder Zugriff nicht erfüllt werden, nenne den Grund in einem freundlichen Satz und nur aus dieser Liste: ${categories}. Erfinde keinen anderen Grund. Eine technische Störung gibst du nie als fehlende Berechtigung aus.`,
+    '- Nenne dabei nie Namen, Titel, Kennungen, Inhalte oder Zahlen aus einem anderen Beruf, aus Trainerbereichen oder von anderen Personen, und nie einen Teil einer Lösung.',
+    '- Wurde nichts gefunden, sage "in deinen freigeschalteten Inhalten habe ich dazu nichts gefunden" und nicht "es gibt nichts". Das heißt nicht, dass es nichts gibt.',
+    '- Nenne am Ende eine Alternative, die du anbieten kannst (zum Beispiel die Aufgabe Schritt für Schritt erklären).',
   ].join('\n');
 }
 
@@ -415,6 +453,9 @@ Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, a
   }
   if (context.navigation) {
     parts.push(buildNavigationRules());
+  }
+  if (context.accessReasons && context.accessReasons.length > 0) {
+    parts.push(buildAccessReasonRules(context.accessReasons));
   }
   parts.push(buildBoundaryRules(context.userRole));
 

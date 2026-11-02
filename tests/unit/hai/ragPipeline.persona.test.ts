@@ -64,10 +64,14 @@ import {
 } from '@/lib/hai/ragPipeline';
 import {
   FIAE_PERSONA,
-  FOREIGN_OCCUPATION_TEXT,
   NEUTRAL_PERSONA,
   resolveHaiPersona,
 } from '@/lib/hai/persona';
+import {
+  DENIAL_BERUF_TEXT,
+  DENIAL_NEUTRAL_TEXT,
+  namesDenialReason,
+} from '@/lib/hai/denial';
 import {
   FIAE_CATALOG,
   KFBM_CATALOG,
@@ -147,10 +151,9 @@ describe('off-topic filter per occupation', () => {
 });
 
 describe('personaRefusal', () => {
-  it('is the neutral refusal without a scope', () => {
-    expect(personaRefusal('Hallo', NEUTRAL_PERSONA)).toBe(
-      NEUTRAL_PERSONA.refusalText
-    );
+  it('is the refusal with the reason FREIGABE without a scope', () => {
+    expect(personaRefusal('Hallo', NEUTRAL_PERSONA)).toBe(DENIAL_NEUTRAL_TEXT);
+    expect(namesDenialReason(DENIAL_NEUTRAL_TEXT, 'FREIGABE')).toBe(true);
   });
   it('is the neutral text for another occupation, nothing for the own one', () => {
     const fiae = resolveHaiPersona({
@@ -158,7 +161,7 @@ describe('personaRefusal', () => {
       otherCatalogs: [KFBM_CATALOG],
     });
     expect(personaRefusal('Erkläre KfBM Lernfeld 3', fiae)).toBe(
-      FOREIGN_OCCUPATION_TEXT
+      DENIAL_BERUF_TEXT
     );
     expect(personaRefusal('Erkläre Normalisierung', fiae)).toBeNull();
   });
@@ -260,7 +263,7 @@ describe.each([
       'Quiz starten',
     ]) {
       const result = await run(message, ctx());
-      expect(result.response).toBe(NEUTRAL_PERSONA.refusalText);
+      expect(result.response).toBe(DENIAL_NEUTRAL_TEXT);
       expect(result.intent).toBe('off_topic');
       expect(result.citations).toEqual([]);
     }
@@ -271,14 +274,14 @@ describe.each([
 
   it('a question about another occupation is refused neutrally', async () => {
     const result = await run('Erkläre mir die Buchführung im KfBM', ctx());
-    expect(result.response).toBe(FOREIGN_OCCUPATION_TEXT);
+    expect(result.response).toBe(DENIAL_BERUF_TEXT);
     expect(result.response).not.toMatch(/Buchführung|KfBM/);
     expect(mockChat).not.toHaveBeenCalled();
     expect(mockSearch).not.toHaveBeenCalled();
 
     mockResolveAccess.mockResolvedValue(access(KFBM_CATALOG));
     const other = await run('Wie funktioniert Fachinformatik?', ctx());
-    expect(other.response).toBe(FOREIGN_OCCUPATION_TEXT);
+    expect(other.response).toBe(DENIAL_BERUF_TEXT);
     expect(mockChat).not.toHaveBeenCalled();
   });
 

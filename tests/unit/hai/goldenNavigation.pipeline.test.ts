@@ -75,6 +75,10 @@ import {
   type PipelineResult,
 } from '@/lib/hai/ragPipeline';
 import { isAllowedNavigationPath } from '@/lib/hai/navigation/targets';
+import {
+  DENIAL_RECORD_NOT_FOUND_TEXT,
+  namesDenialReason,
+} from '@/lib/hai/denial';
 
 interface NavigationCase {
   id: string;
@@ -83,7 +87,7 @@ interface NavigationCase {
   question: string;
   lock: { locked: boolean; lockedByTitle: string | null } | null;
   expected: {
-    kind: 'denied' | 'locked' | 'not_found' | 'offer';
+    kind: 'denied' | 'unknown_page' | 'locked' | 'not_found' | 'offer';
     path?: string;
   };
   forbiddenWords: string[];
@@ -109,8 +113,7 @@ const CATALOG = {
   KFBM: '00000000-0000-4000-8000-000000000002',
 };
 const E1 = '20000000-0000-4000-8000-000000000001';
-const NOT_FOUND =
-  'Dazu finde ich in deinem Lernstoff keinen passenden Eintrag. Nenne mir bitte die Nummer oder den genauen Namen.';
+const NOT_FOUND = DENIAL_RECORD_NOT_FOUND_TEXT;
 
 const pipelines: Array<
   [string, (message: string, ctx: PipelineContext) => Promise<PipelineResult>]
@@ -198,18 +201,31 @@ describe.each(
       switch (kind) {
         case 'denied':
           expect(result.navigationOffer).toBeUndefined();
-          expect(result.response).toContain(
-            'Diese Seite kann ich dir nicht öffnen.'
+          // ROLLE: what does not work, why (the area, the role), what instead
+          expect(result.response).toMatch(
+            /^(?:Diese Seite kann ich dir nicht öffnen, weil sie zum|Weiter lernen kann ich nur für Auszubildende)/
           );
+          expect(namesDenialReason(result.response, 'ROLLE')).toBe(true);
+          expect(result.response).toContain('zum Beispiel');
+          break;
+        case 'unknown_page':
+          expect(result.navigationOffer).toBeUndefined();
+          // an unknown page is no question of rights and says so
+          expect(result.response).toContain('Diese Seite kenne ich nicht');
+          expect(result.response).toContain('nichts mit deinen Rechten zu tun');
+          expect(namesDenialReason(result.response, 'ROLLE')).toBe(false);
           break;
         case 'locked':
           expect(result.navigationOffer).toBeUndefined();
+          // GESPERRT: the reason is the order of work
           expect(result.response).toContain('gesperrt');
+          expect(namesDenialReason(result.response, 'GESPERRT')).toBe(true);
           break;
         case 'not_found':
           expect(result.navigationOffer).toBeUndefined();
-          // the same text as for a record that does not exist
+          // the same text as for a record that does not exist (UMFANG)
           expect(result.response).toBe(NOT_FOUND);
+          expect(namesDenialReason(result.response, 'UMFANG')).toBe(true);
           break;
         case 'offer':
           expect(result.navigationOffer?.path).toBe(c.expected.path);
@@ -230,7 +246,13 @@ describe('the navigation cases', () => {
     const ids = set.cases.map(c => c.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(set.cases.length).toBeLessThanOrEqual(12);
-    for (const kind of ['denied', 'locked', 'not_found', 'offer']) {
+    for (const kind of [
+      'denied',
+      'unknown_page',
+      'locked',
+      'not_found',
+      'offer',
+    ]) {
       expect(set.cases.some(c => c.expected.kind === kind)).toBe(true);
     }
     expect(set.cases.some(c => c.level === 'TRAINER')).toBe(true);

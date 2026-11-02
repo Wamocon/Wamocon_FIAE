@@ -21,8 +21,13 @@
  * @module lib/hai/solutionRequest
  */
 
-export const SOLUTION_REFUSAL_TEXT =
-  'Die Lösung gebe ich nicht heraus, aber ich helfe dir gern mit Leitfragen und Hinweisen. 🦈 Woran hängst du gerade?';
+import { DENIAL_LOESUNGSSCHUTZ_TEXT } from './denial';
+
+/**
+ * The fixed reply. It says that there is no solution and why (LOESUNGSSCHUTZ,
+ * src/lib/hai/denial.ts) and offers hints, never a part of the solution.
+ */
+export const SOLUTION_REFUSAL_TEXT = DENIAL_LOESUNGSSCHUTZ_TEXT;
 
 /** Longer texts are not checked (a pasted document is no request). */
 const MAX_CHECKED_CHARS = 2000;

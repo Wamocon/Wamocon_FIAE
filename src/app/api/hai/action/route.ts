@@ -24,6 +24,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeAction, type ActionFailureCode } from '@/lib/hai/actions';
 import { actionsForRole, isWriteAction } from '@/lib/hai/actionPolicy';
+import { DENIAL_CODES } from '@/lib/hai/denial';
 import { requireProPlan } from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
@@ -57,7 +58,10 @@ export async function POST(req: NextRequest) {
 
         if (!(await requireProPlan(userId))) {
             return NextResponse.json(
-                { error: 'HAI.ai is only available with a PRO subscription.' },
+                {
+                    error: 'HAI.ai is only available with a PRO subscription.',
+                    code: DENIAL_CODES.PRO_REQUIRED,
+                },
                 { status: 403 }
             );
         }
@@ -116,6 +120,8 @@ export async function POST(req: NextRequest) {
                 {
                     success: false,
                     error: result.message,
+                    // the coarse reason when the failure hangs on access (denial.ts)
+                    ...(result.denial ? { denial: result.denial } : {}),
                 },
                 { status: result.code ? STATUS_BY_CODE[result.code] : 400 }
             );
@@ -139,7 +145,13 @@ export async function GET(req: NextRequest) {
         if (isErrorResponse(me)) return me;
 
         if (!(await requireProPlan(me.id))) {
-            return NextResponse.json({ error: 'HAI.ai is only available with a PRO subscription.' }, { status: 403 });
+            return NextResponse.json(
+                {
+                    error: 'HAI.ai is only available with a PRO subscription.',
+                    code: DENIAL_CODES.PRO_REQUIRED,
+                },
+                { status: 403 }
+            );
         }
 
         // Trainers only get trainer actions, trainees only trainee actions

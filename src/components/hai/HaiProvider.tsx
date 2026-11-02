@@ -29,6 +29,7 @@ import {
   type NavigationOffer,
 } from '@/lib/hai/navigation/offer';
 import { isAllowedNavigationPath } from '@/lib/hai/navigation/targets';
+import { chatFailureKey } from '@/lib/hai/denial';
 import { toQuizStartScope } from '@/lib/hai/quizMode/session';
 import { useHaiQuizMode } from './HaiQuizMode';
 
@@ -121,13 +122,57 @@ export function toPendingAction(raw: unknown): HaiPendingAction | undefined {
   return { type, parameters: params, description, status: 'pending' };
 }
 
-function actionErrorKey(status: number): string {
+/**
+ * Suffix of the i18n key hai.action.card.error.<key> for a failed action. The
+ * route sends the coarse reason of an access failure (`denial`, denial.ts) and
+ * the stable code of the plan (PRO_REQUIRED) or the release
+ * (AWAITING_ACTIVATION), so the card names the reason instead of "forbidden".
+ * A technical failure (503, 500) is never shown as a missing right.
+ */
+export function actionErrorKey(
+  status: number,
+  body?: { denial?: unknown; code?: unknown } | null
+): string {
+  if (status === 403 && body?.code === 'PRO_REQUIRED') return 'plan';
+  if (status === 403 && body?.code === 'AWAITING_ACTIVATION') {
+    return 'awaitingActivation';
+  }
+  if (status === 403 || status === 404) {
+    if (body?.denial === 'ROLLE') return 'role';
+    if (body?.denial === 'BERUF') return 'occupation';
+    if (body?.denial === 'GESPERRT') return 'locked';
+    if (body?.denial === 'ZUSTAENDIGKEIT') return 'notResponsible';
+  }
   if (status === 400) return 'invalid';
   if (status === 403) return 'forbidden';
   if (status === 404) return 'notFound';
   if (status === 409) return 'conflict';
   if (status === 503) return 'unavailable';
   return 'generic';
+}
+
+/**
+ * The interface text for a failed call of the chat route: the reason in plain
+ * words (plan, release, switch of the organization, too many requests) instead
+ * of a general error. An unreadable body falls back to the status alone.
+ */
+async function chatFailureText(
+  response: Response,
+  t: (key: string) => string
+): Promise<string> {
+  let code: unknown;
+  try {
+    // a copy, so a caller that reads the body too is not affected
+    const source =
+      typeof response.clone === 'function' ? response.clone() : response;
+    const body: unknown = await source.json();
+    if (typeof body === 'object' && body !== null) {
+      code = (body as { code?: unknown }).code;
+    }
+  } catch {
+    code = undefined;
+  }
+  return t(chatFailureKey(response.status, code));
 }
 
 export interface HaiContext {
@@ -648,7 +693,7 @@ export function HaiProvider({
         } else {
           patchPendingAction(messageId, {
             status: 'error',
-            errorKey: actionErrorKey(response.status),
+            errorKey: actionErrorKey(response.status, data),
           });
         }
       } catch {
@@ -1109,16 +1154,18 @@ export function HaiProvider({
 
           await refreshSessions();
         } else {
+          // the reason in plain words (plan, release, switch), not "error"
+          const failureText = await chatFailureText(response, t);
           setMessages(prev =>
             prev.map(m =>
               m.id === assistantId
                 ? {
                     ...m,
-                    content: t('hai.error.somethingWrong'),
+                    content: failureText,
                     versions: m.versions
                       ? m.versions.map((v, idx) =>
                           idx === (m.activeVersionIndex ?? 0)
-                            ? { ...v, content: t('hai.error.somethingWrong') }
+                            ? { ...v, content: failureText }
                             : v
                         )
                       : m.versions,
@@ -1455,17 +1502,18 @@ export function HaiProvider({
 
           await refreshSessions();
         } else {
-          // Error response
+          // Error response: the reason in plain words (plan, release, switch)
+          const failureText = await chatFailureText(response, t);
           setMessages(prev =>
             prev.map(m =>
               m.id === assistantId
                 ? {
                     ...m,
-                    content: t('hai.error.somethingWrong'),
+                    content: failureText,
                     versions: m.versions
                       ? m.versions.map((v, idx) =>
                           idx === (m.activeVersionIndex ?? 0)
-                            ? { ...v, content: t('hai.error.somethingWrong') }
+                            ? { ...v, content: failureText }
                             : v
                         )
                       : m.versions,
