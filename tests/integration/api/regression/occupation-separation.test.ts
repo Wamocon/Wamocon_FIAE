@@ -597,6 +597,10 @@ const COVERED_ELSEWHERE: Record<string, string> = {
   'activity-reports':
     'tests/integration/api/activity-reports/session-access.test.ts',
   'trainer/profile': 'tests/integration/api/trainer/profile.test.ts',
+  // the figures and activities of the profile of a trainee: the own entries, the
+  // occupation of the chosen tab (WMCNL-2964)
+  'trainee/profile-summary':
+    'tests/integration/api/trainee/profile-summary.test.ts',
   'trainer/reviews':
     'tests/integration/api/trainer/scope-trainee-reads.test.ts',
   'trainer/quiz-submissions/[submissionId]':
