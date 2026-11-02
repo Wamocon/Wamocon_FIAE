@@ -180,6 +180,37 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
     expect(mockChat).not.toHaveBeenCalled();
   });
 
+  it('with a chosen occupation the targets still follow all occupations, the chosen one first', async () => {
+    // the access was narrowed to FIAE, the full list of the person is next to it
+    mockAccess.mockResolvedValue({
+      ...traineeAccess(),
+      allowedCatalogIds: [FIAE, KFBM],
+    });
+    await run('bring mich zum Quiz von Enabler 3', ctx());
+    // the chosen occupation is asked first, then all of the person
+    expect(mockEnablers).toHaveBeenNthCalledWith(1, USER, [FIAE]);
+    expect(mockEnablers.mock.calls.length).toBe(1);
+    // a miss in the chosen occupation goes on to all occupations
+    mockEnablers.mockReset();
+    mockEnablers.mockImplementation(async (_user: string, ids: string[]) =>
+      ids.length > 1
+        ? [
+            {
+              id: E1,
+              title: 'Enabler 3: SQL Grundlagen',
+              code: '3',
+              courseId: 'course-1',
+              courseTitle: 'Datenbanken',
+            },
+          ]
+        : []
+    );
+    const result = await run('bring mich zum Quiz von Enabler 3', ctx());
+    expect(mockEnablers).toHaveBeenNthCalledWith(1, USER, [FIAE]);
+    expect(mockEnablers).toHaveBeenNthCalledWith(2, USER, [FIAE, KFBM]);
+    expect(result.navigationOffer?.path).toBe(`/trainee/enablers/${E1}`);
+  });
+
   it('gives a locked enabler title and hint, no offer', async () => {
     mockLock.mockResolvedValue({
       locked: true,

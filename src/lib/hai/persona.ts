@@ -13,13 +13,21 @@
  *    live data, only a refusal.
  *  - Questions about another occupation (named by code, title or the names in
  *    its settings) are refused neutrally.
+ *  - The occupation chosen in the app (header x-catalog) limits the HAI to that
+ *    one occupation: the persona is the single persona of it. A question about
+ *    ANOTHER occupation of the same user gets the answer "you have chosen X,
+ *    switch to the tab Y" (category AUSWAHL, see denial.ts). Without a choice
+ *    the persona speaks about all occupations of the user (merged persona).
  *
  * Pure functions, no database access (see personaAccess.ts for the loader).
  *
  * @module lib/hai/persona
  */
 
-import { resolveCatalogBranding } from '@/lib/catalog/branding';
+import {
+  isBrandingApplied,
+  resolveCatalogBranding,
+} from '@/lib/catalog/branding';
 import {
   isValidHaiText,
   resolveHaiSettings,
@@ -75,6 +83,22 @@ export interface HaiPersona {
   offTopicContextWords: readonly string[];
   /** Lower case names of other occupations (not of this user). */
   foreignMarkers: readonly string[];
+  /**
+   * Other occupations of this user that are NOT chosen in the app (only with a
+   * choice, else empty). A question that names one of them is answered with
+   * "switch the tab", not with content.
+   */
+  unselectedOwn: readonly UnselectedOccupation[];
+  /** Name of the chosen occupation as the tab shows it, null without a choice. */
+  chosenLabel: string | null;
+}
+
+/** An own occupation outside the choice: its name for the text, its markers. */
+export interface UnselectedOccupation {
+  /** Short name as the tab shows it (branding short name or code). */
+  name: string;
+  /** Lower case names that identify it in a message (like foreignMarkers). */
+  markers: readonly string[];
 }
 
 /** A training catalog as the persona needs it (id, code, title, settings). */
@@ -90,6 +114,12 @@ export interface ResolveHaiPersonaInput {
   catalogs: CatalogPersonaSource[] | null | undefined;
   /** Catalogs outside the scope of the user, only used for the markers. */
   otherCatalogs?: CatalogPersonaSource[] | null;
+  /**
+   * Own occupations of the user outside the choice. Only set when the app chose
+   * one occupation (then `catalogs` holds that one): they get their own markers,
+   * so a question about them is answered with "switch the tab".
+   */
+  unselectedCatalogs?: CatalogPersonaSource[] | null;
   role?: HaiPersonaRole | null;
   /** Training phase of the trainee (1 or 2), from the server. */
   phase?: HaiPersonaPhase | null;
@@ -246,6 +276,8 @@ Wie kann ich dir helfen?`,
     codeHelp: true,
     offTopicContextWords: FIAE_OFF_TOPIC_CONTEXT_WORDS,
     foreignMarkers: [],
+    unselectedOwn: [],
+    chosenLabel: null,
   };
 }
 
@@ -286,6 +318,8 @@ export const NEUTRAL_PERSONA: Readonly<HaiPersona> = Object.freeze({
   codeHelp: false,
   offTopicContextWords: [],
   foreignMarkers: [],
+  unselectedOwn: [],
+  chosenLabel: null,
 } satisfies HaiPersona);
 
 /** Answer to a question about the content of another occupation. */
@@ -450,6 +484,8 @@ Wie kann ich dir helfen?`,
       ...(hai?.offTopicExceptions ?? []),
     ]),
     foreignMarkers: [],
+    unselectedOwn: [],
+    chosenLabel: null,
   };
 }
 
@@ -497,6 +533,49 @@ function foreignMarkersFor(
   );
 }
 
+/**
+ * Name of an occupation as the tab of the app shows it: the short name of the
+ * branding (not for FIAE, whose branding is not applied) or the code. Only
+ * letters, digits, space, hyphen and underscore, so the name is safe in a text.
+ */
+export function tabNameOf(catalog: CatalogPersonaSource): string {
+  const raw =
+    catalog.settings !== null &&
+    typeof catalog.settings === 'object' &&
+    !Array.isArray(catalog.settings)
+      ? (catalog.settings as Record<string, unknown>)
+      : {};
+  const shortName = isBrandingApplied(catalog.code)
+    ? resolveCatalogBranding(raw.branding).shortName
+    : null;
+  const name = (shortName ?? catalog.code)
+    .replace(/[^\p{L}\p{N} _-]/gu, '')
+    .trim();
+  return name || 'dem anderen Beruf';
+}
+
+/**
+ * The own occupations outside the choice with their markers. A marker that the
+ * chosen occupations share (or contain) is dropped, like for foreign
+ * occupations, so a word of the chosen occupation never triggers "switch".
+ */
+function unselectedOwnFor(
+  chosen: CatalogPersonaSource[],
+  unselected: CatalogPersonaSource[]
+): UnselectedOccupation[] {
+  const chosenMarkers = chosen.flatMap(markersOf);
+  const chosenIds = new Set(chosen.map(c => c.id));
+  return unselected
+    .filter(c => !chosenIds.has(c.id))
+    .map(c => ({
+      name: tabNameOf(c),
+      markers: markersOf(c).filter(
+        m => !chosenMarkers.some(o => o === m || o.includes(m) || m.includes(o))
+      ),
+    }))
+    .filter(entry => entry.markers.length > 0);
+}
+
 /** Lower case, compatibility forms folded, no marks or invisible characters. */
 function normalizeForMatch(value: string): string {
   return value
@@ -517,17 +596,37 @@ export function isForeignOccupationQuestion(
   message: string,
   persona: Pick<HaiPersona, 'foreignMarkers'>
 ): boolean {
-  if (persona.foreignMarkers.length === 0) return false;
+  return namesMarker(message, persona.foreignMarkers);
+}
+
+/** Whether the message names one of the markers (start of a word, spelled out too). */
+function namesMarker(message: string, markers: readonly string[]): boolean {
+  if (markers.length === 0) return false;
   const lower = normalizeForMatch(message);
   // Also the text with spelled-out words put together ("K f B M" is "kfbm")
   const spelled = collapseSpelledLetters(lower);
-  return persona.foreignMarkers.some(marker => {
+  return markers.some(marker => {
     const pattern = new RegExp(
       `(^|[^\\p{L}\\p{N}])${escapeRegExp(marker)}`,
       'u'
     );
     return pattern.test(lower) || pattern.test(spelled);
   });
+}
+
+/**
+ * The own occupation outside the choice that the message names, or null. The
+ * same marker rules as for foreign occupations (start of a word, spellings,
+ * spelled-out letters). Only for a persona with a choice.
+ */
+export function unselectedOccupationNamed(
+  message: string,
+  persona: Pick<HaiPersona, 'unselectedOwn'>
+): UnselectedOccupation | null {
+  return (
+    persona.unselectedOwn.find(entry => namesMarker(message, entry.markers)) ??
+    null
+  );
 }
 
 /**
@@ -640,9 +739,18 @@ export function resolveHaiPersona(input: ResolveHaiPersonaInput): HaiPersona {
         ])
       : persona;
 
+  // With a choice (the caller passes the other own occupations): they are not
+  // foreign (the user has them), they get the answer "switch the tab"
+  const unselected = input.unselectedCatalogs ?? [];
+  const unselectedIds = new Set(unselected.map(c => c.id));
   return {
     ...base,
     offTopicContextWords: contextWords,
-    foreignMarkers: foreignMarkersFor(catalogs, input.otherCatalogs ?? []),
+    foreignMarkers: foreignMarkersFor(
+      [...catalogs, ...unselected],
+      (input.otherCatalogs ?? []).filter(c => !unselectedIds.has(c.id))
+    ),
+    unselectedOwn: unselectedOwnFor(catalogs, unselected),
+    chosenLabel: unselected.length > 0 ? tabNameOf(primary) : null,
   };
 }

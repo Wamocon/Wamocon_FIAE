@@ -70,6 +70,12 @@ export interface QuizSessionState {
   reason: QuizEmptyReason | null;
   /** Suffix of the i18n key hai.quiz.error.<key>. */
   errorKey: string | null;
+  /**
+   * Name of the occupation the quiz is about (as the tab shows it), from the
+   * server: the quiz follows the occupation chosen in the app, so the card says
+   * which one it is. Null while the server has not said (or could not).
+   */
+  occupation: string | null;
 }
 
 export type QuizAction =
@@ -79,8 +85,14 @@ export type QuizAction =
       question: QuizQuestionPublic;
       total: number;
       remaining: number;
+      occupation?: string | null;
     }
-  | { type: 'empty'; reason: QuizEmptyReason; total?: number }
+  | {
+      type: 'empty';
+      reason: QuizEmptyReason;
+      total?: number;
+      occupation?: string | null;
+    }
   | { type: 'checking' }
   | { type: 'answered'; feedback: QuizFeedback }
   | { type: 'loading' }
@@ -103,6 +115,7 @@ export function initialQuizState(
     remaining: null,
     reason: null,
     errorKey: null,
+    occupation: null,
   };
 }
 
@@ -128,6 +141,7 @@ export function quizReducer(
         remaining: action.remaining,
         reason: null,
         errorKey: null,
+        occupation: action.occupation ?? state.occupation,
       };
     case 'checking':
       return state.phase === 'question'
@@ -162,13 +176,14 @@ export function quizReducer(
         reason: action.reason,
         total: action.total ?? state.total,
         remaining: 0,
+        occupation: action.occupation ?? state.occupation,
       };
     case 'finish':
       return { ...state, phase: 'summary', question: null, feedback: null };
     case 'restart':
       // Everything is through, or the person wants another round: the history
-      // starts again, the scope stays
-      return { ...initialQuizState(state.scope) };
+      // starts again, the scope and the occupation stay
+      return { ...initialQuizState(state.scope), occupation: state.occupation };
     case 'failed':
       return { ...state, phase: 'error', errorKey: action.errorKey };
     case 'answerFailed':

@@ -10,6 +10,9 @@
  *  - exclude: the questions already asked in this session, so none comes back
  *    until all are through
  *
+ * Every answer carries `occupation`: the name of the occupation the quiz is
+ * about (the one chosen in the app, header x-catalog, see access.ts), or null.
+ *
  * Answer: { status: 'ok', question, total, remaining } with the question as
  * the person may see it BEFORE the attempt (text and options in a random
  * order, no is_correct, no explanation), or { status: 'empty', reason } or
@@ -32,6 +35,7 @@ import {
   toPublicQuestion,
 } from '@/lib/hai/quizMode/logic';
 import {
+  loadOccupationLabel,
   loadQuestionSources,
   loadQuizCandidates,
 } from '@/lib/hai/quizMode/access';
@@ -74,6 +78,10 @@ export async function POST(req: NextRequest) {
     const candidates = await loadQuizCandidates(me, req, enablerId);
     if (candidates instanceof Response) return candidates;
 
+    // The quiz follows the occupation chosen in the app (x-catalog, through the
+    // catalog scope above). The card says which one it is.
+    const occupation = await loadOccupationLabel(me, req);
+
     const { remaining, total, asked } = selectCandidates(candidates, {
       topic,
       exclude,
@@ -85,6 +93,7 @@ export async function POST(req: NextRequest) {
           question: null,
           reason:
             candidates.length > 0 && topic ? 'no_topic_match' : 'no_content',
+          occupation,
         },
         { headers: NO_STORE }
       );
@@ -106,6 +115,7 @@ export async function POST(req: NextRequest) {
             question: toPublicQuestion(source),
             total,
             remaining: remaining.length,
+            occupation,
           },
           { headers: NO_STORE }
         );
@@ -114,8 +124,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       asked > 0
-        ? { status: 'exhausted', question: null, total }
-        : { status: 'empty', question: null, reason: 'no_content' },
+        ? { status: 'exhausted', question: null, total, occupation }
+        : { status: 'empty', question: null, reason: 'no_content', occupation },
       { headers: NO_STORE }
     );
   } catch (e) {

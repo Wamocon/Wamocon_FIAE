@@ -39,9 +39,14 @@ import type { RetrievalAccess } from './retrievalAccess';
 import {
   FIAE_PERSONA,
   isForeignOccupationQuestion,
+  unselectedOccupationNamed,
   type HaiPersona,
 } from './persona';
-import { DENIAL_BERUF_TEXT, DENIAL_NEUTRAL_TEXT } from './denial';
+import {
+  DENIAL_BERUF_TEXT,
+  DENIAL_NEUTRAL_TEXT,
+  denialSelectionText,
+} from './denial';
 import { detectAccessReasons } from './accessReasons';
 import { loadHaiPersona } from './personaAccess';
 import { solutionRequestRefusal } from './solutionRequest';
@@ -471,7 +476,10 @@ export async function retrieveContext(
   // The pipelines resolve the access once per turn and pass it on
   const access =
     resolvedAccess === undefined
-      ? await resolveRetrievalAccess(context.userId)
+      ? await resolveRetrievalAccess(
+          context.userId,
+          context.preferredCatalogCode
+        )
       : resolvedAccess;
   if (!access) {
     console.warn(
@@ -586,7 +594,13 @@ export interface TurnPersona {
 export async function resolveTurnPersona(
   context: PipelineContext
 ): Promise<TurnPersona> {
-  const access = await resolveRetrievalAccess(context.userId);
+  // The occupation chosen in the app limits the access (search and page index)
+  // and the persona to that one occupation, a code outside the occupations of
+  // the user is ignored (retrievalAccess.ts)
+  const access = await resolveRetrievalAccess(
+    context.userId,
+    context.preferredCatalogCode
+  );
   const persona = await loadHaiPersona(
     access,
     context.trainingScope,
@@ -598,17 +612,24 @@ export async function resolveTurnPersona(
 /**
  * Reply that ends the turn before retrieval and before any model call, or
  * null: a refusal without a scope (reason FREIGABE), a refusal for a question
- * that names another occupation (reason BERUF). Both name the reason in plain
- * words and offer what is possible instead, nothing of the other occupation is
- * revealed (src/lib/hai/denial.ts).
+ * that names another occupation (reason BERUF), the hint to switch the tab for
+ * a question about another occupation that the user has too but did not choose
+ * (reason AUSWAHL). All of them name the reason in plain words and offer what
+ * is possible instead, nothing of another occupation is revealed, the AUSWAHL
+ * text names only the two occupations of the user (src/lib/hai/denial.ts).
  */
 export function personaRefusal(
   userMessage: string,
   persona: HaiPersona
 ): string | null {
   if (persona.neutral) return DENIAL_NEUTRAL_TEXT;
+  // Another occupation that the user does not have comes first
   if (isForeignOccupationQuestion(userMessage, persona)) {
     return DENIAL_BERUF_TEXT;
+  }
+  const unselected = unselectedOccupationNamed(userMessage, persona);
+  if (unselected && persona.chosenLabel) {
+    return denialSelectionText(persona.chosenLabel, unselected.name);
   }
   return null;
 }

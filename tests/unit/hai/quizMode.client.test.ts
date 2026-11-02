@@ -3,7 +3,11 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { authFetch } from '@/lib/authFetch';
-import { errorKeyFor, submitQuizAnswer } from '@/lib/hai/quizMode/client';
+import {
+  errorKeyFor,
+  fetchNextQuestion,
+  submitQuizAnswer,
+} from '@/lib/hai/quizMode/client';
 
 jest.mock('@/lib/authFetch', () => ({
   __esModule: true,
@@ -46,6 +50,64 @@ describe('errorKeyFor', () => {
   it('never shows a failure of the server as a missing right', () => {
     for (const status of [500, 502, 503]) {
       expect(errorKeyFor(status, 'PRO_REQUIRED')).toBe('generic');
+    }
+  });
+});
+
+describe('fetchNextQuestion: the occupation of the quiz', () => {
+  beforeEach(() => authFetchMock.mockReset());
+  const input = { enablerId: null, topic: null, exclude: [] };
+  const question = {
+    id: 'q1',
+    text: 'Frage?',
+    multiple: false,
+    options: [
+      { id: 'o1', text: 'A' },
+      { id: 'o2', text: 'B' },
+    ],
+    enablerId: 'e1',
+    enablerTitle: 'SQL',
+  };
+
+  it('hands the name the route sends with a question, an empty result and the end', async () => {
+    authFetchMock.mockResolvedValueOnce(
+      json(200, {
+        status: 'ok',
+        question,
+        total: 2,
+        remaining: 2,
+        occupation: 'FIAE',
+      })
+    );
+    const ok = await fetchNextQuestion(input);
+    expect(ok.kind === 'question' && ok.occupation).toBe('FIAE');
+
+    authFetchMock.mockResolvedValueOnce(
+      json(200, { status: 'empty', reason: 'no_content', occupation: 'KfBM' })
+    );
+    const empty = await fetchNextQuestion(input);
+    expect(empty.kind === 'empty' && empty.occupation).toBe('KfBM');
+
+    authFetchMock.mockResolvedValueOnce(
+      json(200, { status: 'exhausted', total: 2, occupation: 'FIAE' })
+    );
+    const done = await fetchNextQuestion(input);
+    expect(done.kind === 'empty' && done.occupation).toBe('FIAE');
+  });
+
+  it('takes no name that is not a text, and none when the route has none', async () => {
+    for (const occupation of [null, undefined, 3, '  ', { a: 1 }]) {
+      authFetchMock.mockResolvedValueOnce(
+        json(200, {
+          status: 'ok',
+          question,
+          total: 1,
+          remaining: 1,
+          occupation,
+        })
+      );
+      const result = await fetchNextQuestion(input);
+      expect(result.kind === 'question' && result.occupation).toBeNull();
     }
   });
 });

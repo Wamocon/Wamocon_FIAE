@@ -464,3 +464,112 @@ describe('fail closed', () => {
     expect(outcome.offer).toBeUndefined();
   });
 });
+
+// ============================================================================
+// The chosen occupation (the tab of the app): the targets follow ALL occupations
+// of the person, the chosen one is looked at first. Nothing the person may see
+// is hidden by it.
+// ============================================================================
+
+describe('the chosen occupation comes first, the others stay reachable', () => {
+  const KFBM = '00000000-0000-4000-8000-000000000002';
+  const BOTH = [FIAE, KFBM];
+  const E3 = '20000000-0000-4000-8000-000000000003';
+
+  /** Each occupation has an enabler "3", with its own id and title. */
+  const enablersByCatalog = (ids: readonly string[]) => [
+    ...(ids.includes(FIAE) ? [candidate(E1, 'SQL Grundlagen', '3')] : []),
+    ...(ids.includes(KFBM) ? [candidate(E3, 'Rechnungsbearbeitung', '3')] : []),
+  ];
+  const entryOf = (enablerId: string, title: string, completed = false) => ({
+    enablerId,
+    title,
+    courseTitle: 'Kurs',
+    stage: 1,
+    chapter: 1,
+    orderIndex: 1,
+    completed,
+    locked: false,
+  });
+  const plan = { currentPhase: 1, allowedStages: [1, 3] };
+
+  beforeEach(() => {
+    mockEnablers.mockImplementation(async (_user: string, ids: string[]) =>
+      enablersByCatalog(ids)
+    );
+  });
+
+  it('"Enabler 3" means the enabler of the chosen occupation, not "several"', async () => {
+    const fiae = await run(
+      'öffne Enabler 3',
+      scope({ catalogIds: BOTH, preferredCatalogIds: [FIAE] })
+    );
+    expect(fiae.offer?.path).toBe(`/trainee/enablers/${E1}`);
+    const kfbm = await run(
+      'öffne Enabler 3',
+      scope({ catalogIds: BOTH, preferredCatalogIds: [KFBM] })
+    );
+    expect(kfbm.offer?.path).toBe(`/trainee/enablers/${E3}`);
+    // the chosen occupation was asked first
+    expect(mockEnablers.mock.calls[0][1]).toEqual([FIAE]);
+  });
+
+  it('without a choice a number that exists in both occupations asks for the exact name, as before', async () => {
+    const outcome = await run('öffne Enabler 3', scope({ catalogIds: BOTH }));
+    expect(outcome.kind).toBe('ambiguous');
+    expect(mockEnablers).toHaveBeenCalledTimes(1);
+    expect(mockEnablers.mock.calls[0][1]).toEqual(BOTH);
+  });
+
+  it('an enabler that only the other occupation has is still found (nothing is hidden)', async () => {
+    mockEnablers.mockImplementation(async (_user: string, ids: string[]) =>
+      ids.includes(KFBM) && ids.length > 1
+        ? [candidate(E3, 'Rechnungsbearbeitung', '7')]
+        : []
+    );
+    const outcome = await run(
+      'öffne Enabler 7',
+      scope({ catalogIds: BOTH, preferredCatalogIds: [FIAE] })
+    );
+    expect(outcome.kind).toBe('offer');
+    expect(outcome.offer?.path).toBe(`/trainee/enablers/${E3}`);
+  });
+
+  it('"Weiter lernen" takes the open step of the chosen occupation first', async () => {
+    mockNext.mockImplementation(async (_user: string, ids: string[]) =>
+      ids.length === 1
+        ? [entryOf(E1, 'SQL Grundlagen')]
+        : [entryOf(E3, 'Rechnungsbearbeitung'), entryOf(E1, 'SQL Grundlagen')]
+    );
+    const outcome = await run(
+      'wo geht es weiter',
+      scope({ catalogIds: BOTH, preferredCatalogIds: [FIAE], plan })
+    );
+    expect(outcome.offer?.path).toBe(`/trainee/enablers/${E1}`);
+  });
+
+  it('"Weiter lernen" falls back to all occupations when the chosen one has nothing open', async () => {
+    mockNext.mockImplementation(async (_user: string, ids: string[]) =>
+      ids.length === 1
+        ? [entryOf(E1, 'SQL Grundlagen', true)]
+        : [
+            entryOf(E1, 'SQL Grundlagen', true),
+            entryOf(E3, 'Rechnungsbearbeitung'),
+          ]
+    );
+    const outcome = await run(
+      'wo geht es weiter',
+      scope({ catalogIds: BOTH, preferredCatalogIds: [FIAE], plan })
+    );
+    expect(outcome.offer?.path).toBe(`/trainee/enablers/${E3}`);
+  });
+
+  it('a choice that is all the occupations of the person changes nothing', async () => {
+    mockNext.mockResolvedValue([entryOf(E1, 'SQL Grundlagen')]);
+    await run(
+      'wo geht es weiter',
+      scope({ catalogIds: [FIAE], preferredCatalogIds: [FIAE], plan })
+    );
+    expect(mockNext).toHaveBeenCalledTimes(1);
+  });
+});
