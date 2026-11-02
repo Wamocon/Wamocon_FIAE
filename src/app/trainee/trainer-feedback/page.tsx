@@ -132,7 +132,9 @@ export default function TraineeFeedbackPage() {
     <span
       className={`rounded-full border px-2 py-1 text-xs ${s === 'PENDING' ? 'border-yellow-500 text-yellow-600' : s === 'APPROVED' ? 'border-green-500 text-green-600' : 'border-red-500 text-red-600'}`}
     >
-      {s}
+      {/* the status in the language of the page, not the raw value of the
+          database (PENDING, APPROVED, REJECTED) */}
+      {t(`feedback.status.${s.toLowerCase()}`)}
     </span>
   );
 
