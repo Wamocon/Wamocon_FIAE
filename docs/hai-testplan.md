@@ -64,6 +64,7 @@ Hinweis: Die Szenario-Dokumente enthalten laut Beschluss vom 29.10.2026 auch Lö
 | D15 | Azubi | "Wie ist mein Fortschritt?", "Habe ich Rückmeldungen?", "Habe ich neue Benachrichtigungen?" | wie bisher je Absicht (Fortschritt, Abgaben, Benachrichtigungen) | |
 | D16 | Azubi, gesprochen | "Was steht für mich an?" | höchstens drei Punkte, kurz und ohne Markup, eine Frage am Ende, keine Quellenangaben | |
 | D17 | Trainer | "Was muss ich tun?" | offene Bewertungen und Benachrichtigungen, kein Azubi-Fortschritt | |
+| D18 | Trainer mit Azubis in beiden Berufen | HAI-Hinweise öffnen, mit Reiter KfBM, danach mit Reiter FIAE, danach ohne Auswahl | Der Hinweis "Azubis brauchen Unterstützung" nennt im Reiter nur Azubis mit niedrigem Fortschritt (unter 30 Prozent der aktiven Enabler) in den Kursen dieses Berufs, die Namen stehen allein. Ohne Auswahl steht hinter dem Namen der Beruf, zum Beispiel "(KFBM)". Der Fortschritt des anderen Berufs ändert die Liste nicht | |
 
 ## E. Sprachassistent
 
@@ -91,6 +92,10 @@ Browser: Chrome oder Edge am Rechner, Chrome auf Android, Safari am iPhone. Mikr
 | E18 | Anbieterwechsel im laufenden Betrieb: als Administrator auf Sokrates als Hauptanbieter umstellen, Azubi-Gespräch beenden und neu starten | Die nächste Sitzung nutzt Sokrates, der Azubi wird erneut um Einwilligung gebeten (neuer Empfänger des Tons) | |
 | E19 | Mikrofon verbieten bei Soniox | Meldung "Mikrofon nicht freigegeben", kein Rückfall auf einen anderen Anbieter (das Mikrofon ist kein Ausfall des Dienstes) | |
 | E20 | Schalter der Organisation ausschalten, dann `GET /api/hai/voice/config` oder `POST /api/hai/voice/soniox-token` aufrufen (Entwicklerwerkzeuge) | Antwort 403 mit Code `VOICE_DISABLED`, es wird kein Soniox-Schlüssel ausgegeben | P |
+| E21 | Hauptanbieter Sokrates (oder Soniox, Rückfall Sokrates). Die Erkennung von Sokrates stören: im Browser (Entwicklerwerkzeuge, Netzwerk) den Aufruf `haus/transcribe` blockieren, Gespräch starten und einmal sprechen | Das Zuhören weicht auf den Browser aus, das Sprechen bleibt bei Sokrates (Antworten kommen weiter über Sokrates, Einstellung im Chat zeigt es). Kein Fehlerdialog | P |
+| E22 | Umgekehrt: die Sprachausgabe stören, den Aufruf `haus/speech` blockieren | Die HAI hört weiter über Sokrates, nur das Vorlesen übernimmt der Browser | P |
+| E23 | Nach E21 als Administrator Verwaltung, HAI Sprachassistent öffnen, danach eine Minute warten und die Seite neu laden | Die Seite zeigt "Zuhören gestört" mit Grund (nie eine Adresse oder einen Schlüssel), das Sprechen von Sokrates ist nicht als gestört gemeldet. Nach etwa einer Minute ist die Störung weg | |
+| E24 | `GET /api/hai/voice/config` in den Entwicklerwerkzeugen ansehen, während E21 gilt | Antwort enthält `chain` wie bisher und zusätzlich `chains` mit je einer Kette für Zuhören (`stt`) und Sprechen (`tts`), ohne Adressen, Schlüssel oder Modellnamen | |
 
 ## F. Robustheit
 
