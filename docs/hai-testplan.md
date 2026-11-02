@@ -57,7 +57,7 @@ Hinweis: Die Szenario-Dokumente enthalten laut Beschluss vom 29.10.2026 auch Lö
 
 ## E. Sprachassistent
 
-Browser: Chrome oder Edge am Rechner, Chrome auf Android, Safari am iPhone. Mikrofon im Browser erlauben. Firefox hat keine Spracherkennung, dort erscheint kein Mikrofonknopf (richtig so).
+Browser: Chrome oder Edge am Rechner, Chrome auf Android, Safari am iPhone. Mikrofon im Browser erlauben. Mit dem Anbieter Browser hat Firefox keine Spracherkennung, dort erscheint kein Mikrofonknopf (richtig so). Mit Soniox oder Sokrates läuft der Sprachassistent auch in Firefox. Voraussetzung für E14 bis E17 sind SONIOX_API_KEY und SONIOX_REGION=eu in Vercel (Preview), für Sokrates zusätzlich HAI_STT_HAUS_MODEL, HAI_TTS_HAUS_MODEL und HAI_TTS_HAUS_VOICE, und die Migration `20261102000100_hai_settings.sql` auf der Preview (ohne sie gelten die Standardwerte, und das Speichern der Einstellung scheitert mit einer klaren Meldung).
 
 | Nr | Aktion | Erwartung | P |
 |---|---|---|---|
@@ -73,6 +73,14 @@ Browser: Chrome oder Edge am Rechner, Chrome auf Android, Safari am iPhone. Mikr
 | E10 | Einwilligung widerrufen (Einstellungen) | Knopf fragt wieder nach Einwilligung | |
 | E11 | Als Administrator unter Verwaltung, Organisationen: Sprachassistent ausschalten | Mikrofonknopf verschwindet nach Neuladen, gesprochene Anfrage wird mit 403 abgewiesen | P |
 | E12 | Tonqualität und Verständlichkeit der Stimme bewerten | Freitext: verständlich, Tempo, Aussprache der Fachbegriffe | |
+| E13 | Als Administrator der Plattform Verwaltung, HAI Sprachassistent öffnen | Seite zeigt Hauptanbieter, Rückfallebene, den Zustand von Soniox, Sokrates und Browser mit Grund und den Datenschutzhinweis je Anbieter. Ein Azubi sieht den Menüeintrag nicht und bekommt auf der Seite "Zugriff verweigert" | P |
+| E14 | Hauptanbieter Soniox, Rückfallebene Browser einstellen und speichern, als Azubi neu laden, Mikrofonknopf antippen | Einwilligung nennt Soniox mit Region Europäische Union und den Browser als Ersatz. Nach dem Bestätigen erkennt und spricht Soniox (Einstellung im Chat zeigt "über Soniox") | P |
+| E15 | Wie E4 mit Soniox | Zwischenergebnisse erscheinen beim Sprechen, das Ende der Frage wird von selbst erkannt, die Antwort wird Satz für Satz ohne hörbare Lücke vorgelesen, danach hört die HAI wieder zu | P |
+| E16 | Rückfall bei Soniox-Ausfall: in Vercel (Preview) den Schlüssel SONIOX_API_KEY kurz auf einen falschen Wert setzen und neu ausrollen, oder im Browser (Entwicklerwerkzeuge, Netzwerk) den Aufruf `soniox-token` blockieren. Gespräch starten | Die HAI hört und spricht trotzdem, über die Rückfallebene. Kein Fehlerdialog. In den Logs steht der Grund (`Soniox key refused`), nie ein Schlüssel | P |
+| E17 | Wie E16, Rückfallebene Sokrates (HAI_STT_HAUS_MODEL, HAI_TTS_HAUS_MODEL und HAI_TTS_HAUS_VOICE gesetzt) | Sokrates erkennt und spricht, der Ton bleibt im Haus. Fehlt eine der drei Variablen, zeigt die Admin-Seite "Nicht eingerichtet" mit dem Grund, und der Browser übernimmt | |
+| E18 | Anbieterwechsel im laufenden Betrieb: als Administrator auf Sokrates als Hauptanbieter umstellen, Azubi-Gespräch beenden und neu starten | Die nächste Sitzung nutzt Sokrates, der Azubi wird erneut um Einwilligung gebeten (neuer Empfänger des Tons) | |
+| E19 | Mikrofon verbieten bei Soniox | Meldung "Mikrofon nicht freigegeben", kein Rückfall auf einen anderen Anbieter (das Mikrofon ist kein Ausfall des Dienstes) | |
+| E20 | Schalter der Organisation ausschalten, dann `GET /api/hai/voice/config` oder `POST /api/hai/voice/soniox-token` aufrufen (Entwicklerwerkzeuge) | Antwort 403 mit Code `VOICE_DISABLED`, es wird kein Soniox-Schlüssel ausgegeben | P |
 
 ## F. Robustheit
 
@@ -125,4 +133,5 @@ Bekannte Grenzen der Gruppe H: Die Karte steht nur im Chat des Moments, nach dem
 - Zwei Fragen des Prüfsatzes lehnt das Modell zu Unrecht ab: "Welcher Server hostet eine Netflix Plattform?" und "Welches Hotel darf ich für die Dienstreise buchen?". Wer ähnliche Fälle findet, bitte als Fehler zur späteren Behebung melden.
 - Gesprochene Antworten sind absichtlich kurz (höchstens vier Sätze). Für Details gibt es den getippten Chat.
 - Der Sprachassistent in Production bleibt je Organisation aus, bis die Datenschutzfrage geklärt ist.
-- Die Spracherkennung läuft im Browser. Ob der Ton das Gerät verlässt, zeigt die Einstellung "Spracherkennung auf diesem Gerät" oder "über den Dienst Ihres Browsers".
+- Wohin der Ton geht, zeigt die Einstellung im Chat: "über Soniox" (externer Dienst, Region EU), "über den eigenen Server (Sokrates)" oder beim Anbieter Browser "Spracherkennung auf diesem Gerät" beziehungsweise "über den Dienst Ihres Browsers".
+- Soniox und der Rückfall wurden ohne Live-Verbindung gebaut und getestet (nachgebildete Websocket-Verbindungen). Die ersten Gespräche mit echtem Schlüssel in der Preview sind der erste echte Test, Abweichungen bitte mit Browser und Uhrzeit melden.

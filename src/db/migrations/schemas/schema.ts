@@ -2113,6 +2113,33 @@ export const authAttempts = pgTable(
 
 export type AuthAttempt = typeof authAttempts.$inferSelect;
 
+// Platform settings of the HAI (key and JSON value), for example the speech
+// provider of the voice assistant (src/lib/hai/voice/settings.ts). Server only:
+// RLS on, no policy, no grant for anon and authenticated. Created by
+// supabase/migrations/20261102000100_hai_settings.sql.
+export const haiSettings = pgTable(
+  'hai_settings',
+  {
+    key: text('key').notNull(),
+    value: jsonb('value').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    // the admin who saved last: a plain id, no foreign key (an audit note, it
+    // must not hold up the deletion or the merge of a profile)
+    updatedBy: uuid('updated_by'),
+  },
+  table => ({
+    pk: primaryKey({ name: 'hai_settings_pkey', columns: [table.key] }),
+    keyLength: check(
+      'hai_settings_key_length',
+      sql`char_length(${table.key}) <= 64`
+    ),
+  })
+);
+
+export type HaiSetting = typeof haiSettings.$inferSelect;
+
 // --- CONTENT UPLOAD (package U1 of docs/ki-upload-konzept.md) ---
 // Process data of the AI assisted content upload: runs, announced files (also
 // the queue), proposals, decisions, the log of every transmission to Sokrates and
