@@ -4,9 +4,15 @@ Stand: 29.10.2026. Dieser Stand gilt für die Preview. In Production ist die Fun
 
 ## Was der Azubi kann
 
-Zu einer Use-Case-Abgabe kann ein Azubi eine Datei anhängen (optional, eine Datei je Abgabe). Das Feld steht auf der Seite des Use Cases unter den Links. Der Azubi kann die Datei öffnen, ersetzen und entfernen, solange die Abgabe noch nicht eingereicht ist oder vom Trainer zurückgewiesen wurde. Eingereichte und bewertete Abgaben sind gesperrt.
+Zu einer Use-Case-Abgabe kann ein Azubi eine Datei anhängen (optional, eine Datei je Abgabe). Das Feld steht auf der Seite des Use Cases unter den Links. Der Azubi kann die Datei ansehen, herunterladen, ersetzen und entfernen, solange die Abgabe noch nicht eingereicht ist oder vom Trainer zurückgewiesen wurde. Eingereichte und bewertete Abgaben sind gesperrt.
 
-Der zuständige Trainer (und jeder Administrator der Organisation, die Trainerrechte haben) sieht bei der Prüfung der Abgabe den Knopf "Anhang öffnen". Der Knopf holt einen Link, der zwei Minuten gilt und den Download erzwingt. Bevor die Seite zum Link wechselt, fragt sie ein Byte davon ab (`src/lib/submission-file/readLink.ts`). Verweigert der Speicher den Link (Status 503), zeigt der Knopf "Der Anhang konnte nicht geladen werden." statt still nichts zu tun (WMCNL-2998). Eine Vorschau der Datei (WMCNL-2927) gibt es noch nicht.
+Der zuständige Trainer (und jeder Administrator der Organisation, die Trainerrechte haben) sieht bei der Prüfung der Abgabe zwei Knöpfe, "Anhang ansehen" und "Anhang herunterladen". Der Download holt einen Link, der zwei Minuten gilt und den Download erzwingt. Bevor die Seite zum Link wechselt, fragt sie ein Byte davon ab (`src/lib/submission-file/readLink.ts`). Verweigert der Speicher den Link (Status 503), zeigt der Knopf "Der Anhang konnte nicht geladen werden." statt still nichts zu tun (WMCNL-2998).
+
+### Vorschau (WMCNL-2927)
+
+Die Datei lässt sich in der Plattform ansehen, für den Azubi nach dem Anhängen und für den Trainer bei der Prüfung. Ein PDF öffnet im Viewer der App (pdf.js, ohne Download und ohne Link auf die Rohdatei im Viewer), ein PNG oder JPG erscheint als Bild. Word- und Excel-Dateien haben keine Vorschau, dort bleibt nur das Herunterladen, und die Seite sagt das. Das Herunterladen bleibt für den Trainer und für die eigene Abgabe des Azubis erlaubt, es ist die eigene Datei.
+
+Die Bytes kommen von zwei Routen der App, mit der Sitzung abgefragt: `GET /api/trainee/use-cases/[useCaseId]/submission-file/content` (Azubi, nur die eigene Datei) und `GET /api/trainer/reviews/use-cases/[submissionId]/file/content` (Trainer, gleiche Prüfung wie der Download). Beide liefern nur pdf, png und jpg (415 für den Rest), der Inhaltstyp kommt aus der geprüften Endung, dazu `inline`, `no-store`, `nosniff` und eine Richtlinie, die nichts ausführen lässt. Der Trainer kann mit `?link=0` Name, Größe und Datum ohne Download-Link abfragen, damit die Seite zuerst die Art der Datei kennt.
 
 ## Regeln
 
