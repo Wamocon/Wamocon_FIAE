@@ -641,22 +641,32 @@ describe('Sokrates calls', () => {
 
 describe('state of the providers and the chain', () => {
   const soniox = { SONIOX_API_KEY: SECRET };
+  const both = { ...soniox, ...HAUS_ENV };
+  const READY = { status: 'ready', reason: null } as const;
 
   it('Soniox is not set up without a key, the browser is always ready', () => {
     const s = states({});
+    const off = { status: 'not_configured', reason: 'NO_KEY' } as const;
     expect(s.soniox).toEqual({
       id: 'soniox',
       status: 'not_configured',
       reason: 'NO_KEY',
+      functions: { stt: off, tts: off },
     });
     expect(s.haus.status).toBe('not_configured');
-    expect(s.browser).toEqual({ id: 'browser', status: 'ready', reason: null });
+    expect(s.browser).toEqual({
+      id: 'browser',
+      status: 'ready',
+      reason: null,
+      functions: { stt: READY, tts: READY },
+    });
   });
 
   it('starts with Soniox when it is set up, then the browser', () => {
     expect(resolveChain(DEFAULT_VOICE_SETTINGS, states(soniox))).toEqual({
       provider: 'soniox',
       chain: ['soniox', 'browser'],
+      chains: { stt: ['soniox', 'browser'], tts: ['soniox', 'browser'] },
     });
   });
 
@@ -664,34 +674,44 @@ describe('state of the providers and the chain', () => {
     expect(resolveChain(DEFAULT_VOICE_SETTINGS, states({}))).toEqual({
       provider: 'browser',
       chain: ['browser'],
+      chains: { stt: ['browser'], tts: ['browser'] },
     });
   });
 
-  it('Soniox disturbed, Sokrates not set up: the browser takes over', () => {
-    reportProviderFailure('soniox', 'UPSTREAM_UNAVAILABLE', 500);
+  it('Soniox disturbed in both functions, Sokrates not set up: the browser takes over', () => {
+    reportProviderFailure('soniox', 'stt', 'UPSTREAM_UNAVAILABLE', 500);
+    reportProviderFailure('soniox', 'tts', 'UPSTREAM_UNAVAILABLE', 500);
     const s = providerStates(soniox, 1_000);
+    const out = {
+      status: 'disturbed',
+      reason: 'UPSTREAM_UNAVAILABLE',
+    } as const;
     expect(s.soniox).toEqual({
       id: 'soniox',
       status: 'disturbed',
       reason: 'UPSTREAM_UNAVAILABLE',
+      functions: { stt: out, tts: out },
     });
     expect(resolveChain({ primary: 'soniox', fallback: 'haus' }, s)).toEqual({
       provider: 'browser',
       chain: ['browser'],
+      chains: { stt: ['browser'], tts: ['browser'] },
     });
   });
 
-  it('Soniox disturbed, Sokrates ready: Sokrates, then the browser', () => {
-    reportProviderFailure('soniox', 'UPSTREAM_REFUSED', 500);
-    const s = providerStates({ ...soniox, ...HAUS_ENV }, 1_000);
+  it('Soniox disturbed in both functions, Sokrates ready: Sokrates, then the browser', () => {
+    reportProviderFailure('soniox', 'stt', 'UPSTREAM_REFUSED', 500);
+    reportProviderFailure('soniox', 'tts', 'UPSTREAM_REFUSED', 500);
+    const s = providerStates(both, 1_000);
     expect(resolveChain({ primary: 'soniox', fallback: 'haus' }, s)).toEqual({
       provider: 'haus',
       chain: ['haus', 'browser'],
+      chains: { stt: ['haus', 'browser'], tts: ['haus', 'browser'] },
     });
   });
 
   it('all three ready: main provider, fallback, browser in this order', () => {
-    const s = states({ ...soniox, ...HAUS_ENV });
+    const s = states(both);
     expect(
       resolveChain({ primary: 'soniox', fallback: 'haus' }, s).chain
     ).toEqual(['soniox', 'haus', 'browser']);
@@ -704,14 +724,110 @@ describe('state of the providers and the chain', () => {
     ).toEqual(['browser', 'haus']);
   });
 
+  describe('a failure counts for one function only', () => {
+    const choice = { primary: 'soniox', fallback: 'haus' } as const;
+
+    it('recognition of Soniox fails: it is out of the listening chain, its speech output stays', () => {
+      reportProviderFailure('soniox', 'stt', 'UPSTREAM_UNAVAILABLE', 500);
+      const s = providerStates(both, 1_000);
+      expect(s.soniox.functions).toEqual({
+        stt: { status: 'disturbed', reason: 'UPSTREAM_UNAVAILABLE' },
+        tts: READY,
+      });
+      // the summary shows that something is wrong, the chains look at the functions
+      expect(s.soniox.status).toBe('disturbed');
+      expect(s.soniox.reason).toBe('UPSTREAM_UNAVAILABLE');
+      expect(resolveChain(choice, s)).toEqual({
+        provider: 'soniox',
+        chain: ['soniox', 'haus', 'browser'],
+        chains: {
+          stt: ['haus', 'browser'],
+          tts: ['soniox', 'haus', 'browser'],
+        },
+      });
+    });
+
+    it('speech output of Soniox fails: it is out of the speaking chain, listening stays', () => {
+      reportProviderFailure('soniox', 'tts', 'UPSTREAM_REFUSED', 500);
+      const s = providerStates(both, 1_000);
+      expect(s.soniox.functions).toEqual({
+        stt: READY,
+        tts: { status: 'disturbed', reason: 'UPSTREAM_REFUSED' },
+      });
+      expect(resolveChain(choice, s).chains).toEqual({
+        stt: ['soniox', 'haus', 'browser'],
+        tts: ['haus', 'browser'],
+      });
+    });
+
+    it('Sokrates fails in one function: the other stays, and Soniox is not touched', () => {
+      reportProviderFailure('haus', 'stt', 'UPSTREAM_UNAVAILABLE', 500);
+      const s = providerStates(both, 1_000);
+      expect(s.soniox.status).toBe('ready');
+      expect(resolveChain(choice, s).chains).toEqual({
+        stt: ['soniox', 'browser'],
+        tts: ['soniox', 'haus', 'browser'],
+      });
+    });
+
+    it('recognition and speech output fail at different providers: each chain drops its own', () => {
+      reportProviderFailure('soniox', 'stt', 'UPSTREAM_UNAVAILABLE', 500);
+      reportProviderFailure('haus', 'tts', 'UPSTREAM_UNAVAILABLE', 500);
+      const s = providerStates(both, 1_000);
+      expect(resolveChain(choice, s)).toEqual({
+        provider: 'soniox',
+        chain: ['soniox', 'haus', 'browser'],
+        chains: { stt: ['haus', 'browser'], tts: ['soniox', 'browser'] },
+      });
+    });
+
+    it('both functions of both providers fail: both chains end at the browser', () => {
+      for (const id of ['soniox', 'haus'] as const) {
+        for (const fn of ['stt', 'tts'] as const) {
+          reportProviderFailure(id, fn, 'UPSTREAM_UNAVAILABLE', 500);
+        }
+      }
+      expect(resolveChain(choice, providerStates(both, 1_000))).toEqual({
+        provider: 'browser',
+        chain: ['browser'],
+        chains: { stt: ['browser'], tts: ['browser'] },
+      });
+    });
+
+    it('a success of one function frees only that function', () => {
+      reportProviderFailure('soniox', 'stt', 'UPSTREAM_UNAVAILABLE', 500);
+      reportProviderFailure('soniox', 'tts', 'UPSTREAM_UNAVAILABLE', 500);
+      reportProviderSuccess('soniox', 'tts');
+      const s = providerStates(soniox, 1_000);
+      expect(s.soniox.functions.stt.status).toBe('disturbed');
+      expect(s.soniox.functions.tts.status).toBe('ready');
+    });
+
+    it('the failures run out after a minute, each from its own moment', () => {
+      reportProviderFailure('soniox', 'stt', 'UPSTREAM_UNAVAILABLE', 0);
+      reportProviderFailure('soniox', 'tts', 'UPSTREAM_UNAVAILABLE', 10_000);
+      const at = (now: number) => providerStates(soniox, now).soniox.functions;
+      expect(at(DISTURBED_MS - 1).stt.status).toBe('disturbed');
+      expect(at(DISTURBED_MS - 1).tts.status).toBe('disturbed');
+      // after the minute of listening, speaking is still out
+      expect(at(DISTURBED_MS).stt.status).toBe('ready');
+      expect(at(DISTURBED_MS).tts.status).toBe('disturbed');
+      expect(at(10_000 + DISTURBED_MS).tts.status).toBe('ready');
+      expect(
+        resolveChain(choice, providerStates(soniox, 10_000 + DISTURBED_MS))
+          .chains
+      ).toEqual({ stt: ['soniox', 'browser'], tts: ['soniox', 'browser'] });
+    });
+  });
+
   it('a failure is forgotten after a minute and after a success', () => {
-    reportProviderFailure('soniox', 'UPSTREAM_UNAVAILABLE', 0);
+    reportProviderFailure('soniox', 'stt', 'UPSTREAM_UNAVAILABLE', 0);
     expect(providerStates(soniox, DISTURBED_MS - 1).soniox.status).toBe(
       'disturbed'
     );
     expect(providerStates(soniox, DISTURBED_MS).soniox.status).toBe('ready');
-    reportProviderFailure('soniox', 'UPSTREAM_UNAVAILABLE', Date.now());
-    reportProviderSuccess('soniox');
+    reportProviderFailure('soniox', 'stt', 'UPSTREAM_UNAVAILABLE', Date.now());
+    reportProviderSuccess('soniox', 'stt');
     expect(providerStates(soniox).soniox.status).toBe('ready');
   });
 });

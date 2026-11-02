@@ -2,9 +2,11 @@
  * The chain of speech providers in the browser.
  *
  * The server says which providers are in charge and in which order
- * (GET /api/hai/voice/config: for example soniox, then haus, then browser). This
- * module builds the environment of the conversation loop (VoiceEnv) from the
- * browser's own environment and that chain:
+ * (GET /api/hai/voice/config: for example soniox, then haus, then browser), for
+ * listening and for speaking apart: a provider that is disturbed in one function
+ * stays in the chain of the other. This module builds the environment of the
+ * conversation loop (VoiceEnv) from the browser's own environment and those
+ * chains:
  *
  *  - Recognition: a round starts with the first provider of the chain. If it is
  *    not available (no key, refused, not reachable, the websocket breaks) the
@@ -13,8 +15,10 @@
  *  - Speech output: the pieces of an answer go to the first provider. If it fails
  *    in the middle, every piece that was not spoken yet is said by the next
  *    provider, in the same order.
- *  - A provider that failed is skipped for the rest of the conversation. The next
- *    conversation tries the chain from the top again (resetFallback).
+ *  - A provider that failed is skipped for the rest of the conversation, in the
+ *    function in which it failed (a failed recognition does not silence its
+ *    speech output). The next conversation tries the chain from the top again
+ *    (resetFallback).
  *
  * The providers themselves sit behind two small interfaces (RecognitionLike and
  * PieceEngine), so a test replaces them with doubles.
@@ -22,7 +26,7 @@
  * @module lib/hai/voice/client/engine
  */
 
-import type { VoiceProviderId } from '../settings';
+import type { VoiceFunction, VoiceProviderId } from '../settings';
 import { browserPieceEngine, type PieceEngine } from './browserSpeech';
 import { HausRecognition, HausSpeaker, type HausDeps } from './haus';
 import { SonioxRecognition, SonioxSpeaker, type SonioxDeps } from './soniox';
@@ -40,6 +44,11 @@ export interface ChainOptions {
   base: VoiceEnv;
   /** Providers in the order they are tried (already reduced to what the browser can do). */
   chain: VoiceProviderId[];
+  /**
+   * The order per function (listening and speaking), already reduced to what the
+   * browser can do. Left out: `chain` holds for both functions.
+   */
+  chains?: Record<VoiceFunction, VoiceProviderId[]>;
   /** The cloud parts; null when the browser cannot use them. */
   deps: VoiceClientDeps | null;
   /** The provider that listens now (for the text of the settings). */
@@ -273,14 +282,19 @@ class ChainedSpeaker implements SpeakerLike {
  */
 export function createVoiceEnv(options: ChainOptions): VoiceEnv {
   const { base, chain, onActiveProvider } = options;
-  if (!options.deps || !chain.some(id => id !== 'browser')) return base;
+  const listenChain = options.chains?.stt ?? chain;
+  const speakChain = options.chains?.tts ?? chain;
+  const cloud = (ids: VoiceProviderId[]) => ids.some(id => id !== 'browser');
+  if (!options.deps || !(cloud(listenChain) || cloud(speakChain))) {
+    return base;
+  }
   const deps = options.deps;
 
   const failedListening = new Set<VoiceProviderId>();
   const failedSpeaking = new Set<VoiceProviderId>();
 
-  const nextOf = (failed: Set<VoiceProviderId>) => () =>
-    chain.find(id => !failed.has(id)) ?? null;
+  const nextOf = (ids: VoiceProviderId[], failed: Set<VoiceProviderId>) => () =>
+    ids.find(id => !failed.has(id)) ?? null;
 
   const createRecognition = async (id: VoiceProviderId) => {
     if (id === 'soniox') {
@@ -291,7 +305,7 @@ export function createVoiceEnv(options: ChainOptions): VoiceEnv {
   };
 
   const makeEngine = (): PieceEngine | null => {
-    const id = chain.find(candidate => !failedSpeaking.has(candidate));
+    const id = speakChain.find(candidate => !failedSpeaking.has(candidate));
     if (id === 'soniox') return new SonioxSpeaker(deps);
     if (id === 'haus') return new HausSpeaker(deps);
     if (id === 'browser' && base.synth) return browserPieceEngine(base);
@@ -303,7 +317,7 @@ export function createVoiceEnv(options: ChainOptions): VoiceEnv {
     async createRecognition() {
       const rec = new ChainedRecognition(
         createRecognition,
-        nextOf(failedListening),
+        nextOf(listenChain, failedListening),
         id => failedListening.add(id),
         id => onActiveProvider?.(id)
       );
