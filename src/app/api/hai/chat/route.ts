@@ -50,6 +50,7 @@ import {
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
 import { isVoiceAssistantEnabled } from '@/lib/hai/voiceAccess';
+import { DENIAL_CODES } from '@/lib/hai/denial';
 import { badRequestUnlessUuid } from '@/lib/uuid';
 import {
   TRAINER_KNOWLEDGE_PATCH,
@@ -609,7 +610,10 @@ export async function POST(req: NextRequest) {
 
     if (!(await requireProPlan(userId))) {
       return NextResponse.json(
-        { error: 'HAI.ai is only available with a PRO subscription.' },
+        {
+          error: 'HAI.ai is only available with a PRO subscription.',
+          code: DENIAL_CODES.PRO_REQUIRED,
+        },
         { status: 403 }
       );
     }
@@ -956,6 +960,9 @@ export async function POST(req: NextRequest) {
       preferredCatalogCode: requestedCatalogCode(req),
       currentEnablerId: inScope ? context?.enablerId : undefined,
       currentCourseId: inScope ? context?.courseId : undefined,
+      // an open enabler or course outside the occupations of the person was
+      // dropped: only a hint of the reason (UMFANG) for the model
+      contextDropped: !inScope && !!(context?.enablerId || context?.courseId),
       enablerTitle,
       courseTitle,
       // scenarioText of the request is not used: it would reach the system
@@ -1269,7 +1276,10 @@ export async function PATCH(req: NextRequest) {
 
     if (!(await requireProPlan(userId))) {
       return NextResponse.json(
-        { error: 'HAI.ai is only available with a PRO subscription.' },
+        {
+          error: 'HAI.ai is only available with a PRO subscription.',
+          code: DENIAL_CODES.PRO_REQUIRED,
+        },
         { status: 403 }
       );
     }
@@ -1364,7 +1374,10 @@ export async function GET(req: NextRequest) {
 
   if (!(await requireProPlan(userId))) {
     return NextResponse.json(
-      { error: 'HAI.ai is only available with a PRO subscription.' },
+      {
+        error: 'HAI.ai is only available with a PRO subscription.',
+        code: DENIAL_CODES.PRO_REQUIRED,
+      },
       { status: 403 }
     );
   }

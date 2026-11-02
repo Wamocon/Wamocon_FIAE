@@ -51,6 +51,7 @@ import {
   quizChainOf,
   requireQuizOpen,
 } from '@/lib/catalog/progression-db';
+import { DENIAL_CODES } from '../denial';
 import type { QuizCandidate, QuizQuestionSource } from './logic';
 
 const unique = <T>(values: T[]): T[] => Array.from(new Set(values));
@@ -65,6 +66,16 @@ export function enablerHrefFor(
 
 const notFound = () =>
   NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+/**
+ * The course of the question is not assigned to the trainee. A stable code
+ * lets the card say why (reason FREIGABE, denial.ts) instead of "forbidden".
+ */
+const notAssigned = () =>
+  NextResponse.json(
+    { error: 'Forbidden', code: DENIAL_CODES.COURSE_NOT_ASSIGNED },
+    { status: 403 }
+  );
 
 /** A lesson quiz that is active and lies inside the catalogs of the caller. */
 function isUsableQuiz(
@@ -127,8 +138,7 @@ export async function loadQuizCandidates(
       .where(eq(courseMembers.userId, session.id));
     courseIds = unique(memberships.map(m => String(m.courseId)));
     if (onlyCourseId) {
-      if (!courseIds.includes(onlyCourseId))
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      if (!courseIds.includes(onlyCourseId)) return notAssigned();
       courseIds = [onlyCourseId];
     }
     if (courseIds.length === 0) return [];
@@ -411,8 +421,7 @@ export async function authorizeQuestion(
           eq(courseMembers.userId, session.id)
         )
       );
-    if (!member)
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!member) return notAssigned();
 
     // Order of work and chain of the quizzes, the same guard as the real quiz
     const access = await requireQuizOpen(

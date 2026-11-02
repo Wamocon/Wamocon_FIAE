@@ -44,10 +44,11 @@ import {
 import type { RetrievalAccess } from './retrievalAccess';
 import {
   FIAE_PERSONA,
-  FOREIGN_OCCUPATION_TEXT,
   isForeignOccupationQuestion,
   type HaiPersona,
 } from './persona';
+import { DENIAL_BERUF_TEXT, DENIAL_NEUTRAL_TEXT } from './denial';
+import { detectAccessReasons } from './accessReasons';
 import { loadHaiPersona } from './personaAccess';
 import { solutionRequestRefusal } from './solutionRequest';
 import { quizModeStartFor, type QuizModeStartSignal } from './quizMode/start';
@@ -133,6 +134,12 @@ export interface PipelineContext {
    * navigation, never taken from a message.
    */
   isAdmin?: boolean;
+  /**
+   * An enabler or course id of the request was dropped because it lies outside
+   * the occupations of the person. Set by the chat route, only used for the
+   * reason hint to the model (UMFANG), never an access right.
+   */
+  contextDropped?: boolean;
 }
 
 /**
@@ -652,16 +659,18 @@ export async function resolveTurnPersona(
 
 /**
  * Reply that ends the turn before retrieval and before any model call, or
- * null: a neutral refusal without a scope, a neutral refusal for a question
- * that names another occupation. Nothing of the other occupation is revealed.
+ * null: a refusal without a scope (reason FREIGABE), a refusal for a question
+ * that names another occupation (reason BERUF). Both name the reason in plain
+ * words and offer what is possible instead, nothing of the other occupation is
+ * revealed (src/lib/hai/denial.ts).
  */
 export function personaRefusal(
   userMessage: string,
   persona: HaiPersona
 ): string | null {
-  if (persona.neutral) return persona.refusalText;
+  if (persona.neutral) return DENIAL_NEUTRAL_TEXT;
   if (isForeignOccupationQuestion(userMessage, persona)) {
-    return FOREIGN_OCCUPATION_TEXT;
+    return DENIAL_BERUF_TEXT;
   }
   return null;
 }
@@ -817,6 +826,16 @@ export async function processMessage(
       }
     }
 
+    // Step 3c: what the pipeline knows about a limit of access (denial.ts)
+    const accessReasons = detectAccessReasons({
+      message: userMessage,
+      audience: access?.audience ?? 'trainee',
+      searchEmpty:
+        intent !== 'quiz_answer' && !enableWebSearch && !retrievedContext,
+      contextDropped: context.contextDropped === true,
+      liveDataContext,
+    });
+
     // Step 4: Build system prompt
     const systemPrompt = buildSystemPrompt({
       mode,
@@ -837,6 +856,7 @@ export async function processMessage(
       learningTechniques: usesLearningTechniques(userMessage, searchResults),
       voice: context.voice === true,
       navigation: true,
+      accessReasons,
     });
 
     // Step 5: Convert previous messages to provider format
@@ -1072,6 +1092,16 @@ export async function processMessageStream(
       }
     }
 
+    // What the pipeline knows about a limit of access (denial.ts)
+    const accessReasons = detectAccessReasons({
+      message: userMessage,
+      audience: access?.audience ?? 'trainee',
+      searchEmpty:
+        intent !== 'quiz_answer' && !enableWebSearch && !retrievedContext,
+      contextDropped: context.contextDropped === true,
+      liveDataContext,
+    });
+
     // Build prompt
     const systemPrompt = buildSystemPrompt({
       mode,
@@ -1088,6 +1118,7 @@ export async function processMessageStream(
       learningTechniques: usesLearningTechniques(userMessage, searchResults),
       voice: context.voice === true,
       navigation: true,
+      accessReasons,
     });
 
     // Convert messages to provider format

@@ -64,6 +64,12 @@ import {
   retrieveContext,
   type PipelineContext,
 } from '@/lib/hai/ragPipeline';
+import {
+  ACCESS_REASONS,
+  DENIAL_NEUTRAL_TEXT,
+  traineeSearchNotFoundLine,
+} from '@/lib/hai/denial';
+import { fetchDataContext } from '@/lib/hai/dataContext';
 
 const FIAE = '00000000-0000-4000-8000-000000000001';
 const KFBM = '00000000-0000-4000-8000-000000000002';
@@ -577,10 +583,11 @@ describe.each([
     expect(prompt).not.toContain('FIAE');
   });
 
-  it('user without a scope: neutral refusal, no index content, no model call', async () => {
+  it('user without a scope: refusal with the reason FREIGABE, no index content, no model call', async () => {
     mockResolveAccess.mockResolvedValue(null);
     const result = await run(QUESTION, context());
-    expect(result.response).toContain('kein Ausbildungsberuf zugeordnet');
+    expect(result.response).toBe(DENIAL_NEUTRAL_TEXT);
+    expect(result.response).toContain('freigeschaltet oder zugeordnet');
     expect(result.intent).toBe('off_topic');
     expect(result.citations).toEqual([]);
     expect(mockSearchWithContext).not.toHaveBeenCalled();
@@ -644,5 +651,116 @@ describe('both pipelines share one retrieval (structure)', () => {
   it('has no unscoped search call left in the pipeline module', () => {
     expect(source).not.toMatch(/filterSearchResultsForTrainingScope/);
     expect(source.match(/audience: access\.audience/g)).toHaveLength(2);
+  });
+});
+
+// ============================================================================
+// Reasons for a limit of access in the prompt (src/lib/hai/denial.ts). The
+// section is only there when this turn carries a reason, so the prompt of FIAE
+// stays as it was otherwise (persona.fiae-baseline.test.ts).
+// ============================================================================
+
+describe.each([
+  [
+    'processMessage',
+    (message: string, ctx: PipelineContext) => processMessage(message, ctx),
+  ],
+  [
+    'processMessageStream',
+    (message: string, ctx: PipelineContext) =>
+      processMessageStream(message, ctx, () => undefined),
+  ],
+])('%s hands the access reasons to the model', (_name, run) => {
+  const SECTION = '## Begründung bei Zugriffsgrenzen';
+  const mockData = fetchDataContext as unknown as jest.Mock;
+
+  it('UMFANG: an empty search inside the released content carries the note', async () => {
+    mockSearchWithContext.mockResolvedValue({
+      results: [],
+      query: QUESTION,
+      totalResults: 0,
+    });
+    await run('Was ist der Unterschied zwischen Zeta und Eta?', context());
+    const prompt = systemPromptOfLastCall();
+    expect(prompt).toContain(SECTION);
+    expect(prompt).toContain(ACCESS_REASONS.UMFANG_SEARCH.note);
+    expect(prompt).toContain(
+      'in deinen freigeschalteten Inhalten habe ich dazu nichts gefunden'
+    );
+    expect(prompt).toContain('nicht "es gibt nichts"');
+    // the notes of the other situations are not there
+    expect(prompt).not.toContain(ACCESS_REASONS.UMFANG_CONTEXT.note);
+    expect(prompt).not.toContain(ACCESS_REASONS.ROLLE_OTHERS_DATA.note);
+  });
+
+  it('adds nothing when the search found something: the prompt keeps its form', async () => {
+    await run(QUESTION, context());
+    expect(systemPromptOfLastCall()).not.toContain(SECTION);
+  });
+
+  it('UMFANG: an open enabler outside the occupations is named as dropped', async () => {
+    await run(QUESTION, context({ contextDropped: true }));
+    const prompt = systemPromptOfLastCall();
+    expect(prompt).toContain(SECTION);
+    expect(prompt).toContain(ACCESS_REASONS.UMFANG_CONTEXT.note);
+    // the dropped record is named nowhere
+    expect(prompt).not.toContain('KfBM Enabler');
+  });
+
+  it('LOESUNGSSCHUTZ: a trainee who asks for a right answer gets the note, a trainer not', async () => {
+    await run('Welche Antwort ist bei der Quizfrage richtig?', context());
+    expect(systemPromptOfLastCall()).toContain(
+      ACCESS_REASONS.LOESUNGSSCHUTZ_ANSWER.note
+    );
+
+    mockResolveAccess.mockResolvedValue(trainerFiae);
+    await run(
+      'Welche Antwort ist bei der Quizfrage richtig?',
+      context({ userRole: 'TRAINER' })
+    );
+    expect(systemPromptOfLastCall()).not.toContain(
+      ACCESS_REASONS.LOESUNGSSCHUTZ_ANSWER.note
+    );
+  });
+
+  it('ROLLE: a trainee who asks for data of other trainees gets the note', async () => {
+    await run('Wie stehen meine Azubis in der Berufsschule?', context());
+    expect(systemPromptOfLastCall()).toContain(
+      ACCESS_REASONS.ROLLE_OTHERS_DATA.note
+    );
+  });
+
+  it('ZUSTAENDIGKEIT: a trainer asking for a person outside the own trainees gets the note', async () => {
+    mockResolveAccess.mockResolvedValue(trainerFiae);
+    mockData.mockResolvedValueOnce({
+      summary: traineeSearchNotFoundLine('Max'),
+      tokenEstimate: 10,
+      dataIntent: 'trainee_detail_query',
+    });
+    await run('Wie steht Max?', context({ userRole: 'TRAINER' }));
+    const prompt = systemPromptOfLastCall();
+    expect(prompt).toContain(ACCESS_REASONS.ZUSTAENDIGKEIT_TRAINEE.note);
+    // the line of the data context says why, and does not say there is no such person
+    expect(prompt).toContain('Zuständigkeit');
+    expect(prompt).toContain('das heißt aber nicht, dass es ihn nicht gibt');
+  });
+
+  it('never carries a name, an id or a content of a record in the reason section', async () => {
+    mockSearchWithContext.mockResolvedValue({
+      results: [],
+      query: QUESTION,
+      totalResults: 0,
+    });
+    await run(
+      'Welche Antwort ist richtig bei den Azubis von Max Mustermann?',
+      context({ contextDropped: true })
+    );
+    const prompt = systemPromptOfLastCall();
+    const section = prompt.slice(prompt.indexOf(SECTION));
+    const end = section.indexOf('## Zusatzregeln');
+    const own = section.slice(0, end);
+    expect(own).not.toContain('Mustermann');
+    expect(own).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/i);
+    expect(own).not.toContain('KfBM');
   });
 });

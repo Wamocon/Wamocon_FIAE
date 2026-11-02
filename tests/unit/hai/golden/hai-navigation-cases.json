@@ -76,6 +76,24 @@
       "lock": null,
       "expected": { "kind": "offer", "path": "/trainer/reviews" },
       "forbiddenWords": []
+    },
+    {
+      "id": "NG-09",
+      "level": "TRAINEE",
+      "occupation": "FIAE",
+      "question": "Öffne die Seite Wetter.",
+      "lock": null,
+      "expected": { "kind": "unknown_page" },
+      "forbiddenWords": ["/trainer", "Trainerbereich", "Administratoren", "Rolle"]
+    },
+    {
+      "id": "NG-10",
+      "level": "TRAINER",
+      "occupation": "FIAE",
+      "question": "Wo geht es weiter?",
+      "lock": null,
+      "expected": { "kind": "denied" },
+      "forbiddenWords": ["/trainee", "Reihenfolge der Arbeit"]
     }
   ]
 }

@@ -10,6 +10,7 @@
  */
 
 import { authFetch } from '@/lib/authFetch';
+import { DENIAL_CODES } from '../denial';
 import type { QuizQuestionPublic } from './logic';
 import type { QuizEmptyReason, QuizFeedback } from './session';
 
@@ -38,6 +39,16 @@ export function errorKeyFor(status: number, code?: unknown): string {
   if (status === 429) return 'rateLimited';
   if (status === 403 && (code === 'ENABLER_LOCKED' || code === 'QUIZ_LOCKED'))
     return 'locked';
+  // The reason in plain words (denial.ts): plan, release, course, else generic
+  if (status === 403 && code === DENIAL_CODES.PRO_REQUIRED) {
+    return 'planRequired';
+  }
+  if (status === 403 && code === 'AWAITING_ACTIVATION') {
+    return 'awaitingActivation';
+  }
+  if (status === 403 && code === DENIAL_CODES.COURSE_NOT_ASSIGNED) {
+    return 'notAssigned';
+  }
   if (status === 403) return 'forbidden';
   if (status === 404) return 'notFound';
   if (status === 400) return 'invalid';

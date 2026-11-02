@@ -58,7 +58,7 @@ import {
   processMessageStream,
   type PipelineContext,
 } from '@/lib/hai/ragPipeline';
-import { FOREIGN_OCCUPATION_TEXT } from '@/lib/hai/persona';
+import { DENIAL_BERUF_TEXT } from '@/lib/hai/denial';
 import { FIAE_CATALOG, KFBM_CATALOG } from './fixtures/kfbmPersona';
 
 const USER = '10000000-0000-4000-8000-000000000001';
@@ -169,7 +169,7 @@ describe.each([
   it('leaves the persona gate first: a request about another occupation is refused', async () => {
     const result = await run('Frag mich zu KfBM Lernfeld 3 ab', context(), []);
     expect(result.quizMode).toBeUndefined();
-    expect(result.response).toBe(FOREIGN_OCCUPATION_TEXT);
+    expect(result.response).toBe(DENIAL_BERUF_TEXT);
     expect(mockChat).not.toHaveBeenCalled();
   });
 

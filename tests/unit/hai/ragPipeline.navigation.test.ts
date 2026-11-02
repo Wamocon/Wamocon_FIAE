@@ -78,7 +78,7 @@ import {
   type PipelineContext,
   type PipelineResult,
 } from '@/lib/hai/ragPipeline';
-import { FOREIGN_OCCUPATION_TEXT } from '@/lib/hai/persona';
+import { DENIAL_BERUF_TEXT } from '@/lib/hai/denial';
 
 const USER = '10000000-0000-4000-8000-000000000001';
 const FIAE = '00000000-0000-4000-8000-000000000001';
@@ -189,7 +189,7 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
     const result = await run('öffne Enabler 3', ctx());
     expect(result.navigationOffer).toBeUndefined();
     expect(result.response).toBe(
-      'Der Enabler Enabler 3: SQL Grundlagen ist noch gesperrt. Schließe zuerst Enabler 2: Datenmodell ab.'
+      'Der Enabler Enabler 3: SQL Grundlagen ist noch gesperrt, weil in der Reihenfolge der Arbeit zuerst Enabler 2: Datenmodell abgeschlossen sein muss. Schließe Enabler 2: Datenmodell ab, dann wird er frei, und bis dahin helfe ich dir gern bei Enabler 2: Datenmodell.'
     );
     expect(mockChat).not.toHaveBeenCalled();
   });
@@ -236,7 +236,10 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
       ctx({ userRole: 'TRAINER' })
     );
     expect(result.navigationOffer).toBeUndefined();
-    expect(result.response).toContain('Diese Seite kann ich dir nicht öffnen.');
+    expect(result.response).toContain(
+      'Diese Seite kann ich dir nicht öffnen, weil sie zum'
+    );
+    expect(result.response).toContain('für deine Rolle nicht freigegeben');
     expect(mockChat).not.toHaveBeenCalled();
   });
 
@@ -246,7 +249,10 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
       ctx({ isAdmin: true })
     );
     expect(result.navigationOffer).toBeUndefined();
-    expect(result.response).toContain('Diese Seite kann ich dir nicht öffnen.');
+    expect(result.response).toContain(
+      'Diese Seite kann ich dir nicht öffnen, weil sie zum'
+    );
+    expect(result.response).toContain('für deine Rolle nicht freigegeben');
   });
 
   it('gives the trainer level its pages and an admin level the admin pages', async () => {
@@ -273,7 +279,7 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
       'Öffne mir die Seite der KfBM Auszubildenden',
       ctx()
     );
-    expect(result.response).toBe(FOREIGN_OCCUPATION_TEXT);
+    expect(result.response).toBe(DENIAL_BERUF_TEXT);
     expect(result.navigationOffer).toBeUndefined();
     expect(mockEnablers).not.toHaveBeenCalled();
     expect(mockChat).not.toHaveBeenCalled();
@@ -318,9 +324,11 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
     mockEnablers.mockRejectedValue(new Error('db down'));
     const result = await run('öffne Enabler 3', ctx());
     expect(result.navigationOffer).toBeUndefined();
+    // a technical failure is said as such, never as a missing right
     expect(result.response).toBe(
-      'Das kann ich gerade nicht prüfen. Bitte versuche es später noch einmal.'
+      'Das kann ich gerade nicht prüfen, weil eine technische Störung vorliegt und nicht, weil dir etwas fehlt. Bitte versuche es später noch einmal.'
     );
+    expect(result.response).not.toMatch(/Rolle|freigegeben|Berechtigung/);
     expect(mockChat).not.toHaveBeenCalled();
   });
 

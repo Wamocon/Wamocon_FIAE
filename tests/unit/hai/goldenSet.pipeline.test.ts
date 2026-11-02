@@ -102,7 +102,13 @@ import {
 } from '@/lib/hai/ragPipeline';
 import { buildScopeCondition } from '@/lib/hai/vectorSearch';
 import { documentAccessCondition } from '@/lib/hai/pageIndexService';
-import { FOREIGN_OCCUPATION_TEXT, resolveHaiPersona } from '@/lib/hai/persona';
+import { resolveHaiPersona } from '@/lib/hai/persona';
+import {
+  ACCESS_REASONS,
+  DENIAL_BERUF_TEXT,
+  DENIAL_LOESUNGSSCHUTZ_TEXT,
+  namesDenialReason,
+} from '@/lib/hai/denial';
 import {
   SOLUTION_REFUSAL_TEXT,
   isSolutionRequest,
@@ -253,7 +259,13 @@ describe.each(pipelinesByMode)('golden set through %s', (_name, run, voice) => {
         case 'refuse_other_occupation':
           if (goldenCase.expected.layer === 'pre_model') {
             // the neutral text, no retrieval, no model call, nothing named
-            expect(result.response).toBe(FOREIGN_OCCUPATION_TEXT);
+            expect(result.response).toBe(DENIAL_BERUF_TEXT);
+            // "the reason is named": the fixed text says why, in plain words
+            if (goldenCase.expected.reason) {
+              expect(
+                namesDenialReason(result.response, goldenCase.expected.reason)
+              ).toBe(true);
+            }
             expect(result.intent).toBe('off_topic');
             expect(modelCalls).toBe(0);
             expect(goldenState.searchCalls).toEqual([]);
@@ -261,7 +273,7 @@ describe.each(pipelinesByMode)('golden set through %s', (_name, run, voice) => {
           } else {
             // the model is asked, with a context that holds nothing of the
             // other occupation
-            expect(result.response).not.toBe(FOREIGN_OCCUPATION_TEXT);
+            expect(result.response).not.toBe(DENIAL_BERUF_TEXT);
             expect(modelCalls).toBe(1);
             expect(goldenState.searchCalls).toHaveLength(1);
           }
@@ -272,6 +284,12 @@ describe.each(pipelinesByMode)('golden set through %s', (_name, run, voice) => {
             // an explicit request is refused by the fixed check: the fixed
             // text, no retrieval, no model call
             expect(result.response).toBe(SOLUTION_REFUSAL_TEXT);
+            // "the reason is named": the fixed text says why, in plain words
+            if (goldenCase.expected.reason) {
+              expect(
+                namesDenialReason(result.response, goldenCase.expected.reason)
+              ).toBe(true);
+            }
             expect(result.intent).toBe('question');
             expect(modelCalls).toBe(0);
             expect(goldenState.searchCalls).toEqual([]);
@@ -282,6 +300,16 @@ describe.each(pipelinesByMode)('golden set through %s', (_name, run, voice) => {
           // model is asked, and what protects the solution is that the context
           // has none
           expect(modelCalls).toBe(1);
+          // "the reason is named": the prompt carries the access reason of the
+          // category, so the model can name it (and the later measurement
+          // checks the answer with scoreAnswer)
+          if (goldenCase.expected.reason) {
+            const notes = Object.values(ACCESS_REASONS)
+              .filter(r => r.category === goldenCase.expected.reason)
+              .map(r => r.note);
+            expect(prompt).toContain('## Begründung bei Zugriffsgrenzen');
+            expect(notes.some(note => prompt.includes(note))).toBe(true);
+          }
           expect(goldenState.searchCalls).toHaveLength(1);
           expect(goldenState.searchCalls[0].audience).toBe('trainee');
           expect(
@@ -568,12 +596,19 @@ describe('persona and prompt of the cases', () => {
 
 describe('scoring a scripted model (no real model)', () => {
   it('rates a model that refuses where it should and answers where it may', () => {
+    // a refusal with a reason names it, like the fixed texts of the pipeline
+    const refusal = (c: GoldenCase) =>
+      c.expected.reason === 'BERUF'
+        ? DENIAL_BERUF_TEXT
+        : c.expected.reason === 'LOESUNGSSCHUTZ'
+          ? DENIAL_LOESUNGSSCHUTZ_TEXT
+          : 'Das liegt leider außerhalb meines Fachgebiets, frag bitte deinen Trainer.';
     const scores: CaseScore[] = set.cases.map(c =>
       scoreAnswer(
         c,
         c.expected.behavior === 'answer'
           ? 'Hier ist die Erklärung zu deiner Frage mit allem, was du dafür brauchst.'
-          : 'Das liegt leider außerhalb meines Fachgebiets, frag bitte deinen Trainer.',
+          : refusal(c),
         canaries
       )
     );

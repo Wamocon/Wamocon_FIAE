@@ -324,7 +324,7 @@ describe('HaiQuizCard: the feedback', () => {
         /Lösung ist markiert/
       );
       expect(screen.getByTestId('hai-quiz-withheld').textContent).toMatch(
-        /Die richtige Lösung und die Erklärung siehst du, sobald du das Quiz zu diesem Enabler bestanden hast/
+        /Zum Schutz der Lösung siehst du die richtige Lösung und die Erklärung erst, sobald du das Quiz zu diesem Enabler bestanden hast/
       );
       const link = screen.getByRole('link', {
         name: 'Zum Quiz des Enablers: SQL Grundlagen',
@@ -523,9 +523,17 @@ describe('HaiQuizCard: loading, empty and error', () => {
     expect(screen.getByRole('status').textContent).toMatch(/freigeschaltet/);
   });
 
+  // every refusal names its reason in plain words (denial.ts): the order of
+  // work, the protection of the solution, the release, the plan, the course
   it.each([
-    ['locked', /noch gesperrt/],
-    ['rateLimited', /zu schnell/],
+    ['locked', /noch gesperrt, weil in der Reihenfolge der Arbeit/],
+    ['rateLimited', /sehr viele Anfragen.*kein Problem mit deinen Rechten/],
+    ['attemptsExceeded', /Lösungsschutz.*nach dem bestandenen Quiz/],
+    ['forbidden', /nicht freigeschaltet.*nicht zu deiner Ausbildung/],
+    ['planRequired', /Organisation oder deinem Plan nicht enthalten/],
+    ['awaitingActivation', /wartet noch auf die Freigabe/],
+    ['notAssigned', /Kurs.*nicht zugewiesen/],
+    ['notFound', /freigeschalteten Inhalten nicht/],
     ['generic', /nicht geklappt/],
   ])('shows the error %s as an alert with a retry', (errorKey, text) => {
     const { props } = setup({ phase: 'error', question: null, errorKey });

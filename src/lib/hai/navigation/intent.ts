@@ -36,7 +36,9 @@ export type NavigationIntent =
   | { kind: 'continue' }
   | { kind: 'enabler'; ref: ContentReference }
   | { kind: 'use_case'; ref: ContentReference }
-  | { kind: 'enabler_quiz'; ref: ContentReference };
+  | { kind: 'enabler_quiz'; ref: ContentReference }
+  /** A clear command to open "a page" that is none of the known ones. */
+  | { kind: 'unknown_page' };
 
 /** A command is short, a long text is a content question. */
 const MAX_LENGTH = 160;
@@ -102,6 +104,17 @@ const TARGET_PATTERNS: ReadonlyArray<readonly [StaticTargetId, RegExp]> = [
   ['profile', /\b(?:profil\w*)\b/],
   ['dashboard', /\b(?:dashboard|startseite|startbildschirm)\b/],
 ];
+
+/** A command for an unknown page is shorter than a command with a content name. */
+const UNKNOWN_PAGE_MAX_LENGTH = 100;
+
+/**
+ * "öffne die Seite Wetter", "geh zur Seite Rezepte", "bring mich zur Seite
+ * Horoskop": a verb of going, then (at most two words later) the word "Seite"
+ * and a name that is no number.
+ */
+const UNKNOWN_PAGE =
+  /\b(?:oeffn\w*|(?:geh|gehe|gehen)|(?:bring|fuehr|leit)\w*\s+(?:\w+\s+)?(?:mich|uns)|zeig\w*\s+(?:mir|uns))\s+(?:\w+\s+){0,2}(?:seite|seiten)\s+(?!\d)\w{3,}/;
 
 /** Words in front of a name that are not part of it (an article, a filler). */
 const LEADING_FILLER = new Set([
@@ -231,6 +244,14 @@ export function detectNavigationIntent(
 
   for (const [target, pattern] of TARGET_PATTERNS) {
     if (pattern.test(text)) return { kind: 'static', target };
+  }
+
+  // A clear command to open "a page" that is none of ours: it is answered with
+  // "that page is not known" (no question of rights) instead of going to the
+  // model. Narrow on purpose: a short text, the word "Seite" right after the
+  // verb, and not a page number ("Seite 5").
+  if (text.length <= UNKNOWN_PAGE_MAX_LENGTH && UNKNOWN_PAGE.test(text)) {
+    return { kind: 'unknown_page' };
   }
   return null;
 }

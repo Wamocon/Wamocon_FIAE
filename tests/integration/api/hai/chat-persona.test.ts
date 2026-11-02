@@ -149,6 +149,31 @@ describe('HAI chat route: scenarioText and the occupation of the enabler', () =>
     expect(ctx.courseTitle).toBeUndefined();
   });
 
+  it('marks the dropped context for the reason hint (UMFANG), and only then', async () => {
+    const foreign = await load(
+      { allowedCatalogIds: [FIAE_CATALOG_ID] },
+      KFBM_CATALOG_ID
+    );
+    await foreign.mod.POST(post({ enablerId: ENABLER_KFBM }));
+    expect(contextOf(foreign.processMessage as never).contextDropped).toBe(
+      true
+    );
+
+    const own = await load(
+      { allowedCatalogIds: [FIAE_CATALOG_ID] },
+      FIAE_CATALOG_ID
+    );
+    await own.mod.POST(post({ enablerId: ENABLER_FIAE }));
+    expect(contextOf(own.processMessage as never).contextDropped).toBe(false);
+
+    const none = await load(
+      { allowedCatalogIds: [FIAE_CATALOG_ID] },
+      FIAE_CATALOG_ID
+    );
+    await none.mod.POST(post({}));
+    expect(contextOf(none.processMessage as never).contextDropped).toBe(false);
+  });
+
   it('ignores a course of another occupation', async () => {
     const { mod, processMessage } = await load(
       { allowedCatalogIds: [FIAE_CATALOG_ID] },

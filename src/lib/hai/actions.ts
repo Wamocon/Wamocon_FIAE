@@ -45,6 +45,12 @@ import {
     isWriteAction,
     sanitizeActionParameters,
 } from './actionPolicy';
+import {
+    DENIAL_ACTION_TRAINEE_ONLY_TEXT,
+    DENIAL_ACTION_TRAINER_ONLY_TEXT,
+    denialActionLockedText,
+    type DenialCategory,
+} from './denial';
 
 // ============================================================================
 // TYPES
@@ -93,6 +99,8 @@ export interface ActionResult {
     error?: string;
     /** Why the action failed, the route maps it to the HTTP status. */
     code?: ActionFailureCode;
+    /** The coarse reason when the failure hangs on access (denial.ts). */
+    denial?: DenialCategory;
 }
 
 /**
@@ -354,9 +362,10 @@ export async function executeAction(
             return fail(
                 'forbidden',
                 audience === 'TRAINER'
-                    ? 'Diese Aktion ist nur für Auszubildende möglich.'
-                    : 'Diese Aktion ist nur für Trainer möglich.',
-                'Permission denied'
+                    ? DENIAL_ACTION_TRAINEE_ONLY_TEXT
+                    : DENIAL_ACTION_TRAINER_ONLY_TEXT,
+                'Permission denied',
+                'ROLLE'
             );
         }
 
@@ -676,10 +685,9 @@ async function completeEnabler(
             const first = found.enabler.lockedBy?.title;
             return fail(
                 'forbidden',
-                first
-                    ? `Der Enabler "${enabler.title}" ist noch gesperrt. Schließe zuerst "${first}" ab.`
-                    : `Der Enabler "${enabler.title}" ist für dich gesperrt.`,
-                'ENABLER_LOCKED'
+                denialActionLockedText(enabler.title, first),
+                'ENABLER_LOCKED',
+                'GESPERRT'
             );
         }
 

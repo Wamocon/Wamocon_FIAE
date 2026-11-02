@@ -4,6 +4,14 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
 import {
+  DENIAL_ACTION_NOT_FOUND_TEXT,
+  DENIAL_ACTION_OCCUPATION_TEXT,
+  DENIAL_ACTION_TRAINEE_ONLY_TEXT,
+  DENIAL_ACTION_TRAINER_ONLY_TEXT,
+  DENIAL_ACTION_UNAVAILABLE_TEXT,
+  namesDenialReason,
+} from '@/lib/hai/denial';
+import {
   fakeSession,
   makeRequest,
   mockSession,
@@ -868,5 +876,131 @@ describe('/api/hai/action: trainer actions', () => {
     expect(quizWhere.sql).toContain('"trainee_id"');
     expect(quizWhere.sql).toContain('"organization_id"');
     expect(quizWhere.sql).toContain('"is_reviewed"');
+  });
+});
+
+// ============================================================================
+// Reasons for a refusal (src/lib/hai/denial.ts): what does not work, why in a
+// coarse true category, what is possible instead. A technical failure carries
+// no category. A foreign record answers like a missing one.
+// ============================================================================
+
+describe('/api/hai/action: the reason of a refusal', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const submissionTables = (overrides: Rows = {}): Rows => ({
+    enablerSubmissions: [submissionRow()],
+    profiles: [traineeProfile()],
+    enablers: [enablerRow()],
+    ...overrides,
+  });
+  const approve = (headers: Record<string, string> = {}) =>
+    post(
+      confirmed('approve_submission', { submissionId: SUBMISSION }),
+      headers
+    );
+
+  it('ORGANISATION_PLAN: the missing PRO plan has a stable code', async () => {
+    const { mod } = await load({ pro: false });
+    const res = await mod.POST(
+      post(confirmed('complete_enabler', { enablerId: ENABLER }))
+    );
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('PRO_REQUIRED');
+    const list = await mod.GET(
+      makeRequest('GET', 'http://localhost/api/hai/action', { token: 't' })
+    );
+    expect(list.status).toBe(403);
+    expect((await list.json()).code).toBe('PRO_REQUIRED');
+  });
+
+  it('ROLLE: a trainee asking for a trainer action is told the role is the reason', async () => {
+    const { mod } = await load({ role: 'TRAINEE' });
+    const res = await mod.POST(
+      post(confirmed('approve_report', { reportId: REPORT }))
+    );
+    const body = await res.json();
+    expect(res.status).toBe(403);
+    expect(body.denial).toBe('ROLLE');
+    expect(body.error).toBe(DENIAL_ACTION_TRAINER_ONLY_TEXT);
+    expect(namesDenialReason(body.error, 'ROLLE')).toBe(true);
+    expect(body.error).toContain('stattdessen');
+  });
+
+  it('ROLLE: a trainer asking for a trainee action is told the role is the reason', async () => {
+    const { mod } = await load({ role: 'TRAINER' });
+    const res = await mod.POST(
+      post(confirmed('complete_enabler', { enablerId: ENABLER }))
+    );
+    const body = await res.json();
+    expect(res.status).toBe(403);
+    expect(body.denial).toBe('ROLLE');
+    expect(body.error).toBe(DENIAL_ACTION_TRAINEE_ONLY_TEXT);
+  });
+
+  it('BERUF: an occupation the trainer does not have', async () => {
+    const { mod } = await load({
+      role: 'TRAINER',
+      tables: submissionTables(),
+    });
+    const res = await mod.POST(approve({ 'x-catalog': 'KFBM' }));
+    const body = await res.json();
+    expect(res.status).toBe(403);
+    expect(body.denial).toBe('BERUF');
+    expect(body.error).toBe(DENIAL_ACTION_OCCUPATION_TEXT);
+    expect(namesDenialReason(body.error, 'BERUF')).toBe(true);
+  });
+
+  it('UMFANG and ZUSTAENDIGKEIT: a foreign record answers exactly like a missing one', async () => {
+    const missing = await load({
+      role: 'TRAINER',
+      tables: submissionTables({ profiles: [] }),
+    });
+    const foreignOrg = await load({
+      role: 'TRAINER',
+      tables: submissionTables({
+        profiles: [traineeProfile({ organizationId: OTHER_ORG })],
+      }),
+    });
+    const foreignOccupation = await load({
+      role: 'TRAINER',
+      tables: submissionTables({
+        enablers: [enablerRow({ trainingCatalogId: KFBM })],
+      }),
+    });
+    const bodies = [];
+    for (const { mod } of [missing, foreignOrg, foreignOccupation]) {
+      const res = await mod.POST(approve());
+      expect(res.status).toBe(404);
+      bodies.push(await res.json());
+    }
+    for (const body of bodies) {
+      expect(body).toEqual({
+        success: false,
+        error: DENIAL_ACTION_NOT_FOUND_TEXT,
+        denial: 'UMFANG',
+      });
+    }
+    // the text names nothing of the record, the trainee or the other occupation
+    expect(DENIAL_ACTION_NOT_FOUND_TEXT).toContain('Zuständigkeitsbereich');
+    expect(DENIAL_ACTION_NOT_FOUND_TEXT).toContain('das heißt aber nicht');
+    expect(DENIAL_ACTION_NOT_FOUND_TEXT).not.toMatch(
+      /SQL Grundlagen|KfBM|Fachinformatik|Büromanagement/i
+    );
+  });
+
+  it('a technical failure carries no category and says so', async () => {
+    const { mod } = await load({
+      role: 'TRAINER',
+      orgFails: true,
+      tables: submissionTables(),
+    });
+    const res = await mod.POST(approve());
+    const body = await res.json();
+    expect(res.status).toBe(503);
+    expect(body.denial).toBeUndefined();
+    expect(body.error).toBe(DENIAL_ACTION_UNAVAILABLE_TEXT);
+    expect(body.error).toContain('technische Störung');
+    expect(namesDenialReason(body.error, 'ROLLE')).toBe(false);
   });
 });
