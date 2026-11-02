@@ -8,7 +8,6 @@ import {
     traineeIdInScope,
 } from '@/lib/auth/trainee-scope-conditions';
 import {
-    evaluationReportCatalogCondition,
     requireReportCatalogFilter,
 } from '@/lib/auth/activity-report-access';
 
@@ -26,10 +25,11 @@ export async function GET(request: NextRequest) {
         // one) and, with a chosen occupation (x-catalog), of that occupation
         const traineeScope = await requireTraineeScopeCondition(session, request);
         if (isErrorResponse(traineeScope)) return traineeScope;
-        // The evaluations count by the occupation of their activity report
+        // The evaluations count by their own occupation
+        // (weekly_evaluations.training_catalog_id)
         const reportCatalog = await requireReportCatalogFilter(session, request);
         if (isErrorResponse(reportCatalog)) return reportCatalog;
-        const catalogCondition = evaluationReportCatalogCondition(reportCatalog.condition);
+        const catalogCondition = reportCatalog.evaluationCondition ?? undefined;
 
         // Get all trainees that have evaluations with this trainer
         const traineeEvaluations = await db

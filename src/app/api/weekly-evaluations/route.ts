@@ -102,9 +102,9 @@ export async function GET(request: NextRequest) {
 // POST: Create or update weekly evaluation with softskill ratings
 // Supports: trainer ratings, release ratings, and grade editing with audit trail
 // Trainer level only, for a report of a trainee inside its organization scope.
-// Trainee, organization and week come from the report, the trainer is the
-// session user: a traineeId, trainerId, organizationId, weekNumber or year in
-// the body is ignored.
+// Trainee, organization, occupation and week come from the report, the
+// trainer is the session user: a traineeId, trainerId, organizationId,
+// weekNumber or year in the body is ignored.
 export async function POST(request: NextRequest) {
   const session = await requireTrainer(request);
   if (isErrorResponse(session)) return session;
@@ -149,7 +149,9 @@ export async function POST(request: NextRequest) {
     const unknown = await unknownCriterion(softskillRatings);
     if (unknown) return unknown;
 
-    // Check if evaluation already exists for this activity report
+    // Check if evaluation already exists for this activity report. A report
+    // belongs to one occupation, so this is the check "one evaluation per week
+    // and occupation" as well
     const existingEvaluations = await db
       .select()
       .from(weeklyEvaluations)
@@ -247,6 +249,8 @@ export async function POST(request: NextRequest) {
         trainerId,
         organizationId: report.organizationId,
         activityReportId: report.id,
+        // The evaluation belongs to the occupation of its report
+        trainingCatalogId: report.trainingCatalogId,
         weekNumber: report.weekNumber,
         year: report.year,
         ausbildungsjahr: report.ausbildungsjahr,

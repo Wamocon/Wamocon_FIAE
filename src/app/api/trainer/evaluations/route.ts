@@ -11,7 +11,6 @@ import {
     traineeIdInScope,
 } from '@/lib/auth/trainee-scope-conditions';
 import {
-    evaluationReportCatalogCondition,
     requireReportCatalogFilter,
 } from '@/lib/auth/activity-report-access';
 
@@ -29,15 +28,16 @@ export async function GET(request: NextRequest) {
 
         // Only evaluations of trainees of the own organization (the super admin
         // sees every one) and, with a chosen occupation (x-catalog), of that
-        // occupation: the one of the activity report the evaluation belongs to,
-        // not the one of the enrollments of the trainee
+        // occupation: the one of the evaluation itself
+        // (weekly_evaluations.training_catalog_id), not the one of the
+        // enrollments of the trainee
         const traineeScope = await requireTraineeScopeCondition(session, request, {
             byEnrollment: false,
         });
         if (isErrorResponse(traineeScope)) return traineeScope;
         const reportCatalog = await requireReportCatalogFilter(session, request);
         if (isErrorResponse(reportCatalog)) return reportCatalog;
-        const catalogCondition = evaluationReportCatalogCondition(reportCatalog.condition);
+        const catalogCondition = reportCatalog.evaluationCondition ?? undefined;
 
         // Build query conditions
         const conditions = [

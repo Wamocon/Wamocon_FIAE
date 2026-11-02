@@ -369,6 +369,51 @@ describe('POST /api/hai/voice/haus/transcribe', () => {
     );
   });
 
+  it('Open WebUI answers { text, filename }: the client gets only the text', async () => {
+    setEnv(HAUS);
+    global.fetch = (async () =>
+      new Response(
+        JSON.stringify({ text: 'Was ist ein Join?', filename: 'a.webm' })
+      )) as unknown as typeof fetch;
+    const r = await load();
+    const res = await r.transcribe(upload(2048));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ text: 'Was ist ein Join?' });
+  });
+
+  it('a 500 of the speech service behind Open WebUI: 503 UPSTREAM_FAILED, then the config leaves Sokrates out for a while and the browser listens', async () => {
+    setEnv(HAUS);
+    global.fetch = (async () =>
+      new Response('{"detail":"Internal Server Error"}', {
+        status: 500,
+      })) as unknown as typeof fetch;
+    const r = await load({
+      settingsRows: [
+        { key: 'voice_provider_primary', value: 'haus' },
+        { key: 'voice_provider_fallback', value: 'browser' },
+      ],
+    });
+    const before = await (
+      await r.config(get('http://localhost/api/hai/voice/config'))
+    ).json();
+    expect(before.chain).toEqual(['haus', 'browser']);
+    const res = await r.transcribe(upload(100));
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      code: 'UPSTREAM_FAILED',
+      reason: 'UPSTREAM_UNAVAILABLE',
+    });
+    // the answer names no address, no key and no model
+    expect(JSON.stringify(body)).not.toMatch(
+      /sokrates|whisper|tts-1|alloy|sk-real/i
+    );
+    const after = await (
+      await r.config(get('http://localhost/api/hai/voice/config'))
+    ).json();
+    expect(after.chain).toEqual(['browser']);
+  });
+
   it('Sokrates does not offer the model: 503, the client falls back', async () => {
     setEnv(HAUS);
     global.fetch = (async () =>
@@ -450,6 +495,30 @@ describe('POST /api/hai/voice/haus/speech', () => {
     expect(res.headers.get('content-type')).toBe('audio/wav');
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(
       new Uint8Array([82, 73, 70, 70])
+    );
+  });
+
+  it('passes the MP3 of Open WebUI on as audio/mpeg, byte for byte, from /v1/audio/speech', async () => {
+    setEnv(HAUS);
+    const mp3 = new Uint8Array([0x49, 0x44, 0x33, 4, 0, 0, 1, 2, 3, 4]);
+    const fetchMock = jest.fn(
+      async () =>
+        new Response(mp3, {
+          status: 200,
+          headers: { 'Content-Type': 'audio/mpeg' },
+        })
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const r = await load();
+    const res = await r.speech(
+      post('http://localhost/api/x', { text: 'Hallo.' })
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('audio/mpeg');
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(mp3);
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toBe(
+      'https://sokrates.test-qualitaetsmanagement.com/api/v1/audio/speech'
     );
   });
 

@@ -1852,6 +1852,13 @@ export const weeklyEvaluations = pgTable(
       () => activityReports.id,
       { onDelete: 'cascade' }
     ),
+    // Occupation (training catalog) the evaluation was written for. A trainee
+    // in several trainings has one evaluation per week and occupation. The
+    // default keeps writers that do not know the column on FIAE.
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+      .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
 
     // Time period
     weekNumber: integer('week_number').notNull(), // ISO week 1-52
@@ -1889,10 +1896,23 @@ export const weeklyEvaluations = pgTable(
       .$onUpdate(() => new Date()),
   },
   table => ({
-    uniqueTraineeWeekYear: unique().on(
+    // One evaluation per trainee, occupation, year and week (the migration
+    // replaces the older uniqueness per trainee, week and year)
+    uniqueTraineeCatalogWeekYear: unique(
+      'weekly_evaluations_trainee_catalog_week_unique'
+    ).on(
       table.traineeId,
-      table.weekNumber,
-      table.year
+      table.trainingCatalogId,
+      table.year,
+      table.weekNumber
+    ),
+    traineeCatalogWeekIdx: index(
+      'weekly_evaluations_trainee_catalog_week_idx'
+    ).on(
+      table.traineeId,
+      table.trainingCatalogId,
+      table.year,
+      table.weekNumber
     ),
   })
 );
