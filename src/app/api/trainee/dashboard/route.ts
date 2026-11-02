@@ -33,6 +33,7 @@ import { loadCourseProgressions } from '@/lib/catalog/progression-db';
 import { startOfToday } from '@/lib/school/day';
 import type { EnablerProgression } from '@/lib/catalog/progression';
 import { sortCourses } from '@/lib/catalog/course-order';
+import { courseProgressPercent } from '@/lib/catalog/course-progress';
 import {
   getPhaseDeadline,
   getPhaseMonthRange,
@@ -153,7 +154,15 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
     const achievedSet = new Set(achievedSkillsRaw.map(a => String(a.skillId)));
 
     // ── Phase 2: courseId-dependent queries in PARALLEL ──
-    const modules: Array<{ id: string; title: string; progress: number }> = [];
+    const modules: Array<{
+      id: string;
+      title: string;
+      progress: number;
+      enablerCount: number;
+      completedCount: number;
+      useCaseCount: number;
+      approvedUseCaseCount: number;
+    }> = [];
     let nextItem: any = null;
     let skillRadar: Array<{ skill: string; value: number }> = [];
 
@@ -256,26 +265,23 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
           }
         }
 
-        // Calculate weighted progress
-        const enablerProgress =
-          totalEnablers > 0 ? completedCount / totalEnablers : 1;
-        const useCaseProgress =
-          totalUseCases > 0 ? approvedUseCaseCount / totalUseCases : 1;
+        // Weighted progress, the same function as the list of the courses
+        const pct = courseProgressPercent({
+          enablerTotal: totalEnablers,
+          enablerDone: completedCount,
+          useCaseTotal: totalUseCases,
+          useCaseDone: approvedUseCaseCount,
+        });
 
-        let pct: number;
-        if (totalEnablers > 0 && totalUseCases > 0) {
-          pct = Math.round(
-            (enablerProgress * 0.7 + useCaseProgress * 0.3) * 100
-          );
-        } else if (totalEnablers > 0) {
-          pct = Math.round(enablerProgress * 100);
-        } else if (totalUseCases > 0) {
-          pct = Math.round(useCaseProgress * 100);
-        } else {
-          pct = 0;
-        }
-
-        modules.push({ id: cId, title: c.title, progress: pct });
+        modules.push({
+          id: cId,
+          title: c.title,
+          progress: pct,
+          enablerCount: totalEnablers,
+          completedCount,
+          useCaseCount: totalUseCases,
+          approvedUseCaseCount,
+        });
       }
 
       // Next item: the first active enabler that is not completed and that the
