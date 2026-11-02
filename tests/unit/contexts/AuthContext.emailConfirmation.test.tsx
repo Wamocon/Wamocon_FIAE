@@ -5,7 +5,9 @@ import { isEmailNotConfirmedError } from '@/lib/auth/email-confirmation';
 
 // AuthProvider and the two rules of this change: a sign in of an address that
 // is not confirmed yet fails with its own kind of error (the login form offers
-// the e-mail again), and the own password is changed only with 8 characters.
+// the e-mail again), and the own password is changed only with 8 characters
+// and only through the server, which checks the CURRENT password first
+// (WMCNL-2965): the browser no longer calls auth.updateUser itself.
 
 const mockSupabase: any = {
   auth: {
@@ -30,7 +32,7 @@ jest.mock('next/navigation', () => ({
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
-function Probe({ password }: { password: string }) {
+function Probe({ password, current }: { password: string; current: string }) {
   const { signIn, changePassword } = useAuth();
   const [result, setResult] = React.useState('');
   const [kind, setKind] = React.useState('');
@@ -50,9 +52,11 @@ function Probe({ password }: { password: string }) {
       </button>
       <button
         onClick={() =>
-          changePassword(password)
+          changePassword(current, password)
             .then(() => setResult('changed'))
-            .catch((e: Error) => setResult(e.message))
+            .catch((e: Error & { code?: string }) =>
+              setResult(e.code ?? e.message)
+            )
         }
       >
         change
@@ -63,11 +67,15 @@ function Probe({ password }: { password: string }) {
   );
 }
 
-async function run(buttonText: string, password = 'irrelevant') {
+async function run(
+  buttonText: string,
+  password = 'irrelevant',
+  current = 'current-pass'
+) {
   const user = userEvent.setup();
   render(
     <AuthProvider>
-      <Probe password={password} />
+      <Probe password={password} current={current} />
     </AuthProvider>
   );
   await user.click(screen.getByText(buttonText));
@@ -134,23 +142,73 @@ describe('AuthProvider and the confirmation of the e-mail address', () => {
   });
 
   describe('changePassword', () => {
+    const serverAnswer = (status: number, body: unknown) =>
+      jest.fn().mockResolvedValue({
+        ok: status >= 200 && status < 300,
+        status,
+        json: () => Promise.resolve(body),
+      });
+
     it.each(['', 'short', '1234567'])(
-      'refuses %j with the German message of the rule and does not call Supabase',
+      'refuses %j as the new password with its code and sends nothing',
       async password => {
+        global.fetch = jest.fn() as any;
         await run('change', password);
-        expect(screen.getByTestId('result').textContent).toMatch(
-          /^Passwort (ist erforderlich|muss mindestens 8 Zeichen lang sein)$/
+        expect(screen.getByTestId('result')).toHaveTextContent(
+          'PASSWORD_INVALID'
         );
+        expect(global.fetch).not.toHaveBeenCalled();
         expect(mockSupabase.auth.updateUser).not.toHaveBeenCalled();
       }
     );
 
-    it('changes the password with 8 characters', async () => {
-      await run('change', '12345678');
+    it('refuses an empty current password and sends nothing', async () => {
+      global.fetch = jest.fn() as any;
+      await run('change', '12345678', '');
+      expect(screen.getByTestId('result')).toHaveTextContent(
+        'CURRENT_PASSWORD_REQUIRED'
+      );
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(mockSupabase.auth.updateUser).not.toHaveBeenCalled();
+    });
+
+    it('changes the password through the server, with the current and the new one, and never through auth.updateUser', async () => {
+      global.fetch = serverAnswer(200, { success: true }) as any;
+      await run('change', '12345678', 'old-password');
       expect(screen.getByTestId('result')).toHaveTextContent('changed');
-      expect(mockSupabase.auth.updateUser).toHaveBeenCalledWith({
-        password: '12345678',
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+      expect(url).toBe('/api/auth/change-password');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body)).toEqual({
+        currentPassword: 'old-password',
+        newPassword: '12345678',
       });
+      expect(mockSupabase.auth.updateUser).not.toHaveBeenCalled();
+    });
+
+    it('a wrong current password stays a failure with the code of the server', async () => {
+      global.fetch = serverAnswer(400, {
+        code: 'CURRENT_PASSWORD_WRONG',
+      }) as any;
+      await run('change', '12345678', 'wrong');
+      expect(screen.getByTestId('result')).toHaveTextContent(
+        'CURRENT_PASSWORD_WRONG'
+      );
+    });
+
+    it('an answer without a known code is a plain FAILED, no text of the server is passed on', async () => {
+      global.fetch = serverAnswer(500, {
+        error: 'Invalid login credentials from supabase',
+      }) as any;
+      await run('change', '12345678', 'old-password');
+      expect(screen.getByTestId('result').textContent).toBe('FAILED');
+    });
+
+    it('a request that cannot be sent is UNAVAILABLE', async () => {
+      global.fetch = jest.fn().mockRejectedValue(new Error('offline')) as any;
+      await run('change', '12345678', 'old-password');
+      expect(screen.getByTestId('result').textContent).toBe('UNAVAILABLE');
     });
   });
 });
