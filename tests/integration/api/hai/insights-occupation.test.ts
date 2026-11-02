@@ -293,3 +293,89 @@ describe('insights of a trainer', () => {
     expect(params).not.toContain(KFBM);
   });
 });
+
+describe('progress of the assigned trainees, per occupation', () => {
+  const lowRows = [
+    { id: 'a', full_name: 'Anna Beispiel', catalog_code: 'KFBM', progress: 10 },
+    { id: 'b', full_name: 'Ben Beispiel', catalog_code: 'FIAE', progress: 20 },
+  ];
+
+  /** The raw query of the progress check (the one that names assigned_trainer_id). */
+  function progressQuery(rec: ReturnType<typeof createTableDb>) {
+    const calls = (rec.db.execute as jest.Mock).mock.calls.map((c: any[]) =>
+      renderCondition(c[0])
+    );
+    const found = calls.find(c => c.sql.includes('assigned_trainer_id'));
+    expect(found).toBeDefined();
+    return found as { sql: string; params: unknown[] };
+  }
+
+  it.each([
+    ['KFBM', KFBM, FIAE],
+    ['FIAE', FIAE, KFBM],
+  ])(
+    'tab %s: the share is counted in the courses of this occupation only',
+    async (code, chosen, other) => {
+      const { mod, rec } = await load({ role: 'TRAINER' });
+      (rec.db.execute as jest.Mock).mockImplementationOnce(async () => [
+        lowRows[0],
+      ]);
+      const res = await mod.GET(get(code));
+      expect(res.status).toBe(200);
+      const query = progressQuery(rec);
+      expect(query.sql).toContain('c.training_catalog_id = $');
+      expect(query.params).toContain(chosen);
+      expect(query.params).not.toContain(other);
+      // never the progress of the person as a whole
+      expect(query.sql).not.toContain('overall_progress');
+      // the trainer is the first limit
+      expect(query.params).toContain(ME);
+      const { body } = await titles(res);
+      const hint = body.insights.find(
+        i => i.title === 'Azubis brauchen Unterstützung'
+      );
+      // inside one tab the occupation is clear, the name stands alone
+      expect(hint?.message).toContain('Anna Beispiel');
+      expect(hint?.message).not.toContain('(KFBM)');
+    }
+  );
+
+  it('without a choice every occupation is checked and the name carries the code', async () => {
+    const { mod, rec } = await load({ role: 'TRAINER' });
+    (rec.db.execute as jest.Mock).mockImplementationOnce(async () => lowRows);
+    const res = await mod.GET(get());
+    expect(res.status).toBe(200);
+    const query = progressQuery(rec);
+    expect(query.sql).not.toContain('c.training_catalog_id = $');
+    const { body } = await titles(res);
+    const hint = body.insights.find(
+      i => i.title === 'Azubis brauchen Unterstützung'
+    );
+    expect(hint?.message).toContain(
+      'Anna Beispiel (KFBM), Ben Beispiel (FIAE)'
+    );
+  });
+
+  it('no trainee with low progress: no hint', async () => {
+    const { mod } = await load({ role: 'TRAINER' });
+    const res = await mod.GET(get('FIAE'));
+    const { titles: found } = await titles(res);
+    expect(found).not.toContain('Azubis brauchen Unterstützung');
+  });
+});
+
+describe('the raw queries use the real columns of enabler_completions', () => {
+  it('the next step of a trainee joins on trainee_id and enabler_id (there is no user_id or id)', async () => {
+    const { mod, rec } = await load({ tables: progressRows });
+    await mod.GET(get('FIAE'));
+    const sqls = (rec.db.execute as jest.Mock).mock.calls.map(
+      (c: any[]) => renderCondition(c[0]).sql
+    );
+    const next = sqls.find(s => s.includes('LEFT JOIN enabler_completions'));
+    expect(next).toBeDefined();
+    expect(next).toContain('ec.trainee_id = $');
+    expect(next).toContain('ec.enabler_id IS NULL');
+    expect(next).not.toContain('ec.user_id');
+    expect(next).not.toContain('ec.id ');
+  });
+});
