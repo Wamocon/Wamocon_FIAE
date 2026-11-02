@@ -67,7 +67,7 @@ Hinweis: Die Szenario-Dokumente enthalten laut Beschluss vom 29.10.2026 auch Lö
 
 ## E. Sprachassistent
 
-Browser: Chrome oder Edge am Rechner, Chrome auf Android, Safari am iPhone. Mikrofon im Browser erlauben. Mit dem Anbieter Browser hat Firefox keine Spracherkennung, dort erscheint kein Mikrofonknopf (richtig so). Mit Soniox oder Sokrates läuft der Sprachassistent auch in Firefox. Voraussetzung für E14 bis E17 sind SONIOX_API_KEY und SONIOX_REGION=eu in Vercel (Preview), für Sokrates zusätzlich HAI_STT_HAUS_MODEL, HAI_TTS_HAUS_MODEL und HAI_TTS_HAUS_VOICE, und die Migration `20261102000100_hai_settings.sql` auf der Preview (ohne sie gelten die Standardwerte, und das Speichern der Einstellung scheitert mit einer klaren Meldung).
+Browser: Chrome oder Edge am Rechner, Chrome auf Android, Safari am iPhone. Mikrofon im Browser erlauben. Mit dem Anbieter Browser hat Firefox keine Spracherkennung, dort erscheint kein Mikrofonknopf (richtig so). Mit Soniox oder Sokrates läuft der Sprachassistent auch in Firefox. Voraussetzung für E14 bis E17 sind SONIOX_API_KEY und SONIOX_REGION=eu in Vercel (Preview), für Sokrates zusätzlich HAI_STT_HAUS_MODEL, HAI_TTS_HAUS_MODEL und HAI_TTS_HAUS_VOICE, und die Migration `20261102000100_hai_settings.sql` auf der Preview (ohne sie gelten die Standardwerte, und das Speichern der Einstellung scheitert mit einer klaren Meldung). Vorab zeigt `node --env-file=.env.local scripts/hai/voice-live-check.mjs` (Abschnitt "Prüfen der Sprachanbieter" in `docs/hai-sprachassistent.md`), ob Soniox und Sokrates mit diesen Werten antworten.
 
 | Nr | Aktion | Erwartung | P |
 |---|---|---|---|
