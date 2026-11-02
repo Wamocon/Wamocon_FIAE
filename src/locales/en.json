@@ -3122,5 +3122,7 @@
   "trainer.quizDetail.assigned": "Assigned trainees",
   "trainer.quizDetail.noneAssigned": "No trainee is assigned to this quiz.",
   "content.assignSelectBoth": "Please select at least one trainee and one topic.",
-  "content.assignedTrainees.one": "{count} trainee"
+  "content.assignedTrainees.one": "{count} trainee",
+  "trainer.school.calendar.selectTrainee": "Select trainee...",
+  "trainer.school.calendar.unknownTrainee": "Unknown"
 }

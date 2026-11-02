@@ -3124,5 +3124,7 @@
   "trainer.quizDetail.assigned": "Zugewiesene Azubis",
   "trainer.quizDetail.noneAssigned": "Diesem Quiz ist kein Azubi zugewiesen.",
   "content.assignSelectBoth": "Bitte mindestens einen Azubi und einen Fragenkomplex auswählen.",
-  "content.assignedTrainees.one": "{count} Azubi"
+  "content.assignedTrainees.one": "{count} Azubi",
+  "trainer.school.calendar.selectTrainee": "Azubi auswählen...",
+  "trainer.school.calendar.unknownTrainee": "Unbekannt"
 }
