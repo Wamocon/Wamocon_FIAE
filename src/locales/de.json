@@ -3103,5 +3103,11 @@
   "hai.voiceMode.listenAgain": "Erneut zuhören",
   "hai.voiceMode.hint": "Sagen Sie „Sprachmodus beenden“ oder drücken Sie Esc, um das Gespräch zu beenden. Ein Tipp auf die HAI unterbricht sie. Alles Gesprochene steht im Chat zum Nachlesen.",
   "hai.voiceMode.mini.label": "Sprachmodus aktiv",
-  "hai.voiceMode.mini.restore": "Sprachmodus wieder groß anzeigen"
+  "hai.voiceMode.mini.restore": "Sprachmodus wieder groß anzeigen",
+  "flipbook.document": "Dokument",
+  "securePdf.loadFailed": "Das Dokument konnte nicht geladen werden. Bitte versuchen Sie es später noch einmal.",
+  "securePdf.pageOf": "Seite {current} von {total}",
+  "securePdf.pageLabel": "Seite {page}",
+  "securePdf.previousPage": "Vorherige Seite",
+  "securePdf.nextPage": "Nächste Seite"
 }
