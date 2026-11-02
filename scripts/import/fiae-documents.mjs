@@ -53,6 +53,7 @@ import {
   describeComponent,
   listComponentFolders,
   parseComponentList,
+  resolveComponentTokens,
 } from './fiae-component-folder.mjs';
 import { describeCopy, findBaseCopies } from './fiae-copy-check.mjs';
 
@@ -107,9 +108,10 @@ export function parseArgs(argv) {
     } else if (a === '--components') {
       const v = value(i, a);
       i++;
-      // old numbers (05, 13) and labels (2.1, 2.2) both work, an unknown one is an error
+      // plain numbers mean different components in the two schemes: kept as typed, resolved
+      // against the scheme of the delivery folder (resolveComponentTokens)
       const list = v ? parseComponentList(v) : null;
-      out.components = list ? list.keys : null;
+      out.components = list ? list.tokens : null;
       list?.errors.forEach(e => out.errors.push(`--components: ${e}`));
     } else if (a === '--limit') {
       out.limit = Number(value(i, a));
@@ -199,13 +201,16 @@ export function mapComponents(folders, courses) {
       const both = cands.filter(x => /vertiefung/i.test(x.c.title) === wantV);
       pick = (both[0] ?? cands[0]).c;
     }
-    if (!pick) problems.push(`No course for component ${describeComponent(f.nr)}.`);
+    if (!pick) problems.push(`No course for component ${f.name ?? describeComponent(f.nr)}.`);
     else map.set(f.nr, pick);
   }
+  const names = new Map(folders.map(f => [f.nr, f.name]));
   const used = new Set();
   for (const [nr, c] of map) {
     if (used.has(c.id))
-      problems.push(`Two components claim the same course (${describeComponent(nr)}).`);
+      problems.push(
+        `Two components claim the same course (${names.get(nr) ?? describeComponent(nr)}).`
+      );
     used.add(c.id);
   }
   return { map, problems };
@@ -285,7 +290,7 @@ export async function hasSolutionPart(file) {
  */
 export function readSource(root) {
   const comps = [];
-  const { folders, problems } = listComponentFolders(root);
+  const { folders, problems, scheme } = listComponentFolders(root);
   if (problems.length)
     throw new Error(`The component folders are not clear: ${problems.join(' ')}`);
   for (const f of folders) {
@@ -293,7 +298,8 @@ export function readSource(root) {
     const comp = {
       nr: f.nr,
       key: f.key,
-      name: describeComponent(f.nr),
+      scheme,
+      name: describeComponent(f.nr, scheme),
       title: f.dirName,
       dir,
       enablers: [],
@@ -466,10 +472,17 @@ async function rollback(args, client) {
 async function execute(args, client, origin, env) {
   const q = async (sql, params) => (await client.query(sql, params)).rows;
   const everything = readSource(args.source);
+  // --components in the scheme of the delivery folder (a plain 13 is Speicherlösungen in the new one)
+  const wanted = args.components
+    ? resolveComponentTokens(args.components, everything[0]?.scheme ?? 'old')
+    : null;
+  if (wanted?.errors.length) {
+    wanted.errors.forEach(e => console.error(`Refused: --components: ${e}`));
+    return 1;
+  }
   const source = everything.filter(
     c =>
-      !DEFERRED.has(c.key) &&
-      (!args.components || args.components.includes(c.key))
+      !DEFERRED.has(c.key) && (!wanted || wanted.keys.includes(c.key))
   );
   const deferred = everything.filter(c => DEFERRED.has(c.key));
   const courses = await q(
@@ -508,7 +521,7 @@ async function execute(args, client, origin, env) {
     // the run is not changed; component 22 is checked although it is deferred)
     copiesOfBase: findBaseCopies(
       everything,
-      args.components ? new Set(args.components.map(Number)) : null
+      wanted ? new Set(wanted.keys.map(Number)) : null
     ),
   };
   for (const comp of source) {

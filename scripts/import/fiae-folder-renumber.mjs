@@ -1,8 +1,11 @@
-// Renames the component folders of the FIAE delivery (06-01-26 LFA\FIAE\Komponenten) from the old
-// numbering (02_, 13_) to the labels of the platform (2.1_ for the base component, 2.2_ for its
-// Vertiefung). Single components (1, 7, 12, 19, 23 to 26) keep their name, a folder that already has
-// the new name is left as it is. Only the names of the component folders directly under the given
-// folder are changed. No file inside a folder is read, written or moved, nothing is deleted.
+// Renames the component folders of an OLD delivery (06-01-26 LFAFIAEKomponenten, the 26 folders 01 to
+// 26, "13_" is the Vertiefung of 2) to the final numbering of 02.11.2026: two digits with a leading
+// zero, the dot notation for the pairs (02.1_ base, 02.2_ Vertiefung) and the single components
+// numbered on (19 becomes 13, 23 becomes 14, 24 becomes 15, 25 becomes 16, 26 becomes 17; 01, 07 and
+// 12 stay). A delivery that already has the final numbering (a folder with the dot notation) is left
+// as it is. The tool serves later deliveries in the old numbering, the delivery folder of 02.11.2026
+// is converted already. Only the names of the component folders directly under the given folder are
+// changed. No file inside a folder is read, written or moved, nothing is deleted.
 //
 // Commands:
 //   plan     <folder>                    (default, read only) lists old and new name of every folder
@@ -28,23 +31,23 @@ import path from 'node:path';
 
 import {
   describeComponent,
+  finalFolderNumber,
   listComponentFolders,
-  newFolderPrefix,
 } from './fiae-component-folder.mjs';
 
 /**
  * What would happen to every component folder under `root`:
- * { items: [{ from, to, action, nr, name }], problems }. action is 'rename' (a pair in the old
- * spelling), 'keep' (single component) or 'new' (already named 2.1_ or 2.2_). `to` equals `from`
- * unless the action is 'rename'.
+ * { items: [{ from, to, action, nr, name }], problems }. action is 'rename' (a folder of the old
+ * numbering with another final name), 'keep' (its name is the final name already, 01_, 07_, 12_) or
+ * 'new' (the delivery uses the final numbering, nothing to do). `to` equals `from` unless the
+ * action is 'rename'.
  */
 export function planRenames(root) {
-  const { folders, problems } = listComponentFolders(root);
+  const { folders, problems, scheme } = listComponentFolders(root);
   const items = [];
   for (const f of folders) {
-    const name = describeComponent(f.nr);
-    const prefix = newFolderPrefix(f.nr);
-    if (f.spelling === 'new') {
+    const name = describeComponent(f.nr, scheme);
+    if (scheme === 'new') {
       items.push({
         from: f.dirName,
         to: f.dirName,
@@ -54,24 +57,12 @@ export function planRenames(root) {
       });
       continue;
     }
-    // a single component has no dot in its label: nothing to rename
-    if (!prefix.includes('.')) {
-      items.push({
-        from: f.dirName,
-        to: f.dirName,
-        action: 'keep',
-        nr: f.nr,
-        name,
-      });
-      continue;
-    }
     const rest = /^\s*\d+([_ ].*)$/.exec(f.dirName);
-    const separator = rest[1].charAt(0);
-    const title = rest[1].slice(1);
+    const to = `${finalFolderNumber(f.nr)}${rest[1]}`;
     items.push({
       from: f.dirName,
-      to: `${prefix.slice(0, -1)}${separator}${title}`,
-      action: 'rename',
+      to,
+      action: to === f.dirName ? 'keep' : 'rename',
       nr: f.nr,
       name,
     });
@@ -217,7 +208,7 @@ export function main(argv) {
     }
     const count = a => items.filter(i => i.action === a).length;
     console.log(
-      `${items.length} component folders: ${count('rename')} to rename, ${count('keep')} single components stay, ${count('new')} already new.`
+      `${items.length} component folders: ${count('rename')} to rename, ${count('keep')} unchanged names, ${count('new')} already final numbering.`
     );
     problems.forEach(p => console.error(`Problem: ${p}`));
     if (args.command === 'plan') {

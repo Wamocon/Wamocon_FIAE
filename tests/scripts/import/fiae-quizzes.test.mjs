@@ -137,14 +137,14 @@ test('the arguments allow only the Preview', () => {
   assert.deepEqual(
     parseArgs(['run', 'src', '--target', 'preview', '--components', '9,13'])
       .components,
-    ['09', '13']
+    ['9', '13']
   );
 });
 
-test('--components reads old numbers and labels (2.1, 2.2) and refuses an unknown value', () => {
+test('--components keeps the tokens as typed (plain numbers resolve per scheme) and refuses an unknown value', () => {
   assert.deepEqual(
     parseArgs(['run', 'src', '--target', 'preview', '--components', '2.1,2.2,9']).components,
-    ['02', '13', '09']
+    ['2.1', '2.2', '9']
   );
   const bad = parseArgs(['run', 'src', '--target', 'preview', '--components', '13.1']);
   assert.ok(bad.errors.some(e => /--components/.test(e) && /13\.1/.test(e)));

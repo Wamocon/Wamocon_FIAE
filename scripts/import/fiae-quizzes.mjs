@@ -23,7 +23,10 @@ import path from 'node:path';
 
 import { mapComponents, matchEnablers, readSource } from './fiae-documents.mjs';
 import { docxLines, norm, parseQuizLines, stemKey } from './fiae-quiz-parse.mjs';
-import { parseComponentList } from './fiae-component-folder.mjs';
+import {
+  parseComponentList,
+  resolveComponentTokens,
+} from './fiae-component-folder.mjs';
 import {
   openVerifiedClient,
   prepareConnection,
@@ -65,9 +68,10 @@ export function parseArgs(argv) {
     else if (a === '--out') out.out = value(i++, a);
     else if (a === '--components') {
       const v = value(i++, a);
-      // old numbers (05, 13) and labels (2.1, 2.2) both work, an unknown one is an error
+      // plain numbers mean different components in the two schemes: kept as typed, resolved
+      // against the scheme of the delivery folder (resolveComponentTokens)
       const list = v ? parseComponentList(v) : null;
-      out.components = list ? list.keys : null;
+      out.components = list ? list.tokens : null;
       list?.errors.forEach(e => out.errors.push(`--components: ${e}`));
     } else if (a.startsWith('--')) out.errors.push(`Unknown option ${a}.`);
     else rest.push(a);
@@ -176,8 +180,16 @@ export async function main(argv, env = process.env) {
 async function execute(args, client) {
   const q = async (sql, p) => (await client.query(sql, p)).rows;
   const everything = readSource(args.source);
+  // --components in the scheme of the delivery folder (a plain 13 is Speicherlösungen in the new one)
+  const wanted = args.components
+    ? resolveComponentTokens(args.components, everything[0]?.scheme ?? 'old')
+    : null;
+  if (wanted?.errors.length) {
+    wanted.errors.forEach(e => console.error(`Refused: --components: ${e}`));
+    return 1;
+  }
   const source = everything.filter(
-    c => !DEFERRED.has(c.key) && (!args.components || args.components.includes(c.key))
+    c => !DEFERRED.has(c.key) && (!wanted || wanted.keys.includes(c.key))
   );
   const courses = await q(
     `select c.id, c.title from ${S}.courses c join ${S}.training_catalogs t on t.id = c.training_catalog_id where t.code = 'FIAE'`

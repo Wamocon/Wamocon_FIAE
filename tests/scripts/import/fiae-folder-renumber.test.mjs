@@ -14,9 +14,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
+import { FINAL_LISTING, OLD_LISTING } from './fiae-listing.mjs';
+
 const { applyRenames, main, parseArgs, planRenames, rollbackRenames } =
   await import('../../../scripts/import/fiae-folder-renumber.mjs');
 
+// an old delivery (the number is the order index) and what the tool makes of it
 const OLD = [
   '01_Planen, Vorbereiten',
   '02_Informieren und Beraten',
@@ -26,16 +29,18 @@ const OLD = [
   '19_Netzwerk',
   '20_Programmieren (Vertiefung)',
   '23_Berufsbildung',
+  '26_Umweltschutz',
 ];
 const NEW = [
   '01_Planen, Vorbereiten',
-  '2.1_Informieren und Beraten',
+  '02.1_Informieren und Beraten',
   '07_Erbringen',
-  '9.1_Programmieren',
-  '2.2_Informieren und Beraten (Vertiefung)',
-  '19_Netzwerk',
-  '9.2_Programmieren (Vertiefung)',
-  '23_Berufsbildung',
+  '09.1_Programmieren',
+  '02.2_Informieren und Beraten (Vertiefung)',
+  '13_Netzwerk',
+  '09.2_Programmieren (Vertiefung)',
+  '14_Berufsbildung',
+  '17_Umweltschutz',
 ];
 
 /** A throwaway delivery: the component folders with one file inside each, and a loose file next to them. */
@@ -69,7 +74,7 @@ const quiet = fn => {
   }
 };
 
-test('the plan names old and new and changes nothing: pairs are renamed, singles stay', () => {
+test('the plan names old and new and changes nothing: pairs get the dot notation, singles are numbered on', () => {
   const { base, root } = makeRoot();
   try {
     const before = names(root);
@@ -81,7 +86,17 @@ test('the plan names old and new and changes nothing: pairs are renamed, singles
     );
     assert.deepEqual(
       items.map(i => i.action),
-      ['keep', 'rename', 'keep', 'rename', 'rename', 'keep', 'rename', 'keep']
+      [
+        'keep',
+        'rename',
+        'keep',
+        'rename',
+        'rename',
+        'rename',
+        'rename',
+        'rename',
+        'rename',
+      ]
     );
     assert.deepEqual(names(root), before);
   } finally {
@@ -111,18 +126,18 @@ test('plan is the default of the command and apply needs a log file', () => {
   assert.ok(lines.some(l => /folder of the components is missing/.test(l)));
 });
 
-test('apply renames only the pairs, leaves every file untouched and writes the log', () => {
+test('apply renames to the final numbering, leaves every file untouched and writes the log', () => {
   const { base, root, log } = makeRoot();
   try {
     const { renamed } = applyRenames(root, log);
-    assert.equal(renamed.length, 4);
+    assert.equal(renamed.length, 7);
     assert.deepEqual(names(root), [...NEW, 'Hinweis.txt'].sort());
     // the files inside are exactly where and what they were
     assert.equal(
       readFileSync(
         path.join(
           root,
-          '2.1_Informieren und Beraten',
+          '02.1_Informieren und Beraten',
           'Enablers',
           'inhalt.txt'
         ),
@@ -135,10 +150,10 @@ test('apply renames only the pairs, leaves every file untouched and writes the l
       'bleibt'
     );
     const written = JSON.parse(readFileSync(log, 'utf8'));
-    assert.equal(written.renamed.length, 4);
+    assert.equal(written.renamed.length, 7);
     assert.deepEqual(written.renamed[0], {
       from: '02_Informieren und Beraten',
-      to: '2.1_Informieren und Beraten',
+      to: '02.1_Informieren und Beraten',
     });
   } finally {
     rmSync(base, { recursive: true, force: true });
@@ -151,7 +166,7 @@ test('rollback gives every folder its old name again, then a second rollback is 
     const before = names(root);
     applyRenames(root, log);
     const { restored } = rollbackRenames(log);
-    assert.equal(restored.length, 4);
+    assert.equal(restored.length, 7);
     assert.deepEqual(names(root), before);
     assert.equal(
       readFileSync(
@@ -190,7 +205,7 @@ test('apply stops before the first rename when a target name already exists, in 
 test('a loose file with the target name (any letter case) stops apply with the message that it exists', () => {
   const { base, root, log } = makeRoot();
   try {
-    writeFileSync(path.join(root, '2.1_INFORMIEREN UND BERATEN'), 'Datei');
+    writeFileSync(path.join(root, '02.1_INFORMIEREN UND BERATEN'), 'Datei');
     const before = names(root);
     const { problems } = planRenames(root);
     assert.ok(problems.some(p => /already exists/.test(p)));
@@ -205,22 +220,32 @@ test('a loose file with the target name (any letter case) stops apply with the m
   }
 });
 
-test('apply stops on an unclear number or two folders for one component, nothing is renamed', () => {
+test('apply stops on an unclear number, a mix of both numberings or two folders for one component, nothing is renamed', () => {
   const { base, root, log } = makeRoot();
   try {
-    mkdirSync(path.join(root, '2.3_Falsch'));
     const before = names(root);
+    // an unclear number
+    mkdirSync(path.join(root, '2.3_Falsch'));
     assert.throws(
       () => applyRenames(root, log),
       /Nothing renamed.*2\.3_Falsch/
     );
-    assert.deepEqual(names(root), before);
     rmSync(path.join(root, '2.3_Falsch'), { recursive: true });
-    mkdirSync(path.join(root, '2.1_Doppelt'));
+    // a folder with the dot notation makes the delivery final: the plain old numbers are a mix
+    mkdirSync(path.join(root, '02.1_Doppelt'));
     assert.throws(
       () => applyRenames(root, log),
-      /Two folders for the component 2\.1/
+      /Nothing renamed.*not allowed in the final numbering/
     );
+    rmSync(path.join(root, '02.1_Doppelt'), { recursive: true });
+    // two folders for one component
+    mkdirSync(path.join(root, '02 Doppelt'));
+    assert.throws(
+      () => applyRenames(root, log),
+      /Two folders for the component 2\.1 \(Ordner 02\)/
+    );
+    rmSync(path.join(root, '02 Doppelt'), { recursive: true });
+    assert.deepEqual(names(root), before);
     assert.equal(existsSync(log), false);
   } finally {
     rmSync(base, { recursive: true, force: true });
@@ -240,7 +265,7 @@ test('apply refuses to overwrite an existing log file', () => {
   }
 });
 
-test('folders already in the new spelling stay, a second apply finds nothing to do', () => {
+test('a delivery with the final numbering stays as it is, a second apply finds nothing to do', () => {
   const { base, root, log } = makeRoot(NEW);
   try {
     const { items } = planRenames(root);
@@ -262,7 +287,7 @@ test('only the folders directly under the given folder are renamed, not folders 
   try {
     mkdirSync(path.join(root, '02_Informieren', '13_Unterordner'));
     applyRenames(root, log);
-    assert.deepEqual(readdirSync(path.join(root, '2.1_Informieren')).sort(), [
+    assert.deepEqual(readdirSync(path.join(root, '02.1_Informieren')).sort(), [
       '13_Unterordner',
       'Enablers',
     ]);
@@ -291,10 +316,10 @@ test('the command: plan lists and changes nothing, apply renames, rollback resto
       run.lines.some(
         l =>
           l.includes('02_Informieren und Beraten') &&
-          l.includes('2.1_Informieren und Beraten')
+          l.includes('02.1_Informieren und Beraten')
       )
     );
-    assert.ok(run.lines.some(l => /4 to rename/.test(l)));
+    assert.ok(run.lines.some(l => /7 to rename/.test(l)));
     assert.deepEqual(names(root), before);
     run = quiet(() => main(['apply', root, '--log', log]));
     assert.equal(run.result, 0);
@@ -304,6 +329,31 @@ test('the command: plan lists and changes nothing, apply renames, rollback resto
     assert.deepEqual(names(root), before);
     run = quiet(() => main(['plan', path.join(base, 'gibt-es-nicht')]));
     assert.equal(run.result, 1);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('the 26 old folders become the 26 folders of the final listing (numbers only)', () => {
+  const { base, root } = makeRoot([]);
+  try {
+    for (const name of OLD_LISTING) mkdirSync(path.join(root, name));
+    const { items, problems } = planRenames(root);
+    assert.deepEqual(problems, []);
+    assert.equal(items.length, 26);
+    // the number in front of the title is the number of the final listing
+    const finalNumbers = FINAL_LISTING.map(name => name.split('_')[0]);
+    assert.deepEqual(
+      items.map(i => i.to.split('_')[0]).sort(),
+      [...finalNumbers].sort()
+    );
+    const byOrder = Object.fromEntries(items.map(i => [i.nr, i.to]));
+    assert.equal(byOrder[2], '02.1_Titel 2');
+    assert.equal(byOrder[13], '02.2_Titel 13');
+    assert.equal(byOrder[19], '13_Titel 19');
+    assert.equal(byOrder[23], '14_Titel 23');
+    assert.equal(byOrder[26], '17_Titel 26');
+    assert.equal(items.filter(i => i.action === 'keep').length, 3);
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
