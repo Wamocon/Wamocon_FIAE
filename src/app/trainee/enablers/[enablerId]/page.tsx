@@ -36,6 +36,11 @@ import { lockText } from '@/components/trainee/EnablerStateBadge';
 import { PASS_THRESHOLD } from '@/lib/catalog/progression';
 import { hasText } from '@/lib/submission-input';
 import { capitalizeFirst, themenkreisDescription } from '@/lib/display-text';
+import {
+  traineeDocumentPath,
+  traineeScenarioPath,
+} from '@/lib/documentContentPath';
+import { viewerSubtitle } from '@/lib/documentTypeLabel';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -125,7 +130,6 @@ export default function TraineeEnablerPage() {
     documents: Array<{
       id: string;
       title: string;
-      storageUrl: string;
       documentType: string;
       /** The document of the own organization (not the shared curriculum) */
       isOwnOrganization?: boolean;
@@ -150,14 +154,9 @@ export default function TraineeEnablerPage() {
     progression?.reason ?? 'SEQUENCE',
     progression?.lockedBy?.title ?? quizzesData?.lockedBy?.title
   );
-  // A row without a file is no link (a scenario kept without a PDF)
-  const documents = useMemo(
-    () =>
-      (docsData?.documents || []).filter(
-        d => typeof d.storageUrl === 'string' && d.storageUrl.trim() !== ''
-      ),
-    [docsData]
-  );
+  // The route lists only documents that carry a file, and it gives no address of
+  // the file: the viewer opens a document by its id (traineeDocumentPath)
+  const documents = useMemo(() => docsData?.documents || [], [docsData]);
   const gated = useMemo(() => {
     const list = quizzesData?.quizzes || [];
     const order: Difficulty[] = ['LOW', 'MEDIUM', 'HIGH'];
@@ -629,12 +628,18 @@ export default function TraineeEnablerPage() {
           )}
         </div>
         {/* Theory materials */}
-        {(theoryDocs.length > 0 || enabler.videoUrl || enabler.pptUrl) && (
+        {(theoryDocs.length > 0 || enabler.videoUrl) && (
           <div className="mt-4 flex flex-wrap gap-2">
             {theoryDocs.map(doc => (
               <button
                 key={doc.id}
-                onClick={() => flipbook.openPdf(doc.title, doc.storageUrl)}
+                onClick={() =>
+                  flipbook.openPdf(
+                    doc.title,
+                    traineeDocumentPath(doc.id),
+                    viewerSubtitle(doc.documentType, t)
+                  )
+                }
                 className="border-accent/30 hover:bg-accent/15 hover:border-accent/60 flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]"
               >
                 <BookOpen className="h-4 w-4 shrink-0" />
@@ -651,16 +656,6 @@ export default function TraineeEnablerPage() {
                 {t('enablerPage.watchVideo')}
               </a>
             )}
-            {enabler.pptUrl && (
-              <a
-                className="border-accent/30 hover:bg-accent/15 hover:border-accent/60 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors"
-                href={enabler.pptUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t('enablerPage.openPpt')}
-              </a>
-            )}
           </div>
         )}
 
@@ -668,6 +663,7 @@ export default function TraineeEnablerPage() {
         <FlipbookViewer
           title={flipbook.title}
           pdfUrl={flipbook.pdfUrl}
+          subtitle={flipbook.subtitle}
           isOpen={flipbook.isOpen}
           onClose={flipbook.closePdf}
           allowDownload={false}
@@ -703,7 +699,7 @@ export default function TraineeEnablerPage() {
       )}
 
       {/* Scenario Section */}
-      {(scenarioDocs.length > 0 || enabler.scenarioPdfUrl) && (
+      {(scenarioDocs.length > 0 || enabler.hasScenarioPdf) && (
         <div className="border-accent/30 bg-background rounded-3xl border p-5">
           <div className="mb-4 flex items-center gap-2">
             <Layers className="h-5 w-5 text-amber-500" />
@@ -725,12 +721,13 @@ export default function TraineeEnablerPage() {
           </div>
 
           {/* Legacy single scenario PDF */}
-          {enabler.scenarioPdfUrl && scenarioDocs.length === 0 && (
+          {enabler.hasScenarioPdf && scenarioDocs.length === 0 && (
             <button
               onClick={() =>
                 flipbook.openPdf(
                   t('trainer.content.scenarios'),
-                  enabler.scenarioPdfUrl
+                  traineeScenarioPath(String(enabler.id ?? enablerId)),
+                  viewerSubtitle('EXERCISE', t)
                 )
               }
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 text-white shadow-sm transition-colors hover:bg-amber-700"
@@ -750,7 +747,13 @@ export default function TraineeEnablerPage() {
                 return (
                   <button
                     key={doc.id}
-                    onClick={() => flipbook.openPdf(label, doc.storageUrl)}
+                    onClick={() =>
+                      flipbook.openPdf(
+                        label,
+                        traineeDocumentPath(doc.id),
+                        viewerSubtitle('EXERCISE', t)
+                      )
+                    }
                     className="border-accent/20 group flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-left transition-all duration-200 hover:scale-[1.02] hover:border-amber-500/50 hover:bg-amber-500/10 hover:shadow-lg hover:shadow-amber-500/10 active:scale-[0.98]"
                   >
                     {part !== null && (

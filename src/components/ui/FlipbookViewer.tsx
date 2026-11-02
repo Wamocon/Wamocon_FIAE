@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   X,
@@ -14,14 +15,33 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
+// The reading view for trainees draws the pages itself (pdf.js on canvases). It is
+// loaded only when a trainee opens a document, so no other page carries pdf.js.
+const SecurePdfViewer = dynamic(
+  () => import('@/components/ui/SecurePdfViewer'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full w-full items-center justify-center bg-slate-950">
+        <LoadingSpinner size="xl" />
+      </div>
+    ),
+  }
+);
+
 interface FlipbookViewerProps {
   pdfUrl: string;
   title: string;
   isOpen: boolean;
   onClose: () => void;
-  // false for trainees: no download, no new tab with the raw file, and no toolbar of the
-  // PDF viewer (it has its own download and print buttons)
+  // false for trainees: no download, no new tab with the raw file, and no PDF viewer of
+  // the browser (it has a context menu with "save as" and its own download and print
+  // buttons). Then `pdfUrl` is not an address of a file but the route of the app that
+  // delivers the document (a path under /api/trainee/, see SecurePdfViewer), and the
+  // pages are drawn by the app itself.
   allowDownload?: boolean;
+  // Line under the title (the kind of document). Without it: "Theory document".
+  subtitle?: string;
 }
 
 export function FlipbookViewer({
@@ -30,11 +50,14 @@ export function FlipbookViewer({
   isOpen,
   onClose,
   allowDownload = true,
+  subtitle,
 }: FlipbookViewerProps) {
   const { t } = useLanguage();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [scale, setScale] = useState(100);
   const [isLoading, setIsLoading] = useState(true);
+  // The reading view of trainees has its own zoom and keys
+  const secure = !allowDownload;
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -50,14 +73,14 @@ export function FlipbookViewer({
           break;
         case '+':
         case '=':
-          setScale(s => Math.min(200, s + 10));
+          if (!secure) setScale(s => Math.min(200, s + 10));
           break;
         case '-':
-          setScale(s => Math.max(50, s - 10));
+          if (!secure) setScale(s => Math.max(50, s - 10));
           break;
       }
     },
-    [isOpen, isFullscreen, onClose]
+    [isOpen, isFullscreen, onClose, secure]
   );
 
   useEffect(() => {
@@ -79,7 +102,7 @@ export function FlipbookViewer({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md print:hidden"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
       <div
@@ -96,34 +119,36 @@ export function FlipbookViewer({
                 {title}
               </h2>
               <p className="text-xs text-gray-400">
-                {t('flipbook.theoryDocument')}
+                {subtitle || t('flipbook.theoryDocument')}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5">
-            {/* Zoom controls */}
-            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2 py-1">
-              <button
-                onClick={() => setScale(s => Math.max(50, s - 10))}
-                className="hover:text-foreground rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/10"
-                title={t('flipbook.zoomOut')}
-              >
-                <ZoomOut className="h-4 w-4" />
-              </button>
-              <span className="min-w-[3rem] text-center text-xs font-medium text-gray-300">
-                {scale}%
-              </span>
-              <button
-                onClick={() => setScale(s => Math.min(200, s + 10))}
-                className="hover:text-foreground rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/10"
-                title={t('flipbook.zoomIn')}
-              >
-                <ZoomIn className="h-4 w-4" />
-              </button>
-            </div>
+            {/* Zoom controls (the reading view of trainees has its own) */}
+            {!secure && (
+              <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2 py-1">
+                <button
+                  onClick={() => setScale(s => Math.max(50, s - 10))}
+                  className="hover:text-foreground rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/10"
+                  title={t('flipbook.zoomOut')}
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <span className="min-w-[3rem] text-center text-xs font-medium text-gray-300">
+                  {scale}%
+                </span>
+                <button
+                  onClick={() => setScale(s => Math.min(200, s + 10))}
+                  className="hover:text-foreground rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/10"
+                  title={t('flipbook.zoomIn')}
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+              </div>
+            )}
 
-            <div className="mx-1 h-6 w-px bg-white/10" />
+            {!secure && <div className="mx-1 h-6 w-px bg-white/10" />}
 
             {/* Actions */}
             {allowDownload && (
@@ -177,32 +202,42 @@ export function FlipbookViewer({
 
         {/* PDF Viewer */}
         <div className="relative flex-1 overflow-hidden bg-slate-950">
-          {/* Loading overlay */}
-          {isLoading && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/90">
-              <div className="flex flex-col items-center gap-4">
-                <LoadingSpinner size="xl" />
-              </div>
-            </div>
-          )}
+          {secure ? (
+            // Trainee: the pages are drawn by the app, no PDF viewer of the
+            // browser, no address of the file in the page
+            <SecurePdfViewer src={pdfUrl} title={title} />
+          ) : (
+            <>
+              {/* Loading overlay */}
+              {isLoading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/90">
+                  <div className="flex flex-col items-center gap-4">
+                    <LoadingSpinner size="xl" />
+                  </div>
+                </div>
+              )}
 
-          {/* PDF Container with shadow effect */}
-          <div
-            className="flex h-full w-full items-center justify-center p-4"
-            style={{
-              transform: `scale(${scale / 100})`,
-              transformOrigin: 'center top',
-            }}
-          >
-            <div className="h-full w-full overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/10">
-              <iframe
-                src={`${pdfUrl}#toolbar=${allowDownload ? 1 : 0}&navpanes=${allowDownload ? 1 : 0}&view=FitH`}
-                className="h-full w-full border-0 bg-white"
-                title={title}
-                onLoad={() => setIsLoading(false)}
-              />
-            </div>
-          </div>
+              {/* PDF Container with shadow effect. The toolbar of the browser's
+                  PDF viewer is off: it has its own download button, and the
+                  header above already has the one download button. */}
+              <div
+                className="flex h-full w-full items-center justify-center p-4"
+                style={{
+                  transform: `scale(${scale / 100})`,
+                  transformOrigin: 'center top',
+                }}
+              >
+                <div className="h-full w-full overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/10">
+                  <iframe
+                    src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
+                    className="h-full w-full border-0 bg-white"
+                    title={title}
+                    onLoad={() => setIsLoading(false)}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Footer */}
@@ -247,15 +282,21 @@ export function useFlipbookViewer() {
     isOpen: boolean;
     pdfUrl: string;
     title: string;
+    subtitle: string;
   }>({
     isOpen: false,
     pdfUrl: '',
     title: '',
+    subtitle: '',
   });
 
-  const openPdf = useCallback((title: string, pdfUrl: string) => {
-    setState({ isOpen: true, title, pdfUrl });
-  }, []);
+  // `subtitle`: the kind of the document, shown under the title
+  const openPdf = useCallback(
+    (title: string, pdfUrl: string, subtitle = '') => {
+      setState({ isOpen: true, title, pdfUrl, subtitle });
+    },
+    []
+  );
 
   const closePdf = useCallback(() => {
     setState(prev => ({ ...prev, isOpen: false }));

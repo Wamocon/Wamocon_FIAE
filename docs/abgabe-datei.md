@@ -6,7 +6,7 @@ Stand: 29.10.2026. Dieser Stand gilt für die Preview. In Production ist die Fun
 
 Zu einer Use-Case-Abgabe kann ein Azubi eine Datei anhängen (optional, eine Datei je Abgabe). Das Feld steht auf der Seite des Use Cases unter den Links. Der Azubi kann die Datei öffnen, ersetzen und entfernen, solange die Abgabe noch nicht eingereicht ist oder vom Trainer zurückgewiesen wurde. Eingereichte und bewertete Abgaben sind gesperrt.
 
-Der zuständige Trainer (und jeder Administrator der Organisation, die Trainerrechte haben) sieht bei der Prüfung der Abgabe den Knopf "Anhang öffnen". Der Knopf holt einen Link, der zwei Minuten gilt und den Download erzwingt.
+Der zuständige Trainer (und jeder Administrator der Organisation, die Trainerrechte haben) sieht bei der Prüfung der Abgabe den Knopf "Anhang öffnen". Der Knopf holt einen Link, der zwei Minuten gilt und den Download erzwingt. Bevor die Seite zum Link wechselt, fragt sie ein Byte davon ab (`src/lib/submission-file/readLink.ts`). Verweigert der Speicher den Link (Status 503), zeigt der Knopf "Der Anhang konnte nicht geladen werden." statt still nichts zu tun (WMCNL-2998). Eine Vorschau der Datei (WMCNL-2927) gibt es noch nicht.
 
 ## Regeln
 

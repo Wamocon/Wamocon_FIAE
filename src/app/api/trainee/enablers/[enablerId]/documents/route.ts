@@ -11,7 +11,6 @@ import { requireTraineeSession } from '@/lib/auth/activity-report-access';
 import { documentVisibilityCondition } from '@/lib/auth/document-scope';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import { isTraineeFileReference } from '@/lib/storage/contentPath';
-import { withSignedContentUrls } from '@/lib/storage/contentUrl';
 
 // GET the documents of an enabler for the trainee (teaching texts, scenarios).
 //
@@ -29,9 +28,10 @@ import { withSignedContentUrls } from '@/lib/storage/contentUrl';
 //  - it is no Word file: the reader opens PDF files in a frame, so the Word
 //    original of an enabler text (kept for trainers) is not listed.
 // The answer names the fields the page needs. The uploader, the storage path,
-// the index state and the organization ids stay behind. The file itself is
-// reached through storageUrl: a signed address of the bucket content that works
-// for an hour (src/lib/storage/contentUrl.ts), the stored address of any other file.
+// the index state, the organization ids and the address of the file stay behind:
+// a trainee gets no address of a file. The viewer opens the file by the id of the
+// document (GET /api/trainee/documents/[documentId]/content, see
+// docs/dokumentschutz.md).
 // The data of the session user, a traineeId or userId in the query is ignored.
 const TRAINEE_VISIBILITIES = ['ALL', 'TRAINEE_ONLY'] as const;
 
@@ -147,7 +147,6 @@ export async function GET(
         documentType: d.documentType,
         fileName: d.fileName,
         fileSize: d.fileSize,
-        storageUrl: d.storageUrl,
         pageCount: d.pageCount,
         orderIndex: d.orderIndex,
         // The page hides the shared teaching texts from the LIGHT plan
@@ -156,13 +155,7 @@ export async function GET(
           String(d.organizationId) === session.organizationId,
       }));
 
-    // The file of the bucket content is handed out as a signed address that
-    // works for an hour, for a public and for a private bucket alike
-    return NextResponse.json({
-      documents: await withSignedContentUrls(documents, {
-        hideOtherPrivate: true,
-      }),
-    });
+    return NextResponse.json({ documents });
   } catch (e) {
     console.error('Trainee enabler documents GET error', e);
     return NextResponse.json(

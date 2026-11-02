@@ -3123,5 +3123,11 @@
   "hai.voiceMode.listenAgain": "Listen again",
   "hai.voiceMode.hint": "Say “End voice mode” or press Esc to end the conversation. A tap on HAI interrupts it. Everything said is in the chat to read afterwards.",
   "hai.voiceMode.mini.label": "Voice mode active",
-  "hai.voiceMode.mini.restore": "Show voice mode large again"
+  "hai.voiceMode.mini.restore": "Show voice mode large again",
+  "flipbook.document": "Document",
+  "securePdf.loadFailed": "The document could not be loaded. Please try again later.",
+  "securePdf.pageOf": "Page {current} of {total}",
+  "securePdf.pageLabel": "Page {page}",
+  "securePdf.previousPage": "Previous page",
+  "securePdf.nextPage": "Next page"
 }
