@@ -18,6 +18,7 @@ import {
 import { getISOWeekDates, getISOWeekInfo } from '@/lib/date/iso-week';
 import { componentPhase } from '@/lib/ausbildung/component-phase';
 import { compareReportsNewestWeekFirst } from '@/lib/ausbildung/report-order';
+import { activityReportHasContent } from '@/lib/submission-input';
 import {
   componentHoursLabel,
   normalizePlannedHours,
@@ -1964,6 +1965,12 @@ function ReportDetailModal({
   const handleSubmitDraftReport = async () => {
     if (!profile?.id || report.status !== 'DRAFT') return;
 
+    // A draft without a single entry with hours is not handed in (WMCNL-3011)
+    if (!activityReportHasContent(entries)) {
+      toast.error(t('reports.error.noEntries'));
+      return;
+    }
+
     const missingNotes = entries.filter(
       entry => !entry.notes || entry.notes.trim().length === 0
     );
@@ -2406,7 +2413,7 @@ function ReportDetailModal({
           {report.status === 'DRAFT' && (
             <button
               onClick={handleSubmitDraftReport}
-              disabled={savingSkills}
+              disabled={savingSkills || loading}
               className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
             >
               <Send className="h-4 w-4" />

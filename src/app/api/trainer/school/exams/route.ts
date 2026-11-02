@@ -2,8 +2,8 @@ import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, desc, and } from 'drizzle-orm';
-import { schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
+import { eq, desc, and, inArray } from 'drizzle-orm';
+import { schoolExams, schoolExamResults, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import {
     requireTraineeScopeCondition,
@@ -11,6 +11,7 @@ import {
 } from '@/lib/auth/trainee-scope-conditions';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { deriveMaxPoints } from '@/lib/school/exam-points';
 
 // GET /api/trainer/school/exams?trainerId=...&traineeId=...
 export async function GET(req: NextRequest) {
@@ -52,14 +53,45 @@ export async function GET(req: NextRequest) {
             .where(whereClause)
             .orderBy(desc(schoolExams.examDate));
 
+        // The saved result of each exam: the list shows it after a reload and the
+        // dialog can correct it. The database keeps points and percentage, the
+        // maximum is derived from the two.
+        const resultByExam = new Map<
+            string,
+            { points: number | null; percentage: number | null; passed: boolean | null }
+        >();
+        if (examsRaw.length > 0) {
+            const results = await db
+                .select({
+                    examId: schoolExamResults.examId,
+                    points: schoolExamResults.points,
+                    percentage: schoolExamResults.percentage,
+                    passed: schoolExamResults.passed,
+                })
+                .from(schoolExamResults)
+                .where(
+                    inArray(
+                        schoolExamResults.examId,
+                        examsRaw.map(exam => exam.id) as any
+                    )
+                );
+            for (const result of results) {
+                resultByExam.set(String(result.examId), result);
+            }
+        }
+
         // Transform to include isCompanyExam flag (exams with no lernfeld are company exams)
-        const exams = examsRaw.map(exam => ({
-            ...exam,
-            isCompanyExam: !exam.lernfeldCode,
-            points: null, // Will be populated from results if needed
-            maxPoints: null,
-            passed: null,
-        }));
+        const exams = examsRaw.map(exam => {
+            const result = resultByExam.get(String(exam.id));
+            const points = result?.points ?? null;
+            return {
+                ...exam,
+                isCompanyExam: !exam.lernfeldCode,
+                points,
+                maxPoints: deriveMaxPoints(points, result?.percentage),
+                passed: result ? (result.passed ?? null) : null,
+            };
+        });
 
         return NextResponse.json({ exams });
     } catch (e) {

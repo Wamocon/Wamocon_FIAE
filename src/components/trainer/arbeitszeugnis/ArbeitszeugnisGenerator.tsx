@@ -31,6 +31,11 @@ import QRCode from 'qrcode';
 import { SkillRadarChart, renderRadarChartForPDF } from './SkillRadarChart';
 import { EvidenceSection } from './EvidenceSection';
 import { normalizeDurationYears } from '@/lib/ausbildung/duration';
+import {
+  TRAINING_START_MISSING_CODE,
+  formatPeriodDate,
+  generateBlockers,
+} from '@/lib/arbeitszeugnis/review-state';
 
 interface Trainee {
   id: string;
@@ -129,7 +134,8 @@ function getDefaultClosingSummary(
   if (gender === 'female') {
     return `Frau ${name} hat die ihr übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
   }
-  return `Person ${name} hat die der Person übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
+  // Neutral: the name alone, no "Person Leon Moretz ... der Person"
+  return `${name} hat die übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
 }
 
 function isSummaryEdited(summary: string, name: string): boolean {
@@ -145,15 +151,16 @@ function isSummaryEdited(summary: string, name: string): boolean {
 
 function updateSummarySalutation(
   summary: string,
-  gender: 'male' | 'female' | 'neutral'
+  gender: 'male' | 'female' | 'neutral',
+  name: string
 ): string {
-  if (gender === 'male') {
-    return summary.replace(/^\S+/, 'Herr');
-  }
-  if (gender === 'female') {
-    return summary.replace(/^\S+/, 'Frau');
-  }
-  return summary.replace(/^\S+/, 'Person');
+  const prefix =
+    gender === 'male' ? 'Herr ' : gender === 'female' ? 'Frau ' : '';
+  const stripped = summary.replace(/^(Herr|Frau|Person) /, '');
+  // A text that does not begin with a salutation or the name is the trainer's
+  // own wording: it stays as it is
+  if (stripped === summary && !summary.startsWith(name)) return summary;
+  return prefix + stripped;
 }
 
 export function ArbeitszeugnisGenerator() {
@@ -295,6 +302,17 @@ export function ArbeitszeugnisGenerator() {
           ),
         ]);
 
+        if (!aggRes.ok) {
+          // No start of the training: no period (nothing is invented)
+          const failure = await aggRes.json().catch(() => null);
+          setAggregatedData(null);
+          setError(
+            failure?.code === TRAINING_START_MISSING_CODE
+              ? t('arbeitszeugnis.trainingStartMissing')
+              : t('arbeitszeugnis.noData')
+          );
+        }
+
         if (aggRes.ok) {
           const aggData = await aggRes.json();
           setAggregatedData(aggData);
@@ -315,8 +333,6 @@ export function ArbeitszeugnisGenerator() {
 
           // Reset generated assessment when data changes
           setOverallAssessment('');
-        } else {
-          setError(t('arbeitszeugnis.noData'));
         }
 
         if (radarRes.ok) {
@@ -384,7 +400,7 @@ export function ArbeitszeugnisGenerator() {
     setSummary(prev => {
       // If the user has manually edited the summary, only update the salutation prefix
       if (isSummaryEdited(prev, name)) {
-        return updateSummarySalutation(prev, gender);
+        return updateSummarySalutation(prev, gender, name);
       }
       return getDefaultClosingSummary(name, gender);
     });
@@ -416,13 +432,32 @@ export function ArbeitszeugnisGenerator() {
     setValidationErrors(errors);
   }, [aggregatedData, manualOverallGrade, overallAssessment, gender, t]);
 
+  // Why the buttons of the Gesamturteil are grey, said at the buttons
+  const generateMissing = generateBlockers({
+    overallGrade: manualOverallGrade,
+    overallAverage: aggregatedData?.overallAverage,
+  });
+
   const handleSelectTrainee = (trainee: Trainee) => {
     setSelectedTrainee(trainee.id);
     setSelectedTraineeData(trainee);
     setStep('configure');
   };
 
+  // The training year is counted from the start of the training: without it
+  // only an own period (interim certificate) can be written
+  const trainingStartMissing = !(
+    selectedTraineeData?.training_start_date ||
+    selectedTraineeData?.startOfTrainingDate
+  );
+  const periodNeedsStart =
+    trainingStartMissing && (certificateType === 'FINAL' || mode === 'YEAR');
+
   const handleContinueToReview = () => {
+    if (periodNeedsStart) {
+      setError(t('arbeitszeugnis.trainingStartMissing'));
+      return;
+    }
     if (
       certificateType !== 'FINAL' &&
       mode === 'CUSTOM' &&
@@ -1167,6 +1202,9 @@ export function ArbeitszeugnisGenerator() {
                                 <span className="text-sm font-medium">
                                   {trainee.pendingReports}
                                 </span>
+                                <span className="text-muted-foreground text-xs">
+                                  {t('arbeitszeugnis.pending')}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -1221,7 +1259,9 @@ export function ArbeitszeugnisGenerator() {
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
                 <span className="text-sm font-medium text-green-600">
                   {selectedTraineeData?.approvedReports || 0}{' '}
-                  {t('arbeitszeugnis.approvedReports')}
+                  {(selectedTraineeData?.approvedReports || 0) === 1
+                    ? t('arbeitszeugnis.approvedReportsOne')
+                    : t('arbeitszeugnis.approvedReports')}
                 </span>
               </div>
             </div>
@@ -1243,6 +1283,16 @@ export function ArbeitszeugnisGenerator() {
               </p>
             </div>
           </div>
+
+          {trainingStartMissing && (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{t('arbeitszeugnis.trainingStartMissing')}</span>
+            </div>
+          )}
 
           {/* Mode Toggle */}
           <div className="bg-muted flex rounded-xl p-1">
@@ -1524,11 +1574,9 @@ export function ArbeitszeugnisGenerator() {
                 {t('arbeitszeugnis.period')}
               </p>
               <p className="text-sm font-bold">
-                {new Date(aggregatedData.periodStart).toLocaleDateString(
-                  'de-DE'
-                )}
+                {formatPeriodDate(aggregatedData.periodStart)}
                 <br />
-                {new Date(aggregatedData.periodEnd).toLocaleDateString('de-DE')}
+                {formatPeriodDate(aggregatedData.periodEnd)}
               </p>
             </div>
           </div>
@@ -1592,6 +1640,11 @@ export function ArbeitszeugnisGenerator() {
             <h3 className="mb-4 text-lg font-bold">
               {t('arbeitszeugnis.componentGrades')}
             </h3>
+            {aggregatedData.components.length === 0 && (
+              <p className="text-muted-foreground text-sm">
+                {t('arbeitszeugnis.noComponentGrades')}
+              </p>
+            )}
             <div className="space-y-2">
               {aggregatedData.components.map(comp => (
                 <div
@@ -1698,14 +1751,12 @@ export function ArbeitszeugnisGenerator() {
               </div>
             )}
 
-          {/* Evidence */}
-          <div className="bg-card border-border rounded-2xl border p-6">
-            <EvidenceSection
-              traineeId={selectedTrainee}
-              query={evidenceQuery}
-              onCopy={text => setSummary(prev => prev + '\n' + text)}
-            />
-          </div>
+          {/* Evidence (draws its own card, nothing when there is no proposal) */}
+          <EvidenceSection
+            traineeId={selectedTrainee}
+            query={evidenceQuery}
+            onCopy={text => setSummary(prev => prev + '\n' + text)}
+          />
 
           {/* Overall Grade Selection */}
           <div className="bg-card border-border rounded-2xl border p-6">
@@ -1743,21 +1794,27 @@ export function ArbeitszeugnisGenerator() {
               <FileText className="text-accent h-5 w-5" />
               {t('arbeitszeugnis.closingWords')}
             </h3>
+            <p className="text-muted-foreground mb-3 text-sm">
+              {t('arbeitszeugnis.closingWordsHint')}
+            </p>
             <textarea
               value={summary}
               onChange={e => setSummary(e.target.value)}
               className="bg-background border-border min-h-[100px] w-full resize-y rounded-xl border p-4 focus:ring-2 focus:ring-amber-500"
               placeholder={t('arbeitszeugnis.textPlaceholder')}
             />
+          </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          {/* Overall Assessment Preview */}
+          <div className="bg-card border-border rounded-2xl border p-6">
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-bold">
+              <Award className="text-accent h-5 w-5" />
+              {t('arbeitszeugnis.overallAssessment')}
+            </h3>
+            <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               <button
                 onClick={handleGenerateWithAI}
-                disabled={
-                  aiLoading ||
-                  manualOverallGrade === null ||
-                  !aggregatedData.overallAverage
-                }
+                disabled={aiLoading || generateMissing.length > 0}
                 className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-600 py-3 font-semibold text-white shadow-lg transition-all hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
               >
                 {aiLoading ? (
@@ -1771,23 +1828,33 @@ export function ArbeitszeugnisGenerator() {
               </button>
               <button
                 onClick={handleGenerateWithoutAI}
-                disabled={
-                  manualOverallGrade === null || !aggregatedData.overallAverage
-                }
+                disabled={generateMissing.length > 0}
                 className="bg-background flex items-center justify-center gap-2 rounded-xl border-2 border-amber-500/30 py-3 font-semibold text-amber-600 transition-all hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <FileCheck className="h-5 w-5" />
                 {t('arbeitszeugnis.generateWithoutAI')}
               </button>
             </div>
-          </div>
-
-          {/* Overall Assessment Preview */}
-          <div className="bg-card border-border rounded-2xl border p-6">
-            <h3 className="mb-3 flex items-center gap-2 text-lg font-bold">
-              <Award className="text-accent h-5 w-5" />
-              {t('arbeitszeugnis.overallAssessment')}
-            </h3>
+            {generateMissing.length > 0 && (
+              <p
+                role="status"
+                data-testid="generate-hint"
+                className="mb-4 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700"
+              >
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  {generateMissing
+                    .map(m =>
+                      t(
+                        m === 'grade'
+                          ? 'arbeitszeugnis.generateNeedsGrade'
+                          : 'arbeitszeugnis.generateNeedsComponents'
+                      )
+                    )
+                    .join(' ')}
+                </span>
+              </p>
+            )}
             {overallAssessment ? (
               <textarea
                 value={overallAssessment}
