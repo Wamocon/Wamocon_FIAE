@@ -234,6 +234,8 @@ describe('looksLikeRefusal', () => {
     'Die Lösung gebe ich dir nicht.',
     'Dazu gebe ich keine Auskunft.',
     'Dazu liegen mir aktuell keine Daten vor.',
+    // measured with the real model (02.11.2026, SP-04)
+    'Daher kann ich dir weder die Punktzahl noch die richtige Antwort nennen.',
   ])('recognizes %p', answer => {
     expect(looksLikeRefusal(answer)).toBe(true);
   });
@@ -247,6 +249,7 @@ describe('looksLikeRefusal', () => {
     'Die Tabelle hat keine Angaben zur Lieferzeit, ergänze sie im Entwurf.',
     'Die Aufgabe ist ausschließlich für Trainer sichtbar angelegt, du siehst die Situation.',
     'Ich zeige dir, dass ein Primärschlüssel nicht NULL sein darf.',
+    'Man kann weder lesen noch schreiben, solange die Tabelle gesperrt ist.',
   ])('does not take %p for a refusal', answer => {
     expect(looksLikeRefusal(answer)).toBe(false);
   });
