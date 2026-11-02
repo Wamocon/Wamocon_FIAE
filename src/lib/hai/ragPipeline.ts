@@ -54,6 +54,7 @@ import {
   getOffTopicResponse,
 } from './prompts';
 import { fetchDataContext } from './dataContext';
+import { isDayQuestion } from './dayQuestion';
 import type { UserRole } from './dataContext';
 import { handleActionMessage } from './actionFlow';
 import type { PendingAction } from './actionPolicy';
@@ -402,6 +403,19 @@ export function classifyIntent(
 /**
  * Determine the prompt mode based on context and intent
  */
+/**
+ * The day companion: the message asks for the own tasks, appointments or state
+ * ("Was steht für mich an?"). The answer comes from the live data of the
+ * person, so the turn skips the greeting, the off-topic check and the
+ * knowledge search, and no source cards of the knowledge base hang under it.
+ */
+function isDayBriefingTurn(
+  userMessage: string,
+  context: PipelineContext
+): boolean {
+  return !!context.userRole && isDayQuestion(userMessage);
+}
+
 function determineMode(
   intent: IntentType,
   context: PipelineContext
@@ -702,7 +716,10 @@ export async function processMessage(
     if (navigationResponse) return navigationResponse;
 
     // Step 1: Classify intent
-    const intent = classifyIntent(userMessage, context.quizState, persona);
+    const dayBriefing = isDayBriefingTurn(userMessage, context);
+    const intent: IntentType = dayBriefing
+      ? 'question'
+      : classifyIntent(userMessage, context.quizState, persona);
 
     // Handle special intents
     if (intent === 'greeting') {
@@ -731,7 +748,7 @@ export async function processMessage(
     let searchResults: SearchResult[] = [];
     let retrievedContext = '';
 
-    if (intent !== 'quiz_answer' && !enableWebSearch) {
+    if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
       // Vector search and PageIndex, limited to the occupation, audience and
       // organization of the user (one function for both pipelines)
       ({ searchResults, retrievedContext } = await retrieveContext(
@@ -753,7 +770,11 @@ export async function processMessage(
         const dataCtx = await fetchDataContext(
           context.userId,
           context.userRole as UserRole,
-          userMessage
+          userMessage,
+          {
+            preferredCatalogCode: context.preferredCatalogCode,
+            trainingScope: context.trainingScope,
+          }
         );
         if (dataCtx) {
           liveDataContext = dataCtx.summary;
@@ -771,7 +792,10 @@ export async function processMessage(
       message: userMessage,
       audience: access?.audience ?? 'trainee',
       searchEmpty:
-        intent !== 'quiz_answer' && !enableWebSearch && !retrievedContext,
+        intent !== 'quiz_answer' &&
+        !enableWebSearch &&
+        !dayBriefing &&
+        !retrievedContext,
       contextDropped: context.contextDropped === true,
       liveDataContext,
     });
@@ -797,6 +821,7 @@ export async function processMessage(
       voice: context.voice === true,
       navigation: true,
       accessReasons,
+      dayBriefing,
     });
 
     // Step 5: Convert previous messages to provider format
@@ -975,7 +1000,10 @@ export async function processMessageStream(
       return navigationResponse;
     }
 
-    const intent = classifyIntent(userMessage, context.quizState, persona);
+    const dayBriefing = isDayBriefingTurn(userMessage, context);
+    const intent: IntentType = dayBriefing
+      ? 'question'
+      : classifyIntent(userMessage, context.quizState, persona);
 
     // Handle special intents immediately
     if (intent === 'greeting') {
@@ -997,7 +1025,7 @@ export async function processMessageStream(
     let searchResults: SearchResult[] = [];
     let retrievedContext = '';
 
-    if (intent !== 'quiz_answer' && !enableWebSearch) {
+    if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
       // Same retrieval as processMessage: scoped to the user
       ({ searchResults, retrievedContext } = await retrieveContext(
         userMessage,
@@ -1018,7 +1046,11 @@ export async function processMessageStream(
         const dataCtx = await fetchDataContext(
           context.userId,
           context.userRole as UserRole,
-          userMessage
+          userMessage,
+          {
+            preferredCatalogCode: context.preferredCatalogCode,
+            trainingScope: context.trainingScope,
+          }
         );
         if (dataCtx) {
           liveDataContext = dataCtx.summary;
@@ -1036,7 +1068,10 @@ export async function processMessageStream(
       message: userMessage,
       audience: access?.audience ?? 'trainee',
       searchEmpty:
-        intent !== 'quiz_answer' && !enableWebSearch && !retrievedContext,
+        intent !== 'quiz_answer' &&
+        !enableWebSearch &&
+        !dayBriefing &&
+        !retrievedContext,
       contextDropped: context.contextDropped === true,
       liveDataContext,
     });
@@ -1058,6 +1093,7 @@ export async function processMessageStream(
       voice: context.voice === true,
       navigation: true,
       accessReasons,
+      dayBriefing,
     });
 
     // Convert messages to provider format
