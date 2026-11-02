@@ -1,6 +1,7 @@
 import {
   FIAE_COMPONENT_CODES,
   FIAE_COMPONENT_PAIRS,
+  FIAE_COMPONENT_SINGLES,
   fiaeLabelOfOrderIndex,
   fiaeOrderIndexOfCode,
   fiaeOrderIndexOfLabel,
@@ -9,7 +10,7 @@ import {
 
 // FIAE labels its components like KfBM (K24.1, K24.2): the base component of a pair
 // is x.1, its Vertiefung x.2, x is the order index of the base component. A
-// component without a Vertiefung keeps its number. Label only: code and order index
+// component without a Vertiefung is numbered on (13 to 17 for the order index 19, 23 to 26). Label only: code and order index
 // do not change.
 
 // order index -> label, as decided on 02.11.2026
@@ -32,14 +33,14 @@ const EXPECTED: Record<number, string> = {
   16: '5.2',
   17: '6.2',
   18: '8.2',
-  19: '19',
+  19: '13',
   20: '9.2',
   21: '10.2',
   22: '11.2',
-  23: '23',
-  24: '24',
-  25: '25',
-  26: '26',
+  23: '14',
+  24: '15',
+  25: '16',
+  26: '17',
 };
 
 describe('getComponentLabel for FIAE', () => {
@@ -94,9 +95,31 @@ describe('getComponentLabel for FIAE', () => {
       expect(fiaeLabelOfOrderIndex(base)).toBe(`${base}.1`);
       expect(fiaeLabelOfOrderIndex(deep)).toBe(`${base}.2`);
     }
-    for (const single of [1, 7, 12, 19, 23, 24, 25, 26]) {
-      expect(fiaeLabelOfOrderIndex(single)).toBe(String(single));
+    // the singles are numbered on: order index 19, 23, 24, 25, 26 are 13 to 17
+    const singles = [
+      [1, '1'],
+      [7, '7'],
+      [12, '12'],
+      [19, '13'],
+      [23, '14'],
+      [24, '15'],
+      [25, '16'],
+      [26, '17'],
+    ] as const;
+    for (const [orderIndex, label] of singles) {
+      expect(fiaeLabelOfOrderIndex(orderIndex)).toBe(label);
     }
+    expect(FIAE_COMPONENT_SINGLES.map(s => [...s])).toEqual(
+      singles.map(s => [...s].map((v, i) => (i === 1 ? Number(v) : v)))
+    );
+    // 17 labels in all, 1 to 17 without a gap
+    const numbers = new Set<number>();
+    for (let n = 1; n <= 26; n++) {
+      numbers.add(Number(fiaeLabelOfOrderIndex(n)!.split('.')[0]));
+    }
+    expect([...numbers].sort((a, b) => a - b)).toEqual(
+      Array.from({ length: 17 }, (_, i) => i + 1)
+    );
   });
 
   it('is case-insensitive for the catalog code', () => {
@@ -156,8 +179,23 @@ describe('the lookups behind the label', () => {
     expect(fiaeOrderIndexOfLabel('2.2')).toBe(13);
     expect(fiaeOrderIndexOfLabel('9.2')).toBe(20);
     expect(fiaeOrderIndexOfLabel('07')).toBe(7);
+    expect(fiaeOrderIndexOfLabel('13')).toBe(19);
+    expect(fiaeOrderIndexOfLabel('17')).toBe(26);
     expect(fiaeOrderIndexOfLabel('02.1')).toBe(2);
-    for (const bad of ['2.3', '13.1', '7.1', '27', '0', 'x', '', '2.']) {
+    for (const bad of [
+      '2.3',
+      '13.1',
+      '7.1',
+      '2',
+      '9',
+      '18',
+      '26',
+      '27',
+      '0',
+      'x',
+      '',
+      '2.',
+    ]) {
       expect(fiaeOrderIndexOfLabel(bad)).toBeNull();
     }
   });

@@ -32,6 +32,7 @@ import {
   describeComponent,
   listComponentFolders,
   parseComponentList,
+  resolveComponentTokens,
 } from './fiae-component-folder.mjs';
 
 import {
@@ -77,9 +78,9 @@ export const QUIZ_OF_FILE = {
 export const LEFT_OUT = {
   '09': 'questions come from the enablers FR-726 to FR-731 (network, storage), not from Programmieren: wrong subject in the delivery',
   13: 'the file is missing in the delivery',
-  14: 'identical copy of file 03 (the Preview has one quiz for both years)',
-  18: 'identical copy of file 08 (the Preview has one quiz for both years)',
-  22: 'identical copy of file 11 (the Preview has one quiz for both years)',
+  14: 'identical copy of the file of component 3.1 (the Preview has one quiz for both years)',
+  18: 'identical copy of the file of component 8.1 (the Preview has one quiz for both years)',
+  22: 'identical copy of the file of component 11.1 (the Preview has one quiz for both years)',
 };
 
 export function parseArgs(argv) {
@@ -110,9 +111,10 @@ export function parseArgs(argv) {
     else if (a === '--out') out.out = value(i++, a);
     else if (a === '--files') {
       const v = value(i++, a);
-      // old numbers (05, 13) and labels (2.1, 2.2) both work, an unknown one is an error
+      // plain numbers mean different components in the two schemes: kept as typed, resolved
+      // against the scheme of the delivery folder (resolveComponentTokens)
       const list = v ? parseComponentList(v) : null;
-      out.files = list ? list.keys : null;
+      out.files = list ? list.tokens : null;
       list?.errors.forEach(e => out.errors.push(`--files: ${e}`));
     } else if (a.startsWith('--')) out.errors.push(`Unknown option ${a}.`);
     else rest.push(a);
@@ -310,11 +312,18 @@ async function execute(args, client) {
     console.error(`Refused: ${args.source} does not exist.`);
     return 1;
   }
-  const { folders, problems } = listComponentFolders(args.source);
+  const { folders, problems, scheme } = listComponentFolders(args.source);
   if (problems.length) {
     console.error(
       `Refused: the component folders are not clear: ${problems.join(' ')}`
     );
+    return 1;
+  }
+  // --files in the scheme of the delivery folder (a plain 13 is Speicherlösungen in the new one);
+  // QUIZ_OF_FILE and LEFT_OUT are keyed by the order index
+  const wanted = args.files ? resolveComponentTokens(args.files, scheme) : null;
+  if (wanted?.errors.length) {
+    wanted.errors.forEach(e => console.error(`Refused: --files: ${e}`));
     return 1;
   }
   const quizzes = await loadQuizzes(client);
@@ -322,13 +331,13 @@ async function execute(args, client) {
   const gaps = [];
   for (const [nr, why] of Object.entries(LEFT_OUT)) {
     const key = nr.padStart(2, '0');
-    if (!args.files || args.files.includes(key))
-      gaps.push({ file: key, component: describeComponent(key), why });
+    if (!wanted || wanted.keys.includes(key))
+      gaps.push({ file: key, component: describeComponent(key, scheme), why });
   }
   for (const [nr, label] of Object.entries(QUIZ_OF_FILE)) {
     const key = String(nr).padStart(2, '0');
-    if (args.files && !args.files.includes(key)) continue;
-    const name = describeComponent(key);
+    if (wanted && !wanted.keys.includes(key)) continue;
+    const name = describeComponent(key, scheme);
     const file = sourceFolder(folders, args.source, key);
     if (!file || !existsSync(file)) {
       gaps.push({
