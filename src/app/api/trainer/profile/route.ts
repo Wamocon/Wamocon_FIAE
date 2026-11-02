@@ -1,13 +1,12 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, desc, eq, gte } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 import {
   profiles,
   courses,
   quizSubmissions,
   useCaseSubmissions,
-  activityLog,
   enablers,
   useCases,
   trainingCatalogLearningFields,
@@ -17,6 +16,7 @@ import {
   traineeIdInScope,
 } from '@/lib/auth/trainee-scope-conditions';
 import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
+import { loadRecentActivities } from '@/lib/profile/recent-activities';
 
 export async function GET(req: NextRequest) {
   try {
@@ -149,119 +149,30 @@ export async function GET(req: NextRequest) {
 
     pendingReviews = pendingQuizzes + pendingUseCases;
 
-    // Recent activity from activity_log (last 7 days)
-    const lastWeek = new Date();
-    lastWeek.setDate(lastWeek.getDate() - 7);
-
-    // Get recent activities from activity log
-    const activityRows = await db
-      .select({
-        id: activityLog.id,
-        odaUserId: activityLog.userId,
-        activityType: activityLog.activityType,
-        createdAt: activityLog.createdAt,
-      })
-      .from(activityLog)
-      .where(traineeIdInScope(activityLog.userId, traineeScope.condition))
-      .orderBy(desc(activityLog.createdAt))
-      .limit(10);
-
-    // Map user IDs to names
+    // Recent activities of the trainees inside the scope: what they really
+    // did (finished lessons, quiz and use case submissions) in the occupation
+    // of the caller. The activity_log is no source for this: it records the
+    // actions of trainers and admins, so a list built from it stayed empty.
     const userMap = new Map<string, string>();
-    traineeRows.forEach(t => userMap.set(t.id, t.fullName || 'Unbekannt'));
+    traineeRows.forEach(t => userMap.set(t.id, t.fullName || ''));
 
-    const recentActivities = activityRows.map(a => ({
+    const activities = await loadRecentActivities({
+      traineeFilter: column =>
+        traineeIdInScope(column, traineeScope.condition),
+      scope: catalogScope,
+      limit: 10,
+    });
+    const recentActivities = activities.map(a => ({
       id: a.id,
-      odaUserId: a.odaUserId,
-      userFullName: a.odaUserId ? userMap.get(a.odaUserId) || 'Azubi' : 'Azubi',
+      userId: a.traineeId,
+      // An empty name is shown as "unknown" by the page (translated there)
+      userFullName: userMap.get(a.traineeId) || null,
       activityType: a.activityType,
+      itemTitle: a.itemTitle,
+      score: a.score,
+      status: a.status,
       createdAt: a.createdAt,
-      details: getActivityDescription(a.activityType),
     }));
-
-    // Count activities in last 7 days
-    const [{ c: c7 = 0 } = { c: 0 }] = await db
-      .select({ c: count() })
-      .from(activityLog)
-      .where(
-        and(
-          gte(activityLog.createdAt, lastWeek),
-          traineeIdInScope(activityLog.userId, traineeScope.condition)
-        )
-      );
-    let recentCount7d = Number(c7) || 0;
-
-    // If no activity log entries, get recent submissions instead
-    if (recentActivities.length === 0) {
-      let recentSubmissions: Array<{ id: string; userFullName: string; activityType: string; createdAt: Date | null; details: string }> = [];
-
-      // Get recent quiz submissions
-      const quizSubs = await db
-        .select({
-          id: quizSubmissions.id,
-          traineeId: quizSubmissions.traineeId,
-          createdAt: quizSubmissions.submittedAt,
-          score: quizSubmissions.score,
-        })
-        .from(quizSubmissions)
-        .where(
-          traineeIdInScope(quizSubmissions.traineeId, traineeScope.condition)
-        )
-        .orderBy(desc(quizSubmissions.submittedAt))
-        .limit(5);
-
-      quizSubs.forEach(q => {
-        recentSubmissions.push({
-          id: q.id,
-          userFullName: userMap.get(q.traineeId) || 'Azubi',
-          activityType: 'QUIZ_SUBMITTED',
-          createdAt: q.createdAt,
-          details:
-            q.score === null || q.score === undefined
-              ? 'Quiz abgegeben (nicht bewertet)'
-              : `Quiz abgegeben (${q.score}%)`,
-        });
-      });
-
-      // Get recent use case submissions
-      const ucSubs = await db
-        .select({
-          id: useCaseSubmissions.id,
-          traineeId: useCaseSubmissions.traineeId,
-          createdAt: useCaseSubmissions.submittedAt,
-          status: useCaseSubmissions.status,
-        })
-        .from(useCaseSubmissions)
-        .where(
-          traineeIdInScope(useCaseSubmissions.traineeId, traineeScope.condition)
-        )
-        .orderBy(desc(useCaseSubmissions.submittedAt))
-        .limit(5);
-
-      ucSubs.forEach(u => {
-        recentSubmissions.push({
-          id: u.id,
-          userFullName: userMap.get(u.traineeId) || 'Azubi',
-          activityType: 'USECASE_SUBMITTED',
-          createdAt: u.createdAt,
-          details: `Use Case Abgabe (${u.status})`,
-        });
-      });
-
-      // Sort by date and take top 10
-      recentSubmissions.sort((a, b) => {
-        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return dateB - dateA;
-      });
-
-      recentSubmissions = recentSubmissions.slice(0, 10);
-
-      // Update activity count based on submissions
-      if (recentCount7d === 0) {
-        recentCount7d = recentSubmissions.length;
-      }
-    }
 
     return NextResponse.json({
       counts: {
@@ -274,7 +185,6 @@ export async function GET(req: NextRequest) {
         pendingReviews,
         pendingQuizzes,
         pendingUseCases,
-        recentActivity7d: recentCount7d,
       },
       recentActivities,
     });
@@ -282,21 +192,4 @@ export async function GET(req: NextRequest) {
     console.error('Trainer profile API error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
-
-function getActivityDescription(activityType: string): string {
-  const descriptions: Record<string, string> = {
-    'LOGIN': 'Anmeldung',
-    'LOGOUT': 'Abmeldung',
-    'QUIZ_STARTED': 'Quiz gestartet',
-    'QUIZ_SUBMITTED': 'Quiz abgegeben',
-    'QUIZ_COMPLETED': 'Quiz abgeschlossen',
-    'LESSON_STARTED': 'Lektion gestartet',
-    'LESSON_COMPLETED': 'Lektion abgeschlossen',
-    'USECASE_STARTED': 'Use Case gestartet',
-    'USECASE_SUBMITTED': 'Use Case abgegeben',
-    'COURSE_STARTED': 'Kurs gestartet',
-    'COURSE_COMPLETED': 'Kurs abgeschlossen',
-  };
-  return descriptions[activityType] || activityType;
 }

@@ -970,6 +970,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   {
+    route: 'trainee/profile-summary',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
     route: 'trainee/enablers/[enablerId]',
     method: 'GET',
     guard: 'user',

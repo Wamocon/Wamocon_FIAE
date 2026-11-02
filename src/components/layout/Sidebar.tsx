@@ -16,7 +16,7 @@ import {
   LayoutDashboard,
   BookOpen,
   Users,
-  Settings,
+  User,
   LogOut,
   GraduationCap,
   HelpCircle,
@@ -248,7 +248,7 @@ export function Sidebar({
       {
         id: 'profile',
         label: t('nav.profile'),
-        icon: Settings,
+        icon: User,
         href: userRole === 'trainee' ? '/trainee/profile' : '/trainer/profile',
       },
     ],
@@ -314,19 +314,15 @@ export function Sidebar({
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-accent hover:ring-1'
                 }`}
               >
-                {item.id === 'profile' ? (
+                {/* The profile entry shows the profile picture if there is one,
+                    otherwise the icon of a person like the other entries (never
+                    the first letter of the name) */}
+                {item.id === 'profile' && profile.avatar ? (
                   <Avatar className="h-5 w-5 shrink-0">
-                    {profile.avatar ? (
-                      <AvatarImage
-                        src={profile.avatar}
-                        alt={profile.full_name}
-                      />
-                    ) : (
-                      <AvatarFallback>
-                        {profile.full_name?.trim()?.charAt(0)?.toUpperCase() ||
-                          'U'}
-                      </AvatarFallback>
-                    )}
+                    <AvatarImage src={profile.avatar} alt={profile.full_name} />
+                    <AvatarFallback>
+                      <User className="h-3 w-3" />
+                    </AvatarFallback>
                   </Avatar>
                 ) : (
                   <Icon
@@ -400,6 +396,7 @@ export function Sidebar({
           {isMultiple && (
             <Link
               href="/berufswahl"
+              data-tour="sidebar-catalog"
               className="text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-accent mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 hover:ring-1"
             >
               <Briefcase className="h-5 w-5" />
