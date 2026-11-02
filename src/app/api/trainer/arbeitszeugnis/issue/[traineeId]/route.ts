@@ -16,7 +16,11 @@ import { randomBytes } from 'crypto';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { generateCertificateText } from '@/lib/arbeitszeugnis/textGenerator';
 import { getBaseUrlFromRequest } from '@/lib/url';
-import { getTrainingYearDateRange } from '@/lib/ausbildung/duration';
+import {
+  TRAINING_START_MISSING_CODE,
+  TRAINING_START_MISSING_MESSAGE,
+  resolveTrainingYearPeriod,
+} from '@/lib/arbeitszeugnis/period';
 
 /**
  * POST /api/trainer/arbeitszeugnis/issue/[traineeId]
@@ -130,13 +134,21 @@ export async function POST(
         yearEnd.setUTCHours(23, 59, 59, 999);
       }
     } else {
-      const startOfTraining =
-        traineeProfile[0].startDate || new Date('2025-08-01');
-      const range = getTrainingYearDateRange(
-        startOfTraining,
-        certificateAusbildungsjahr,
-        traineeProfile[0].ausbildungDurationYears
-      );
+      // Counted from the start of the training, nothing is invented without one
+      const range = resolveTrainingYearPeriod({
+        startDate: traineeProfile[0].startDate,
+        ausbildungsjahr: certificateAusbildungsjahr,
+        durationYears: traineeProfile[0].ausbildungDurationYears,
+      });
+      if (!range) {
+        return NextResponse.json(
+          {
+            error: TRAINING_START_MISSING_MESSAGE,
+            code: TRAINING_START_MISSING_CODE,
+          },
+          { status: 422 }
+        );
+      }
       yearStart = range.startDate;
       yearEnd = range.endDate;
     }

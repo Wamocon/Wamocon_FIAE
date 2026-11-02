@@ -51,6 +51,9 @@ const traineeProfile = {
   organizationId: ORG,
   isPlatformOwner: false,
   startOfTrainingDate: new Date(2026, 7, 1),
+  // the name the certificate routes select the start of the training under (the
+  // year is counted from it, without one there is no period)
+  startDate: new Date(2026, 7, 1),
   ausbildungDurationYears: 3,
 };
 

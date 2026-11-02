@@ -17,7 +17,11 @@ import {
     TRAINING_CATALOG_IDS
 } from '@/db/migrations/schemas/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
-import { getTrainingYearDateRange } from '@/lib/ausbildung/duration';
+import {
+    TRAINING_START_MISSING_CODE,
+    TRAINING_START_MISSING_MESSAGE,
+    resolveTrainingYearPeriod,
+} from '@/lib/arbeitszeugnis/period';
 import { FIAE_CATALOG_CODE } from '@/lib/catalog/branding';
 import { getComponentLabel } from '@/lib/catalog/component-label';
 
@@ -97,12 +101,22 @@ export async function GET(
                 .where(eq(profiles.id, traineeId))
                 .limit(1);
 
-            const startOfTraining = traineeProfile[0]?.startDate || new Date('2025-08-01');
-            const range = getTrainingYearDateRange(
-                startOfTraining,
+            // The year is counted from the start of the training; without a start
+            // date there is no period (nothing is invented)
+            const range = resolveTrainingYearPeriod({
+                startDate: traineeProfile[0]?.startDate,
                 ausbildungsjahr,
-                traineeProfile[0]?.ausbildungDurationYears
-            );
+                durationYears: traineeProfile[0]?.ausbildungDurationYears,
+            });
+            if (!range) {
+                return NextResponse.json(
+                    {
+                        error: TRAINING_START_MISSING_MESSAGE,
+                        code: TRAINING_START_MISSING_CODE,
+                    },
+                    { status: 422 }
+                );
+            }
             yearStart = range.startDate;
             yearEnd = range.endDate;
         }
