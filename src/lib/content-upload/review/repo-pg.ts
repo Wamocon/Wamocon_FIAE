@@ -255,7 +255,7 @@ export class PgReviewRepo implements ReviewRepo {
     if (!isUuid(catalogId)) return [];
     const components = rowsOf(
       await this.db.execute(
-        sql`select code, title, kind, phase from training_components
+        sql`select code, title, kind, phase, order_index from training_components
             where training_catalog_id = ${catalogId}::uuid
             order by order_index, code`
       )
@@ -289,6 +289,10 @@ export class PgReviewRepo implements ReviewRepo {
       title: text(c.title),
       kind: text(c.kind) as CatalogComponentRow['kind'],
       phase: c.phase === null || c.phase === undefined ? null : Number(c.phase),
+      orderIndex:
+        c.order_index === null || c.order_index === undefined
+          ? null
+          : Number(c.order_index),
       enablers: byComponent.get(String(c.code)) ?? [],
     }));
   }

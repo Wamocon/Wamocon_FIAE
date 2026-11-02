@@ -265,9 +265,11 @@ order by table_name, column_name;
 -- N checks (after a stage, the runbook says which)
 -- ============================================================================
 
--- N01. Ledger against the 35 files of the repository. Expect 0 rows after the release (and
--- after the repair of 202606260001). Every row is a file whose version is missing in the
--- ledger: it was not applied through the pipeline.
+-- N01. Ledger against the 39 files of the repository (202606260001 and the 38 files from
+-- 20261023100000 to 20261102000200). Expect 0 rows after the release (and after the repair
+-- of 202606260001). Every row is a file whose version is missing in the ledger: it was not
+-- applied through the pipeline. Every new migration file needs its version in this list,
+-- tests/unit/migrations/rollout-checks-ledger.test.ts fails otherwise.
 with expected(version) as (
   values ('202606260001'),
          ('20261023100000'), ('20261023100100'), ('20261023100200'),
@@ -279,7 +281,9 @@ with expected(version) as (
          ('20261025000000'), ('20261025000100'), ('20261026000100'), ('20261027000100'),
          ('20261028000100'), ('20261028000200'), ('20261028000300'),
          ('20261029000100'), ('20261029000200'), ('20261029000300'),
-         ('20261030000100'), ('20261030000200'), ('20261030000300')
+         ('20261030000100'), ('20261030000200'), ('20261030000300'),
+         ('20261101000100'), ('20261101000200'),
+         ('20261102000100'), ('20261102000200')
 )
 select e.version as missing_in_ledger
 from expected e
@@ -330,6 +334,13 @@ from (
     ('trigger quizzes_catalog_link_check', exists (select 1 from pg_trigger where tgname = 'quizzes_catalog_link_check' and not tgisinternal)),
     ('trigger hai_embeddings_set_scope', exists (select 1 from pg_trigger where tgname = 'hai_embeddings_set_scope' and not tgisinternal)),
     ('trigger content_documents_follow_hai_scope', exists (select 1 from pg_trigger where tgname = 'content_documents_follow_hai_scope' and not tgisinternal)),
+    -- 20261101000100: the source types of the index include the learning technique cards
+    ('constraint hai_embeddings_source_type_check allows learning_technique', exists (select 1 from pg_constraint where conname = 'hai_embeddings_source_type_check' and conrelid = to_regclass('public.hai_embeddings') and pg_get_constraintdef(oid) like '%learning_technique%')),
+    -- 20261101000200: switch of the voice assistant per organization
+    ('column organizations.voice_assistant_enabled', exists (select 1 from pg_attribute where attrelid = to_regclass('public.organizations') and attname = 'voice_assistant_enabled' and not attisdropped)),
+    -- 20261102000100 and 20261102000200: settings of the HAI (provider of the voice assistant), no foreign key on updated_by
+    ('table hai_settings', to_regclass('public.hai_settings') is not null),
+    ('foreign key hai_settings_updated_by_fkey is gone (20261102000200)', not exists (select 1 from pg_constraint where conname = 'hai_settings_updated_by_fkey')),
     ('enum value user_role SUPER_ADMIN', exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'user_role' and e.enumlabel = 'SUPER_ADMIN')),
     ('PUBLIC cannot create in schema public', not has_schema_privilege('public', 'public', 'CREATE'))
 ) as t(check_name, present)
@@ -393,6 +404,13 @@ from kfbm_documents
 group by 1, 2, 3
 order by 1, 2, 3;
 
+-- Known state before the FIAE promotion (rehearsal of 02.11.2026, B2): the query is not limited
+-- to KFBM, so it also counts the old FIAE trainer solutions of Production (81 rows, TRAINER_ONLY,
+-- public address in the bucket content). Those rows come from before the private solution
+-- bucket. They are not a violation of the KFBM rule, but real solution files behind a public
+-- link, so the bucket has to become private with the release (step 6 of the order on the day,
+-- docs/go-checkliste.md). Whether the FIAE promotion rewrites these rows is not verified yet:
+-- measure N06 again after step 5 and note the count.
 select d.document_type, d.visibility, count(*) as violations
 from public.content_documents d
 where (d.document_type = 'TRAINER_SOLUTION' and d.visibility <> 'TRAINER_ONLY')

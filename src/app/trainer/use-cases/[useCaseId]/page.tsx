@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { documentTypeLabel } from '@/lib/documentTypeLabel';
 import {
   ArrowLeft,
   BookOpen,
@@ -484,7 +485,7 @@ export default function TrainerUseCaseDetailPage() {
                   <span className="text-foreground">{doc.title}</span>
                 </div>
                 <span className="text-muted bg-accent/10 rounded-full px-2 py-1 text-xs">
-                  {doc.documentType}
+                  {documentTypeLabel(doc.documentType, t)}
                 </span>
               </a>
             ))}

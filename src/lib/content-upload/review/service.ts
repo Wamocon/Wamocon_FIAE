@@ -8,6 +8,9 @@
 // confidence. Never a storage path, an excerpt, the text of a document or a part of
 // a solution.
 
+import { TRAINING_CATALOG_IDS } from '@/db/migrations/schemas/schema';
+import { FIAE_CATALOG_CODE } from '@/lib/catalog/branding';
+import { getComponentLabel } from '@/lib/catalog/component-label';
 import { parseDecisions } from '@/lib/content-import/apply/decisions';
 import type { Decisions } from '@/lib/content-import/apply/types';
 import {
@@ -200,7 +203,10 @@ export async function reviewOptions(
   const components = await deps.review.catalogComponents(run.trainingCatalogId);
   return optionsOf(
     components,
-    positiveListFromPaths(files.map(f => f.relPath))
+    positiveListFromPaths(files.map(f => f.relPath)),
+    run.trainingCatalogId === TRAINING_CATALOG_IDS.FIAE
+      ? FIAE_CATALOG_CODE
+      : null
   );
 }
 
@@ -209,15 +215,21 @@ const componentOrder = (code: string) => {
   return m ? Number(m[1]) * 100 + Number(m[2] ?? 0) : Number.MAX_SAFE_INTEGER;
 };
 
-/** Merges the database and the plan, the database wins, the plan marks what is new. */
+/**
+ * Merges the database and the plan, the database wins, the plan marks what is new.
+ * The label of a component is its code (KfBM: K24.2), only for FIAE it is derived
+ * (2.1, 2.2, ...): the code stays the key of every assignment.
+ */
 export function optionsOf(
   database: readonly CatalogComponentRow[],
-  plan: PositiveListInput
+  plan: PositiveListInput,
+  catalogCode: string | null = null
 ): ReviewOptions {
   const byCode = new Map<
     string,
     {
       code: string;
+      label: string;
       title: string | null;
       isNew: boolean;
       enablers: Map<
@@ -229,6 +241,11 @@ export function optionsOf(
   for (const c of database) {
     byCode.set(c.code, {
       code: c.code,
+      label: getComponentLabel({
+        catalogCode,
+        code: c.code,
+        orderIndex: c.orderIndex,
+      }),
       title: c.title,
       isNew: false,
       enablers: new Map(
@@ -242,6 +259,7 @@ export function optionsOf(
   for (const c of plan.components ?? []) {
     const entry = byCode.get(c.code) ?? {
       code: c.code,
+      label: c.code,
       title: c.title ?? null,
       isNew: true,
       enablers: new Map(),
@@ -264,6 +282,7 @@ export function optionsOf(
       .sort((a, b) => componentOrder(a.code) - componentOrder(b.code))
       .map(c => ({
         code: c.code,
+        label: c.label,
         title: c.title,
         isNew: c.isNew,
         enablers: [...c.enablers.values()].sort((a, b) =>

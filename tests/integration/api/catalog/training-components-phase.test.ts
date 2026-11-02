@@ -55,6 +55,8 @@ describe('/api/training-components phase and kind', () => {
       {
         id: 'f1',
         code: '§4.2.1',
+        // an unknown FIAE code is labelled by its order index (1)
+        label: '1',
         title: 'Planen',
         description: 'Beschreibung',
         totalWeeks: 4,

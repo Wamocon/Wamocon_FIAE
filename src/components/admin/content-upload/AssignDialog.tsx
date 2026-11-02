@@ -111,7 +111,7 @@ export function AssignDialog({
             <option value={KEEP}>{t('contentUpload.assign.keep')}</option>
             {options.components.map(c => (
               <option key={c.code} value={c.code}>
-                {c.code}
+                {c.label}
                 {c.title ? ` ${c.title}` : ''}
               </option>
             ))}
@@ -135,7 +135,7 @@ export function AssignDialog({
             {options.components
               .filter(c => !component || c.code === component.code)
               .map(c => (
-                <optgroup key={c.code} label={c.code}>
+                <optgroup key={c.code} label={c.label}>
                   {c.enablers.map(e => (
                     <option key={e.code} value={e.code}>
                       {e.code}

@@ -57,6 +57,8 @@
     "import:fiae:documents": "node scripts/import/fiae-documents.mjs",
     "import:fiae:quizzes": "node scripts/import/fiae-quizzes.mjs",
     "import:fiae:global-quizzes": "node scripts/import/fiae-global-quizzes.mjs",
+    "import:fiae:folder-renumber": "node scripts/import/fiae-folder-renumber.mjs",
+    "import:fiae:copy-check": "node scripts/import/fiae-copy-check.mjs",
     "import:kfbm:planned-hours": "node scripts/import/kfbm-planned-hours.mjs"
   },
   "dependencies": {
