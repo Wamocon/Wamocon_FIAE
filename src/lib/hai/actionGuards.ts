@@ -24,24 +24,41 @@ import {
 } from '@/lib/catalog/scope';
 import { ensureTraineeInCatalog } from '@/lib/catalog/trainee-scope';
 import type { ActionFailureCode, ActionResult } from './actions';
+import {
+  DENIAL_ACTION_NOT_FOUND_TEXT,
+  DENIAL_ACTION_OCCUPATION_TEXT,
+  DENIAL_ACTION_UNAVAILABLE_TEXT,
+  type DenialCategory,
+} from './denial';
 
+/**
+ * A failed result. `denial` is the category of the reason when the failure
+ * hangs on access (denial.ts), the route sends it so the interface can name the
+ * reason. A technical failure carries none.
+ */
 export function fail(
   code: ActionFailureCode,
   message: string,
-  error: string
+  error: string,
+  denial?: DenialCategory
 ): ActionResult {
-  return { success: false, message, error, code };
+  return {
+    success: false,
+    message,
+    error,
+    code,
+    ...(denial ? { denial } : {}),
+  };
 }
 
+// A foreign record answers like a missing one, so the reason is the coarse
+// "not in your released content and responsibility", never "it exists elsewhere"
 export const notFound = (): ActionResult =>
-  fail('not_found', 'Datensatz nicht gefunden.', 'Not found');
+  fail('not_found', DENIAL_ACTION_NOT_FOUND_TEXT, 'Not found', 'UMFANG');
 
+// A technical failure, said as such: no denial category
 export const unavailable = (): ActionResult =>
-  fail(
-    'unavailable',
-    'Die Berechtigung kann gerade nicht geprüft werden. Bitte versuche es später erneut.',
-    'Scope unavailable'
-  );
+  fail('unavailable', DENIAL_ACTION_UNAVAILABLE_TEXT, 'Scope unavailable');
 
 /** Map the ready-made error response of a scope helper to an action result. */
 function fromResponse(response: NextResponse): ActionResult {
@@ -49,8 +66,9 @@ function fromResponse(response: NextResponse): ActionResult {
   if (response.status === 403) {
     return fail(
       'forbidden',
-      'Für diesen Beruf ist die Aktion nicht erlaubt.',
-      'Occupation not allowed'
+      DENIAL_ACTION_OCCUPATION_TEXT,
+      'Occupation not allowed',
+      'BERUF'
     );
   }
   return unavailable();

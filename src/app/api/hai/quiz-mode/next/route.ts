@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireProPlan } from '@/lib/auth-helpers';
+import { DENIAL_CODES } from '@/lib/hai/denial';
 import {
   QUIZ_MODE_CANDIDATE_BATCH,
   isAskable,
@@ -50,7 +51,10 @@ export async function POST(req: NextRequest) {
   try {
     if (!(await requireProPlan(me.id))) {
       return NextResponse.json(
-        { error: 'HAI.ai is only available with a PRO subscription.' },
+        {
+          error: 'HAI.ai is only available with a PRO subscription.',
+          code: DENIAL_CODES.PRO_REQUIRED,
+        },
         { status: 403 }
       );
     }

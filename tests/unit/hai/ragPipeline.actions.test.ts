@@ -54,6 +54,11 @@ import {
   processMessageStream,
   type PipelineContext,
 } from '@/lib/hai/ragPipeline';
+import {
+  DENIAL_ACTION_TRAINEE_ONLY_TEXT,
+  DENIAL_ACTION_TRAINER_ONLY_TEXT,
+  namesDenialReason,
+} from '@/lib/hai/denial';
 
 const ENABLER = '20000000-0000-4000-8000-000000000001';
 const USER = '10000000-0000-4000-8000-000000000001';
@@ -191,6 +196,29 @@ describe('HAI pipeline: actions are proposals, never writes', () => {
       success: false,
       actionType: 'complete_enabler',
     });
+    // ROLLE: says what does not work, that the role is the reason, what instead
+    expect(result.response).toBe(DENIAL_ACTION_TRAINEE_ONLY_TEXT);
+    expect(namesDenialReason(result.response, 'ROLLE')).toBe(true);
+    expect(result.response).toContain('stattdessen');
+  });
+
+  it('refuses a trainer action for a trainee with the reason ROLLE, no proposal', async () => {
+    mockDetect.mockReturnValue(
+      intent('approve_report', 0.9, {
+        reportId: '30000000-0000-4000-8000-000000000002',
+      })
+    );
+    for (const run of [
+      () => processMessage('x', ctx({ userRole: 'TRAINEE' })),
+      () => processMessageStream('x', ctx({ userRole: 'TRAINEE' }), () => {}),
+    ]) {
+      const result = await run();
+      expect(mockExecute).not.toHaveBeenCalled();
+      expect(result.pendingAction).toBeUndefined();
+      expect(result.response).toBe(DENIAL_ACTION_TRAINER_ONLY_TEXT);
+      expect(namesDenialReason(result.response, 'ROLLE')).toBe(true);
+      expect(mockChat).not.toHaveBeenCalled();
+    }
   });
 
   it('explains what is missing instead of proposing an incomplete action', async () => {

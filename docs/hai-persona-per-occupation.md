@@ -23,6 +23,7 @@ person.
   trainee prompt carries no trainer topics.
 - **Without a catalog scope** (no profile, no catalog, database error) the persona is neutral:
   no knowledge context, no live data, no model call, only a refusal.
+- **The texts of the refusals** (no occupation, another occupation) are fixed texts with the reason in plain words and an alternative, see `docs/hai-ablehnungen.md` (`src/lib/hai/denial.ts`). `NEUTRAL_REFUSAL` and `FOREIGN_OCCUPATION_TEXT` in `persona.ts` are no longer sent by the pipeline.
 - **Questions about another occupation** (code, title, short name or the names in the
   settings of a catalog the user may not use) get a neutral refusal. Nothing of the other
   occupation is named. A person with several occupations may ask about all of them.

@@ -11,6 +11,10 @@
 
 import { detectActionIntent } from './actions';
 import {
+  DENIAL_ACTION_TRAINEE_ONLY_TEXT,
+  DENIAL_ACTION_TRAINER_ONLY_TEXT,
+} from './denial';
+import {
   describeAction,
   isActionAllowedForRole,
   isWriteAction,
@@ -71,10 +75,11 @@ export async function handleActionMessage(
   if (!isWriteAction(intent.type)) return null;
 
   if (!isActionAllowedForRole(intent.type, context.userRole)) {
+    // reason ROLLE: says why and what is possible instead (denial.ts)
     return answer(
       context.userRole === 'TRAINER'
-        ? 'Diese Aktion ist nur für Auszubildende möglich.'
-        : 'Diese Aktion ist nur für Trainer möglich.',
+        ? DENIAL_ACTION_TRAINEE_ONLY_TEXT
+        : DENIAL_ACTION_TRAINER_ONLY_TEXT,
       intent.type
     );
   }

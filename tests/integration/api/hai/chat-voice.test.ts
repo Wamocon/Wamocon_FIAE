@@ -15,7 +15,7 @@ import {
 
 const ME = 'me-1';
 
-async function load(voiceEnabled: boolean) {
+async function load(voiceEnabled: boolean, pro = true) {
   jest.resetModules();
   mockSession(
     fakeSession({ id: ME, role: 'TRAINEE', organizationId: 'org-1' })
@@ -41,7 +41,7 @@ async function load(voiceEnabled: boolean) {
   jest.doMock('@/lib/auth-helpers', () => ({
     __esModule: true,
     ...(jest.requireActual('@/lib/auth-helpers') as object),
-    requireProPlan: jest.fn(async () => true),
+    requireProPlan: jest.fn(async () => pro),
     getUserOrgId: jest.fn(async () => 'org-1'),
     getUserOrgIdStrict: jest.fn(async () => 'org-1'),
   }));
@@ -97,6 +97,26 @@ describe('HAI chat route: spoken questions', () => {
     expect((await res.json()).code).toBe('VOICE_DISABLED');
     expect(isVoiceAssistantEnabled).toHaveBeenCalledWith(ME);
     expect(processMessage).not.toHaveBeenCalled();
+  });
+
+  it('names the reason with stable codes: the plan (PRO_REQUIRED) and the switch (VOICE_DISABLED)', async () => {
+    // ORGANISATION_PLAN: no PRO plan, nothing reaches the pipeline
+    const noPlan = await load(true, false);
+    const planRes = await noPlan.mod.POST(post({}));
+    expect(planRes.status).toBe(403);
+    expect((await planRes.json()).code).toBe('PRO_REQUIRED');
+    expect(noPlan.processMessage).not.toHaveBeenCalled();
+    // the sessions list of the same route answers the same way
+    const list = await noPlan.mod.GET(
+      makeRequest('GET', 'http://localhost/api/hai/chat', { token: 't' })
+    );
+    expect(list.status).toBe(403);
+    expect((await list.json()).code).toBe('PRO_REQUIRED');
+
+    // SCHALTER_AUS: the switch of the organization, a different code
+    const noVoice = await load(false);
+    const voiceRes = await noVoice.mod.POST(post({ voice: true }));
+    expect((await voiceRes.json()).code).toBe('VOICE_DISABLED');
   });
 
   it('hands voice to the pipeline where the organization allows it', async () => {

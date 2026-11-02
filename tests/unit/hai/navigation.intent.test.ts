@@ -193,6 +193,41 @@ describe('detectNavigationIntent: what stays with the pipeline', () => {
   });
 });
 
+describe('detectNavigationIntent: a page that is not known', () => {
+  it.each([
+    'öffne die Seite Wetter',
+    'Öffne bitte die Seite Rezepte',
+    'geh zur Seite Horoskop',
+    'bring mich zur Seite Fussball',
+    'zeig mir die Seite Gewinnspiel',
+  ])('%s is a command for an unknown page', message => {
+    expect(detectNavigationIntent(message)).toEqual({ kind: 'unknown_page' });
+  });
+
+  it.each([
+    // no name of a page
+    'öffne die Seite',
+    'bring mich zur Seite',
+    // a page number or a path is no page name
+    'zeig mir Seite 5 des Skripts',
+    'öffne die Seite /admin/secret',
+    // a question or an explanation stays with the pipeline
+    'Erkläre mir die Seite Wetter',
+    'Was ist die Seite Rezepte?',
+    // a long text is no command
+    `öffne die Seite Wetter ${'und noch ein langer Satz '.repeat(6)}`,
+  ])('%s stays with the pipeline', message => {
+    expect(detectNavigationIntent(message)).toBeNull();
+  });
+
+  it('keeps a known page a known page', () => {
+    expect(detectNavigationIntent('öffne die Seite Berufsschule')).toEqual({
+      kind: 'static',
+      target: 'school',
+    });
+  });
+});
+
 describe('detectNavigationIntent: the golden set is not hijacked', () => {
   // None of the questions of the golden set (solutions, other occupations,
   // off-topic, allowed answers) may turn into a navigation, except the cases
