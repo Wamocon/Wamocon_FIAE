@@ -15,9 +15,9 @@ describe('universe planets', () => {
     expect(isExplorable(UNIVERSE_PLANETS[0])).toBe(true);
   });
 
-  it('only FIAE can be explored, the page has no learning field data for KfBM', () => {
+  it('FIAE and KfBM can be explored, the announced occupations cannot (WMCNL-2978)', () => {
     const explorable = UNIVERSE_PLANETS.filter(isExplorable).map(p => p.abbr);
-    expect(explorable).toEqual(['FIAE']);
+    expect(explorable).toEqual(['FIAE', 'KfBM']);
   });
 
   it('uses distinct, ascending orbits and distinct abbreviations', () => {
