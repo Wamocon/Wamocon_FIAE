@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isAccountStopped } from '@/lib/auth/access-state';
 import { HaiProvider, HaiContext } from './HaiProvider';
 import { HaiQuizModeProvider } from './HaiQuizMode';
+import { HaiVoiceSessionProvider } from './voice-mode/HaiVoiceSession';
 
 // Lazy-load the button & chat panel — keeps framer-motion out of the
 // critical-path bundle.  They are only downloaded once the wrapper mounts
@@ -57,9 +58,11 @@ export function HaiWrapper({ children, context }: HaiWrapperProps) {
   return (
     <HaiQuizModeProvider>
       <HaiProvider userId={user.id} initialContext={context}>
-        {children}
-        <HaiButton />
-        <HaiChat />
+        <HaiVoiceSessionProvider>
+          {children}
+          <HaiButton />
+          <HaiChat />
+        </HaiVoiceSessionProvider>
       </HaiProvider>
     </HaiQuizModeProvider>
   );

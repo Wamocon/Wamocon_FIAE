@@ -9,49 +9,20 @@
  * use asks for consent and says plainly where the audio goes: the text names the
  * effective provider and the one that takes over. The HAI gets the recognized
  * text and records no audio.
+ *
+ * The voice loop is the one of the voice session (voice-mode/HaiVoiceSession.tsx),
+ * shared with the voice mode: next to the microphone sits the button "Gespräch"
+ * that opens the voice mode with the mascot.
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Loader2, Mic, Square, Volume2 } from 'lucide-react';
-import { authFetch } from '@/lib/authFetch';
-import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useHai } from './HaiProvider';
-import { useHaiVoice, type VoiceConfig, type VoiceError } from './useHaiVoice';
-import { fetchVoiceConfig } from '@/lib/hai/voice/client/deps';
+import { type VoiceError } from './useHaiVoice';
 import { consentParagraphs } from '@/lib/hai/voice/consentText';
-
-function sameConfig(a: VoiceConfig | null, b: VoiceConfig): boolean {
-  return (
-    !!a &&
-    a.region === b.region &&
-    a.chain.length === b.chain.length &&
-    a.chain.every((id, i) => id === b.chain[i])
-  );
-}
-
-let enabledCache: boolean | null = null;
-
-function useVoiceEnabled(): boolean {
-  const [enabled, setEnabled] = useState<boolean>(enabledCache === true);
-  useEffect(() => {
-    if (enabledCache !== null) return;
-    let cancelled = false;
-    authFetch('/api/hai/voice')
-      .then(res => (res.ok ? res.json() : null))
-      .then(data => {
-        enabledCache = data?.enabled === true;
-        if (!cancelled) setEnabled(enabledCache);
-      })
-      .catch(() => {
-        if (!cancelled) setEnabled(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return enabled;
-}
+import { HaiVoiceModeButton } from './voice-mode/HaiVoiceModeButton';
+import { providerStatement } from './voice-mode/providerStatement';
+import { useOptionalHaiVoiceSession } from './voice-mode/voiceSessionContext';
 
 const ERROR_KEY: Record<Exclude<VoiceError, null>, string> = {
   'not-allowed': 'hai.voice.error.notAllowed',
@@ -62,45 +33,11 @@ const ERROR_KEY: Record<Exclude<VoiceError, null>, string> = {
 
 export function HaiVoiceControl() {
   const { t } = useLanguage();
-  const { user } = useAuth() as { user?: { id?: string } | null };
-  const { messages, streamingMessageId, sendMessage, stopGeneration } =
-    useHai();
-  const orgEnabled = useVoiceEnabled();
+  const session = useOptionalHaiVoiceSession();
   const [askConsent, setAskConsent] = useState(false);
-  // who listens and speaks: the providers in charge, read from the server
-  const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
 
-  const voice = useHaiVoice({
-    userId: user?.id,
-    enabled: orgEnabled,
-    voiceConfig,
-    messages,
-    streamingMessageId,
-    sendMessage,
-    stopGeneration,
-    placeholderText: t('hai.loading.thinking') || 'Thinking...',
-  });
-
-  // Read the providers when the control appears and after every conversation, so a
-  // change of the platform admin (or a provider that failed) is picked up at the
-  // next start. A failing call leaves the browser alone as the provider.
-  const idle = voice.phase === 'idle';
-  useEffect(() => {
-    if (!orgEnabled || !idle) return;
-    let cancelled = false;
-    void fetchVoiceConfig().then(config => {
-      if (cancelled || !config) return;
-      setVoiceConfig(previous =>
-        sameConfig(previous, config) ? previous : config
-      );
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [orgEnabled, idle]);
-
-  if (!voice.available) return null;
-
+  if (!session || !session.voice.available) return null;
+  const voice = session.voice;
   const active = voice.phase !== 'idle' && voice.phase !== 'error';
 
   const onMain = () => {
@@ -120,10 +57,9 @@ export function HaiVoiceControl() {
   };
 
   const accept = () => {
-    voice.giveConsent();
+    // stores the consent and starts on the next render
+    session.acceptConsent();
     setAskConsent(false);
-    // the consent was just stored; start on the next render
-    setTimeout(() => voice.start(), 0);
   };
 
   const statusKey =
@@ -181,6 +117,7 @@ export function HaiVoiceControl() {
             </p>
           )}
         </div>
+        <HaiVoiceModeButton className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20" />
         {active && (
           <button
             type="button"
@@ -234,19 +171,7 @@ export function HaiVoiceControl() {
           {t('hai.voice.settings')}
         </summary>
         <div className="mt-2 space-y-2">
-          <p>
-            {voice.provider === 'browser'
-              ? voice.localRecognition
-                ? t('hai.voice.local')
-                : t('hai.voice.cloud')
-              : t(`hai.voice.provider.${voice.provider}`, {
-                  region: t(
-                    voice.region === 'us'
-                      ? 'hai.voice.region.us'
-                      : 'hai.voice.region.eu'
-                  ),
-                })}
-          </p>
+          <p>{providerStatement(voice, t)}</p>
           <p>{t('hai.voice.hint')}</p>
           <label className="flex items-center gap-2">
             <input

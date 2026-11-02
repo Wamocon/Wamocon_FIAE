@@ -199,6 +199,42 @@ Pflichtfälle der Gruppe I (Blocker für den Produktivgang): I1, I3, I5, I7, I8,
 
 Bekannte Grenzen der Gruppe I: Die Fälle I4, I13, I14 und I15 beantwortet das Sprachmodell, der Wortlaut kann abweichen, geprüft wird der genannte Grund. Eine technische Störung (alle Anbieter ausgefallen, Datenbank nicht erreichbar) zeigt nie einen Berechtigungsgrund, sondern "technische Störung" oder die allgemeine Meldung (siehe F). Die Chat-Route hat keine eigene Ratenbegrenzung, I21 betrifft deshalb nur die Quiz-Routen. Der Schalter `HAI_TRAINER_SOLUTIONS` existiert auf master nicht, ein Fall dazu entfällt.
 
+## J. Sprachmodus mit Maskottchen
+
+Voraussetzung: Konten wie in A bis I, der Sprachassistent ist für die Organisation eingeschaltet (E11), Browser wie in E. Beschreibung und Aufbau: `docs/hai-sprachmodus.md`. Der Sprachmodus ist ein Gesprächsfenster mit dem Hai über dem Sprachassistenten, alles Gesprochene steht im Chat im Hintergrund. Er ändert nichts an den Regeln der HAI (Berufstrennung, Lösungsschutz, Berechtigung), die Fälle A bis I gelten gesprochen wie getippt. Geprüft wird bei jedem Fall auch, dass der Zustand als Text sichtbar ist, nicht nur als Bewegung.
+
+| Nr | Als | Aktion | Erwartung | P |
+|---|---|---|---|---|
+| J1 | FIAE-Azubi | Chat öffnen (Seitenansicht und Vollbild) | Der Knopf "Gespräch" steht in der Kopfzeile des Chats und neben dem Mikrofon. Tab erreicht ihn, Enter öffnet den Sprachmodus | P |
+| J2 | Azubi einer Organisation mit ausgeschaltetem Sprachassistenten (nach E11) | Chat öffnen, Seite neu laden | Kein Knopf "Gespräch" und kein Mikrofon. Ein Aufruf von `GET /api/hai/voice/config` antwortet mit 403 und `VOICE_DISABLED` (E20) | P |
+| J3 | Azubi, Einwilligung zurückgesetzt (E10) | Knopf "Gespräch" drücken | Der Sprachmodus öffnet sich mit der Einwilligung, sie nennt den wirksamen Anbieter und den Ersatz. Der Browser fragt noch nicht nach dem Mikrofon, es wird nichts aufgenommen. Ein Tipp auf den Hai startet nichts. "Abbrechen" schließt den Sprachmodus | P |
+| J4 | wie J3 | "Einverstanden und starten" | Der Browser fragt nach dem Mikrofon, der Zustand zeigt "HAI hört zu", der Hai zeigt ruhige Ringe, der Fokus liegt auf dem Hai | P |
+| J5 | Azubi | "Was ist ein Primärschlüssel?" sprechen | Während des Sprechens steht der Text als Untertitel, danach "HAI denkt nach", dann "HAI spricht", die Antwort steht satzweise als Untertitel und wird vorgelesen, danach "HAI hört zu". Kein Markdown in den Untertiteln | P |
+| J6 | wie J5 | Sprachmodus mit Esc beenden, im Chat nachlesen | Im Chat stehen die gesprochene Frage als Nutzernachricht und die Antwort der HAI, in derselben Sitzung. Eine zweite gesprochene Frage steht in demselben Verlauf, in der Liste der Sitzungen gibt es keinen zweiten Eintrag für das Gespräch | P |
+| J7 | Azubi | Beenden mit Esc, mit dem Kreuz und mit dem Sprachbefehl "Sprachmodus beenden" (jeweils neu öffnen) | Der Sprachmodus schließt, das Mikrofon ist aus (die Aufnahmeanzeige des Browsers verschwindet), das Vorlesen bricht ab, der Fokus liegt wieder auf dem Knopf "Gespräch". Der Sprachbefehl wird nicht als Frage an die HAI geschickt | P |
+| J8 | Azubi | Während die HAI spricht, auf den Hai tippen | Die Stimme ist sofort still, die HAI hört zu | |
+| J9 | Azubi | Untertitel ausschalten, Frage stellen, Seite neu laden, Sprachmodus öffnen | Ohne Untertitel bleiben der Hai und der Zustandstext. Die Wahl gilt nach dem Neuladen noch. Ein Wiedereinschalten zeigt die Untertitel wieder | |
+| J10 | Azubi | Nichts sagen | Nach etwa drei stillen Runden zeigt der Hai "HAI macht Pause" mit dem Hinweis, auf die HAI zu tippen. Ein Tipp auf den Hai hört wieder zu | |
+| J11 | Azubi | Mikrofon im Browser verbieten, Sprachmodus öffnen | Der Zustand zeigt den Fehler mit der Meldung zum Mikrofon, kein Absturz, kein Rückfall auf einen anderen Anbieter (E19) | |
+| J12 | Azubi, erstes Gespräch des Tages | Sprachmodus öffnen | Die HAI beginnt von selbst mit der Lage des Tages (E3), als erste gesprochene Äußerung, sie steht als Untertitel. Das zweite Gespräch am selben Tag beginnt mit Zuhören | |
+| J13 | FIAE-Azubi | "Öffne meine Berichte" sprechen | Die HAI nennt die Seite mit dem Grund und fragt "Soll ich sie öffnen?". Die Seite wechselt noch nicht. Unter den Untertiteln steht die Karte mit dem Knopf "Öffnen" | P |
+| J14 | wie J13 | direkt danach "Ja" sprechen | Die Seite öffnet sich, der Sprachmodus bleibt: Der Hai sitzt klein am Rand (unten rechts ab 768 Pixel, auf dem Handy unten in der Mitte), zeigt seinen Zustand als Text, sagt "Ich öffne die Seite ..." und hört danach weiter zu. Das Chatpanel verdeckt die Seite nicht. Eine weitere Frage steht im selben Chat | P |
+| J15 | wie J14 | auf den kleinen Hai tippen, danach das Kreuz | Der Tipp holt das Vollbild zurück, das Mikrofon läuft weiter. Das Kreuz der kleinen Einheit und der Sprachbefehl "Sprachmodus beenden" beenden den Modus und das Mikrofon | |
+| J16 | wie J13 | "Nein" sprechen, danach "Ja" | Nichts wird geöffnet, der Sprachmodus bleibt im Vollbild, auch das spätere "Ja" öffnet nichts (H21) | |
+| J17 | wie J13 | statt "Ja" auf "Öffnen" der Karte tippen | Wie J14: Seite öffnet sich, der Hai wird klein | |
+| J18 | FIAE-Azubi | "Bring mich zur Seite der Auszubildenden" sprechen | Ablehnung mit Grund wie I7, keine Karte, kein Seitenwechsel. Die Navigation im Sprachmodus gibt nie mehr Rechte als im Chat | P |
+| J19 | Azubi mit Tastatur und Bildschirmleser | Sprachmodus öffnen, mit Tab durch den Dialog, Enter auf dem Hai | Tab bleibt im Dialog (Umschalt+Tab ebenfalls), alle Knöpfe haben einen Namen, der Zustandstext wird vorgelesen, Enter auf dem Hai unterbricht | |
+| J20 | Azubi, Betriebssystem auf weniger Bewegung gestellt | Sprachmodus öffnen, Frage stellen | Der Hai bewegt sich nicht (keine Ringe, kein Schwimmen), der Zustand steht als Text und der Rahmen wechselt die Farbe | |
+| J21 | Azubi | Theme hell und dunkel wechseln, Sprachmodus öffnen | Hai, Untertitel und Zustandstext sind in beiden Themes lesbar | |
+| J22 | Azubi am Handy (iPhone Safari, Chrome Android) | Sprachmodus öffnen, Frage stellen, Seite per "Ja" öffnen | Das Vollbild passt auf den Bildschirm, Ton startet (Audio wird im Tipp freigeschaltet), die kleine Einheit sitzt unten in der Mitte über dem Chat-Knopf und verdeckt keine Eingabe | |
+| J23 | Azubi, Hauptanbieter Soniox (E14) | Gespräch im Sprachmodus | Zwischenergebnisse erscheinen beim Sprechen als Untertitel, die Antwort wird ohne hörbare Lücke vorgelesen. Fällt Soniox aus (E16), läuft das Gespräch über die Rückfallebene weiter | |
+| J24 | Azubi | im Sprachmodus "Frag mich ab" sprechen | Der Quiz-Modus läuft nicht im Sprachmodus: Der Sprachmodus endet, der Chat öffnet sich und zeigt die Quiz-Karte (nächste Stufe: Quiz per Sprache) | |
+| J25 | Azubi | Sprachmodus öffnen, per "Ja" eine Seite öffnen, dann das Chatpanel über den Knopf rechts unten öffnen | Die kleine Einheit rückt neben das Panel (ab 768 Pixel) beziehungsweise nach oben (Handy) und verdeckt das Eingabefeld nicht | |
+
+Pflichtfälle der Gruppe J (Blocker für den Produktivgang des Sprachmodus): J1, J2, J3, J4, J5, J6, J7, J13, J14, J18. Die Einwilligung (J3, J4), der Chat im Hintergrund (J6), das Beenden (J7), der Schalter (J2) und die Navigation per "Ja" (J14) dürfen in keinem Konto durchfallen.
+
+Bekannte Grenzen der Gruppe J: Der Pegel der Aufnahme wird von keinem Anbieter gemeldet, der Hai atmet deshalb ruhig und die Ringe werden schneller, solange Text eintrifft (kein Fehler). Aktionskarten (Bestätigung einer Schreibaktion) erscheinen nur im Chat. Die Oberfläche wurde in Tests mit nachgebildetem Browser geprüft, ein echtes Mikrofon, echter Ton, die Wirkung der Bewegung und die Lage der kleinen Einheit auf einem Handy sind erst mit diesen Fällen geprüft.
+
 ## Bekannte Grenzen (kein Testfehler)
 
 - Zwei Fragen des Prüfsatzes lehnt das Modell zu Unrecht ab: "Welcher Server hostet eine Netflix Plattform?" und "Welches Hotel darf ich für die Dienstreise buchen?". Wer ähnliche Fälle findet, bitte als Fehler zur späteren Behebung melden.

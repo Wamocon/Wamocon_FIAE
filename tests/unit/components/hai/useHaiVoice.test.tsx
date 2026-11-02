@@ -401,3 +401,140 @@ describe('useHaiVoice', () => {
     expect(hook.result.current.localRecognition).toBe(true);
   });
 });
+
+describe('useHaiVoice for the voice mode (subtitles and loudness)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('hands the pieces of the answer out as they are read, and forgets them with the next question', async () => {
+    const t = makeEnv({ stored: consentedAndStarted });
+    const { hook, update } = setup(t.env);
+    await flush();
+    expect(hook.result.current.spoken).toEqual([]);
+    act(() => hook.result.current.start());
+    await flush();
+    act(() => t.recognitions[0].say('Was ist ein Primärschlüssel?'));
+    const question: Msg = {
+      id: 'u',
+      role: 'user',
+      content: 'Was ist ein Primärschlüssel?',
+    };
+    update({
+      messages: [
+        question,
+        {
+          id: 'a1',
+          role: 'assistant',
+          content:
+            'Ein Primärschlüssel kennzeichnet eine Zeile eindeutig. Er darf nie leer',
+        },
+      ],
+      streamingMessageId: 'a1',
+    });
+    expect(hook.result.current.spoken).toEqual([
+      'Ein Primärschlüssel kennzeichnet eine Zeile eindeutig.',
+    ]);
+    update({
+      messages: [
+        question,
+        {
+          id: 'a1',
+          role: 'assistant',
+          content:
+            'Ein Primärschlüssel kennzeichnet eine Zeile eindeutig. Er darf nie leer sein.',
+        },
+      ],
+      streamingMessageId: null,
+    });
+    expect(hook.result.current.spoken).toEqual([
+      'Ein Primärschlüssel kennzeichnet eine Zeile eindeutig.',
+      'Er darf nie leer sein.',
+    ]);
+
+    // a new question starts a new answer: the old pieces are gone
+    act(() => t.spoken[0].onend?.());
+    act(() => t.spoken[1].onend?.());
+    await flush();
+    act(() => t.recognitions[1].say('Und ein Fremdschlüssel?'));
+    expect(hook.result.current.spoken).toEqual([]);
+  });
+
+  it('keeps what was understood as the question until the conversation ends', async () => {
+    const t = makeEnv({ stored: consentedAndStarted });
+    const { hook } = setup(t.env);
+    await flush();
+    expect(hook.result.current.heard).toBe('');
+    act(() => hook.result.current.start());
+    await flush();
+    act(() => t.recognitions[0].say('Erkläre mir SQL'));
+    expect(hook.result.current.heard).toBe('Erkläre mir SQL');
+    expect(hook.result.current.interim).toBe('');
+    act(() => hook.result.current.stop());
+    expect(hook.result.current.heard).toBe('');
+  });
+
+  it('does not take the stop command for a question', async () => {
+    const t = makeEnv({ stored: consentedAndStarted });
+    const { hook } = setup(t.env);
+    await flush();
+    act(() => hook.result.current.start());
+    await flush();
+    act(() => t.recognitions[0].say('Sprachmodus beenden'));
+    expect(hook.result.current.heard).toBe('');
+  });
+
+  it('shows no pieces when the conversation ends', async () => {
+    const t = makeEnv({ stored: consentedAndStarted });
+    const { hook, update } = setup(t.env);
+    await flush();
+    act(() => hook.result.current.start());
+    await flush();
+    act(() => t.recognitions[0].say('Erkläre mir SQL'));
+    update({
+      messages: [
+        { id: 'u', role: 'user', content: 'Erkläre mir SQL' },
+        {
+          id: 'a1',
+          role: 'assistant',
+          content: 'SQL ist eine Abfragesprache für Datenbanken. Mehr gleich.',
+        },
+      ],
+      streamingMessageId: 'a1',
+    });
+    expect(hook.result.current.spoken.length).toBeGreaterThan(0);
+    act(() => hook.result.current.stop());
+    expect(hook.result.current.spoken).toEqual([]);
+  });
+
+  it('reports the loudness of the recording when the provider gives one, kept between 0 and 1', async () => {
+    const t = makeEnv({ stored: consentedAndStarted });
+    const { hook } = setup(t.env);
+    await flush();
+    expect(hook.result.current.level).toBeNull();
+    act(() => hook.result.current.start());
+    await flush();
+    const rec = t.recognitions[0] as unknown as {
+      onlevel?: (value: number) => void;
+    };
+    expect(typeof rec.onlevel).toBe('function');
+    act(() => rec.onlevel?.(0.4));
+    expect(hook.result.current.level).toBe(0.4);
+    act(() => rec.onlevel?.(7));
+    expect(hook.result.current.level).toBe(1);
+    act(() => rec.onlevel?.(-3));
+    expect(hook.result.current.level).toBe(0);
+    act(() => rec.onlevel?.(Number.NaN));
+    expect(hook.result.current.level).toBe(0);
+    // the end of the conversation drops the value
+    act(() => hook.result.current.stop());
+    expect(hook.result.current.level).toBeNull();
+  });
+
+  it('has no loudness for a provider that does not measure it', async () => {
+    const t = makeEnv({ stored: consentedAndStarted });
+    const { hook } = setup(t.env);
+    await flush();
+    act(() => hook.result.current.start());
+    await flush();
+    expect(hook.result.current.level).toBeNull();
+  });
+});

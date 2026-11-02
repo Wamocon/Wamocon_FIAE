@@ -14,6 +14,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { HaiMessage } from './HaiMessage';
 import { HaiSessionList } from './HaiSessionList';
 import { HaiVoiceControl } from './HaiVoiceControl';
+import { HaiVoiceModeButton } from './voice-mode/HaiVoiceModeButton';
 import { HaiQuizModeButton, HaiQuizPanel } from './HaiQuizPanel';
 import { useHaiQuizMode } from './HaiQuizMode';
 import { HaiLogoBanner, HaiLogoInline } from './HaiLogoBanner';
@@ -99,6 +100,7 @@ function ChatWidget() {
         </div>
 
         <div className="flex items-center gap-1">
+          <HaiVoiceModeButton className="mr-1 inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20" />
           <HaiQuizModeButton className="mr-1 inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20" />
           <button
             onClick={() => setViewMode('full')}
@@ -296,6 +298,7 @@ function ChatFull() {
             </div>
 
             <div className="flex items-center gap-2">
+              <HaiVoiceModeButton className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20" />
               <HaiQuizModeButton />
               <button
                 onClick={newSession}

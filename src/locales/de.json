@@ -3043,5 +3043,22 @@
   "hai.quiz.error.planRequired": "Die HAI ist in deiner Organisation oder deinem Plan nicht enthalten, deshalb gibt es den Quiz-Modus für dich nicht. Wende dich an deinen Trainer oder Administrator, er kann das Paket freischalten. Die Quizze in den Enablern kannst du weiter nutzen.",
   "hai.quiz.error.awaitingActivation": "Dein Konto wartet noch auf die Freigabe durch deinen Trainer oder Administrator, deshalb kann ich dich noch nicht abfragen. Sobald dein Konto freigeschaltet ist, geht es los.",
   "hai.quiz.error.notAssigned": "Der Kurs zu dieser Frage ist dir noch nicht zugewiesen, deshalb kann ich dich dazu nicht abfragen. Frage deinen Trainer, er kann dich einem Kurs zuordnen.",
-  "hai.quiz.error.invalid": "Die Anfrage war nicht gültig."
+  "hai.quiz.error.invalid": "Die Anfrage war nicht gültig.",
+  "hai.voiceMode.open": "Gespräch",
+  "hai.voiceMode.openLabel": "Gespräch mit der HAI starten (Sprachmodus)",
+  "hai.voiceMode.title": "Sprachmodus",
+  "hai.voiceMode.dialogLabel": "Sprachmodus: Gespräch mit der HAI",
+  "hai.voiceMode.close": "Sprachmodus beenden",
+  "hai.voiceMode.captions": "Untertitel",
+  "hai.voiceMode.captionsLabel": "Untertitel des Gesprächs",
+  "hai.voiceMode.heard": "Sie sagen",
+  "hai.voiceMode.answer": "HAI sagt",
+  "hai.voiceMode.state.waiting": "HAI wartet",
+  "hai.voiceMode.state.paused": "HAI macht Pause",
+  "hai.voiceMode.state.error": "Das Gespräch ist angehalten",
+  "hai.voiceMode.error.noSpeech": "Ich habe nichts gehört. Tippen Sie auf die HAI, um weiterzusprechen.",
+  "hai.voiceMode.listenAgain": "Erneut zuhören",
+  "hai.voiceMode.hint": "Sagen Sie „Sprachmodus beenden“ oder drücken Sie Esc, um das Gespräch zu beenden. Ein Tipp auf die HAI unterbricht sie. Alles Gesprochene steht im Chat zum Nachlesen.",
+  "hai.voiceMode.mini.label": "Sprachmodus aktiv",
+  "hai.voiceMode.mini.restore": "Sprachmodus wieder groß anzeigen"
 }
