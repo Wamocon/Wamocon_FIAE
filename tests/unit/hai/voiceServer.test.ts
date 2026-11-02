@@ -21,6 +21,7 @@ import {
   ttsStreamConfig,
 } from '@/lib/hai/voice/sonioxServer';
 import {
+  audioUrl,
   hausConfigReason,
   hausModelStatus,
   hausSpeech,
@@ -378,7 +379,7 @@ describe('Sokrates calls', () => {
       RequestInit,
     ];
     expect(url).toBe(
-      'https://sokrates.test-qualitaetsmanagement.com/api/audio/transcriptions'
+      'https://sokrates.test-qualitaetsmanagement.com/api/v1/audio/transcriptions'
     );
     expect((init.headers as Record<string, string>).Authorization).toBe(
       `Bearer ${SECRET}`
@@ -405,7 +406,7 @@ describe('Sokrates calls', () => {
       RequestInit,
     ];
     expect(url).toBe(
-      'https://sokrates.test-qualitaetsmanagement.com/api/audio/speech'
+      'https://sokrates.test-qualitaetsmanagement.com/api/v1/audio/speech'
     );
     expect(JSON.parse(init.body as string)).toEqual({
       model: 'tts-1',
@@ -413,6 +414,37 @@ describe('Sokrates calls', () => {
       voice: 'alloy',
       response_format: 'wav',
     });
+  });
+
+  it('takes the content type of the server (Open WebUI answers MP3)', async () => {
+    const fetchMock = jest.fn(
+      async () =>
+        new Response(new Uint8Array([1, 2, 3]), {
+          headers: { 'Content-Type': 'audio/mpeg' },
+        })
+    );
+    const result = await hausSpeech(
+      tts,
+      'Guten Morgen.',
+      fetchMock as unknown as typeof fetch
+    );
+    expect(result.ok && result.contentType).toBe('audio/mpeg');
+  });
+
+  it('puts /v1 in front of /audio for the address of Open WebUI, not for one that ends in /v1', () => {
+    expect(
+      audioUrl('https://sokrates.test-qualitaetsmanagement.com/api', 'speech')
+    ).toBe(
+      'https://sokrates.test-qualitaetsmanagement.com/api/v1/audio/speech'
+    );
+    expect(
+      audioUrl('https://sokrates.test-qualitaetsmanagement.com/api/', 'speech')
+    ).toBe(
+      'https://sokrates.test-qualitaetsmanagement.com/api/v1/audio/speech'
+    );
+    expect(audioUrl('https://gateway.example/v1', 'transcriptions')).toBe(
+      'https://gateway.example/v1/audio/transcriptions'
+    );
   });
 
   it.each([
@@ -464,10 +496,11 @@ describe('Sokrates calls', () => {
       sttOffered: true,
       ttsOffered: true,
     });
+    // a model that is not in the list proves nothing: Open WebUI does not list its audio engines
     expect(await hausModelStatus(HAUS_ENV, list(['whisper-1']))).toEqual({
       reachable: true,
       sttOffered: true,
-      ttsOffered: false,
+      ttsOffered: null,
     });
     const down = (async () => {
       throw new Error('offline');

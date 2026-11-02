@@ -38,7 +38,7 @@ Stand: 02.11.2026 (WMCNL-2907, Anbieter Soniox und Sokrates ergänzt). Azubis sp
 | Anbieter | Wer erkennt und spricht | Wohin geht der Ton |
 |---|---|---|
 | `soniox` | Der externe Dienst Soniox (Echtzeit-Erkennung und Sprachausgabe über Websocket). Standard als Hauptanbieter. | Direkt vom Browser der Person zu Soniox, Region Europäische Union (`*.eu.soniox.com`). |
-| `haus` | Sokrates, der eigene Server (OpenAI-kompatible Endpunkte `/audio/transcriptions` und `/audio/speech`). | Vom Browser zum Server dieser Anwendung und von dort zu Sokrates. Es ist kein weiterer Dienst beteiligt. |
+| `haus` | Sokrates, der eigene Server (OpenAI-kompatible Endpunkte `audio/transcriptions` und `audio/speech`, hinter Open WebUI unter `/api/v1/audio/...`). | Vom Browser zum Server dieser Anwendung und von dort zu Sokrates. Es ist kein weiterer Dienst beteiligt. |
 | `browser` | Spracherkennung und Sprachausgabe des Browsers selbst. Standard als Rückfallebene. | Hängt vom Browser ab (siehe unten). |
 
 ### Wahl und Kette
@@ -127,3 +127,19 @@ Alle Routen verlangen eine angemeldete Person und den Schalter der Organisation 
 - Beim Wechsel des Anbieters mitten in einer Antwort wird der Satz, der gerade lief, noch einmal gesprochen. Der Zustand "gestört" liegt im Speicher je Serverinstanz, mehrere Instanzen können kurz verschieden urteilen.
 - Sokrates erkennt eine Äußerung erst nach dem Sprechende, es gibt dort keine Zwischenergebnisse. Das Sprechende erkennt der Browser an der Lautstärke (1,2 Sekunden Stille), in einer lauten Umgebung kann das ungenau sein.
 - Production: Migrationen (Schalter je Organisation und `hai_settings`) und der Schalter gehören zum Rollout und stehen dort aus, bis die Datenschutzfrage je Organisation geklärt ist. Das gilt besonders für Soniox, einen externen Dienst.
+
+## Messung von Sokrates und Soniox am 02.11.2026
+
+Gemessen von einem Rechner aus mit den echten Zugangsdaten, ohne Browser.
+
+| Prüfung | Ergebnis |
+|---|---|
+| Soniox, Schlüssel aus `.env.local` gegen die EU-Adresse (`api.eu.soniox.com`) | 401, der Schlüssel gehört zu einem Projekt der Region US. Für EU braucht es einen Schlüssel eines EU-Projekts. |
+| Soniox, derselbe Schlüssel gegen die US-Adresse | 201, beide Kurzzeit-Schlüssel (Erkennung, Sprachausgabe) kommen. |
+| Soniox, Kette in der US-Region: Sprachausgabe "Was ist ein Primärschlüssel?" und die erzeugte Sprache zurück in die Erkennung | bestanden: 1,6 Sekunden Sprache nach 1,5 s, erkannt "Was ist ein Primärschlüssel?" nach 1,2 s |
+| Sokrates, Modellliste | 22 Modelle, keine Audiomodelle (Open WebUI listet seine Audio-Engines nicht auf) |
+| Sokrates, Sprachausgabe `POST /api/v1/audio/speech` mit `tts-1` und `alloy` | 200, MP3, etwa 1,5 bis 2,5 Sekunden je Satz |
+| Sokrates, Spracherkennung `POST /api/v1/audio/transcriptions` | 500: Open WebUI reicht an einen internen Erkennungsdienst (`192.168.178.64:8790`) weiter, und der antwortet mit einem Serverfehler. Muss auf Sokrates behoben werden. |
+| Sokrates, Pfad `/api/audio/...` ohne `/v1` (so rief der erste Stand den Dienst auf) | 405 |
+
+Folgen: Der Server hängt für Open WebUI jetzt `/v1` an (`audioUrl`) und gibt die echte Antwortart (MP3) weiter. Die Modellprüfung der Admin-Seite meldet "nicht angeboten" nur noch, wenn das feststeht (fehlt ein Eintrag in der Liste, ist der Zustand unbekannt). Variablen in der Preview: `HAI_STT_HAUS_MODEL=whisper-1`, `HAI_TTS_HAUS_MODEL=tts-1`, `HAI_TTS_HAUS_VOICE=alloy` (bei Open WebUI nur Namen, die Engines und Stimmen stellt Sokrates selbst ein). Ob die Stimme Deutsch gut spricht, zeigt der Hörtest (Testplan E12). Fällt die Erkennung auf Sokrates aus, nimmt die Kette für das Zuhören den Browser, die Sprachausgabe kann trotzdem über Sokrates laufen.

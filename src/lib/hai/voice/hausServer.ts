@@ -6,6 +6,9 @@
  * endpoints of the same address as the chat:
  *   POST <base>/audio/transcriptions   multipart: file, model, language
  *   POST <base>/audio/speech           JSON: model, input, voice, response_format
+ * Behind Open WebUI (the address of the chat ends in /api) the audio routes are
+ * <base>/v1/audio/..., see audioUrl. Open WebUI answers speech output as MP3 and uses
+ * the engines and voices it is set up with, model and voice are only names for it.
  * The audio therefore passes this server and goes on to Sokrates, it is not
  * stored and not logged. The audio never leaves the own infrastructure.
  *
@@ -56,6 +59,21 @@ export const MODELS_TIMEOUT_MS = 5_000;
 /** The audio that comes back from speech output is capped (about 4 minutes of WAV at 24 kHz). */
 export const MAX_SPEECH_BYTES = 12 * 1024 * 1024;
 export const MAX_TRANSCRIPT_CHARS = 4_000;
+
+/**
+ * Address of an audio endpoint. A base that ends in /v1 (LiteLLM, OpenAI) takes
+ * /audio/<name>. The base of Open WebUI (.../api) has its audio routes under
+ * /v1/audio/<name> and answers 405 on /audio/<name>.
+ */
+export function audioUrl(
+  baseUrl: string,
+  name: 'transcriptions' | 'speech'
+): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  return /\/v1$/.test(base)
+    ? `${base}/audio/${name}`
+    : `${base}/v1/audio/${name}`;
+}
 
 export interface HausConnection {
   baseUrl: string;
@@ -202,7 +220,7 @@ export async function hausTranscribe(
   form.append('language', 'de');
   form.append('response_format', 'json');
   const result = await call(
-    `${config.baseUrl}/audio/transcriptions`,
+    audioUrl(config.baseUrl, 'transcriptions'),
     {
       method: 'POST',
       headers: { Authorization: `Bearer ${config.apiKey}` },
@@ -225,14 +243,14 @@ export type SpeechResult =
   | { ok: true; audio: ArrayBuffer; contentType: string }
   | { ok: false; reason: HausFailure };
 
-/** Asks Sokrates to speak one text (a sentence), returns the audio as WAV. */
+/** Asks Sokrates to speak one text (a sentence), returns the audio (WAV or MP3, as the server sends it). */
 export async function hausSpeech(
   config: HausTtsConfig,
   text: string,
   fetchImpl: typeof fetch = fetch
 ): Promise<SpeechResult> {
   const result = await call(
-    `${config.baseUrl}/audio/speech`,
+    audioUrl(config.baseUrl, 'speech'),
     {
       method: 'POST',
       headers: {
@@ -258,15 +276,28 @@ export async function hausSpeech(
   if (!audio || audio.byteLength === 0 || audio.byteLength > MAX_SPEECH_BYTES) {
     return { ok: false, reason: 'UPSTREAM_BAD_ANSWER' };
   }
-  return { ok: true, audio, contentType: 'audio/wav' };
+  // Open WebUI answers MP3 whatever response_format says, the browser decodes both
+  const declaredType = (result.response.headers.get('content-type') ?? '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+  return {
+    ok: true,
+    audio,
+    contentType: declaredType.startsWith('audio/') ? declaredType : 'audio/wav',
+  };
 }
 
 export interface HausModelStatus {
   /** Sokrates answered the list of models. */
   reachable: boolean;
-  /** The model of speech recognition is in the list (null: no model configured or not reachable). */
+  /**
+   * The model of speech recognition is in the list. null: not known (no model
+   * configured, not reachable, or not in the list: Open WebUI does not list its audio
+   * engines, so a missing entry proves nothing).
+   */
   sttOffered: boolean | null;
-  /** The model of speech output is in the list. */
+  /** The model of speech output is in the list (null as above). */
   ttsOffered: boolean | null;
 }
 
@@ -308,7 +339,7 @@ export async function hausModelStatus(
   const ttsModel = (env[HAUS_ENV.ttsModel] ?? '').trim();
   return {
     reachable: true,
-    sttOffered: MODEL_NAME.test(sttModel) ? ids.has(sttModel) : null,
-    ttsOffered: MODEL_NAME.test(ttsModel) ? ids.has(ttsModel) : null,
+    sttOffered: MODEL_NAME.test(sttModel) && ids.has(sttModel) ? true : null,
+    ttsOffered: MODEL_NAME.test(ttsModel) && ids.has(ttsModel) ? true : null,
   };
 }
