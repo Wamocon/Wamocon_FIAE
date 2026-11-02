@@ -17,6 +17,7 @@ import {
 } from '@/lib/ausbildung/duration';
 import { getISOWeekDates, getISOWeekInfo } from '@/lib/date/iso-week';
 import { componentPhase } from '@/lib/ausbildung/component-phase';
+import { compareReportsNewestWeekFirst } from '@/lib/ausbildung/report-order';
 import {
   componentHoursLabel,
   normalizePlannedHours,
@@ -584,11 +585,7 @@ export default function TraineeActivityReportsPage() {
           <div className="divide-border/50 divide-y">
             {reports
               .filter(r => filterStatus === 'ALL' || r.status === filterStatus)
-              .sort(
-                (a, b) =>
-                  new Date(b.createdAt).getTime() -
-                  new Date(a.createdAt).getTime()
-              )
+              .sort(compareReportsNewestWeekFirst)
               .map(report => (
                 <div
                   key={report.id}
