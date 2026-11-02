@@ -6,6 +6,9 @@
  * Shows the question with the options as buttons (several can be selected for
  * a question with more than one right option), checks the attempt through the
  * parent, then shows right or wrong, the right solution and the explanation.
+ * While the quiz of the question is not passed the server withholds the
+ * solution (feedback.solutionWithheld): the card says right or wrong and that
+ * the solution comes with the passed quiz, with a link to the enabler.
  * At the end a summary: x of y right and the enablers to repeat with a link.
  *
  * Keyboard: a number or a letter selects an option, Enter checks the attempt
@@ -282,11 +285,16 @@ export function HaiQuizCard({
                   phase === 'feedback' && feedback
                     ? feedback.selectedOptionIds.includes(option.id)
                     : selected.includes(option.id);
+                // With the solution withheld nothing is marked right or wrong:
+                // the pick only stays highlighted (the verdict is the text)
                 const isRight =
                   phase === 'feedback' &&
                   !!feedback?.correctOptionIds.includes(option.id);
                 const isWrongPick =
-                  phase === 'feedback' && isSelected && !isRight;
+                  phase === 'feedback' &&
+                  !feedback?.solutionWithheld &&
+                  isSelected &&
+                  !isRight;
                 const tone = isRight
                   ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-100'
                   : isWrongPick
@@ -388,8 +396,39 @@ export function HaiQuizCard({
                   >
                     {feedback.correct
                       ? t('hai.quiz.correct')
-                      : t('hai.quiz.wrong')}
+                      : feedback.solutionWithheld
+                        ? t('hai.quiz.wrongWithheld')
+                        : t('hai.quiz.wrong')}
                   </p>
+                  {feedback.solutionWithheld && (
+                    <div
+                      data-testid="hai-quiz-withheld"
+                      className="mt-2 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-gray-200"
+                    >
+                      {feedback.correctCount !== null && !feedback.correct && (
+                        <p className="mb-1 break-words">
+                          {t('hai.quiz.withheld.count', {
+                            count: feedback.correctCount,
+                          })}
+                        </p>
+                      )}
+                      <p className="break-words">
+                        {t('hai.quiz.withheld.note')}
+                      </p>
+                      {question.enablerHref && (
+                        <p className="mt-1">
+                          <Link
+                            href={question.enablerHref}
+                            className="text-cyan-300 underline underline-offset-2 hover:text-cyan-200 focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none"
+                          >
+                            {t('hai.quiz.withheld.link', {
+                              title: question.enablerTitle,
+                            })}
+                          </Link>
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {feedback.explanation && (
                     <div className="mt-2 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-gray-200">
                       <p className="font-semibold text-gray-100">
@@ -446,6 +485,11 @@ export function HaiQuizCard({
                 {summary.repeat.length === 0 && (
                   <> {t('hai.quiz.summary.perfect')}</>
                 )}
+              </p>
+            )}
+            {summary.anyWithheld && (
+              <p className="text-xs text-gray-400">
+                {t('hai.quiz.summary.withheld')}
               </p>
             )}
             {state.reason === 'exhausted' && (

@@ -7,7 +7,12 @@ import {
   parseAnswerBody,
   parseNextBody,
 } from '@/lib/hai/quizMode/validate';
-import { QUIZ_MODE_LIMITS, quizModeRateLimit } from '@/lib/hai/quizMode/limits';
+import {
+  QUIZ_MODE_ATTEMPT_LIMIT,
+  QUIZ_MODE_LIMITS,
+  quizModeAttemptLimit,
+  quizModeRateLimit,
+} from '@/lib/hai/quizMode/limits';
 import { resetRateLimits } from '@/lib/rate-limit';
 
 // Behavior under test: src/lib/hai/quizMode/validate.ts and limits.ts. Every id
@@ -118,6 +123,44 @@ describe('quizModeRateLimit', () => {
     }
     expect(quizModeRateLimit('user-1', 'next')?.status).toBe(429);
     expect(quizModeRateLimit('user-2', 'next')).toBeNull();
+    expect(quizModeRateLimit('user-1', 'answer')).toBeNull();
+  });
+});
+
+describe('quizModeAttemptLimit', () => {
+  beforeEach(() => resetRateLimits());
+
+  it('is three attempts per question and hour', () => {
+    expect(QUIZ_MODE_ATTEMPT_LIMIT).toEqual({ limit: 3, windowMs: 3_600_000 });
+  });
+
+  it('lets the attempts through and then answers 429 with a code and no solution', async () => {
+    for (let i = 0; i < QUIZ_MODE_ATTEMPT_LIMIT.limit; i++) {
+      expect(quizModeAttemptLimit('user-1', 'q-1')).toBeNull();
+    }
+    const blocked = quizModeAttemptLimit('user-1', 'q-1');
+    expect(blocked?.status).toBe(429);
+    // an hour window: the person is told to wait, not a few seconds
+    expect(Number(blocked?.headers.get('Retry-After'))).toBeGreaterThan(3000);
+    expect(await blocked?.json()).toEqual({
+      error: 'Too many attempts at this question',
+      code: 'QUESTION_ATTEMPTS_EXCEEDED',
+    });
+  });
+
+  it('counts per person and per question', () => {
+    for (let i = 0; i < QUIZ_MODE_ATTEMPT_LIMIT.limit; i++) {
+      quizModeAttemptLimit('user-1', 'q-1');
+    }
+    expect(quizModeAttemptLimit('user-1', 'q-1')?.status).toBe(429);
+    expect(quizModeAttemptLimit('user-1', 'q-2')).toBeNull();
+    expect(quizModeAttemptLimit('user-2', 'q-1')).toBeNull();
+  });
+
+  it('is independent of the limit of the route', () => {
+    for (let i = 0; i < QUIZ_MODE_ATTEMPT_LIMIT.limit; i++) {
+      quizModeAttemptLimit('user-1', 'q-1');
+    }
     expect(quizModeRateLimit('user-1', 'answer')).toBeNull();
   });
 });

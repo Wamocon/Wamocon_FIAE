@@ -43,6 +43,8 @@ const feedback = (correct: boolean) => ({
   selectedOptionIds: ['x'],
   correctOptionIds: ['y'],
   explanation: null,
+  solutionWithheld: false,
+  correctCount: null,
 });
 
 describe('quizReducer', () => {
@@ -82,8 +84,30 @@ describe('quizReducer', () => {
         enablerTitle: 'SQL Grundlagen',
         enablerHref: '/trainee/enablers/e1',
         correct: false,
+        solutionWithheld: false,
       },
     ]);
+  });
+
+  it('remembers in the attempt that the solution was withheld', () => {
+    const state = run([
+      { type: 'start', scope: { enablerId: null, topic: null } },
+      { type: 'question', question: question(), total: 3, remaining: 3 },
+      { type: 'checking' },
+      {
+        type: 'answered',
+        feedback: {
+          correct: false,
+          selectedOptionIds: ['x'],
+          correctOptionIds: [],
+          explanation: null,
+          solutionWithheld: true,
+          correctCount: null,
+        },
+      },
+    ]);
+    expect(state.attempts[0].solutionWithheld).toBe(true);
+    expect(state.feedback?.correctOptionIds).toEqual([]);
   });
 
   it('only moves to checking from a question on screen', () => {
@@ -180,6 +204,7 @@ describe('buildSummary', () => {
     enablerTitle: title,
     enablerHref: href,
     correct,
+    solutionWithheld: false,
   });
 
   it('counts x of y and lists the enablers to repeat, the most wrong first', () => {
@@ -204,7 +229,20 @@ describe('buildSummary', () => {
 
   it('has nothing to repeat when everything was right, and handles no attempt', () => {
     expect(buildSummary([attempt('e1', 'SQL', true)]).repeat).toEqual([]);
-    expect(buildSummary([])).toEqual({ total: 0, correct: 0, repeat: [] });
+    expect(buildSummary([])).toEqual({
+      total: 0,
+      correct: 0,
+      anyWithheld: false,
+      repeat: [],
+    });
+  });
+
+  it('says whether any solution stayed back', () => {
+    const withheld = { ...attempt('e1', 'SQL', false), solutionWithheld: true };
+    expect(
+      buildSummary([attempt('e2', 'Netz', true), withheld]).anyWithheld
+    ).toBe(true);
+    expect(buildSummary([attempt('e2', 'Netz', true)]).anyWithheld).toBe(false);
   });
 
   it('keeps a missing link as null (a trainer has no page of the enabler)', () => {

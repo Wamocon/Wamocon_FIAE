@@ -251,6 +251,27 @@ describe('HaiQuizCard: the feedback', () => {
         selectedOptionIds: correct ? ['o1'] : ['o2'],
         correctOptionIds: ['o1'],
         explanation: 'Er identifiziert eine Zeile eindeutig.',
+        solutionWithheld: false,
+        correctCount: null,
+      },
+      ...over,
+    });
+
+  // The server holds the solution back: right or wrong and nothing else
+  const withheldState = (
+    correct: boolean,
+    over: Partial<QuizSessionState> = {},
+    correctCount: number | null = null
+  ) =>
+    state({
+      phase: 'feedback',
+      feedback: {
+        correct,
+        selectedOptionIds: correct ? ['o1'] : ['o2'],
+        correctOptionIds: [],
+        explanation: null,
+        solutionWithheld: true,
+        correctCount,
       },
       ...over,
     });
@@ -287,10 +308,73 @@ describe('HaiQuizCard: the feedback', () => {
           selectedOptionIds: ['o1'],
           correctOptionIds: ['o1'],
           explanation: null,
+          solutionWithheld: false,
+          correctCount: null,
         },
       })
     );
     expect(screen.queryByText('Erklärung')).toBeNull();
+  });
+
+  describe('with the solution withheld (the quiz is not passed yet)', () => {
+    it('says wrong without marking a right option, and points to the quiz of the enabler', () => {
+      setup(withheldState(false));
+      expect(screen.getByText('Leider falsch.')).toBeTruthy();
+      expect(screen.getByRole('status').textContent).not.toMatch(
+        /Lösung ist markiert/
+      );
+      expect(screen.getByTestId('hai-quiz-withheld').textContent).toMatch(
+        /Die richtige Lösung und die Erklärung siehst du, sobald du das Quiz zu diesem Enabler bestanden hast/
+      );
+      const link = screen.getByRole('link', {
+        name: 'Zum Quiz des Enablers: SQL Grundlagen',
+      });
+      expect(link.getAttribute('href')).toBe('/trainee/enablers/e1');
+      // no option is marked as the right answer, none as a wrong pick
+      for (const button of optionButtons()) {
+        expect(button.textContent).not.toMatch(/Richtige Antwort/);
+        expect(button.className).not.toMatch(/emerald|red-/);
+      }
+      expect(screen.queryByText('Erklärung')).toBeNull();
+    });
+
+    it('says right with the same hint, still without the solution', () => {
+      setup(withheldState(true));
+      expect(screen.getByText('Richtig!')).toBeTruthy();
+      expect(screen.getByTestId('hai-quiz-withheld')).toBeTruthy();
+      expect(screen.queryByText(/Richtige Antwort/)).toBeNull();
+      expect(screen.queryByText('Erklärung')).toBeNull();
+    });
+
+    it('tells how many answers are right for a multiple choice question that was wrong', () => {
+      setup(withheldState(false, {}, 2));
+      expect(
+        screen.getByText('Bei dieser Frage sind 2 Antworten richtig.')
+      ).toBeTruthy();
+    });
+
+    it('shows no count for a choice question and none after a right answer', () => {
+      setup(withheldState(false));
+      expect(screen.queryByText(/Antworten richtig/)).toBeNull();
+      setup(withheldState(true, {}, 2));
+      expect(screen.queryByText(/Antworten richtig/)).toBeNull();
+    });
+
+    it('shows the hint without a link where the enabler has no page (a trainer)', () => {
+      setup(
+        withheldState(false, {
+          question: question({ enablerHref: null }),
+        })
+      );
+      expect(screen.getByTestId('hai-quiz-withheld')).toBeTruthy();
+      expect(screen.queryByRole('link')).toBeNull();
+    });
+
+    it('still offers the next question', () => {
+      const { props } = setup(withheldState(false));
+      fireEvent.click(screen.getByRole('button', { name: 'Nächste Frage' }));
+      expect(props.onNext).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('goes on with Enter on the card and ends with the second button', () => {
@@ -317,6 +401,7 @@ describe('HaiQuizCard: the summary', () => {
     enablerTitle: title,
     enablerHref: href,
     correct,
+    solutionWithheld: false,
   });
 
   it('shows x of y right and the enablers to repeat with a link', () => {
@@ -337,6 +422,41 @@ describe('HaiQuizCard: the summary', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Noch eine Runde' }));
     expect(props.onRestart).toHaveBeenCalledTimes(1);
     expect(document.activeElement?.textContent).toBe('Zusammenfassung');
+  });
+
+  it('keeps the summary without solutions and says where they come from when some stayed back', () => {
+    setup({
+      phase: 'summary',
+      question: null,
+      attempts: [
+        {
+          ...attempt(
+            'a',
+            'e1',
+            'SQL Grundlagen',
+            false,
+            '/trainee/enablers/e1'
+          ),
+          solutionWithheld: true,
+        },
+      ],
+    });
+    expect(screen.getByText('Zum Wiederholen')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Die richtigen Lösungen siehst du, sobald du das jeweilige Quiz bestanden hast.'
+      )
+    ).toBeTruthy();
+    expect(screen.queryByText(/Richtige Antwort/)).toBeNull();
+  });
+
+  it('has no hint about withheld solutions when all were shown', () => {
+    setup({
+      phase: 'summary',
+      question: null,
+      attempts: [attempt('a', 'e1', 'SQL Grundlagen', false, null)],
+    });
+    expect(screen.queryByText(/sobald du das jeweilige Quiz/)).toBeNull();
   });
 
   it('praises a clean round and lists nothing to repeat', () => {
