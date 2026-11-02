@@ -7,6 +7,10 @@ import {
     requireTraineeScopeCondition,
     traineeIdInScope,
 } from '@/lib/auth/trainee-scope-conditions';
+import {
+    evaluationReportCatalogCondition,
+    requireReportCatalogFilter,
+} from '@/lib/auth/activity-report-access';
 
 // GET: Get annual performance summaries for all trainees (trainer view)
 export async function GET(request: NextRequest) {
@@ -22,6 +26,10 @@ export async function GET(request: NextRequest) {
         // one) and, with a chosen occupation (x-catalog), of that occupation
         const traineeScope = await requireTraineeScopeCondition(session, request);
         if (isErrorResponse(traineeScope)) return traineeScope;
+        // The evaluations count by the occupation of their activity report
+        const reportCatalog = await requireReportCatalogFilter(session, request);
+        if (isErrorResponse(reportCatalog)) return reportCatalog;
+        const catalogCondition = evaluationReportCatalogCondition(reportCatalog.condition);
 
         // Get all trainees that have evaluations with this trainer
         const traineeEvaluations = await db
@@ -34,7 +42,8 @@ export async function GET(request: NextRequest) {
             .leftJoin(profiles, eq(weeklyEvaluations.traineeId, profiles.id))
             .where(and(
                 eq(weeklyEvaluations.trainerId, trainerId),
-                traineeIdInScope(weeklyEvaluations.traineeId, traineeScope.condition)
+                traineeIdInScope(weeklyEvaluations.traineeId, traineeScope.condition),
+                catalogCondition
             ))
             .groupBy(weeklyEvaluations.traineeId, profiles.fullName, profiles.email);
 
@@ -55,7 +64,8 @@ export async function GET(request: NextRequest) {
                     .where(
                         and(
                             eq(weeklyEvaluations.traineeId, trainee.traineeId),
-                            eq(weeklyEvaluations.status, 'APPROVED')
+                            eq(weeklyEvaluations.status, 'APPROVED'),
+                            catalogCondition
                         )
                     );
 
@@ -83,7 +93,8 @@ export async function GET(request: NextRequest) {
                         and(
                             eq(weeklyEvaluations.traineeId, trainee.traineeId),
                             eq(weeklyEvaluations.trainerId, trainerId),
-                            eq(weeklyEvaluations.status, 'SUBMITTED')
+                            eq(weeklyEvaluations.status, 'SUBMITTED'),
+                            catalogCondition
                         )
                     );
 

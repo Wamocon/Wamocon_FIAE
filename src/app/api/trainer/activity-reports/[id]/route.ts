@@ -17,6 +17,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { ensureReportInChosenCatalog } from '@/lib/auth/activity-report-access';
 import { notFoundUnlessUuid } from '@/lib/uuid';
 
 interface RouteParams {
@@ -45,10 +46,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         }
 
         // Only the report of a trainee of the own organization (the super admin:
-        // any) and of the chosen occupation. A foreign report answers like a
-        // missing one.
-        const access = await requireTraineeAccess(session, String(report.traineeId), req, 'Report not found');
+        // any) and of the chosen occupation (the occupation of the report, not
+        // of the enrollments). A foreign report answers like a missing one.
+        const access = await requireTraineeAccess(session, String(report.traineeId), {}, 'Report not found');
         if (isErrorResponse(access)) return access;
+        const outOfCatalog = await ensureReportInChosenCatalog(session, req, report, () =>
+            NextResponse.json({ error: 'Report not found' }, { status: 404 }));
+        if (outOfCatalog) return outOfCatalog;
 
         // Get entries
         const entries = await db
@@ -128,10 +132,14 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         }
 
         // Only the report of a trainee of the own organization (the super admin:
-        // any) and of the chosen occupation. A foreign report answers like a
-        // missing one, whatever its status is.
-        const access = await requireTraineeAccess(session, String(report.traineeId), req, 'Report not found');
+        // any) and of the chosen occupation (the occupation of the report, not
+        // of the enrollments). A foreign report answers like a missing one,
+        // whatever its status is.
+        const access = await requireTraineeAccess(session, String(report.traineeId), {}, 'Report not found');
         if (isErrorResponse(access)) return access;
+        const outOfCatalog = await ensureReportInChosenCatalog(session, req, report, () =>
+            NextResponse.json({ error: 'Report not found' }, { status: 404 }));
+        if (outOfCatalog) return outOfCatalog;
 
         // Validate status
         if (report.status !== 'SUBMITTED') {

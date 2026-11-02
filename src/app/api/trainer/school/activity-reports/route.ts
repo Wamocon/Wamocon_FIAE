@@ -7,6 +7,7 @@ import {
     requireTraineeScopeCondition,
     traineeIdInScope,
 } from '@/lib/auth/trainee-scope-conditions';
+import { requireReportCatalogFilter } from '@/lib/auth/activity-report-access';
 
 // GET /api/trainer/school/activity-reports?trainerId=...&status=...
 export async function GET(req: NextRequest) {
@@ -19,14 +20,19 @@ export async function GET(req: NextRequest) {
 
         // Only reports of trainees of the own organization (the super admin:
         // every one) and, with a chosen occupation (x-catalog), of that
-        // occupation. The platform-owner flag of an organization does not
-        // widen the list.
-        const traineeScope = await requireTraineeScopeCondition(session, req);
+        // occupation (the occupation of the report, not of the enrollments).
+        // The platform-owner flag of an organization does not widen the list.
+        const traineeScope = await requireTraineeScopeCondition(session, req, {
+            byEnrollment: false,
+        });
         if (isErrorResponse(traineeScope)) return traineeScope;
+        const reportCatalog = await requireReportCatalogFilter(session, req);
+        if (isErrorResponse(reportCatalog)) return reportCatalog;
 
         const conditions: any[] = [
             traineeIdInScope(activityReports.traineeId, traineeScope.condition),
         ];
+        if (reportCatalog.condition) conditions.push(reportCatalog.condition);
         // A DRAFT is the private work of the trainee, never listed to trainer level
         conditions.push(ne(activityReports.status, 'DRAFT' as any));
         if (status) conditions.push(eq(activityReports.status, status as any));

@@ -81,6 +81,13 @@ export interface PromptContext {
    * categories. Without a key the prompt is unchanged (FIAE byte for byte).
    */
   accessReasons?: readonly AccessReasonKey[];
+  /**
+   * The message asks for the day, the tasks or the state of the person (day
+   * companion, typed or spoken). Adds the short section that makes the model
+   * answer from the live data in at most three points, name what is empty and
+   * never answer "no data" in general. Without it the prompt is unchanged.
+   */
+  dayBriefing?: boolean;
 }
 
 // ============================================================================
@@ -187,9 +194,40 @@ export function buildVoiceRules(userRole?: PromptContext['userRole']): string {
     '- Zahlen, Fristen und Zeiten so, wie man sie spricht ("bis Freitag", "um halb neun", "zwölf von dreißig").',
     solutionLine,
     '- Antworte zuerst auf die Frage, auch kurz. Frage nur zurück, wenn ohne die Angabe keine sinnvolle Antwort möglich ist.',
-    '- Tagesbegleiter: Fragt der Nutzer, was heute ansteht, bittet er um einen Plan oder begrüßt er dich am Tagesbeginn, nutze nur die Daten im Abschnitt "Aktuelle Plattform-Daten". Nenne höchstens drei Punkte, das Dringendste zuerst (Frist, Prüfung, Rückmeldung zu einer Abgabe), begründe den ersten kurz und schließe mit genau einer Frage, womit er beginnen will. Erfinde keine Termine, Fristen oder Noten. Fehlen Daten, sage es und verweise auf die Plattform.',
+    '- Tagesbegleiter: Fragt der Nutzer, was heute ansteht, bittet er um einen Plan oder begrüßt er dich am Tagesbeginn, nutze nur die Daten im Abschnitt "Aktuelle Plattform-Daten". Nenne höchstens drei Punkte, das Dringendste zuerst (Frist, Prüfung, Rückmeldung zu einer Abgabe), begründe den ersten kurz und schließe mit genau einer Frage, womit er beginnen will. Erfinde keine Termine, Fristen oder Noten. Fehlt ein Bereich, benenne konkret und kurz, was fehlt, und verweise nicht auf die Plattform für das, was du selbst kennst.',
     '- Höchstens eine Frage je Antwort, nie dieselbe zweimal. Nach einer reinen Auskunft endet die Antwort ohne Frage.',
     '- Keine Einschätzung von Stimme, Tonfall oder Stimmung des Nutzers und keine Diagnosen.',
+  ].join('\n');
+}
+
+/**
+ * The day companion in the chat (typed or spoken): the question is answered from
+ * the live data of the person, which the data context loads for the intent
+ * `day_briefing` (progress with the next step, appointments, reports, feedback,
+ * notifications). The section names the rules for the answer: at most three
+ * points, the urgent one first, progress and next step, a concrete statement for
+ * every empty area and one question at the end. It comes after the data block
+ * and takes precedence over the general sentence "no data available".
+ */
+export function buildDayBriefingRules(
+  userRole?: PromptContext['userRole']
+): string {
+  const urgent =
+    userRole === 'TRAINER'
+      ? 'offene Bewertungen, Benachrichtigungen'
+      : 'Frist, Prüfung, Rückmeldung zu einer Abgabe, abgelehnter oder fehlender Ausbildungsnachweis';
+  const progress =
+    userRole === 'TRAINER'
+      ? ''
+      : '- Nenne danach den Fortschritt und den nächsten Lernschritt aus den Daten. Hat der Nutzer mehrere Berufe, nenne den Fortschritt je Beruf, den gewählten Beruf zuerst.\n';
+  return [
+    '## Tageslage (Tagesbegleiter)',
+    'Der Nutzer fragt nach seinen Aufgaben, Terminen oder seinem Stand. Du bist sein Tagesbegleiter und kennst seine Daten aus dem Abschnitt "Aktuelle Plattform-Daten". Antworte nur daraus, diese Regeln gehen den allgemeinen Sätzen zu fehlenden Daten vor:',
+    `- Nenne höchstens drei Punkte, das Dringendste zuerst (${urgent}), und begründe den ersten kurz.`,
+    `${progress}- Fehlt ein Bereich, zum Beispiel Termine, sage konkret und kurz, was fehlt ("Für heute sind keine Termine eingetragen"). Sage nie pauschal "keine Daten" und schicke den Nutzer nicht in die Plattform, um etwas nachzusehen, das du selbst kennst.`,
+    '- Liegt in allen Bereichen nichts vor, sage das ehrlich und schlage einen Schritt vor, zum Beispiel weiter lernen.',
+    '- Schließe mit genau einer Frage, womit er beginnen möchte.',
+    '- Erfinde nichts: keine Termine, Fristen, Noten oder Zahlen, die nicht in den Daten stehen. Wissensfragen beantwortest du hier nicht.',
   ].join('\n');
 }
 
@@ -391,7 +429,8 @@ Zitiere die Quelle wenn du Informationen daraus verwendest.
 ---
 ${context.retrievedContext}
 ---`);
-  } else {
+  } else if (!context.dayBriefing) {
+    // (a day question skips the knowledge search on purpose, no hint about it)
     parts.push(`
 ## Hinweis zur Wissensdatenbank
 Zu dieser Frage wurde KEIN spezifischer Kontext in der Wissensdatenbank gefunden.
@@ -449,6 +488,9 @@ Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, a
   // that FIAE gets them too, and the baseline was recorded again for this
   // change only. They come before the learning technique section, which stays
   // the last part when it applies.
+  if (context.dayBriefing && context.liveDataContext) {
+    parts.push(buildDayBriefingRules(context.userRole));
+  }
   if (context.voice) {
     parts.push(buildVoiceRules(context.userRole));
   }

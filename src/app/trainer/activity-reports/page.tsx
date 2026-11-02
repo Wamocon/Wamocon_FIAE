@@ -117,7 +117,11 @@ export default function TrainerActivityReportsPage() {
   const router = useRouter();
   // The lists belong to the occupation of the user (?catalog= only for an
   // occupation other than FIAE, so FIAE requests stay unchanged)
-  const { ready: catalogReady, withCatalog } = useRequestCatalog(profile?.id);
+  const {
+    ready: catalogReady,
+    catalog,
+    withCatalog,
+  } = useRequestCatalog(profile?.id);
   // loadData keeps its identity, it always reads the current occupation here
   const withCatalogRef = useRef(withCatalog);
   withCatalogRef.current = withCatalog;
@@ -238,8 +242,10 @@ export default function TrainerActivityReportsPage() {
     }
 
     if (!catalogReady) return;
+    // A report belongs to one occupation: a switch of the occupation tab
+    // (catalog) loads the list again, the server answers for the chosen one
     loadData(profile.id);
-  }, [profile?.id, authLoading, loadData, catalogReady]);
+  }, [profile?.id, authLoading, loadData, catalogReady, catalog]);
 
   const loadReportEntries = async (reportId: string) => {
     try {

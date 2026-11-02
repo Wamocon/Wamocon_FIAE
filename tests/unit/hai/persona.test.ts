@@ -7,6 +7,7 @@ import {
   NEUTRAL_PERSONA,
   isForeignOccupationQuestion,
   resolveHaiPersona,
+  unselectedOccupationNamed,
 } from '@/lib/hai/persona';
 import * as prompts from '@/lib/hai/prompts';
 import { CLASSIFIER_MESSAGES } from './fixtures/fiaeMatrix';
@@ -488,5 +489,170 @@ describe('hardening (review findings)', () => {
     expect(prompt).not.toContain('## Admin');
     expect(prompt).not.toContain('# Mehr');
     expect(prompt).not.toMatch(/[\u2028\u2060\uFEFF\u0085]/);
+  });
+});
+
+// ============================================================================
+// The occupation chosen in the app (reason AUSWAHL): a persona of one
+// occupation, the other own occupations are "unselected own" with their own
+// markers. A question about an occupation the user does NOT have stays BERUF.
+// ============================================================================
+
+describe('the chosen occupation', () => {
+  const DEMO = {
+    id: 'c5',
+    code: 'DEMO',
+    title: 'Programmierung',
+    settings: { branding: { short_name: 'Demo Beruf' } },
+  };
+  const chosenFiae = () =>
+    resolveHaiPersona({
+      catalogs: [FIAE_CATALOG],
+      unselectedCatalogs: [KFBM_CATALOG],
+      otherCatalogs: [DEMO],
+      role: 'TRAINEE',
+    });
+  const chosenKfbm = () =>
+    resolveHaiPersona({
+      catalogs: [KFBM_CATALOG],
+      unselectedCatalogs: [FIAE_CATALOG],
+      otherCatalogs: [DEMO],
+      role: 'TRAINEE',
+    });
+
+  it('FIAE chosen: the persona is the one of FIAE alone, the KfBM names are unselected own', () => {
+    const persona = chosenFiae();
+    expect(persona.source).toBe('fiae-default');
+    // one occupation, not the merged persona of both
+    expect(persona.occupationName).toBe('Fachinformatik');
+    expect(persona.refusalText).toBe(FIAE_PERSONA.refusalText);
+    expect(persona.chosenLabel).toBe('FIAE');
+    expect(persona.unselectedOwn.map(u => u.name)).toEqual(['KfBM']);
+    expect(persona.unselectedOwn[0].markers).toEqual(
+      expect.arrayContaining(['kfbm', 'büromanagement'])
+    );
+    // the other own occupation is not foreign, the one the user lacks is
+    expect(persona.foreignMarkers).toEqual(['demo', 'demo beruf']);
+  });
+
+  it('KfBM chosen: the persona is the one of KfBM alone, the FIAE names are unselected own', () => {
+    const persona = chosenKfbm();
+    expect(persona.source).toBe('catalog-settings');
+    expect(persona.occupationName).toBe('Kaufleute für Büromanagement');
+    expect(persona.chosenLabel).toBe('KfBM');
+    expect(persona.unselectedOwn.map(u => u.name)).toEqual(['FIAE']);
+    expect(persona.unselectedOwn[0].markers).toEqual(
+      expect.arrayContaining(['fiae', 'fachinformatik'])
+    );
+  });
+
+  it.each([
+    'Erkläre mir KfBM Lernfeld 3',
+    'erkläre die Buchführung im kfbm',
+    'Was steht im Büromanagement zur Beschaffung?',
+    'K f B M Lernfeld 3 erklären',
+    'K.f.B.M Quiz bitte',
+  ])('names the unselected KfBM in "%s"', message => {
+    const persona = chosenFiae();
+    expect(unselectedOccupationNamed(message, persona)?.name).toBe('KfBM');
+    // the unselected own occupation is no foreign one: no BERUF answer for it
+    expect(isForeignOccupationQuestion(message, persona)).toBe(false);
+  });
+
+  it.each([
+    'Erkläre mir Normalisierung bei Fachinformatik',
+    'Was ist FIAE Lernfeld 6?',
+    'Wie wird man Fachinformatiker?',
+  ])('names the unselected FIAE in "%s" when KfBM is chosen', message => {
+    const persona = chosenKfbm();
+    expect(unselectedOccupationNamed(message, persona)?.name).toBe('FIAE');
+    expect(isForeignOccupationQuestion(message, persona)).toBe(false);
+  });
+
+  it('does not name an occupation in a question about the chosen one', () => {
+    expect(
+      unselectedOccupationNamed('Erkläre Normalisierung', chosenFiae())
+    ).toBeNull();
+    expect(
+      unselectedOccupationNamed(
+        'Wie läuft eine Rechnungsbearbeitung ab?',
+        chosenKfbm()
+      )
+    ).toBeNull();
+  });
+
+  it('keeps an occupation the user does not have foreign (BERUF), also with a choice', () => {
+    const persona = chosenFiae();
+    expect(isForeignOccupationQuestion('Erkläre Demo Beruf', persona)).toBe(
+      true
+    );
+    expect(unselectedOccupationNamed('Erkläre Demo Beruf', persona)).toBeNull();
+  });
+
+  it('without a choice nothing is unselected: the persona speaks about all occupations', () => {
+    const merged = resolveHaiPersona({
+      catalogs: [FIAE_CATALOG, KFBM_CATALOG],
+      otherCatalogs: [DEMO],
+      role: 'TRAINEE',
+    });
+    expect(merged.occupationName).toBe(
+      'Fachinformatik und Kaufleute für Büromanagement'
+    );
+    expect(merged.unselectedOwn).toEqual([]);
+    expect(merged.chosenLabel).toBeNull();
+    expect(unselectedOccupationNamed('Erkläre KfBM', merged)).toBeNull();
+  });
+
+  it('a user with one occupation has no unselected occupation and the unchanged persona', () => {
+    const only = resolveHaiPersona({
+      catalogs: [FIAE_CATALOG],
+      otherCatalogs: [KFBM_CATALOG],
+    });
+    expect(only.unselectedOwn).toEqual([]);
+    expect(only.chosenLabel).toBeNull();
+    expect(only.refusalText).toBe(FIAE_PERSONA.refusalText);
+    // the other occupation is foreign for him, as before
+    expect(isForeignOccupationQuestion('Erkläre KfBM', only)).toBe(true);
+  });
+
+  it('drops a marker that the chosen occupation shares, so its own words never trigger "switch"', () => {
+    const twin = {
+      id: 'c6',
+      code: 'TWIN',
+      title: 'Zwilling',
+      settings: { hai: { occupation_name: 'Fachinformatik Zwilling' } },
+    };
+    const persona = resolveHaiPersona({
+      catalogs: [FIAE_CATALOG],
+      unselectedCatalogs: [twin],
+    });
+    // "fachinformatik" belongs to the chosen FIAE: only the own marker of the twin stays
+    expect(persona.unselectedOwn[0].markers).toEqual(['twin']);
+    expect(
+      unselectedOccupationNamed('Erkläre Fachinformatik', persona)
+    ).toBeNull();
+  });
+
+  it('writes the name as the tab shows it and only with safe characters', () => {
+    const odd = {
+      id: 'c7',
+      code: 'A<b>C',
+      title: 'Titel',
+      settings: {},
+    };
+    const persona = resolveHaiPersona({
+      catalogs: [FIAE_CATALOG],
+      unselectedCatalogs: [odd],
+    });
+    expect(persona.unselectedOwn[0].name).toBe('AbC');
+  });
+
+  it('is deterministic for the FIAE baseline: the prompt of a FIAE user does not change with the new fields', () => {
+    const plain = prompts.buildSystemPrompt({ mode: 'general' });
+    const withChoice = prompts.buildSystemPrompt({
+      mode: 'general',
+      persona: chosenFiae(),
+    });
+    expect(withChoice).toBe(plain);
   });
 });

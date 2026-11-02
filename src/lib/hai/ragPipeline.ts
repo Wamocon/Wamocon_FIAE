@@ -45,9 +45,14 @@ import type { RetrievalAccess } from './retrievalAccess';
 import {
   FIAE_PERSONA,
   isForeignOccupationQuestion,
+  unselectedOccupationNamed,
   type HaiPersona,
 } from './persona';
-import { DENIAL_BERUF_TEXT, DENIAL_NEUTRAL_TEXT } from './denial';
+import {
+  DENIAL_BERUF_TEXT,
+  DENIAL_NEUTRAL_TEXT,
+  denialSelectionText,
+} from './denial';
 import { detectAccessReasons } from './accessReasons';
 import { loadHaiPersona } from './personaAccess';
 import { solutionRequestRefusal } from './solutionRequest';
@@ -60,6 +65,7 @@ import {
   getOffTopicResponse,
 } from './prompts';
 import { fetchDataContext } from './dataContext';
+import { isDayQuestion } from './dayQuestion';
 import type { UserRole } from './dataContext';
 import { handleActionMessage } from './actionFlow';
 import type { PendingAction } from './actionPolicy';
@@ -432,6 +438,19 @@ export function classifyIntent(
 /**
  * Determine the prompt mode based on context and intent
  */
+/**
+ * The day companion: the message asks for the own tasks, appointments or state
+ * ("Was steht für mich an?"). The answer comes from the live data of the
+ * person, so the turn skips the greeting, the off-topic check and the
+ * knowledge search, and no source cards of the knowledge base hang under it.
+ */
+function isDayBriefingTurn(
+  userMessage: string,
+  context: PipelineContext
+): boolean {
+  return !!context.userRole && isDayQuestion(userMessage);
+}
+
 function determineMode(
   intent: IntentType,
   context: PipelineContext
@@ -511,7 +530,10 @@ export async function retrieveContext(
   // The pipelines resolve the access once per turn and pass it on
   const access =
     resolvedAccess === undefined
-      ? await resolveRetrievalAccess(context.userId)
+      ? await resolveRetrievalAccess(
+          context.userId,
+          context.preferredCatalogCode
+        )
       : resolvedAccess;
   if (!access) {
     console.warn(
@@ -648,7 +670,13 @@ export interface TurnPersona {
 export async function resolveTurnPersona(
   context: PipelineContext
 ): Promise<TurnPersona> {
-  const access = await resolveRetrievalAccess(context.userId);
+  // The occupation chosen in the app limits the access (search and page index)
+  // and the persona to that one occupation, a code outside the occupations of
+  // the user is ignored (retrievalAccess.ts)
+  const access = await resolveRetrievalAccess(
+    context.userId,
+    context.preferredCatalogCode
+  );
   const persona = await loadHaiPersona(
     access,
     context.trainingScope,
@@ -660,17 +688,24 @@ export async function resolveTurnPersona(
 /**
  * Reply that ends the turn before retrieval and before any model call, or
  * null: a refusal without a scope (reason FREIGABE), a refusal for a question
- * that names another occupation (reason BERUF). Both name the reason in plain
- * words and offer what is possible instead, nothing of the other occupation is
- * revealed (src/lib/hai/denial.ts).
+ * that names another occupation (reason BERUF), the hint to switch the tab for
+ * a question about another occupation that the user has too but did not choose
+ * (reason AUSWAHL). All of them name the reason in plain words and offer what
+ * is possible instead, nothing of another occupation is revealed, the AUSWAHL
+ * text names only the two occupations of the user (src/lib/hai/denial.ts).
  */
 export function personaRefusal(
   userMessage: string,
   persona: HaiPersona
 ): string | null {
   if (persona.neutral) return DENIAL_NEUTRAL_TEXT;
+  // Another occupation that the user does not have comes first
   if (isForeignOccupationQuestion(userMessage, persona)) {
     return DENIAL_BERUF_TEXT;
+  }
+  const unselected = unselectedOccupationNamed(userMessage, persona);
+  if (unselected && persona.chosenLabel) {
+    return denialSelectionText(persona.chosenLabel, unselected.name);
   }
   return null;
 }
@@ -764,7 +799,10 @@ export async function processMessage(
     if (navigationResponse) return navigationResponse;
 
     // Step 1: Classify intent
-    const intent = classifyIntent(userMessage, context.quizState, persona);
+    const dayBriefing = isDayBriefingTurn(userMessage, context);
+    const intent: IntentType = dayBriefing
+      ? 'question'
+      : classifyIntent(userMessage, context.quizState, persona);
 
     // Handle special intents
     if (intent === 'greeting') {
@@ -794,7 +832,7 @@ export async function processMessage(
     let retrievedContext = '';
     let usedTrainerSolutions: boolean | undefined;
 
-    if (intent !== 'quiz_answer' && !enableWebSearch) {
+    if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
       // Vector search and PageIndex, limited to the occupation, audience and
       // organization of the user (one function for both pipelines)
       ({ searchResults, retrievedContext, usedTrainerSolutions } =
@@ -813,7 +851,11 @@ export async function processMessage(
         const dataCtx = await fetchDataContext(
           context.userId,
           context.userRole as UserRole,
-          userMessage
+          userMessage,
+          {
+            preferredCatalogCode: context.preferredCatalogCode,
+            trainingScope: context.trainingScope,
+          }
         );
         if (dataCtx) {
           liveDataContext = dataCtx.summary;
@@ -831,7 +873,10 @@ export async function processMessage(
       message: userMessage,
       audience: access?.audience ?? 'trainee',
       searchEmpty:
-        intent !== 'quiz_answer' && !enableWebSearch && !retrievedContext,
+        intent !== 'quiz_answer' &&
+        !enableWebSearch &&
+        !dayBriefing &&
+        !retrievedContext,
       contextDropped: context.contextDropped === true,
       liveDataContext,
     });
@@ -857,6 +902,7 @@ export async function processMessage(
       voice: context.voice === true,
       navigation: true,
       accessReasons,
+      dayBriefing,
     });
 
     // Step 5: Convert previous messages to provider format
@@ -1038,7 +1084,10 @@ export async function processMessageStream(
       return navigationResponse;
     }
 
-    const intent = classifyIntent(userMessage, context.quizState, persona);
+    const dayBriefing = isDayBriefingTurn(userMessage, context);
+    const intent: IntentType = dayBriefing
+      ? 'question'
+      : classifyIntent(userMessage, context.quizState, persona);
 
     // Handle special intents immediately
     if (intent === 'greeting') {
@@ -1061,7 +1110,7 @@ export async function processMessageStream(
     let retrievedContext = '';
     let usedTrainerSolutions: boolean | undefined;
 
-    if (intent !== 'quiz_answer' && !enableWebSearch) {
+    if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
       // Same retrieval as processMessage: scoped to the user
       ({ searchResults, retrievedContext, usedTrainerSolutions } =
         await retrieveContext(userMessage, context, access));
@@ -1079,7 +1128,11 @@ export async function processMessageStream(
         const dataCtx = await fetchDataContext(
           context.userId,
           context.userRole as UserRole,
-          userMessage
+          userMessage,
+          {
+            preferredCatalogCode: context.preferredCatalogCode,
+            trainingScope: context.trainingScope,
+          }
         );
         if (dataCtx) {
           liveDataContext = dataCtx.summary;
@@ -1097,7 +1150,10 @@ export async function processMessageStream(
       message: userMessage,
       audience: access?.audience ?? 'trainee',
       searchEmpty:
-        intent !== 'quiz_answer' && !enableWebSearch && !retrievedContext,
+        intent !== 'quiz_answer' &&
+        !enableWebSearch &&
+        !dayBriefing &&
+        !retrievedContext,
       contextDropped: context.contextDropped === true,
       liveDataContext,
     });
@@ -1119,6 +1175,7 @@ export async function processMessageStream(
       voice: context.voice === true,
       navigation: true,
       accessReasons,
+      dayBriefing,
     });
 
     // Convert messages to provider format

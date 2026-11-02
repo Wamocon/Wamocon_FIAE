@@ -19,11 +19,11 @@ import { getISOWeekDates } from '@/lib/date/iso-week';
 import { withDbRetry } from '@/lib/db-retry';
 import { isErrorResponse, requireUser, scopeOrg } from '@/lib/auth/session';
 import {
+  requireReportCatalogFilter,
   requireTraineeSession,
   traineeScopeCondition,
 } from '@/lib/auth/activity-report-access';
 import { resolveTraineeForRead } from '@/lib/auth/trainee-data-access';
-import { requireTraineeCatalogFilter } from '@/lib/catalog/trainee-scope';
 import {
   allowedCatalogCondition,
   requireCatalogScope,
@@ -31,9 +31,11 @@ import {
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 
 // GET: List activity reports
-// A trainee gets their own reports (a userId in the query is ignored). Trainer
-// level gets the submitted reports of the trainees in its organization scope
-// (and in the chosen occupation); a userId naming a trainee narrows the list to
+// A trainee gets their own reports (a userId in the query is ignored), of the
+// occupation they work in (a trainee in several occupations sees the reports of
+// the chosen one only). Trainer level gets the submitted reports of the trainees
+// in its organization scope and of the chosen occupation (the occupation of the
+// REPORT, not of the enrollment); a userId naming a trainee narrows the list to
 // that trainee, if the trainee lies inside the scope.
 export async function GET(req: NextRequest) {
   const session = await requireUser(req);
@@ -51,33 +53,42 @@ export async function GET(req: NextRequest) {
 
     let reports: ActivityReportRow[] = [];
 
+    // The occupation of the reports: the one the caller works in (a trainee in
+    // several occupations always works in one), for trainer level the chosen one
+    const reportCatalog = await requireReportCatalogFilter(session, req);
+    if (isErrorResponse(reportCatalog)) return reportCatalog;
+
     if (!session.isTrainerLevel) {
       // Trainees only see their own reports
       reports = await withDbRetry(() =>
         db
           .select()
           .from(activityReports)
-          .where(eq(activityReports.traineeId, session.id as any))
+          .where(
+            and(
+              eq(activityReports.traineeId, session.id as any),
+              reportCatalog.condition ?? undefined
+            )
+          )
           .orderBy(desc(activityReports.createdAt))
           .limit(limit)
       );
     } else {
       let traineeFilter;
       if (requestedUserId && requestedUserId !== session.id) {
+        // Organization scope and role of the trainee. The occupation is the one
+        // of the report (reportCatalog), not the one of the enrollments.
         const traineeId = await resolveTraineeForRead(
           session,
-          req,
+          {},
           requestedUserId
         );
         if (isErrorResponse(traineeId)) return traineeId;
         traineeFilter = eq(activityReports.traineeId, traineeId as any);
       } else {
-        const catalogFilter = await requireTraineeCatalogFilter(session, req);
-        if (catalogFilter instanceof Response) return catalogFilter;
         traineeFilter = traineeScopeCondition(
           activityReports.traineeId,
-          scopeOrg(session),
-          catalogFilter.condition
+          scopeOrg(session)
         );
       }
 
@@ -86,7 +97,13 @@ export async function GET(req: NextRequest) {
         db
           .select()
           .from(activityReports)
-          .where(and(ne(activityReports.status, 'DRAFT'), traineeFilter))
+          .where(
+            and(
+              ne(activityReports.status, 'DRAFT'),
+              traineeFilter,
+              reportCatalog.condition ?? undefined
+            )
+          )
           .orderBy(desc(activityReports.createdAt))
           .limit(limit)
       );
@@ -136,6 +153,7 @@ export async function GET(req: NextRequest) {
     const formattedReports = reports.map(r => ({
       id: r.id,
       traineeId: r.traineeId,
+      trainingCatalogId: r.trainingCatalogId,
       ausbildungsjahr: r.ausbildungsjahr,
       weekNumber: r.weekNumber,
       year: r.year,
@@ -258,13 +276,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check for duplicate report (same week/year)
+    // Check for duplicate report (same week/year in the same occupation: a
+    // trainee in two trainings has one report per week for each of them)
     const [existing] = await db
       .select({ id: activityReports.id })
       .from(activityReports)
       .where(
         and(
           eq(activityReports.traineeId, userId as any),
+          eq(activityReports.trainingCatalogId, catalogScope.activeCatalogId),
           eq(activityReports.weekNumber, reportWeekNumber),
           eq(activityReports.year, reportYear)
         )
@@ -343,13 +363,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get already-used hours from all non-rejected reports for this trainee
+    // Get already-used hours from all non-rejected reports of this trainee in
+    // this occupation
     const existingReports = await db
       .select({ id: activityReports.id })
       .from(activityReports)
       .where(
         and(
           eq(activityReports.traineeId, userId as any),
+          eq(activityReports.trainingCatalogId, catalogScope.activeCatalogId),
           ne(activityReports.status, 'REJECTED')
         )
       );
@@ -436,6 +458,7 @@ export async function POST(req: NextRequest) {
       .values({
         traineeId: userId,
         organizationId,
+        trainingCatalogId: catalogScope.activeCatalogId,
         weekNumber: reportWeekNumber,
         year: reportYear,
         ausbildungsjahr: calculatedAusbildungsjahr,

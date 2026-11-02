@@ -403,6 +403,7 @@ describe('POST /api/hai/quiz-mode/next', () => {
     const body = await res.json();
     expect(body.status).toBe('ok');
     expect(Object.keys(body).sort()).toEqual([
+      'occupation',
       'question',
       'remaining',
       'status',
@@ -470,7 +471,12 @@ describe('POST /api/hai/quiz-mode/next', () => {
     const done = await (
       await POST(post('next', { exclude: [QA1, QA2] }))
     ).json();
-    expect(done).toEqual({ status: 'exhausted', question: null, total: 3 });
+    expect(done).toEqual({
+      status: 'exhausted',
+      question: null,
+      total: 3,
+      occupation: null,
+    });
   });
 
   it('narrows by topic and says so when nothing fits', async () => {
@@ -482,6 +488,7 @@ describe('POST /api/hai/quiz-mode/next', () => {
       status: 'empty',
       question: null,
       reason: 'no_topic_match',
+      occupation: null,
     });
   });
 
@@ -494,6 +501,7 @@ describe('POST /api/hai/quiz-mode/next', () => {
       status: 'empty',
       question: null,
       reason: 'no_content',
+      occupation: null,
     });
   });
 
@@ -528,6 +536,7 @@ describe('POST /api/hai/quiz-mode/next', () => {
       status: 'empty',
       question: null,
       reason: 'no_content',
+      occupation: null,
     });
   });
 

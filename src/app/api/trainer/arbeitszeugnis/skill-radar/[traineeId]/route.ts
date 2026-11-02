@@ -1,5 +1,9 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import {
+  evaluationReportCatalogCondition,
+  requireReportCatalogFilter,
+} from '@/lib/auth/activity-report-access';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import {
@@ -37,6 +41,10 @@ export async function GET(
 
     const access = await requireTraineeAccess(session, traineeId, request);
     if (isErrorResponse(access)) return access;
+
+    // Only the reports of the occupation the trainer chose
+    const reportCatalog = await requireReportCatalogFilter(session, request);
+    if (isErrorResponse(reportCatalog)) return reportCatalog;
 
     const { searchParams } = new URL(request.url);
     const ausbildungsjahr = parseInt(
@@ -103,7 +111,8 @@ export async function GET(
           eq(activityReports.traineeId, traineeId),
           eq(activityReports.status, 'APPROVED'),
           gte(activityReports.periodStart, yearStart),
-          lte(activityReports.periodStart, yearEnd)
+          lte(activityReports.periodStart, yearEnd),
+          reportCatalog.condition ?? undefined
         )
       );
 
@@ -172,10 +181,14 @@ export async function GET(
     // === FETCH SOFT SKILLS FOR RADAR ===
     const softSkillConditions =
       (customStartDate && customEndDate) || ausbildungsjahr === 0
-        ? eq(weeklyEvaluations.traineeId, traineeId)
+        ? and(
+            eq(weeklyEvaluations.traineeId, traineeId),
+            evaluationReportCatalogCondition(reportCatalog.condition)
+          )
         : and(
             eq(weeklyEvaluations.traineeId, traineeId),
-            eq(weeklyEvaluations.ausbildungsjahr, ausbildungsjahr)
+            eq(weeklyEvaluations.ausbildungsjahr, ausbildungsjahr),
+            evaluationReportCatalogCondition(reportCatalog.condition)
           );
 
     const softSkillRatings = await db

@@ -9,10 +9,16 @@ import { eq, and, desc } from 'drizzle-orm';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { resolveTraineeForRead } from '@/lib/auth/trainee-data-access';
+import {
+  evaluationReportCatalogCondition,
+  requireReportCatalogFilter,
+} from '@/lib/auth/activity-report-access';
 
 // GET: Fetch trainee's evaluations
 // A trainee gets their own evaluations (a userId in the query is ignored), a
 // trainer-level caller gets the ones of a trainee in their organization scope.
+// An evaluation belongs to the occupation of its activity report: with an
+// occupation chosen (or a trainee in several occupations) only those count.
 export async function GET(request: NextRequest) {
   const session = await requireUser(request);
   if (isErrorResponse(session)) return session;
@@ -26,14 +32,21 @@ export async function GET(request: NextRequest) {
     );
     if (isErrorResponse(resolved)) return resolved;
     const userId = resolved;
+    const reportCatalog = await requireReportCatalogFilter(session, request);
+    if (isErrorResponse(reportCatalog)) return reportCatalog;
 
     const cached = await apiCache.getOrFetch(
-      `trainee_evaluations_${userId}`,
+      `trainee_evaluations_${userId}_${reportCatalog.condition ? reportCatalog.catalogId : 'all'}`,
       async () => {
         const evaluations = await db
           .select()
           .from(weeklyEvaluations)
-          .where(eq(weeklyEvaluations.traineeId, userId))
+          .where(
+            and(
+              eq(weeklyEvaluations.traineeId, userId),
+              evaluationReportCatalogCondition(reportCatalog.condition)
+            )
+          )
           .orderBy(
             desc(weeklyEvaluations.year),
             desc(weeklyEvaluations.weekNumber)

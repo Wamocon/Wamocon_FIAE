@@ -1,5 +1,9 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import {
+    evaluationReportCatalogCondition,
+    requireReportCatalogFilter,
+} from '@/lib/auth/activity-report-access';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import {
@@ -60,6 +64,12 @@ export async function GET(
 
         const access = await requireTraineeAccess(session, traineeId, request);
         if (isErrorResponse(access)) return access;
+
+        // The certificate is written for ONE occupation: only the reports (and the
+        // evaluations of those reports) of the occupation the trainer chose count
+        const reportCatalog = await requireReportCatalogFilter(session, request);
+        if (isErrorResponse(reportCatalog)) return reportCatalog;
+        const catalogCondition = reportCatalog.condition ?? undefined;
 
         const { searchParams } = new URL(request.url);
         const ausbildungsjahr = parseInt(searchParams.get('ausbildungsjahr') || '1');
@@ -125,7 +135,8 @@ export async function GET(
                     eq(activityReports.traineeId, traineeId),
                     eq(activityReports.status, 'APPROVED'),
                     gte(activityReports.periodStart, yearStart),
-                    lte(activityReports.periodStart, yearEnd)
+                    lte(activityReports.periodStart, yearEnd),
+                    catalogCondition
                 )
             )
             .orderBy(trainingComponents.orderIndex, trainingUseCases.orderIndex);
@@ -251,7 +262,8 @@ export async function GET(
                         eq(activityReports.traineeId, traineeId),
                         eq(activityReports.status, 'APPROVED'),
                         gte(activityReports.periodStart, yearStart),
-                        lte(activityReports.periodStart, yearEnd)
+                        lte(activityReports.periodStart, yearEnd),
+                        catalogCondition
                     )
                 );
 
@@ -303,10 +315,14 @@ export async function GET(
                 .innerJoin(mesSoftskillCriteria, eq(weeklySoftskillRatings.softskillCriterionId, mesSoftskillCriteria.id))
                 .where(
                     ausbildungsjahr === 0 || (customStartDate && customEndDate)
-                        ? eq(weeklyEvaluations.traineeId, traineeId)
+                        ? and(
+                            eq(weeklyEvaluations.traineeId, traineeId),
+                            evaluationReportCatalogCondition(reportCatalog.condition)
+                        )
                         : and(
                             eq(weeklyEvaluations.traineeId, traineeId),
-                            eq(weeklyEvaluations.ausbildungsjahr, ausbildungsjahr)
+                            eq(weeklyEvaluations.ausbildungsjahr, ausbildungsjahr),
+                            evaluationReportCatalogCondition(reportCatalog.condition)
                         )
                 );
             
@@ -334,7 +350,8 @@ export async function GET(
                     and(
                         eq(activityReports.traineeId, traineeId),
                         gte(activityReports.periodStart, yearStart),
-                        lte(activityReports.periodStart, yearEnd)
+                        lte(activityReports.periodStart, yearEnd),
+                        catalogCondition
                     )
                 );
             

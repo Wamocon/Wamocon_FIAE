@@ -1,5 +1,6 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { requireReportCatalogFilter } from '@/lib/auth/activity-report-access';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import {
@@ -47,6 +48,11 @@ export async function POST(
 
     const access = await requireTraineeAccess(session, traineeId, request);
     if (isErrorResponse(access)) return access;
+
+    // The certificate is written for the occupation the trainer chose: only
+    // the reports of that occupation go into the frozen snapshot
+    const reportCatalog = await requireReportCatalogFilter(session, request);
+    if (isErrorResponse(reportCatalog)) return reportCatalog;
 
     // The issuing trainer is the authenticated user, never a client value
     const trainerId = session.id;
@@ -166,7 +172,8 @@ export async function POST(
           eq(activityReports.traineeId, traineeId),
           eq(activityReports.status, 'APPROVED'),
           gte(activityReports.periodStart, yearStart),
-          lte(activityReports.periodStart, yearEnd)
+          lte(activityReports.periodStart, yearEnd),
+          reportCatalog.condition ?? undefined
         )
       )
       .orderBy(trainingComponents.orderIndex, trainingUseCases.orderIndex);

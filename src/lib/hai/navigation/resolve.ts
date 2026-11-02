@@ -26,7 +26,7 @@
  */
 
 import type { ContentReference, NavigationIntent } from './intent';
-import { matchContent } from './match';
+import { matchContent, type ContentCandidate, type MatchResult } from './match';
 import { pickNextStep, type NextStepPlan } from './nextStep';
 import { plainText } from './text';
 import {
@@ -61,8 +61,14 @@ import {
 export interface NavigationScope {
   userId: string;
   level: NavigationLevel;
-  /** Catalogs of the person (the occupation scope of the retrieval access). */
+  /** All catalogs of the person (the targets follow all occupations of the person). */
   catalogIds: readonly string[];
+  /**
+   * The occupation chosen in the app, when the person has several: "Weiter
+   * lernen" and the search of an enabler or use case by number or name look
+   * there first and only then in the others. Never narrows what can be found.
+   */
+  preferredCatalogIds?: readonly string[];
   /** The phases whose content is due now (trainees), for "Weiter lernen". */
   plan?: NextStepPlan | null;
 }
@@ -195,6 +201,31 @@ export async function resolveNavigation(
   }
 }
 
+/** The chosen occupation is a part of the occupations of the person. */
+function isNarrower(scope: NavigationScope): boolean {
+  const chosen = scope.preferredCatalogIds;
+  return (
+    !!chosen && chosen.length > 0 && chosen.length < scope.catalogIds.length
+  );
+}
+
+/**
+ * Look for the record in the chosen occupation first and only then in all of the
+ * person: a number like "3" exists in every occupation, the chosen one is meant.
+ * Nothing that the person may see is hidden by this.
+ */
+async function matchChosenFirst(
+  ref: ContentReference,
+  scope: NavigationScope,
+  load: (catalogIds: readonly string[]) => Promise<ContentCandidate[]>
+): Promise<MatchResult> {
+  if (isNarrower(scope)) {
+    const first = matchContent(ref, await load(scope.preferredCatalogIds!));
+    if (first.status !== 'none') return first;
+  }
+  return matchContent(ref, await load(scope.catalogIds));
+}
+
 async function resolveContinue(
   scope: NavigationScope
 ): Promise<NavigationOutcome> {
@@ -206,8 +237,19 @@ async function resolveContinue(
     };
   }
 
-  const entries = await loadNextStepEntries(scope.userId, scope.catalogIds);
-  const step = pickNextStep(entries, scope.plan);
+  // The chosen occupation first: an open step there wins, otherwise all
+  let step = isNarrower(scope)
+    ? pickNextStep(
+        await loadNextStepEntries(scope.userId, scope.preferredCatalogIds!),
+        scope.plan
+      )
+    : null;
+  if (step?.kind !== 'next') {
+    step = pickNextStep(
+      await loadNextStepEntries(scope.userId, scope.catalogIds),
+      scope.plan
+    );
+  }
 
   switch (step.kind) {
     case 'next': {
@@ -249,11 +291,9 @@ async function resolveContent(
   }
 
   if (kind === 'use_case') {
-    const candidates = await loadTraineeUseCases(
-      scope.userId,
-      scope.catalogIds
+    const found = await matchChosenFirst(ref, scope, ids =>
+      loadTraineeUseCases(scope.userId, ids)
     );
-    const found = matchContent(ref, candidates);
     if (found.status === 'none') {
       return { kind: 'not_found', text: NOT_FOUND_TEXT };
     }
@@ -268,8 +308,9 @@ async function resolveContent(
     );
   }
 
-  const candidates = await loadTraineeEnablers(scope.userId, scope.catalogIds);
-  const found = matchContent(ref, candidates);
+  const found = await matchChosenFirst(ref, scope, ids =>
+    loadTraineeEnablers(scope.userId, ids)
+  );
   if (found.status === 'none') {
     return { kind: 'not_found', text: NOT_FOUND_TEXT };
   }

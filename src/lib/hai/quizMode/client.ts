@@ -20,8 +20,14 @@ export type NextQuestionResult =
       question: QuizQuestionPublic;
       total: number;
       remaining: number;
+      occupation: string | null;
     }
-  | { kind: 'empty'; reason: QuizEmptyReason; total?: number }
+  | {
+      kind: 'empty';
+      reason: QuizEmptyReason;
+      total?: number;
+      occupation: string | null;
+    }
   | { kind: 'error'; errorKey: string };
 
 export type AnswerResult =
@@ -130,11 +136,16 @@ export async function fetchNextQuestion(input: {
       };
     }
     if (!isRecord(data)) return { kind: 'error', errorKey: 'generic' };
+    const occupation =
+      typeof data.occupation === 'string' && data.occupation.trim() !== ''
+        ? data.occupation
+        : null;
     if (data.status === 'exhausted') {
       return {
         kind: 'empty',
         reason: 'exhausted',
         total: typeof data.total === 'number' ? data.total : undefined,
+        occupation,
       };
     }
     if (data.status === 'empty') {
@@ -142,6 +153,7 @@ export async function fetchNextQuestion(input: {
         kind: 'empty',
         reason:
           data.reason === 'no_topic_match' ? 'no_topic_match' : 'no_content',
+        occupation,
       };
     }
     const question = asQuestion(data.question);
@@ -152,6 +164,7 @@ export async function fetchNextQuestion(input: {
       question,
       total: typeof data.total === 'number' ? data.total : 0,
       remaining: typeof data.remaining === 'number' ? data.remaining : 0,
+      occupation,
     };
   } catch {
     return { kind: 'error', errorKey: 'network' };
