@@ -40,6 +40,7 @@ import { buildHaiTrainingScope } from './trainingScope';
 import { isLearningTechniqueQuestion } from './learningTechniques/detect';
 import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
+import { traineeSearchNotFoundLine } from './denial';
 
 // ============================================================================
 // TYPES
@@ -1006,7 +1007,9 @@ async function fetchTraineeDetailForTrainer(
 ): Promise<string> {
     const trainee = await findTraineeByName(trainerId, nameQuery);
     if (!trainee) {
-        return `**Azubi-Suche:** Kein Azubi mit dem Namen "${nameQuery}" gefunden. Bitte den vollstaendigen Namen verwenden.`;
+        // ZUSTAENDIGKEIT: only the own trainees count, a person of another
+        // trainer answers like a person that does not exist (denial.ts)
+        return traineeSearchNotFoundLine(nameQuery);
     }
 
     const parts: string[] = [`**Azubi-Detail: ${trainee.fullName}**`];

@@ -24,6 +24,12 @@ import {
   type NavigationScope,
 } from '@/lib/hai/navigation/resolve';
 import { isAllowedNavigationPath } from '@/lib/hai/navigation/targets';
+import {
+  DENIAL_ALL_LOCKED_TEXT,
+  DENIAL_NO_COURSE_TEXT,
+  DENIAL_RECORD_NOT_FOUND_TEXT,
+  namesDenialReason,
+} from '@/lib/hai/denial';
 
 const USER = '10000000-0000-4000-8000-000000000001';
 const FIAE = '00000000-0000-4000-8000-000000000001';
@@ -110,26 +116,64 @@ describe('static pages', () => {
 
 describe('rights per level', () => {
   it.each([
-    ['bring mich zu den Auszubildenden', 'TRAINEE'],
-    ['geh zu den offenen Bewertungen', 'TRAINEE'],
-    ['öffne die Inhaltsverwaltung', 'TRAINEE'],
-    ['öffne die Organisationen', 'TRAINEE'],
-    ['öffne die Benutzerverwaltung', 'TRAINEE'],
-    ['öffne die Organisationen', 'TRAINER'],
-    ['öffne die Benutzerverwaltung', 'TRAINER'],
+    ['bring mich zu den Auszubildenden', 'TRAINEE', 'Trainerbereich'],
+    ['geh zu den offenen Bewertungen', 'TRAINEE', 'Trainerbereich'],
+    ['öffne die Inhaltsverwaltung', 'TRAINEE', 'Trainerbereich'],
+    [
+      'öffne die Organisationen',
+      'TRAINEE',
+      'Verwaltungsbereich der Administratoren',
+    ],
+    [
+      'öffne die Benutzerverwaltung',
+      'TRAINEE',
+      'Verwaltungsbereich der Administratoren',
+    ],
+    [
+      'öffne die Organisationen',
+      'TRAINER',
+      'Verwaltungsbereich der Administratoren',
+    ],
+    [
+      'öffne die Benutzerverwaltung',
+      'TRAINER',
+      'Verwaltungsbereich der Administratoren',
+    ],
   ] as const)(
-    'refuses "%s" for %s without an offer',
-    async (message, level) => {
+    'refuses "%s" for %s without an offer, with the reason ROLLE and the area',
+    async (message, level, area) => {
       const outcome = await run(message, scope({ level }));
       expect(outcome.kind).toBe('denied');
       expect(outcome.offer).toBeUndefined();
-      expect(outcome.text).toContain('Diese Seite kann ich dir nicht öffnen.');
-      // no path, no hint at the page that exists for others
+      // what does not work, why (the role, the area roughly), what is possible
+      expect(outcome.text).toContain('Diese Seite kann ich dir nicht öffnen');
+      expect(outcome.text).toContain(area);
+      expect(namesDenialReason(outcome.text, 'ROLLE')).toBe(true);
+      expect(outcome.text).toContain('zum Beispiel');
+      // no path, no name of the page that exists for others
       expect(outcome.text).not.toMatch(
         /\/trainer|\/admin|Organisationen|Benutzer/
       );
     }
   );
+
+  it('says that a page that is not known is no question of rights', async () => {
+    for (const message of [
+      'öffne die Seite Wetter',
+      'geh zur Seite Rezepte',
+      'bring mich zur Seite Horoskop',
+    ]) {
+      const outcome = await run(message);
+      expect(outcome.kind).toBe('unknown_page');
+      expect(outcome.offer).toBeUndefined();
+      expect(outcome.text).toContain('Diese Seite kenne ich nicht');
+      expect(outcome.text).toContain('nichts mit deinen Rechten zu tun');
+      // no reason of rights, and not the wording of a refusal of a role
+      expect(namesDenialReason(outcome.text, 'ROLLE')).toBe(false);
+      expect(outcome.text).not.toContain('nicht freigegeben');
+      expect(outcome.text).toContain('Dashboard');
+    }
+  });
 
   it('refuses a trainee the page of the trainees with a friendly offer of own pages', async () => {
     const outcome = await run('bring mich zu den Auszubildenden');
@@ -185,9 +229,11 @@ describe('rights per level', () => {
     expect(mockUseCases).not.toHaveBeenCalled();
   });
 
-  it('keeps "weiter lernen" for trainees', async () => {
+  it('keeps "weiter lernen" for trainees, with the reason ROLLE', async () => {
     const outcome = await run('wo geht es weiter', scope({ level: 'TRAINER' }));
     expect(outcome.kind).toBe('denied');
+    expect(outcome.text).toContain('nur für Auszubildende');
+    expect(namesDenialReason(outcome.text, 'ROLLE')).toBe(true);
     expect(mockNext).not.toHaveBeenCalled();
   });
 });
@@ -277,6 +323,10 @@ describe('occupation separation and unknown records', () => {
   it('answers a number that no record of the person has with not found', async () => {
     const outcome = await run('öffne Enabler 99');
     expect(outcome.kind).toBe('not_found');
+    // UMFANG: nothing found in the released content, not "there is none"
+    expect(outcome.text).toBe(DENIAL_RECORD_NOT_FOUND_TEXT);
+    expect(namesDenialReason(outcome.text, 'UMFANG')).toBe(true);
+    expect(outcome.text).toContain('das heißt aber nicht');
     expect(outcome.text).toContain(
       'Nenne mir bitte die Nummer oder den genauen Namen'
     );
@@ -303,9 +353,11 @@ describe('a locked enabler (order of work)', () => {
     const outcome = await run('öffne Enabler 3');
     expect(outcome.kind).toBe('locked');
     expect(outcome.offer).toBeUndefined();
+    // GESPERRT: the reason (order of work) and a way forward
     expect(outcome.text).toBe(
-      'Der Enabler Enabler 3: SQL Grundlagen ist noch gesperrt. Schließe zuerst Enabler 2: Datenmodell ab.'
+      'Der Enabler Enabler 3: SQL Grundlagen ist noch gesperrt, weil in der Reihenfolge der Arbeit zuerst Enabler 2: Datenmodell abgeschlossen sein muss. Schließe Enabler 2: Datenmodell ab, dann wird er frei, und bis dahin helfe ich dir gern bei Enabler 2: Datenmodell.'
     );
+    expect(namesDenialReason(outcome.text, 'GESPERRT')).toBe(true);
     expect(outcome.text).not.toContain('/trainee');
   });
 
@@ -319,8 +371,9 @@ describe('a locked enabler (order of work)', () => {
     expect(outcome.kind).toBe('locked');
     expect(outcome.offer).toBeUndefined();
     expect(outcome.text).toBe(
-      'Der Enabler Enabler 3: SQL Grundlagen ist für dich gesperrt.'
+      'Der Enabler Enabler 3: SQL Grundlagen ist für dich noch gesperrt (Reihenfolge der Arbeit). Sobald er freigeschaltet ist, helfe ich dir gern dabei, bis dahin beim Enabler davor.'
     );
+    expect(namesDenialReason(outcome.text, 'GESPERRT')).toBe(true);
   });
 
   it('writes the titles as plain text', async () => {
@@ -385,10 +438,16 @@ describe('"Weiter lernen"', () => {
     const locked = await run('wo geht es weiter', scope({ plan }));
     expect(locked.kind).toBe('nothing');
     expect(locked.offer).toBeUndefined();
+    // GESPERRT: the order of work or a lock of the trainer
+    expect(locked.text).toBe(DENIAL_ALL_LOCKED_TEXT);
+    expect(namesDenialReason(locked.text, 'GESPERRT')).toBe(true);
     mockNext.mockResolvedValue([]);
     const none = await run('wo geht es weiter', scope({ plan }));
     expect(none.kind).toBe('nothing');
     expect(none.offer).toBeUndefined();
+    // FREIGABE: no course released for the person
+    expect(none.text).toBe(DENIAL_NO_COURSE_TEXT);
+    expect(namesDenialReason(none.text, 'FREIGABE')).toBe(true);
   });
 });
 

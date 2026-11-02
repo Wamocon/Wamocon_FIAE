@@ -330,7 +330,10 @@ describe('HAI chat route with the real pipeline behind it', () => {
     );
     const body = await res.json();
     expect(body.navigationOffer).toBeUndefined();
-    expect(body.response).toContain('Diese Seite kann ich dir nicht öffnen.');
+    expect(body.response).toContain(
+      'Diese Seite kann ich dir nicht öffnen, weil sie zum Trainerbereich gehört'
+    );
+    expect(body.response).toContain('für deine Rolle nicht freigegeben');
     expect(model).not.toHaveBeenCalled();
   });
 

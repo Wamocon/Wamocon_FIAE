@@ -8,6 +8,10 @@ import {
   isSolutionRequest,
   solutionRequestRefusal,
 } from '@/lib/hai/solutionRequest';
+import {
+  DENIAL_LOESUNGSSCHUTZ_TEXT,
+  namesDenialReason,
+} from '@/lib/hai/denial';
 
 // The fixed check before the model: an explicit request of a trainee for a
 // model solution, a trainer solution, a solution path or an assessment key is
@@ -141,5 +145,16 @@ describe('solutionRequestRefusal', () => {
     expect(SOLUTION_REFUSAL_TEXT).toMatch(/Die Lösung gebe ich nicht heraus/);
     expect(SOLUTION_REFUSAL_TEXT).toMatch(/Leitfragen und Hinweisen/);
     expect(SOLUTION_REFUSAL_TEXT).not.toMatch(/kfbm|fiae|büro|fachinformatik/i);
+  });
+
+  it('names the reason: no solution, and why (LOESUNGSSCHUTZ)', () => {
+    expect(SOLUTION_REFUSAL_TEXT).toBe(DENIAL_LOESUNGSSCHUTZ_TEXT);
+    expect(namesDenialReason(SOLUTION_REFUSAL_TEXT, 'LOESUNGSSCHUTZ')).toBe(
+      true
+    );
+    // the reason is a rule, not a part of the solution
+    expect(SOLUTION_REFUSAL_TEXT).toContain('Trainern vorbehalten');
+    expect(SOLUTION_REFUSAL_TEXT).toContain('nach dem bestandenen Quiz');
+    expect(SOLUTION_REFUSAL_TEXT).not.toMatch(/Schritt 1|zuerst|Ergebnis ist/);
   });
 });

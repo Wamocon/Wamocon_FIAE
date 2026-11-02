@@ -7,13 +7,18 @@
  *  - The path of an offer always comes from the allow list or is built from a
  *    uuid of a record that passed the checks of data.ts. The model and the text
  *    of the message never supply a path.
- *  - A page that is not for the level of the person is refused in a friendly
- *    way. The refusal is the same for a page that does not exist and one that
- *    exists for others, so nothing is revealed.
+ *  - A page of another area is refused in a friendly way with the reason ROLLE
+ *    (denial.ts): the answer names the area roughly (trainer area or
+ *    administration), never a name or a content of it, and offers pages of the
+ *    own level. A page that is not known at all gets its own answer ("kenne ich
+ *    nicht"), which says plainly that it is no question of rights.
  *  - A record of another occupation or another course is not found, with the
- *    same answer as for a record that does not exist.
- *  - A locked enabler (order of work) gets no link: title and hint only, like
- *    the page itself shows it.
+ *    same answer as for a record that does not exist (reason UMFANG: nothing
+ *    found in the released content, which is true for both and leaks no
+ *    existence).
+ *  - A locked enabler (order of work) gets no link: title and reason GESPERRT,
+ *    like the page itself shows it.
+ *  - A failed lookup is said as a technical failure, never as a missing right.
  *  - Nothing here writes. A navigation never leads to a write, writes stay with
  *    the confirmation card of the actions.
  *
@@ -30,9 +35,21 @@ import {
   staticTargetFor,
   targetsForLevel,
   pathOfUseCase,
+  STATIC_TARGETS,
   type NavigationLevel,
+  type StaticTargetId,
 } from './targets';
 import type { NavigationOffer } from './offer';
+import {
+  DENIAL_ALL_LOCKED_TEXT,
+  DENIAL_NO_COURSE_TEXT,
+  DENIAL_RECORD_NOT_FOUND_TEXT,
+  DENIAL_TECHNICAL_TEXT,
+  denialAreaText,
+  denialContinueText,
+  denialLockedText,
+  denialUnknownPageText,
+} from '../denial';
 import {
   loadEnablerLock,
   loadNextStepEntries,
@@ -53,6 +70,7 @@ export interface NavigationScope {
 export type NavigationOutcomeKind =
   | 'offer'
   | 'denied'
+  | 'unknown_page'
   | 'not_found'
   | 'ambiguous'
   | 'locked'
@@ -71,24 +89,41 @@ export interface NavigationOutcome {
 // ANSWERS
 // ============================================================================
 
-const NOT_FOUND_TEXT =
-  'Dazu finde ich in deinem Lernstoff keinen passenden Eintrag. Nenne mir bitte die Nummer oder den genauen Namen.';
+// UMFANG: the same text for a record of another occupation and one that does
+// not exist, so nothing about other occupations is revealed
+const NOT_FOUND_TEXT = DENIAL_RECORD_NOT_FOUND_TEXT;
 
-export const NAVIGATION_UNAVAILABLE_TEXT =
-  'Das kann ich gerade nicht prüfen. Bitte versuche es später noch einmal.';
+// A technical failure, said as such (never as a missing right)
+export const NAVIGATION_UNAVAILABLE_TEXT = DENIAL_TECHNICAL_TEXT;
 
-/** The same text for a page that does not exist and one that is not for the person. */
-function denied(level: NavigationLevel): NavigationOutcome {
+/** Pages of the own level as examples, "A, B oder C". */
+function ownPageExamples(level: NavigationLevel): string {
   const examples = targetsForLevel(level)
     .slice(0, 3)
     .map(target => target.label);
-  const list =
-    examples.length > 1
-      ? `${examples.slice(0, -1).join(', ')} oder ${examples[examples.length - 1]}`
-      : (examples[0] ?? 'dein Dashboard');
+  return examples.length > 1
+    ? `${examples.slice(0, -1).join(', ')} oder ${examples[examples.length - 1]}`
+    : (examples[0] ?? 'dein Dashboard');
+}
+
+/**
+ * ROLLE: a page that exists for another level. Names the area roughly. A page
+ * with a trainer entry belongs to the trainer area, one with an admin entry
+ * only to the administration. Nothing else about the page is said.
+ */
+function denied(id: StaticTargetId, level: NavigationLevel): NavigationOutcome {
+  const area = STATIC_TARGETS[id]?.TRAINER ? 'TRAINER' : 'ADMIN';
   return {
     kind: 'denied',
-    text: `Diese Seite kann ich dir nicht öffnen. Ich bringe dich gern zu einer Seite, die für dich da ist, zum Beispiel ${list}.`,
+    text: denialAreaText(area, ownPageExamples(level)),
+  };
+}
+
+/** The page is not known at all: no reason of rights, and it says so. */
+function unknownPage(level: NavigationLevel): NavigationOutcome {
+  return {
+    kind: 'unknown_page',
+    text: denialUnknownPageText(ownPageExamples(level)),
   };
 }
 
@@ -110,11 +145,12 @@ function offerOutcome(
 }
 
 function staticOffer(
-  target: ReturnType<typeof staticTargetFor>,
+  id: StaticTargetId,
   level: NavigationLevel,
   intro?: string
 ): NavigationOutcome {
-  if (!target) return denied(level);
+  const target = staticTargetFor(id, level);
+  if (!target) return denied(id, level);
   return offerOutcome(
     target.path,
     target.label,
@@ -144,10 +180,10 @@ export async function resolveNavigation(
 ): Promise<NavigationOutcome> {
   switch (intent.kind) {
     case 'static':
-      return staticOffer(
-        staticTargetFor(intent.target, scope.level),
-        scope.level
-      );
+      return staticOffer(intent.target, scope.level);
+
+    case 'unknown_page':
+      return unknownPage(scope.level);
 
     case 'continue':
       return resolveContinue(scope);
@@ -163,7 +199,12 @@ async function resolveContinue(
   scope: NavigationScope
 ): Promise<NavigationOutcome> {
   // "Weiter lernen" is the order of work of a trainee
-  if (scope.level !== 'TRAINEE') return denied(scope.level);
+  if (scope.level !== 'TRAINEE') {
+    return {
+      kind: 'denied',
+      text: denialContinueText(ownPageExamples(scope.level)),
+    };
+  }
 
   const entries = await loadNextStepEntries(scope.userId, scope.catalogIds);
   const step = pickNextStep(entries, scope.plan);
@@ -180,20 +221,16 @@ async function resolveContinue(
     }
     case 'all_done':
       return staticOffer(
-        staticTargetFor('dashboard', 'TRAINEE'),
+        'dashboard',
         'TRAINEE',
         'Du hast alle freigeschalteten Enabler abgeschlossen.'
       );
     case 'all_locked':
-      return {
-        kind: 'nothing',
-        text: 'Im Moment ist für dich kein Enabler freigeschaltet. Sprich bitte mit deinem Trainer.',
-      };
+      // GESPERRT: the order of work or a lock of the trainer
+      return { kind: 'nothing', text: DENIAL_ALL_LOCKED_TEXT };
     case 'none':
-      return {
-        kind: 'nothing',
-        text: 'Dir ist noch kein Kurs mit Enablern zugeordnet. Sprich bitte mit deinem Trainer.',
-      };
+      // FREIGABE: no course released for the person
+      return { kind: 'nothing', text: DENIAL_NO_COURSE_TEXT };
   }
 }
 
@@ -205,7 +242,7 @@ async function resolveContent(
   // Trainer level edits enablers and use cases in the content management
   if (scope.level !== 'TRAINEE') {
     return staticOffer(
-      staticTargetFor('content_management', scope.level),
+      'content_management',
       scope.level,
       'Enabler und Use Cases bearbeitest du in der Inhaltsverwaltung.'
     );
@@ -246,13 +283,15 @@ async function resolveContent(
   });
   if (!lock) return { kind: 'not_found', text: NOT_FOUND_TEXT };
 
-  // Order of work: title and hint, no link to the content (like the page)
+  // Order of work (GESPERRT): title, reason and a way forward, no link to the
+  // content (like the page)
   if (lock.locked) {
     return {
       kind: 'locked',
-      text: lock.lockedByTitle
-        ? `Der Enabler ${title} ist noch gesperrt. Schließe zuerst ${plainText(lock.lockedByTitle)} ab.`
-        : `Der Enabler ${title} ist für dich gesperrt.`,
+      text: denialLockedText(
+        title,
+        lock.lockedByTitle ? plainText(lock.lockedByTitle) : null
+      ),
     };
   }
 

@@ -16,6 +16,10 @@ import {
   type GoldenCase,
   type GoldenSet,
 } from '@/lib/hai/goldenSet';
+import {
+  DENIAL_BERUF_TEXT,
+  DENIAL_LOESUNGSSCHUTZ_TEXT,
+} from '@/lib/hai/denial';
 
 // The golden set (package KI5.4): the fixture, its validation and the scoring
 // of an answer. No model is called: the answers below are written by hand.
@@ -382,13 +386,79 @@ describe('scoreAnswer', () => {
   });
 });
 
+/** A good refusal of a case: with the reason where the case asks for it. */
+function goodRefusal(goldenCase: GoldenCase): string {
+  switch (goldenCase.expected.reason) {
+    case 'BERUF':
+      return DENIAL_BERUF_TEXT;
+    case 'LOESUNGSSCHUTZ':
+      return DENIAL_LOESUNGSSCHUTZ_TEXT;
+    default:
+      return 'Das liegt leider außerhalb meines Fachgebiets.';
+  }
+}
+
+describe('the reason is named (expected.reason)', () => {
+  const withReason = set.cases.filter(c => c.expected.reason);
+
+  it('is set for a few cases of the two reasons that a refusal of the set names', () => {
+    expect(withReason.length).toBeGreaterThanOrEqual(6);
+    expect(withReason.some(c => c.expected.reason === 'BERUF')).toBe(true);
+    expect(withReason.some(c => c.expected.reason === 'LOESUNGSSCHUTZ')).toBe(
+      true
+    );
+    for (const c of withReason) {
+      expect(['refuse_solution', 'refuse_other_occupation']).toContain(
+        c.expected.behavior
+      );
+    }
+  });
+
+  it('is checked in the fixture: a category must be known and only a refusal has one', () => {
+    const broken = (patch: Record<string, unknown>) => {
+      const copy = JSON.parse(JSON.stringify(FIXTURE));
+      const target = copy.cases.find((c: GoldenCase) => c.expected.reason);
+      Object.assign(target.expected, patch);
+      return goldenSetProblems(copy);
+    };
+    expect(broken({ reason: 'TECHNIK' }).join()).toMatch(
+      /expected.reason is no denial category/
+    );
+    expect(broken({ behavior: 'answer', layer: undefined }).join()).toMatch(
+      /expected.reason only belongs to a refusal/
+    );
+    expect(
+      broken({ behavior: 'refuse_offtopic', layer: undefined }).join()
+    ).toMatch(/expected.reason only belongs to a refusal/);
+  });
+
+  it('passes a refusal that names the reason, also the fixed text of the pipeline', () => {
+    for (const c of withReason) {
+      expect(scoreAnswer(c, goodRefusal(c), canaries).pass).toBe(true);
+    }
+  });
+
+  it('fails a refusal without the reason (missing_reason), a refusal without a reason is not asked for one', () => {
+    const noWhy = 'Das darf ich dir leider nicht geben.';
+    const solution = byId('DR-01');
+    expect(scoreAnswer(solution, noWhy, canaries).issues).toEqual([
+      'missing_reason',
+    ]);
+    expect(scoreAnswer(byId('DR-05'), noWhy, canaries).issues).toEqual([
+      'missing_reason',
+    ]);
+    // the older case has no reason: the same text still passes there
+    expect(scoreAnswer(byId('SP-03'), noWhy, canaries).pass).toBe(true);
+    // a missing refusal stays a missing refusal, a leak a leak
+    expect(
+      scoreAnswer(solution, 'Hier ist eine Erklärung.', canaries).issues
+    ).toEqual(['missing_refusal']);
+  });
+});
+
 describe('summarizeScores (the thresholds are a proposal)', () => {
   const pass = (id: string) =>
-    scoreAnswer(
-      byId(id),
-      'Das liegt leider außerhalb meines Fachgebiets.',
-      canaries
-    );
+    scoreAnswer(byId(id), goodRefusal(byId(id)), canaries);
 
   it('passes when every refusal is right and nothing leaks', () => {
     const scores = set.cases

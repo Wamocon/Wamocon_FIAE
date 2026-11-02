@@ -355,6 +355,8 @@ describe('POST /api/hai/quiz-mode/next', () => {
     const { POST, rec } = await load('next', { proPlan: false });
     const res = await POST(post('next', {}));
     expect(res.status).toBe(403);
+    // ORGANISATION_PLAN: a stable code, so the card can say why
+    expect((await res.json()).code).toBe('PRO_REQUIRED');
     expect(rec.db.select).not.toHaveBeenCalled();
   });
 
@@ -610,6 +612,8 @@ describe('POST /api/hai/quiz-mode/next', () => {
       });
       const res = await POST(post('next', { enablerId: E1 }));
       expect(res.status).toBe(403);
+      // FREIGABE: the course is not assigned, a stable code says so
+      expect((await res.json()).code).toBe('COURSE_NOT_ASSIGNED');
     });
   });
 
@@ -742,7 +746,9 @@ describe('POST /api/hai/quiz-mode/answer', () => {
 
   it('answers 403 without the PRO plan', async () => {
     const { POST } = await load('answer', { proPlan: false, tables: chain() });
-    expect((await POST(answer(QA1, [uid(0x1001)]))).status).toBe(403);
+    const res = await POST(answer(QA1, [uid(0x1001)]));
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('PRO_REQUIRED');
   });
 
   it.each([
@@ -1059,7 +1065,9 @@ describe('POST /api/hai/quiz-mode/answer', () => {
     });
     const res = await POST(answer(QA1, [uid(0x1001)]));
     expect(res.status).toBe(403);
-    expect(JSON.stringify(await res.json())).not.toMatch(/correct|Darum/);
+    const body = await res.json();
+    expect(body.code).toBe('COURSE_NOT_ASSIGNED');
+    expect(JSON.stringify(body)).not.toMatch(/correct|Darum/);
   });
 
   it('answers 403 ENABLER_LOCKED for a question of a locked enabler, with no solution', async () => {

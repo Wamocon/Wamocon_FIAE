@@ -32,6 +32,22 @@ describe('errorKeyFor', () => {
     expect(errorKeyFor(429, 'RATE_LIMITED')).toBe('rateLimited');
     expect(errorKeyFor(429)).toBe('rateLimited');
   });
+
+  it('names the reason of a 403 by its stable code (denial.ts)', () => {
+    expect(errorKeyFor(403, 'ENABLER_LOCKED')).toBe('locked');
+    expect(errorKeyFor(403, 'QUIZ_LOCKED')).toBe('locked');
+    expect(errorKeyFor(403, 'PRO_REQUIRED')).toBe('planRequired');
+    expect(errorKeyFor(403, 'AWAITING_ACTIVATION')).toBe('awaitingActivation');
+    expect(errorKeyFor(403, 'COURSE_NOT_ASSIGNED')).toBe('notAssigned');
+    expect(errorKeyFor(403, 'SOMETHING_ELSE')).toBe('forbidden');
+    expect(errorKeyFor(403)).toBe('forbidden');
+  });
+
+  it('never shows a failure of the server as a missing right', () => {
+    for (const status of [500, 502, 503]) {
+      expect(errorKeyFor(status, 'PRO_REQUIRED')).toBe('generic');
+    }
+  });
 });
 
 describe('submitQuizAnswer', () => {

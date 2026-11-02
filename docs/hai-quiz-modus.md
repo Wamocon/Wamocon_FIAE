@@ -64,6 +64,7 @@ Dieselben wie beim echten Lektionsquiz (`GET /api/trainee/enablers/[id]/quizzes/
 6. **Ein Thema aus dem Text hat Vorrang vor dem Enabler-Kontext** (Abschnitt 2). Wer im Enabler "Frag mich zu Netzwerken ab" schreibt, bekommt Netzwerke über alle Enabler.
 7. **Golden Set:** Die Bitte "Teste mich zur Beschaffung mit einer Quizfrage." (Fall AL-08) gehört seit dem Quiz-Modus zur festen Erkennung. Der Fall wurde auf "Stelle mir eine Quizfrage zur Beschaffung." umformuliert, damit er den Weg über das Modell weiter prüft (siehe `docs/hai-golden-set.md`).
 8. **Alte Quizanfrage:** Die Eingabe "/quiz" und die Karte "Quiz starten" auf dem Startbildschirm des Vollbilds führen jetzt in den Quiz-Modus (Erkennung von "/quiz"). Der bisherige Weg über das Modell bleibt für andere Formulierungen (zum Beispiel "Erstelle mir ein Quiz").
+9. **Fehlertexte mit Grund (02.11.2026).** Jeder Fehler der Karte nennt den Grund in Klartext: gesperrt (Reihenfolge der Arbeit), Lösungsschutz (Versuchsgrenze, zurückgehaltene Lösung), Freigabe (Konto wartet, Kurs nicht zugewiesen), Organisation oder Plan, Umfang (nichts gefunden, das heißt nicht, dass es nichts gibt). Die Routen senden dafür stabile Codes, neu sind `PRO_REQUIRED` und `COURSE_NOT_ASSIGNED`, bestehende Codes bleiben. Die Zuordnung steht in `errorKeyFor` (`quizMode/client.ts`), die Texte in `hai.quiz.error.*`, Übersicht in `docs/hai-ablehnungen.md`.
 
 ## 7. Dateien
 
