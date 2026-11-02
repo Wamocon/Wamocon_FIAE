@@ -29,6 +29,10 @@ import {
   requireCatalogScope,
 } from '@/lib/catalog/scope';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
+import {
+  EMPTY_SUBMISSION_CODE,
+  activityReportHasContent,
+} from '@/lib/submission-input';
 
 // GET: List activity reports
 // A trainee gets their own reports (a userId in the query is ignored), of the
@@ -248,6 +252,18 @@ export async function POST(req: NextRequest) {
     ) {
       return NextResponse.json(
         { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Only entries with 0 hours are no hand-in either (WMCNL-3011)
+    if (submit && !activityReportHasContent(entries)) {
+      return NextResponse.json(
+        {
+          error:
+            'Ein Nachweis ohne Tätigkeit kann nicht eingereicht werden. Trage mindestens eine Tätigkeit mit Stunden ein.',
+          code: EMPTY_SUBMISSION_CODE,
+        },
         { status: 400 }
       );
     }

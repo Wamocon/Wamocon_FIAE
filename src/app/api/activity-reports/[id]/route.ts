@@ -31,6 +31,10 @@ import {
   requireCatalogScope,
 } from '@/lib/catalog/scope';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
+import {
+  EMPTY_SUBMISSION_CODE,
+  activityReportHasContent,
+} from '@/lib/submission-input';
 
 // GET: Get a single activity report
 // A trainee reaches their own reports, trainer level the submitted reports of
@@ -212,6 +216,20 @@ export async function PUT(
     const catalogScope = await requireCatalogScope(session, request);
     if (catalogScope instanceof Response) return catalogScope;
     const reportCatalogId = String(report.trainingCatalogId);
+
+    // A report without a single entry with hours is no hand-in: the trainer
+    // would get 0 hours and "no entries" to check (WMCNL-3011). The entries of
+    // the body replace the saved ones, so the body decides.
+    if (submit && !activityReportHasContent(entries)) {
+      return NextResponse.json(
+        {
+          error:
+            'Ein Nachweis ohne Tätigkeit kann nicht eingereicht werden. Trage mindestens eine Tätigkeit mit Stunden ein.',
+          code: EMPTY_SUBMISSION_CODE,
+        },
+        { status: 400 }
+      );
+    }
 
     // Validate actualHours are non-negative numbers
     if (entries && entries.length > 0) {

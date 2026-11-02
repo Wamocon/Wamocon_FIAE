@@ -52,3 +52,20 @@ export function handInOfUseCaseHasContent(input: {
 
 /** Code of the 400 answer of a route for a hand-in without content. */
 export const EMPTY_SUBMISSION_CODE = 'EMPTY_SUBMISSION';
+
+/**
+ * The weekly report (Ausbildungsnachweis) has content when it has at least one
+ * entry with hours. A report without entries, or only with entries of 0 hours,
+ * is nothing the trainer could check.
+ */
+export function activityReportHasContent(entries: unknown): boolean {
+  return (
+    Array.isArray(entries) &&
+    entries.some(
+      e =>
+        typeof e === 'object' &&
+        e !== null &&
+        Number((e as { actualHours?: unknown }).actualHours) > 0
+    )
+  );
+}
