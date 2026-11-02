@@ -59,9 +59,12 @@ export interface ProactiveCheck {
  * Run all proactive checks for a user
  *
  * @param userId - User ID to check
- * @param catalogId - The occupation the person works in (x-catalog). The report
- *   reminders of a trainee ask in this occupation only, because a report belongs
- *   to one occupation. Without it the default occupation of the trainee counts.
+ * @param catalogId - The occupation the person works in (x-catalog). A trainee
+ *   gets reminders of this occupation only (reports, progress, next step),
+ *   because a report and a course belong to one occupation. Without it the
+ *   default occupation of the trainee counts. A trainer gets the counts of
+ *   pending reviews of this occupation, without it those of all occupations of
+ *   the organization.
  * @returns Array of insights
  */
 export async function runProactiveChecks(
@@ -87,12 +90,17 @@ export async function runProactiveChecks(
 
         // Run role-specific checks
         if (userRole === 'TRAINEE') {
-            insights.push(...await checkMissingActivityReports(userId, catalogId));
+            // Fail closed: without an occupation nothing that belongs to one is asked
+            const traineeCatalogId =
+                catalogId ??
+                (await getCatalogScopeForUserId(userId))?.activeCatalogId ??
+                null;
+            insights.push(...await checkMissingActivityReports(userId, traineeCatalogId));
             insights.push(...await checkUpcomingExams(userId));
-            insights.push(...await checkLowProgress(userId));
-            insights.push(...await suggestNextSteps(userId));
+            insights.push(...await checkLowProgress(userId, traineeCatalogId));
+            insights.push(...await suggestNextSteps(userId, traineeCatalogId));
         } else if (userRole === 'TRAINER') {
-            insights.push(...await checkPendingReviews(userId));
+            insights.push(...await checkPendingReviews(userId, catalogId));
             insights.push(...await checkTraineeProgress(userId));
         }
 
@@ -120,16 +128,12 @@ export async function runProactiveChecks(
  */
 async function checkMissingActivityReports(
     userId: string,
-    chosenCatalogId?: string | null
+    catalogId: string | null
 ): Promise<ProactiveInsight[]> {
     const insights: ProactiveInsight[] = [];
 
     try {
         // Fail closed: without an occupation nothing is asked
-        const catalogId =
-            chosenCatalogId ??
-            (await getCatalogScopeForUserId(userId))?.activeCatalogId ??
-            null;
         if (!catalogId) return insights;
 
         // Get current week number
@@ -263,13 +267,20 @@ async function checkUpcomingExams(userId: string): Promise<ProactiveInsight[]> {
 }
 
 /**
- * Check for low progress in courses
+ * Check for low progress in the courses of one occupation: the courses of the
+ * other training of a trainee in two trainings are not shown here.
  */
-async function checkLowProgress(userId: string): Promise<ProactiveInsight[]> {
+async function checkLowProgress(
+    userId: string,
+    catalogId: string | null
+): Promise<ProactiveInsight[]> {
     const insights: ProactiveInsight[] = [];
 
     try {
-        // Get all courses the user is enrolled in
+        // Fail closed: without an occupation nothing is asked
+        if (!catalogId) return insights;
+
+        // Get the courses of this occupation the user is enrolled in
         const enrollments = await db
             .select({
                 courseId: courseMembers.courseId,
@@ -277,7 +288,12 @@ async function checkLowProgress(userId: string): Promise<ProactiveInsight[]> {
             })
             .from(courseMembers)
             .innerJoin(courses, eq(courseMembers.courseId, courses.id))
-            .where(eq(courseMembers.userId, userId));
+            .where(
+                and(
+                    eq(courseMembers.userId, userId),
+                    eq(courses.trainingCatalogId, catalogId)
+                )
+            );
 
         for (const enrollment of enrollments) {
             // Count total enablers in course
@@ -330,13 +346,19 @@ async function checkLowProgress(userId: string): Promise<ProactiveInsight[]> {
 }
 
 /**
- * Suggest next learning steps
+ * Suggest next learning steps, in the courses of one occupation
  */
-async function suggestNextSteps(userId: string): Promise<ProactiveInsight[]> {
+async function suggestNextSteps(
+    userId: string,
+    catalogId: string | null
+): Promise<ProactiveInsight[]> {
     const insights: ProactiveInsight[] = [];
 
     try {
-        // Find incomplete enablers in active courses
+        // Fail closed: without an occupation nothing is suggested
+        if (!catalogId) return insights;
+
+        // Find incomplete enablers in active courses of this occupation
         const activeEnablers = await db.execute(sql`
             SELECT DISTINCT ON (e.id)
                 e.id,
@@ -347,6 +369,7 @@ async function suggestNextSteps(userId: string): Promise<ProactiveInsight[]> {
             INNER JOIN course_members cm ON c.id = cm.course_id
             LEFT JOIN enabler_completions ec ON e.id = ec.enabler_id AND ec.user_id = ${userId}
             WHERE cm.user_id = ${userId}
+                AND c.training_catalog_id = ${catalogId}
                 AND e.is_active = true
                 AND ec.id IS NULL
             ORDER BY e.id, e.created_at
@@ -375,9 +398,14 @@ async function suggestNextSteps(userId: string): Promise<ProactiveInsight[]> {
 // ============================================================================
 
 /**
- * Check for pending reviews (trainer-only)
+ * Check for pending reviews (trainer-only). With an occupation only the
+ * submissions and reports of this occupation are counted, without one those of
+ * all occupations of the organization.
  */
-async function checkPendingReviews(trainerId: string): Promise<ProactiveInsight[]> {
+async function checkPendingReviews(
+    trainerId: string,
+    catalogId?: string | null
+): Promise<ProactiveInsight[]> {
     const insights: ProactiveInsight[] = [];
 
     try {
@@ -388,10 +416,12 @@ async function checkPendingReviews(trainerId: string): Promise<ProactiveInsight[
         const pendingSubmissions = await db
             .select({ count: sql<number>`count(*)::int` })
             .from(enablerSubmissions)
+            .innerJoin(enablers, eq(enablerSubmissions.enablerId, enablers.id))
             .where(
                 and(
                     eq(enablerSubmissions.status, 'PENDING'),
-                    eq(enablerSubmissions.organizationId, organizationId)
+                    eq(enablerSubmissions.organizationId, organizationId),
+                    catalogId ? eq(enablers.trainingCatalogId, catalogId) : undefined
                 )
             );
 
@@ -416,7 +446,10 @@ async function checkPendingReviews(trainerId: string): Promise<ProactiveInsight[
             .where(
                 and(
                     eq(activityReports.status, 'SUBMITTED'),
-                    eq(activityReports.organizationId, organizationId)
+                    eq(activityReports.organizationId, organizationId),
+                    catalogId
+                        ? eq(activityReports.trainingCatalogId, catalogId)
+                        : undefined
                 )
             );
 

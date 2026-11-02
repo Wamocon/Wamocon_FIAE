@@ -731,6 +731,27 @@ describe('the chain of providers', () => {
     expect(r.errors).toEqual([]);
   });
 
+  it('Sokrates cannot recognize (500) but speaks: the browser listens, the speech output stays on Sokrates', async () => {
+    const r = await listen({ transcribeFails: true }, ['haus', 'browser']);
+    // Sokrates records, hears speech, cannot transcribe
+    r.t.ctx.analyser.level = 0.1;
+    r.t.recorders[0].emit();
+    await jest.advanceTimersByTimeAsync(500);
+    r.t.ctx.analyser.level = 0;
+    await jest.advanceTimersByTimeAsync(1_500);
+    expect(r.active).toEqual(['haus', 'browser']);
+    expect(r.b.recognitions).toHaveLength(1);
+    expect(r.errors).toEqual([]);
+
+    // the same conversation: the answer is still spoken by Sokrates, not by the browser
+    const speaker = r.env.createSpeaker!({ onDone: () => undefined })!;
+    speaker.say('Hallo.');
+    speaker.end();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(r.t.calls.speak).toEqual(['Hallo.']);
+    expect(r.b.spoken).toHaveLength(0);
+  });
+
   it('a refused microphone is no failure of the provider: no fallback, the error reaches the loop', async () => {
     const r = await listen({ micDenied: true }, ['soniox', 'haus', 'browser']);
     expect(r.errors).toEqual(['not-allowed']);
