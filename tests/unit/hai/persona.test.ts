@@ -199,13 +199,47 @@ describe('resolveHaiPersona: generic, neutral and several occupations', () => {
     );
   });
 
-  it('uses the primary catalog and the exception words of all catalogs', () => {
+  it('speaks about ALL occupations of the user, not only the primary one', () => {
+    // Found in the Preview on 02.11.2026: a trainee with two occupations got a
+    // persona that named only the first one, refused the other and still saw its content
+    const persona = resolveHaiPersona({
+      catalogs: [KFBM_CATALOG, FIAE_CATALOG],
+      role: 'TRAINEE',
+    });
+    expect(persona.neutral).toBe(false);
+    expect(persona.occupationName).toBe(
+      'Kaufleute für Büromanagement und Fachinformatik'
+    );
+    expect(persona.intro).toBe(
+      'für Auszubildende in den Berufen Kaufleute für Büromanagement und Fachinformatik'
+    );
+    expect(persona.refusalText).toContain('Kaufleute für Büromanagement');
+    expect(persona.refusalText).toContain('Fachinformatik');
+    expect(persona.refusalPrompt).toBe(persona.refusalText);
+    expect(persona.forbiddenLine).toContain(
+      'Berufen Kaufleute für Büromanagement und Fachinformatik'
+    );
+    // the code help of FIAE stays available when one of the occupations has it
+    expect(persona.codeHelp).toBe(true);
+    // the glossary has every term once, the terms of both occupations
+    const terms = persona.glossary.map(g => g.term);
+    expect(new Set(terms).size).toBe(terms.length);
+    // the prompt names both occupations
+    const prompt = prompts.buildSystemPrompt({ mode: 'general', persona });
+    expect(prompt).toContain('Büromanagement');
+    expect(prompt).toContain('Fachinformatik');
+    expect(prompts.getOffTopicResponse(persona)).toBe(persona.refusalText);
+  });
+
+  it('the order of the occupations only decides the base, the exception words are those of all', () => {
     const persona = resolveHaiPersona({
       catalogs: [FIAE_CATALOG, KFBM_CATALOG],
       role: 'TRAINER',
     });
     expect(persona.source).toBe('fiae-default');
-    expect(persona.refusalText).toBe(FIAE_PERSONA.refusalText);
+    expect(persona.occupationName).toBe(
+      'Fachinformatik und Kaufleute für Büromanagement'
+    );
     expect(persona.offTopicContextWords).toEqual(
       expect.arrayContaining(['datenbank', 'reisekosten', 'bewirtung'])
     );
@@ -216,6 +250,12 @@ describe('resolveHaiPersona: generic, neutral and several occupations', () => {
         otherCatalogs: [FIAE_CATALOG, KFBM_CATALOG],
       }).foreignMarkers
     ).toEqual([]);
+  });
+
+  it('a user with one occupation keeps the persona of that occupation unchanged', () => {
+    expect(resolveHaiPersona({ catalogs: [FIAE_CATALOG] }).refusalText).toBe(
+      FIAE_PERSONA.refusalText
+    );
   });
 });
 
