@@ -28,6 +28,9 @@ export type RecordedCall = {
   where?: unknown[];
   /** Row lock strength passed to for(), for example 'no key update'. */
   lock?: string;
+  /** Page size passed to limit(), and the offset passed to offset(). */
+  limit?: number;
+  offset?: number;
 };
 
 /** Render a drizzle condition to SQL text and parameters (for assertions). */
@@ -126,6 +129,8 @@ export function createTableDb(
           }
           if (prop === 'values' || prop === 'set') call.values = args[0];
           if (prop === 'for') call.lock = args[0];
+          if (prop === 'limit') call.limit = args[0];
+          if (prop === 'offset') call.offset = args[0];
           if (prop === 'where' && args[0]) {
             // drizzle also accepts where(fields => condition)
             const condition =
