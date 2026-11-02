@@ -12,6 +12,7 @@
 import React from 'react';
 import { HaiMessage as MessageType, useHai } from './HaiProvider';
 import { HaiActionCard } from './HaiActionCard';
+import { HaiNavigationCard } from './HaiNavigationCard';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { MarkdownText } from '@/components/ui/MarkdownText';
 import { isDocumentId, openDocumentFile } from '@/lib/documentFileLink';
@@ -38,6 +39,7 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
     setActiveVersion,
     confirmPendingAction,
     cancelPendingAction,
+    openNavigation,
   } = useHai();
   const isUser = message.role === 'user';
   const hasCitations = message.citations && message.citations.length > 0;
@@ -92,10 +94,11 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
         className={`flex max-w-[85%] flex-col gap-1 ${isUser ? 'items-end' : 'items-start'} `}
       >
         <div
-          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${isUser
-            ? 'rounded-tr-sm bg-[#1f2937] text-gray-100'
-            : 'bg-transparent pt-1 pl-0 text-gray-200 shadow-none'
-            } `}
+          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+            isUser
+              ? 'rounded-tr-sm bg-[#1f2937] text-gray-100'
+              : 'bg-transparent pt-1 pl-0 text-gray-200 shadow-none'
+          } `}
         >
           {isThinking ? (
             <ThinkingAnimation />
@@ -151,6 +154,14 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
             action={message.pendingAction}
             onConfirm={() => void confirmPendingAction(message.id)}
             onCancel={() => cancelPendingAction(message.id)}
+          />
+        )}
+
+        {/* Offered page: the person taps "Open", the page never changes by itself */}
+        {!isUser && !isStreaming && message.navigationOffer && (
+          <HaiNavigationCard
+            offer={message.navigationOffer}
+            onOpen={() => openNavigation(message.id)}
           />
         )}
 

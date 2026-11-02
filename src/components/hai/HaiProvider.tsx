@@ -17,8 +17,18 @@ import React, {
   useCallback,
   useEffect,
 } from 'react';
+import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { authFetch } from '@/lib/authFetch';
+import {
+  isOpenConfirmation,
+  isOpenDecline,
+} from '@/lib/hai/navigation/confirm';
+import {
+  toNavigationOffer,
+  type NavigationOffer,
+} from '@/lib/hai/navigation/offer';
+import { isAllowedNavigationPath } from '@/lib/hai/navigation/targets';
 
 // ============================================================================
 // TYPES
@@ -62,6 +72,20 @@ export interface HaiMessage {
   baseUserMessageId?: string;
   /** A write HAI proposes, shown as a confirmation card */
   pendingAction?: HaiPendingAction;
+  /** A page HAI offers, shown as a card with the button "Open" (never a write) */
+  navigationOffer?: HaiNavigationOffer;
+}
+
+/**
+ * A page HAI offers. The text chat never changes the page by itself: the card
+ * waits for the tap on "Open". Only a spoken "yes" to the question of the voice
+ * assistant opens it (`spoken`). The path is checked against the allow list
+ * once more before it is opened.
+ */
+export interface HaiNavigationOffer extends NavigationOffer {
+  status: 'open' | 'opened' | 'dismissed';
+  /** The question was spoken and HAI asked "Soll ich sie öffnen?" */
+  spoken: boolean;
 }
 
 /**
@@ -135,12 +159,17 @@ interface HaiProviderState {
   clearContext: () => void;
 
   /** `voice`: the question was spoken and the answer is read aloud (voice assistant). */
-  sendMessage: (message: string, options?: { voice?: boolean }) => Promise<void>;
+  sendMessage: (
+    message: string,
+    options?: { voice?: boolean }
+  ) => Promise<void>;
   stopGeneration: () => void;
   updateMessage: (messageId: string, newContent: string) => Promise<void>;
   regenerateFromEdit: (messageId: string, newContent: string) => Promise<void>;
   confirmPendingAction: (messageId: string) => Promise<void>;
   cancelPendingAction: (messageId: string) => void;
+  /** Open the page of a navigation offer (tap on "Open" of the card) */
+  openNavigation: (messageId: string) => void;
   setActiveVersion: (messageId: string, versionIndex: number) => void;
   loadSession: (sessionId: string) => Promise<void>;
   newSession: () => void;
@@ -181,6 +210,7 @@ export function HaiProvider({
   initialContext,
 }: HaiProviderProps) {
   const { t, language } = useLanguage();
+  const router = useRouter();
 
   // UI State
   const [viewMode, setViewModeState] = useState<ViewMode>('hidden');
@@ -308,10 +338,10 @@ export function HaiProvider({
             // Reconstruct versions from metadata if present
             const storedVersions = Array.isArray(meta.versions)
               ? (meta.versions as Array<{
-                content: string;
-                citations?: unknown[];
-                createdAt: string;
-              }>)
+                  content: string;
+                  citations?: unknown[];
+                  createdAt: string;
+                }>)
               : undefined;
 
             // Determine active version index
@@ -342,10 +372,10 @@ export function HaiProvider({
               createdAt: m.createdAt,
               versions: storedVersions
                 ? storedVersions.map(v => ({
-                  content: v.content,
-                  citations: v.citations as HaiMessage['citations'],
-                  createdAt: v.createdAt,
-                }))
+                    content: v.content,
+                    citations: v.citations as HaiMessage['citations'],
+                    createdAt: v.createdAt,
+                  }))
                 : undefined,
               activeVersionIndex: storedVersions ? activeIdx : undefined,
               baseUserMessageId,
@@ -631,6 +661,107 @@ export function HaiProvider({
     [patchPendingAction]
   );
 
+  // ========================================================================
+  // NAVIGATION OFFERS (card "Open", spoken "yes")
+  // ========================================================================
+
+  const attachNavigationOffer = useCallback(
+    (messageId: string, raw: unknown, spoken: boolean) => {
+      // the path must be on the allow list, otherwise there is no card
+      const offer = toNavigationOffer(raw);
+      if (!offer) return;
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId
+            ? { ...m, navigationOffer: { ...offer, status: 'open', spoken } }
+            : m
+        )
+      );
+    },
+    []
+  );
+
+  const patchNavigationOffer = useCallback(
+    (messageId: string, status: HaiNavigationOffer['status']) => {
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId && m.navigationOffer
+            ? { ...m, navigationOffer: { ...m.navigationOffer, status } }
+            : m
+        )
+      );
+    },
+    []
+  );
+
+  /** Go to the page. The open chat panel must not hide it. */
+  const goToOffer = useCallback(
+    (offer: HaiNavigationOffer) => {
+      if (!isAllowedNavigationPath(offer.path)) return false;
+      setViewModeState(prev => (prev === 'full' ? 'widget' : prev));
+      router.push(offer.path);
+      return true;
+    },
+    [router]
+  );
+
+  const openNavigation = useCallback(
+    (messageId: string) => {
+      const offer = messagesRef.current.find(
+        m => m.id === messageId
+      )?.navigationOffer;
+      if (!offer || offer.status === 'dismissed') return;
+      if (goToOffer(offer)) patchNavigationOffer(messageId, 'opened');
+    },
+    [goToOffer, patchNavigationOffer]
+  );
+
+  /**
+   * The spoken reply to the question "Soll ich sie öffnen?": "ja" or "öffnen"
+   * opens the page, "nein" drops the offer, both are answered here without a
+   * call to the server. Only the reply to a spoken, still open offer counts, a
+   * typed chat never changes the page by itself. Returns true when the reply
+   * was handled, false when the message goes on as a normal question (the
+   * offer is dropped then, so a later "ja" opens nothing).
+   */
+  const answerSpokenNavigation = useCallback(
+    (text: string): boolean => {
+      const last = [...messagesRef.current]
+        .reverse()
+        .find(m => m.role === 'assistant');
+      const offer = last?.navigationOffer;
+      if (!last || !offer || offer.status !== 'open' || !offer.spoken) {
+        return false;
+      }
+      const open = isOpenConfirmation(text);
+      if (!open && !isOpenDecline(text)) {
+        patchNavigationOffer(last.id, 'dismissed');
+        return false;
+      }
+      if (open && !goToOffer(offer)) return false;
+
+      const now = new Date().toISOString();
+      const stamp = Date.now();
+      const userId = `temp-${stamp}`;
+      setMessages(prev => [
+        ...prev,
+        { id: userId, role: 'user', content: text, createdAt: now },
+        {
+          id: `msg-${stamp}`,
+          role: 'assistant',
+          content: open
+            ? `Ich öffne die Seite ${offer.label}.`
+            : 'In Ordnung, ich bleibe hier.',
+          createdAt: now,
+          baseUserMessageId: userId,
+        },
+      ]);
+      patchNavigationOffer(last.id, open ? 'opened' : 'dismissed');
+      return true;
+    },
+    [goToOffer, patchNavigationOffer]
+  );
+
   const regenerateFromEdit = useCallback(
     async (messageId: string, newContent: string) => {
       if (!newContent.trim() || !currentSessionId) return;
@@ -692,12 +823,12 @@ export function HaiProvider({
           const userVersions = userMsg.versions
             ? [...userMsg.versions]
             : [
-              {
-                content: userMsg.content,
-                citations: userMsg.citations,
-                createdAt: userMsg.createdAt,
-              },
-            ];
+                {
+                  content: userMsg.content,
+                  citations: userMsg.citations,
+                  createdAt: userMsg.createdAt,
+                },
+              ];
           // Only add a new version if the content actually changed
           const lastUserVersion = userVersions[userVersions.length - 1];
           if (lastUserVersion.content !== newContent.trim()) {
@@ -722,12 +853,12 @@ export function HaiProvider({
           const versions = current.versions
             ? [...current.versions]
             : [
-              {
-                content: current.content,
-                citations: current.citations,
-                createdAt: current.createdAt,
-              },
-            ];
+                {
+                  content: current.content,
+                  citations: current.citations,
+                  createdAt: current.createdAt,
+                },
+              ];
           versions.push({ content: '', citations: [], createdAt: now });
           const newIndex = versions.length - 1;
           updated[aIdx] = {
@@ -735,6 +866,7 @@ export function HaiProvider({
             content: '',
             citations: [],
             pendingAction: undefined,
+            navigationOffer: undefined,
             versions,
             activeVersionIndex: newIndex,
             baseUserMessageId: messageId,
@@ -801,11 +933,17 @@ export function HaiProvider({
 
           // Thinking message if it takes more than 3 seconds to get first chunk
           const thinkingTimeoutId = setTimeout(() => {
-            if (!hasReceivedFirstChunk && activeStreamSessionRef.current === streamSessionId) {
+            if (
+              !hasReceivedFirstChunk &&
+              activeStreamSessionRef.current === streamSessionId
+            ) {
               setMessages(prev =>
                 prev.map(m =>
                   m.id === assistantId && m.content === ''
-                    ? { ...m, content: t('hai.loading.thinking') || 'Thinking...' }
+                    ? {
+                        ...m,
+                        content: t('hai.loading.thinking') || 'Thinking...',
+                      }
                     : m
                 )
               );
@@ -832,7 +970,7 @@ export function HaiProvider({
               setMessages(prev =>
                 prev.map(m =>
                   m.id === assistantId &&
-                    m.content === (t('hai.loading.thinking') || 'Thinking...')
+                  m.content === (t('hai.loading.thinking') || 'Thinking...')
                     ? { ...m, content: '' }
                     : m
                 )
@@ -858,16 +996,16 @@ export function HaiProvider({
                     prev.map(m =>
                       m.id === assistantId
                         ? {
-                          ...m,
-                          content: fullText,
-                          versions: m.versions
-                            ? m.versions.map((v, idx) =>
-                              idx === (m.activeVersionIndex ?? 0)
-                                ? { ...v, content: fullText }
-                                : v
-                            )
-                            : m.versions,
-                        }
+                            ...m,
+                            content: fullText,
+                            versions: m.versions
+                              ? m.versions.map((v, idx) =>
+                                  idx === (m.activeVersionIndex ?? 0)
+                                    ? { ...v, content: fullText }
+                                    : v
+                                )
+                              : m.versions,
+                          }
                         : m
                     )
                   );
@@ -875,6 +1013,11 @@ export function HaiProvider({
 
                 if (event.done) {
                   attachPendingAction(assistantId, event.pendingAction);
+                  attachNavigationOffer(
+                    assistantId,
+                    event.navigationOffer,
+                    false
+                  );
                   if (event.sessionId && event.sessionId !== currentSessionId) {
                     setCurrentSessionId(event.sessionId);
                   }
@@ -883,16 +1026,16 @@ export function HaiProvider({
                       prev.map(m =>
                         m.id === assistantId
                           ? {
-                            ...m,
-                            citations: event.citations,
-                            versions: m.versions
-                              ? m.versions.map((v, idx) =>
-                                idx === (m.activeVersionIndex ?? 0)
-                                  ? { ...v, citations: event.citations }
-                                  : v
-                              )
-                              : m.versions,
-                          }
+                              ...m,
+                              citations: event.citations,
+                              versions: m.versions
+                                ? m.versions.map((v, idx) =>
+                                    idx === (m.activeVersionIndex ?? 0)
+                                      ? { ...v, citations: event.citations }
+                                      : v
+                                  )
+                                : m.versions,
+                            }
                           : m
                       )
                     );
@@ -918,6 +1061,7 @@ export function HaiProvider({
           await refreshSessions();
         } else if (response.ok) {
           const data = await response.json();
+          attachNavigationOffer(assistantId, data.navigationOffer, false);
 
           if (data.sessionId && data.sessionId !== currentSessionId) {
             setCurrentSessionId(data.sessionId);
@@ -927,22 +1071,22 @@ export function HaiProvider({
             prev.map(m =>
               m.id === assistantId
                 ? {
-                  ...m,
-                  content: data.response,
-                  citations: data.citations,
-                  pendingAction: toPendingAction(data.pendingAction),
-                  versions: m.versions
-                    ? m.versions.map((v, idx) =>
-                      idx === (m.activeVersionIndex ?? 0)
-                        ? {
-                          ...v,
-                          content: data.response,
-                          citations: data.citations,
-                        }
-                        : v
-                    )
-                    : m.versions,
-                }
+                    ...m,
+                    content: data.response,
+                    citations: data.citations,
+                    pendingAction: toPendingAction(data.pendingAction),
+                    versions: m.versions
+                      ? m.versions.map((v, idx) =>
+                          idx === (m.activeVersionIndex ?? 0)
+                            ? {
+                                ...v,
+                                content: data.response,
+                                citations: data.citations,
+                              }
+                            : v
+                        )
+                      : m.versions,
+                  }
                 : m
             )
           );
@@ -954,16 +1098,16 @@ export function HaiProvider({
             prev.map(m =>
               m.id === assistantId
                 ? {
-                  ...m,
-                  content: t('hai.error.somethingWrong'),
-                  versions: m.versions
-                    ? m.versions.map((v, idx) =>
-                      idx === (m.activeVersionIndex ?? 0)
-                        ? { ...v, content: t('hai.error.somethingWrong') }
-                        : v
-                    )
-                    : m.versions,
-                }
+                    ...m,
+                    content: t('hai.error.somethingWrong'),
+                    versions: m.versions
+                      ? m.versions.map((v, idx) =>
+                          idx === (m.activeVersionIndex ?? 0)
+                            ? { ...v, content: t('hai.error.somethingWrong') }
+                            : v
+                        )
+                      : m.versions,
+                  }
                 : m
             )
           );
@@ -973,17 +1117,22 @@ export function HaiProvider({
         if (error.name === 'AbortError' || error.message === 'TIMEOUT') {
           console.log('HAI.ai: Stream aborted or timed out');
           // If it was a timeout, show the timeout error message
-          if (error.message === 'TIMEOUT' || (abortController.signal.aborted && !activeStreamSessionRef.current)) {
+          if (
+            error.message === 'TIMEOUT' ||
+            (abortController.signal.aborted && !activeStreamSessionRef.current)
+          ) {
             setMessages(prev =>
               prev.map(m =>
                 m.id === assistantId
                   ? {
-                    ...m,
-                    content: t('hai.error.timeout'),
-                    versions: m.versions?.map((v, idx) =>
-                      idx === (m.activeVersionIndex ?? 0) ? { ...v, content: t('hai.error.timeout') } : v
-                    )
-                  }
+                      ...m,
+                      content: t('hai.error.timeout'),
+                      versions: m.versions?.map((v, idx) =>
+                        idx === (m.activeVersionIndex ?? 0)
+                          ? { ...v, content: t('hai.error.timeout') }
+                          : v
+                      ),
+                    }
                   : m
               )
             );
@@ -996,16 +1145,16 @@ export function HaiProvider({
           prev.map(m =>
             m.id === assistantId
               ? {
-                ...m,
-                content: t('hai.error.connectionError'),
-                versions: m.versions
-                  ? m.versions.map((v, idx) =>
-                    idx === (m.activeVersionIndex ?? 0)
-                      ? { ...v, content: t('hai.error.connectionError') }
-                      : v
-                  )
-                  : m.versions,
-              }
+                  ...m,
+                  content: t('hai.error.connectionError'),
+                  versions: m.versions
+                    ? m.versions.map((v, idx) =>
+                        idx === (m.activeVersionIndex ?? 0)
+                          ? { ...v, content: t('hai.error.connectionError') }
+                          : v
+                      )
+                    : m.versions,
+                }
               : m
           )
         );
@@ -1020,12 +1169,23 @@ export function HaiProvider({
         }
       }
     },
-    [currentSessionId, userId, context, refreshSessions, t, attachPendingAction]
+    [
+      currentSessionId,
+      userId,
+      context,
+      refreshSessions,
+      t,
+      attachPendingAction,
+      attachNavigationOffer,
+    ]
   );
 
   const sendMessage = useCallback(
     async (message: string, options?: { voice?: boolean }) => {
       if (!message.trim()) return;
+
+      // The spoken "yes" to "Soll ich sie öffnen?" opens the page, no call
+      if (options?.voice === true && answerSpokenNavigation(message)) return;
 
       // Abort any previous in-flight stream
       if (abortControllerRef.current) {
@@ -1079,7 +1239,7 @@ export function HaiProvider({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-language': language
+            'x-language': language,
           },
           body: JSON.stringify({
             message,
@@ -1105,11 +1265,17 @@ export function HaiProvider({
 
           // Thinking message if it takes more than 3 seconds to get first chunk
           const thinkingTimeoutId = setTimeout(() => {
-            if (!hasReceivedFirstChunk && activeStreamSessionRef.current === streamSessionId) {
+            if (
+              !hasReceivedFirstChunk &&
+              activeStreamSessionRef.current === streamSessionId
+            ) {
               setMessages(prev =>
                 prev.map(m =>
                   m.id === assistantId && m.content === ''
-                    ? { ...m, content: t('hai.loading.thinking') || 'Thinking...' }
+                    ? {
+                        ...m,
+                        content: t('hai.loading.thinking') || 'Thinking...',
+                      }
                     : m
                 )
               );
@@ -1134,7 +1300,14 @@ export function HaiProvider({
               hasReceivedFirstChunk = true;
               clearTimeout(thinkingTimeoutId);
               // Clear 'Thinking...' text if present before first chunk
-              setMessages(prev => prev.map(m => m.id === assistantId && m.content === (t('hai.loading.thinking') || 'Thinking...') ? { ...m, content: '' } : m));
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantId &&
+                  m.content === (t('hai.loading.thinking') || 'Thinking...')
+                    ? { ...m, content: '' }
+                    : m
+                )
+              );
             }
 
             buffer += decoder.decode(value, { stream: true });
@@ -1158,16 +1331,16 @@ export function HaiProvider({
                     prev.map(m =>
                       m.id === assistantId
                         ? {
-                          ...m,
-                          content: fullText,
-                          versions: m.versions
-                            ? m.versions.map((v, idx) =>
-                              idx === (m.activeVersionIndex ?? 0)
-                                ? { ...v, content: fullText }
-                                : v
-                            )
-                            : m.versions,
-                        }
+                            ...m,
+                            content: fullText,
+                            versions: m.versions
+                              ? m.versions.map((v, idx) =>
+                                  idx === (m.activeVersionIndex ?? 0)
+                                    ? { ...v, content: fullText }
+                                    : v
+                                )
+                              : m.versions,
+                          }
                         : m
                     )
                   );
@@ -1175,6 +1348,11 @@ export function HaiProvider({
 
                 if (event.done) {
                   attachPendingAction(assistantId, event.pendingAction);
+                  attachNavigationOffer(
+                    assistantId,
+                    event.navigationOffer,
+                    options?.voice === true
+                  );
                   // Final event — update with citations and sessionId
                   if (event.sessionId && event.sessionId !== currentSessionId) {
                     setCurrentSessionId(event.sessionId);
@@ -1184,16 +1362,16 @@ export function HaiProvider({
                       prev.map(m =>
                         m.id === assistantId
                           ? {
-                            ...m,
-                            citations: event.citations,
-                            versions: m.versions
-                              ? m.versions.map((v, idx) =>
-                                idx === (m.activeVersionIndex ?? 0)
-                                  ? { ...v, citations: event.citations }
-                                  : v
-                              )
-                              : m.versions,
-                          }
+                              ...m,
+                              citations: event.citations,
+                              versions: m.versions
+                                ? m.versions.map((v, idx) =>
+                                    idx === (m.activeVersionIndex ?? 0)
+                                      ? { ...v, citations: event.citations }
+                                      : v
+                                  )
+                                : m.versions,
+                            }
                           : m
                       )
                     );
@@ -1221,6 +1399,11 @@ export function HaiProvider({
         } else if (response.ok) {
           // Fallback: non-streaming response (shouldn't happen but just in case)
           const data = await response.json();
+          attachNavigationOffer(
+            assistantId,
+            data.navigationOffer,
+            options?.voice === true
+          );
 
           if (data.sessionId && data.sessionId !== currentSessionId) {
             setCurrentSessionId(data.sessionId);
@@ -1230,22 +1413,22 @@ export function HaiProvider({
             prev.map(m =>
               m.id === assistantId
                 ? {
-                  ...m,
-                  content: data.response,
-                  citations: data.citations,
-                  pendingAction: toPendingAction(data.pendingAction),
-                  versions: m.versions
-                    ? m.versions.map((v, idx) =>
-                      idx === (m.activeVersionIndex ?? 0)
-                        ? {
-                          ...v,
-                          content: data.response,
-                          citations: data.citations,
-                        }
-                        : v
-                    )
-                    : m.versions,
-                }
+                    ...m,
+                    content: data.response,
+                    citations: data.citations,
+                    pendingAction: toPendingAction(data.pendingAction),
+                    versions: m.versions
+                      ? m.versions.map((v, idx) =>
+                          idx === (m.activeVersionIndex ?? 0)
+                            ? {
+                                ...v,
+                                content: data.response,
+                                citations: data.citations,
+                              }
+                            : v
+                        )
+                      : m.versions,
+                  }
                 : m
             )
           );
@@ -1259,16 +1442,16 @@ export function HaiProvider({
             prev.map(m =>
               m.id === assistantId
                 ? {
-                  ...m,
-                  content: t('hai.error.somethingWrong'),
-                  versions: m.versions
-                    ? m.versions.map((v, idx) =>
-                      idx === (m.activeVersionIndex ?? 0)
-                        ? { ...v, content: t('hai.error.somethingWrong') }
-                        : v
-                    )
-                    : m.versions,
-                }
+                    ...m,
+                    content: t('hai.error.somethingWrong'),
+                    versions: m.versions
+                      ? m.versions.map((v, idx) =>
+                          idx === (m.activeVersionIndex ?? 0)
+                            ? { ...v, content: t('hai.error.somethingWrong') }
+                            : v
+                        )
+                      : m.versions,
+                  }
                 : m
             )
           );
@@ -1278,17 +1461,22 @@ export function HaiProvider({
         // Handle stop/abort or timeout
         if (error.name === 'AbortError' || error.message === 'TIMEOUT') {
           console.log('HAI.ai: Stream aborted or timed out');
-          if (error.message === 'TIMEOUT' || (abortController.signal.aborted && !activeStreamSessionRef.current)) {
+          if (
+            error.message === 'TIMEOUT' ||
+            (abortController.signal.aborted && !activeStreamSessionRef.current)
+          ) {
             setMessages(prev =>
               prev.map(m =>
                 m.id === assistantId
                   ? {
-                    ...m,
-                    content: t('hai.error.timeout'),
-                    versions: m.versions?.map((v, idx) =>
-                      idx === (m.activeVersionIndex ?? 0) ? { ...v, content: t('hai.error.timeout') } : v
-                    )
-                  }
+                      ...m,
+                      content: t('hai.error.timeout'),
+                      versions: m.versions?.map((v, idx) =>
+                        idx === (m.activeVersionIndex ?? 0)
+                          ? { ...v, content: t('hai.error.timeout') }
+                          : v
+                      ),
+                    }
                   : m
               )
             );
@@ -1301,16 +1489,16 @@ export function HaiProvider({
           prev.map(m =>
             m.id === assistantId
               ? {
-                ...m,
-                content: t('hai.error.connectionError'),
-                versions: m.versions
-                  ? m.versions.map((v, idx) =>
-                    idx === (m.activeVersionIndex ?? 0)
-                      ? { ...v, content: t('hai.error.connectionError') }
-                      : v
-                  )
-                  : m.versions,
-              }
+                  ...m,
+                  content: t('hai.error.connectionError'),
+                  versions: m.versions
+                    ? m.versions.map((v, idx) =>
+                        idx === (m.activeVersionIndex ?? 0)
+                          ? { ...v, content: t('hai.error.connectionError') }
+                          : v
+                      )
+                    : m.versions,
+                }
               : m
           )
         );
@@ -1327,7 +1515,16 @@ export function HaiProvider({
         }
       }
     },
-    [userId, currentSessionId, context, refreshSessions, t, attachPendingAction]
+    [
+      userId,
+      currentSessionId,
+      context,
+      refreshSessions,
+      t,
+      attachPendingAction,
+      attachNavigationOffer,
+      answerSpokenNavigation,
+    ]
   );
 
   // ========================================================================
@@ -1373,6 +1570,7 @@ export function HaiProvider({
     regenerateFromEdit,
     confirmPendingAction,
     cancelPendingAction,
+    openNavigation,
     setActiveVersion,
     loadSession,
     newSession,
