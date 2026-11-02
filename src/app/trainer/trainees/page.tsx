@@ -39,6 +39,7 @@ export default function TrainerTraineesPage() {
   const [error, setError] = useState<string | null>(null);
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'deactivated'>('all');
+  const [search, setSearch] = useState('');
 
   const loadTrainees = useCallback(async () => {
     if (!profile || !user) return;
@@ -138,7 +139,7 @@ export default function TrainerTraineesPage() {
   const activeTrainees = trainees.filter(t => t.trainerActivated);
   const deactivatedByAdmin = trainees.filter(t => !t.isActive);
 
-  const filteredTrainees =
+  const byFilter =
     filter === 'pending'
       ? pendingTrainees
       : filter === 'active'
@@ -146,6 +147,25 @@ export default function TrainerTraineesPage() {
         : filter === 'deactivated'
           ? deactivatedByAdmin
           : trainees;
+  // Search by name or email (WMCNL-2997)
+  const needle = search.trim().toLocaleLowerCase();
+  const filteredTrainees = needle
+    ? byFilter.filter(trainee =>
+        `${trainee.full_name ?? ''} ${trainee.email ?? ''}`
+          .toLocaleLowerCase()
+          .includes(needle)
+      )
+    : byFilter;
+  // The empty text names the filter, not "nobody is assigned"
+  const emptyKey = needle
+    ? 'noSearchResults'
+    : filter === 'pending'
+      ? 'noPending'
+      : filter === 'deactivated'
+        ? 'noInactive'
+        : filter === 'active'
+          ? 'noActive'
+          : 'noTrainees';
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
@@ -235,20 +255,31 @@ export default function TrainerTraineesPage() {
         ))}
       </div>
 
+      {/* Search */}
+      <div>
+        <label htmlFor="trainee-search" className="sr-only">
+          {t('trainee.management.searchLabel')}
+        </label>
+        <input
+          id="trainee-search"
+          type="search"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={t('trainee.management.searchPlaceholder')}
+          className="bg-background text-foreground border-accent/30 w-full max-w-md rounded-xl border px-4 py-2 text-sm"
+        />
+      </div>
+
       {/* Trainees Grid */}
       {error && <div className="text-sm text-red-500">{error}</div>}
       {!error && filteredTrainees.length === 0 && (
         <div className="border-accent/30 rounded-3xl border p-12 text-center">
           <Users className="text-muted mx-auto mb-4 h-12 w-12" />
           <h3 className="text-foreground text-lg font-semibold">
-            {filter === 'pending'
-              ? t('trainee.management.noPending')
-              : t('trainee.management.noTrainees')}
+            {t(`trainee.management.${emptyKey}`)}
           </h3>
           <p className="text-muted mt-1 text-sm">
-            {filter === 'pending'
-              ? t('trainee.management.noPendingDesc')
-              : t('trainee.management.noTraineesDesc')}
+            {t(`trainee.management.${emptyKey}Desc`)}
           </p>
         </div>
       )}
@@ -286,12 +317,12 @@ export default function TrainerTraineesPage() {
                     {trainee.email}
                   </p>
                 )}
-                <div className="mt-2 flex min-h-7 flex-nowrap items-center gap-2 overflow-hidden">
+                <div className="mt-2 flex min-h-7 flex-wrap items-center gap-2">
                   <span className="bg-accent/20 text-accent rounded-full px-3 py-0.5 text-xs font-medium">
                     {t('roles.trainee')}
                   </span>
                   <span
-                    className="min-w-0 truncate rounded-full border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-500"
+                    className="rounded-full border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-500"
                     title={getDurationLabel(trainee)}
                   >
                     {getDurationLabel(trainee)}
