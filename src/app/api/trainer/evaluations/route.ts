@@ -10,6 +10,10 @@ import {
     requireTraineeScopeCondition,
     traineeIdInScope,
 } from '@/lib/auth/trainee-scope-conditions';
+import {
+    evaluationReportCatalogCondition,
+    requireReportCatalogFilter,
+} from '@/lib/auth/activity-report-access';
 
 // GET: Fetch pending evaluations for trainer review
 export async function GET(request: NextRequest) {
@@ -25,15 +29,22 @@ export async function GET(request: NextRequest) {
 
         // Only evaluations of trainees of the own organization (the super admin
         // sees every one) and, with a chosen occupation (x-catalog), of that
-        // occupation
-        const traineeScope = await requireTraineeScopeCondition(session, request);
+        // occupation: the one of the activity report the evaluation belongs to,
+        // not the one of the enrollments of the trainee
+        const traineeScope = await requireTraineeScopeCondition(session, request, {
+            byEnrollment: false,
+        });
         if (isErrorResponse(traineeScope)) return traineeScope;
+        const reportCatalog = await requireReportCatalogFilter(session, request);
+        if (isErrorResponse(reportCatalog)) return reportCatalog;
+        const catalogCondition = evaluationReportCatalogCondition(reportCatalog.condition);
 
         // Build query conditions
         const conditions = [
             eq(weeklyEvaluations.trainerId, trainerId as any),
             traineeScope.condition,
         ];
+        if (catalogCondition) conditions.push(catalogCondition);
 
         if (status) {
             conditions.push(eq(weeklyEvaluations.status, status as any));
@@ -63,7 +74,8 @@ export async function GET(request: NextRequest) {
             .where(and(
                 eq(weeklyEvaluations.trainerId, trainerId as any),
                 eq(weeklyEvaluations.status, 'SUBMITTED'),
-                traineeIdInScope(weeklyEvaluations.traineeId, traineeScope.condition)
+                traineeIdInScope(weeklyEvaluations.traineeId, traineeScope.condition),
+                catalogCondition
             ));
 
         return NextResponse.json({

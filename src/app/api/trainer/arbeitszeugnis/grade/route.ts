@@ -1,4 +1,5 @@
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { ensureReportInChosenCatalog } from '@/lib/auth/activity-report-access';
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
             .select({
                 id: activityReports.id,
                 traineeId: activityReports.traineeId,
+                trainingCatalogId: activityReports.trainingCatalogId,
                 status: activityReports.status,
             })
             .from(activityReports)
@@ -45,8 +47,13 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Activity report not found' }, { status: 404 });
         }
 
-        const access = await requireTraineeAccess(session, String(report[0].traineeId), request);
+        // Organization scope of the trainee; the occupation is the one of the
+        // report (checked next), not the one of the enrollments
+        const access = await requireTraineeAccess(session, String(report[0].traineeId), {});
         if (isErrorResponse(access)) return access;
+        const outOfCatalog = await ensureReportInChosenCatalog(session, request, report[0], () =>
+            NextResponse.json({ error: 'Activity report not found' }, { status: 404 }));
+        if (outOfCatalog) return outOfCatalog;
 
         // Update each entry with grade
         const updatedEntries: string[] = [];
@@ -117,15 +124,18 @@ export async function GET(request: NextRequest) {
 
         // The report must belong to a trainee the caller is responsible for
         const [report] = await db
-            .select({ traineeId: activityReports.traineeId, status: activityReports.status })
+            .select({ traineeId: activityReports.traineeId, trainingCatalogId: activityReports.trainingCatalogId, status: activityReports.status })
             .from(activityReports)
             .where(eq(activityReports.id, reportId))
             .limit(1);
         if (!report || report.status === 'DRAFT') {
             return NextResponse.json({ error: 'Activity report not found' }, { status: 404 });
         }
-        const access = await requireTraineeAccess(session, String(report.traineeId), request);
+        const access = await requireTraineeAccess(session, String(report.traineeId), {});
         if (isErrorResponse(access)) return access;
+        const outOfCatalog = await ensureReportInChosenCatalog(session, request, report, () =>
+            NextResponse.json({ error: 'Activity report not found' }, { status: 404 }));
+        if (outOfCatalog) return outOfCatalog;
 
         const entries = await db
             .select({

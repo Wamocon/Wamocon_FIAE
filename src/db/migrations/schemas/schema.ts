@@ -1420,49 +1420,70 @@ export const lernfeldMappings = pgTable('lernfeld_mappings', {
 
 // === ACTIVITY REPORTS (IHK Ausbildungsnachweis) ===
 // Weekly training documentation with approval workflow
-export const activityReports = pgTable('activity_reports', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  traineeId: uuid('trainee_id')
-    .notNull()
-    .references(() => profiles.id, { onDelete: 'cascade' }),
-  organizationId: uuid('organization_id')
-    .notNull()
-    .references(() => organizations.id, { onDelete: 'cascade' }),
+export const activityReports = pgTable(
+  'activity_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    traineeId: uuid('trainee_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    // Occupation (training catalog) the report was written for. A trainee in
+    // several trainings has one report per week and occupation. The default
+    // keeps writers that do not know the column on FIAE.
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+      .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
 
-  ausbildungsjahr: integer('ausbildungsjahr').notNull(),
-  weekNumber: integer('week_number').notNull(), // ISO week 1-52
-  year: integer('year').notNull(), // Calendar year
-  periodStart: timestamp('period_start').notNull(),
-  periodEnd: timestamp('period_end').notNull(),
+    ausbildungsjahr: integer('ausbildungsjahr').notNull(),
+    weekNumber: integer('week_number').notNull(), // ISO week 1-52
+    year: integer('year').notNull(), // Calendar year
+    periodStart: timestamp('period_start').notNull(),
+    periodEnd: timestamp('period_end').notNull(),
 
-  // Department info (from IHK template)
-  abteilung: text('abteilung'), // e.g., "FAE"
+    // Department info (from IHK template)
+    abteilung: text('abteilung'), // e.g., "FAE"
 
-  // Workflow status
-  status: activityReportStatus('status').default('DRAFT'),
-  submittedAt: timestamp('submitted_at'),
+    // Workflow status
+    status: activityReportStatus('status').default('DRAFT'),
+    submittedAt: timestamp('submitted_at'),
 
-  // Trainer review
-  reviewerId: uuid('reviewer_id').references(() => profiles.id),
-  reviewedAt: timestamp('reviewed_at'),
-  reviewerFeedback: text('reviewer_feedback'),
+    // Trainer review
+    reviewerId: uuid('reviewer_id').references(() => profiles.id),
+    reviewedAt: timestamp('reviewed_at'),
+    reviewerFeedback: text('reviewer_feedback'),
 
-  // Digital signatures (timestamp = signed)
-  traineeSignedAt: timestamp('trainee_signed_at'),
-  trainerSignedAt: timestamp('trainer_signed_at'),
+    // Digital signatures (timestamp = signed)
+    traineeSignedAt: timestamp('trainee_signed_at'),
+    trainerSignedAt: timestamp('trainer_signed_at'),
 
-  // Trainee self-rating for competency areas (stored as JSON: {FACHKOMPETENZ: '2', METHODENKOMPETENZ: '3', PERSONALKOMPETENZ: '1'})
-  skillSelfRatings: jsonb('skill_self_ratings').$type<Record<string, string>>(),
+    // Trainee self-rating for competency areas (stored as JSON: {FACHKOMPETENZ: '2', METHODENKOMPETENZ: '3', PERSONALKOMPETENZ: '1'})
+    skillSelfRatings:
+      jsonb('skill_self_ratings').$type<Record<string, string>>(),
 
-  // Generated PDF storage
-  pdfUrl: text('pdf_url'),
-  pdfGeneratedAt: timestamp('pdf_generated_at'),
+    // Generated PDF storage
+    pdfUrl: text('pdf_url'),
+    pdfGeneratedAt: timestamp('pdf_generated_at'),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    traineeCatalogWeekIdx: index(
+      'activity_reports_trainee_catalog_week_idx'
+    ).on(
+      table.traineeId,
+      table.trainingCatalogId,
+      table.year,
+      table.weekNumber
+    ),
+  })
+);
 
 // === ACTIVITY REPORT ENTRIES ===
 // Individual sections within a weekly report (matches IHK template structure)

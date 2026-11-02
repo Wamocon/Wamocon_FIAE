@@ -443,7 +443,8 @@ export async function seedTrainee(
     enabler += 1;
   }
 
-  // weekly activity reports: approved, handed in, draft
+  // weekly activity reports: approved, handed in, draft. A report belongs to an
+  // occupation: the one of the first enrollment of the trainee, FIAE without one
   let reports = 0;
   for (const [week, start, status] of REPORT_WEEKS) {
     const exists = await db.unsafe(
@@ -454,9 +455,12 @@ export async function seedTrainee(
     const [report] = await db.unsafe(
       `insert into ${SCHEMA}.activity_reports
          (trainee_id, ausbildungsjahr, week_number, year, period_start, period_end, abteilung, status,
-          submitted_at, reviewer_id, reviewed_at, reviewer_feedback, organization_id)
+          submitted_at, reviewer_id, reviewed_at, reviewer_feedback, organization_id, training_catalog_id)
        values ($1, 1, $2, 2026, $3::timestamp, $3::timestamp + interval '6 days 23 hours 59 minutes 59 seconds',
-               'IT-Abteilung', $4::${SCHEMA}.activity_report_status, $5, $6, $7, $8, $9)
+               'IT-Abteilung', $4::${SCHEMA}.activity_report_status, $5, $6, $7, $8, $9,
+               coalesce((select en.training_catalog_id from ${SCHEMA}.trainee_enrollments en
+                          where en.trainee_id = $1 order by en.created_at limit 1),
+                        '00000000-0000-4000-8000-000000000001'::uuid))
        returning id`,
       [
         trainee.id,

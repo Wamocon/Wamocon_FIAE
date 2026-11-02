@@ -30,13 +30,15 @@ import {
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { getUserOrgIdStrict } from '@/lib/auth-helpers';
 import { isInOrgScope, scopeOrg, type SessionUser } from '@/lib/auth/session';
-import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 import { getEnablerProgression } from '@/lib/catalog/progression-db';
 import type { CatalogRequestLike } from '@/lib/catalog/scope';
 import {
     ensureContentAllowed,
     fail,
     notFound,
+    requireActionCatalog,
+    requireReportInChosenCatalog,
     requireResponsibleTrainer,
     unavailable,
 } from './actionGuards';
@@ -389,10 +391,10 @@ export async function executeAction(
         // Route to specific action handler
         switch (actionType) {
             case 'create_activity_report':
-                return await createActivityReport(actor.id, params);
+                return await createActivityReport(actor, params, request);
 
             case 'submit_activity_report':
-                return await submitActivityReport(actor.id, params);
+                return await submitActivityReport(actor, params, request);
 
             case 'complete_enabler':
                 return await completeEnabler(actor, params, request);
@@ -424,25 +426,34 @@ export async function executeAction(
 // ============================================================================
 
 /**
- * Create a new activity report (Tätigkeitsnachweis)
+ * Create a new activity report (Tätigkeitsnachweis). The report belongs to the
+ * occupation the person works in (x-catalog, otherwise the default): a trainee
+ * in two trainings has one report per week and occupation.
  */
 async function createActivityReport(
-    userId: string,
-    parameters: Record<string, unknown>
+    actor: SessionUser,
+    parameters: Record<string, unknown>,
+    request?: CatalogRequestLike | null
 ): Promise<ActionResult> {
     try {
+        const userId = actor.id;
+        const occupation = await requireActionCatalog(actor, request);
+        if (!('catalogId' in occupation)) return occupation;
+        const catalogId = occupation.catalogId;
+
         // Determine week and year
         const now = new Date();
         const weekNumber = (parameters.weekNumber as number) || getWeekNumber(now);
         const year = (parameters.year as number) || now.getFullYear();
 
-        // Check if report for this week already exists
+        // Check if report for this week already exists (in this occupation)
         const existing = await db
             .select({ id: activityReports.id })
             .from(activityReports)
             .where(
                 and(
                     eq(activityReports.traineeId, userId),
+                    eq(activityReports.trainingCatalogId, catalogId),
                     eq(activityReports.weekNumber, weekNumber),
                     eq(activityReports.year, year)
                 )
@@ -471,9 +482,9 @@ async function createActivityReport(
             .where(eq(profiles.id, userId))
             .limit(1);
 
-        // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
+        // Phase one of the occupation of the report (KfBM 15 months, FIAE 18)
         const phasePlan = profile?.startOfTrainingDate
-            ? await loadPhasePlanForUser(userId, profile.ausbildungDurationYears)
+            ? await loadPhasePlan(catalogId, profile.ausbildungDurationYears)
             : null;
         const ausbildungsjahr = profile?.startOfTrainingDate
             ? getTrainingPhase(
@@ -492,6 +503,7 @@ async function createActivityReport(
             .insert(activityReports)
             .values({
                 traineeId: userId,
+                trainingCatalogId: catalogId,
                 weekNumber,
                 year,
                 ausbildungsjahr,
@@ -518,15 +530,28 @@ async function createActivityReport(
 }
 
 /**
- * Submit an activity report for review
+ * Submit an activity report for review. A report named by id is submitted
+ * whatever its occupation (it is the own report of the trainee). A report named
+ * by week, or the most recent draft, is looked up in the occupation the person
+ * works in (x-catalog, otherwise the default), so a draft of the other training
+ * is not submitted by mistake.
  */
 async function submitActivityReport(
-    userId: string,
-    parameters: Record<string, unknown>
+    actor: SessionUser,
+    parameters: Record<string, unknown>,
+    request?: CatalogRequestLike | null
 ): Promise<ActionResult> {
     try {
+        const userId = actor.id;
         const reportId = parameters.reportId as string | undefined;
         const weekNumber = parameters.weekNumber as number | undefined;
+
+        let catalogId = '';
+        if (!reportId) {
+            const occupation = await requireActionCatalog(actor, request);
+            if (!('catalogId' in occupation)) return occupation;
+            catalogId = occupation.catalogId;
+        }
 
         let reportToSubmit;
 
@@ -551,6 +576,7 @@ async function submitActivityReport(
                 .where(
                     and(
                         eq(activityReports.traineeId, userId),
+                        eq(activityReports.trainingCatalogId, catalogId),
                         eq(activityReports.weekNumber, weekNumber),
                         eq(activityReports.year, year)
                     )
@@ -564,6 +590,7 @@ async function submitActivityReport(
                 .where(
                     and(
                         eq(activityReports.traineeId, userId),
+                        eq(activityReports.trainingCatalogId, catalogId),
                         eq(activityReports.status, 'DRAFT')
                     )
                 )
@@ -916,6 +943,7 @@ async function approveReport(
                 id: activityReports.id,
                 status: activityReports.status,
                 traineeId: activityReports.traineeId,
+                trainingCatalogId: activityReports.trainingCatalogId,
                 assignedTrainerId: profiles.assignedTrainerId,
             })
             .from(activityReports)
@@ -927,13 +955,20 @@ async function approveReport(
 
         const report = reportRows[0];
 
-        // Security: organization and occupation scope of the trainee
+        // Security: organization scope of the trainee. The occupation is the one
+        // of the report (checked next), not the one of the enrollments.
         const notResponsible = await requireResponsibleTrainer(
             actor,
-            request,
+            null,
             String(report.traineeId)
         );
         if (notResponsible) return notResponsible;
+        const outOfCatalog = await requireReportInChosenCatalog(
+            actor,
+            request,
+            report
+        );
+        if (outOfCatalog) return outOfCatalog;
 
         // Security: verify trainer is assigned to this trainee
         if (report.assignedTrainerId !== trainerId) return notFound();

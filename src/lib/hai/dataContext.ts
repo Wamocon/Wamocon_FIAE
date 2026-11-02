@@ -33,6 +33,7 @@ import {
     schoolExamResults,
     activityReports,
     notifications,
+    trainingCatalogs,
 } from '@/db/migrations/schemas/schema';
 import { toHaiRole } from '@/lib/auth-helpers';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
@@ -120,6 +121,21 @@ export interface CalendarInfo {
 }
 
 export interface ReportStatus {
+    draft: number;
+    submitted: number;
+    approved: number;
+    rejected: number;
+    currentWeekExists: boolean;
+    /**
+     * Only set for a trainee in several occupations: a report belongs to one
+     * occupation, so the numbers above are those of the default occupation and
+     * this list gives every occupation its own numbers.
+     */
+    occupations?: ReportStatusOccupation[];
+}
+
+export interface ReportStatusOccupation {
+    code: string;
     draft: number;
     submitted: number;
     approved: number;
@@ -588,9 +604,17 @@ export async function fetchCalendar(userId: string): Promise<CalendarInfo> {
 }
 
 /**
- * Fetch activity report (Taetigkeitsnachweis) status.
+ * Fetch activity report (Taetigkeitsnachweis) status. A report belongs to one
+ * occupation, so the numbers are counted per occupation: with `catalogId` for
+ * that occupation only, without it for every occupation of the trainee (a
+ * trainee in one occupation gets the plain numbers, one in several gets the
+ * default occupation plus a list with each occupation, see ReportStatus).
+ * Fail closed: without a catalog scope nothing is counted.
  */
-export async function fetchReportStatus(userId: string): Promise<ReportStatus> {
+export async function fetchReportStatus(
+    userId: string,
+    catalogId?: string | null
+): Promise<ReportStatus> {
     const defaultResult: ReportStatus = {
         draft: 0,
         submitted: 0,
@@ -600,21 +624,38 @@ export async function fetchReportStatus(userId: string): Promise<ReportStatus> {
     };
 
     try {
-        // Count reports by status
-        const statusCounts = await db.execute(sql`
-            SELECT status, COUNT(*) as cnt
-            FROM activity_reports
-            WHERE trainee_id = ${userId}
-            GROUP BY status
-        `);
+        const catalogScope = catalogId ? null : await getCatalogScopeForUserId(userId);
+        const catalogIds = catalogId ? [catalogId] : (catalogScope?.allowedCatalogIds ?? []);
+        if (catalogIds.length === 0) return defaultResult;
+        const defaultCatalogId = catalogId ?? catalogScope!.activeCatalogId;
 
-        for (const row of statusCounts as any[]) {
+        const perCatalog = new Map<string, Omit<ReportStatusOccupation, 'code'>>(
+            catalogIds.map(id => [id, { draft: 0, submitted: 0, approved: 0, rejected: 0, currentWeekExists: false }])
+        );
+
+        // Count reports by occupation and status
+        const statusCounts = await db
+            .select({
+                catalogId: activityReports.trainingCatalogId,
+                status: activityReports.status,
+                cnt: count(),
+            })
+            .from(activityReports)
+            .where(and(
+                eq(activityReports.traineeId, userId),
+                inArray(activityReports.trainingCatalogId, catalogIds),
+            ))
+            .groupBy(activityReports.trainingCatalogId, activityReports.status);
+
+        for (const row of statusCounts) {
+            const entry = perCatalog.get(String(row.catalogId));
+            if (!entry) continue;
             const s = row.status as string;
             const c = Number(row.cnt);
-            if (s === 'DRAFT') defaultResult.draft = c;
-            else if (s === 'SUBMITTED') defaultResult.submitted = c;
-            else if (s === 'APPROVED') defaultResult.approved = c;
-            else if (s === 'REJECTED') defaultResult.rejected = c;
+            if (s === 'DRAFT') entry.draft = c;
+            else if (s === 'SUBMITTED') entry.submitted = c;
+            else if (s === 'APPROVED') entry.approved = c;
+            else if (s === 'REJECTED') entry.rejected = c;
         }
 
         // Check if current week report exists
@@ -626,16 +667,33 @@ export async function fetchReportStatus(userId: string): Promise<ReportStatus> {
         const currentWeek = Math.ceil((dayOfYear + janFirst.getDay()) / 7);
 
         const weekCheck = await db
-            .select({ id: activityReports.id })
+            .selectDistinct({ catalogId: activityReports.trainingCatalogId })
             .from(activityReports)
             .where(and(
                 eq(activityReports.traineeId, userId),
+                inArray(activityReports.trainingCatalogId, catalogIds),
                 eq(activityReports.weekNumber, currentWeek),
                 eq(activityReports.year, currentYear),
-            ))
-            .limit(1);
+            ));
+        for (const row of weekCheck) {
+            const entry = perCatalog.get(String(row.catalogId));
+            if (entry) entry.currentWeekExists = true;
+        }
 
-        defaultResult.currentWeekExists = weekCheck.length > 0;
+        const own = perCatalog.get(defaultCatalogId) ?? perCatalog.get(catalogIds[0])!;
+        Object.assign(defaultResult, own);
+
+        if (catalogIds.length > 1) {
+            const codeRows = await db
+                .select({ id: trainingCatalogs.id, code: trainingCatalogs.code })
+                .from(trainingCatalogs)
+                .where(inArray(trainingCatalogs.id, catalogIds));
+            const codes = new Map(codeRows.map(r => [String(r.id), String(r.code)]));
+            defaultResult.occupations = catalogIds.map(id => ({
+                code: codes.get(id) ?? id,
+                ...perCatalog.get(id)!,
+            }));
+        }
 
         return defaultResult;
     } catch (error) {
@@ -1098,26 +1156,37 @@ async function fetchTraineeDetailForTrainer(
             }
         }
 
-        // 4. Report status
+        // 4. Report status, per occupation (a report belongs to one occupation)
         const reports = await db.execute(sql`
-            SELECT status, COUNT(*) as cnt
-            FROM activity_reports
-            WHERE trainee_id = ${trainee.id}
-            GROUP BY status
+            SELECT tc.code AS catalog_code, ar.status, COUNT(*) as cnt
+            FROM activity_reports ar
+            JOIN training_catalogs tc ON tc.id = ar.training_catalog_id
+            WHERE ar.trainee_id = ${trainee.id}
+            GROUP BY tc.code, ar.status
+            ORDER BY tc.code
         `);
 
         if ((reports as any[]).length > 0) {
-            const reportMap: Record<string, number> = {};
+            const byCatalog = new Map<string, Record<string, number>>();
             for (const r of reports as any[]) {
+                const code = String(r.catalog_code);
+                const reportMap = byCatalog.get(code) ?? {};
                 reportMap[r.status] = Number(r.cnt);
+                byCatalog.set(code, reportMap);
             }
             const reportLabels: Record<string, string> = {
                 DRAFT: 'Entwurf', SUBMITTED: 'Eingereicht', APPROVED: 'Genehmigt', REVISION_NEEDED: 'Korrektur noetig',
             };
-            const reportParts = Object.entries(reportMap)
-                .map(([status, cnt]) => `${reportLabels[status] || status}: ${cnt}`)
-                .join(', ');
-            parts.push(`**Nachweise:** ${reportParts}`);
+            for (const [code, reportMap] of byCatalog) {
+                const reportParts = Object.entries(reportMap)
+                    .map(([status, cnt]) => `${reportLabels[status] || status}: ${cnt}`)
+                    .join(', ');
+                parts.push(
+                    byCatalog.size > 1
+                        ? `**Nachweise ${code}:** ${reportParts}`
+                        : `**Nachweise:** ${reportParts}`
+                );
+            }
         }
     } catch (error) {
         console.error('HAI.ai DataContext: Error fetching trainee detail:', error);
@@ -1226,6 +1295,23 @@ function formatCalendar(cal: CalendarInfo): string {
 }
 
 function formatReports(reports: ReportStatus): string {
+    // A trainee in several occupations: every occupation has its own reports
+    if (reports.occupations && reports.occupations.length > 1) {
+        const blocks = reports.occupations.map(o => {
+            const sum = o.draft + o.submitted + o.approved + o.rejected;
+            return [
+                `**Taetigkeitsnachweise ${o.code} gesamt:** ${sum}`,
+                `- Entwurf: ${o.draft}`,
+                `- Eingereicht: ${o.submitted}`,
+                `- Genehmigt: ${o.approved}`,
+                `- Abgelehnt: ${o.rejected}`,
+                o.currentWeekExists
+                    ? `**Aktuelle Woche (${o.code}):** Nachweis vorhanden.`
+                    : `**Hinweis:** Fuer die aktuelle Woche existiert in ${o.code} noch kein Nachweis!`,
+            ].join('\n');
+        });
+        return blocks.join('\n');
+    }
     const total = reports.draft + reports.submitted + reports.approved + reports.rejected;
     const lines: string[] = [
         `**Taetigkeitsnachweise gesamt:** ${total}`,

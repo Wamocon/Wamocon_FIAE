@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { runProactiveChecks } from '@/lib/hai/proactive';
 import { requireProPlan } from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { requireCatalogScope } from '@/lib/catalog/scope';
 
 // ============================================================================
 // ROUTE HANDLERS
@@ -33,8 +34,15 @@ export async function GET(req: NextRequest) {
             );
         }
 
+        // The occupation the person works in (x-catalog): a report belongs to
+        // one occupation, so the report reminders follow it. A scope that cannot
+        // be read leaves it open, the checks then use the default occupation.
+        const catalogScope = await requireCatalogScope(me, req);
+        const catalogId =
+            catalogScope instanceof Response ? null : catalogScope.activeCatalogId;
+
         // Run proactive checks
-        const insights = await runProactiveChecks(userId);
+        const insights = await runProactiveChecks(userId, catalogId);
 
         return NextResponse.json({
             success: true,

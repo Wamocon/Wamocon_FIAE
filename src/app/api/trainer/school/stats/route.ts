@@ -7,6 +7,7 @@ import {
     requireTraineeScopeCondition,
     traineeIdInScope,
 } from '@/lib/auth/trainee-scope-conditions';
+import { requireReportCatalogFilter } from '@/lib/auth/activity-report-access';
 
 // GET /api/trainer/school/stats?trainerId=...
 export async function GET(req: NextRequest) {
@@ -22,10 +23,18 @@ export async function GET(req: NextRequest) {
         if (isErrorResponse(traineeScope)) return traineeScope;
 
         // Count pending activity reports (trainee-scoped)
+        // (the reports of the chosen occupation, by the occupation of the report)
+        const reportScope = await requireTraineeScopeCondition(session, req, {
+            byEnrollment: false,
+        });
+        if (isErrorResponse(reportScope)) return reportScope;
+        const reportCatalog = await requireReportCatalogFilter(session, req);
+        if (isErrorResponse(reportCatalog)) return reportCatalog;
         const reportConditions: any[] = [
             eq(activityReports.status, 'SUBMITTED'),
-            traineeIdInScope(activityReports.traineeId, traineeScope.condition),
+            traineeIdInScope(activityReports.traineeId, reportScope.condition),
         ];
+        if (reportCatalog.condition) reportConditions.push(reportCatalog.condition);
         const pendingReportsResult = await db
             .select({ count: sql<number>`count(*)::int` })
             .from(activityReports)

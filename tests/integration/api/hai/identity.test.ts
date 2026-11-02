@@ -17,6 +17,7 @@ import {
 
 const ME = 'me-1';
 const VICTIM = 'victim-9';
+const FIAE = '00000000-0000-4000-8000-000000000001';
 const URL_BASE = 'http://localhost/api/hai';
 
 type Rows = Record<string, any[]>;
@@ -290,12 +291,25 @@ describe('HAI chat route: the person is the session', () => {
 describe('HAI insights route: the person is the session', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('computes the insights of the session user', async () => {
-    const { mod, runProactiveChecks, requireProPlan } = await load('insights');
+  it('computes the insights of the session user, in the occupation of the session', async () => {
+    const { mod, runProactiveChecks, requireProPlan } = await load('insights', {
+      tables: {
+        trainingCatalogs: [{ id: FIAE, code: 'FIAE', isActive: true }],
+        organizationCatalogs: [],
+        traineeEnrollments: [],
+      },
+    });
     const res = await mod.GET(call('GET', `insights?userId=${VICTIM}`));
     expect(res.status).toBe(200);
-    expect(runProactiveChecks.mock.calls).toEqual([[ME]]);
+    expect(runProactiveChecks.mock.calls).toEqual([[ME, FIAE]]);
     expect(requireProPlan.mock.calls).toEqual([[ME]]);
+  });
+
+  it('leaves the occupation open when the scope cannot be read', async () => {
+    const { mod, runProactiveChecks } = await load('insights');
+    const res = await mod.GET(call('GET', `insights?userId=${VICTIM}`));
+    expect(res.status).toBe(200);
+    expect(runProactiveChecks.mock.calls).toEqual([[ME, null]]);
   });
 
   it('answers 403 without the PRO plan', async () => {

@@ -86,7 +86,7 @@ const STATUS_CONFIG = {
 
 export function ActivityReportsList() {
   const { profile } = useAuth();
-  const { phaseOneMonthsFor } = useRequestCatalog(profile?.id);
+  const { catalog, phaseOneMonthsFor } = useRequestCatalog(profile?.id);
   const { t } = useLanguage();
   const searchParams = useSearchParams();
 
@@ -116,10 +116,12 @@ export function ActivityReportsList() {
       .replace('{end}', String(range.endMonth));
   };
 
+  // A report belongs to one occupation: a switch of the occupation tab loads
+  // the list again (the server answers for the chosen occupation)
   useEffect(() => {
     if (!profile?.id) return;
     loadReports();
-  }, [profile?.id, filterStatus]);
+  }, [profile?.id, filterStatus, catalog]);
 
   const loadReports = async () => {
     if (!profile?.id) return;

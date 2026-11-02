@@ -41,10 +41,14 @@ const allFiles = fs
   .sort();
 
 describe('hai_settings migration: place in the series', () => {
-  it('has a 14 digit version and sorts behind every other migration, the follow-up last', () => {
+  it('has a 14 digit version and sorts behind the older migrations, the follow-up right after it', () => {
     expect(FILE).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
     expect(allFiles).toContain(FILE);
-    expect(allFiles.slice(-2)).toEqual([FILE, FOLLOW_UP]);
+    expect(allFiles.indexOf(FILE)).toBeGreaterThan(0);
+    expect(allFiles.indexOf(FOLLOW_UP)).toBe(allFiles.indexOf(FILE) + 1);
+    expect(
+      allFiles.slice(0, allFiles.indexOf(FILE)).every(name => name < FILE)
+    ).toBe(true);
   });
 });
 
