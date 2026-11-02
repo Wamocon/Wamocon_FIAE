@@ -93,9 +93,11 @@ Browser: Chrome oder Edge am Rechner, Chrome auf Android, Safari am iPhone. Mikr
 
 ## G. Quiz-Modus
 
-Die HAI fragt Frage für Frage ab, ohne Wertung (Übungsmodus, Abrufübung). Die Fragen kommen aus den bestehenden Quizzen der Enabler, nicht vom Modell. Beschreibung: `docs/hai-quiz-modus.md`. Voraussetzung: ein Azubi mit mindestens einem freigeschalteten Enabler mit Quiz, bei der Reihenfolge der Arbeit zusätzlich ein gesperrter Enabler mit Quiz.
+Die HAI fragt Frage für Frage ab, ohne Wertung (Übungsmodus, Abrufübung). Die Fragen kommen aus den bestehenden Quizzen der Enabler, nicht vom Modell. Die richtige Antwort und die Erklärung erscheinen erst, wenn der Azubi das Quiz zu der Frage bestanden hat (Beschluss vom 02.11.2026), davor nur "Richtig!" oder "Leider falsch.". Beschreibung: `docs/hai-quiz-modus.md`. Voraussetzung: ein Azubi mit mindestens einem freigeschalteten Enabler mit Quiz, das er noch nicht bestanden hat (G6, G21 bis G23), und ein Enabler mit bereits bestandenem Quiz (G20), bei der Reihenfolge der Arbeit zusätzlich ein gesperrter Enabler mit Quiz.
 
 **Hinweis zu G4:** In Chrome die Entwicklerwerkzeuge öffnen (F12, Reiter Netzwerk), den Aufruf `next` unter `/api/hai/quiz-mode` anklicken und die Antwort ansehen. Dort darf kein Feld mit Lösung oder Erklärung stehen.
+
+**Hinweis zu G21 bis G23:** Gleiche Ansicht, diesmal den Aufruf `answer` anklicken. Vor dem bestandenen Quiz hat die Antwort genau die Felder `solutionWithheld` (true), `correct`, `selectedOptionIds`, `multiple`, `correctCount` und `enablerId`. Felder wie `correctOptionIds` oder `explanation` dürfen nicht vorkommen. Für G23 den Aufruf in den Entwicklerwerkzeugen mit "Wiederholen" oder "Als fetch kopieren" erneut senden.
 
 | Nr | Als | Frage oder Aktion | Erwartung | P |
 |---|---|---|---|---|
@@ -104,7 +106,7 @@ Die HAI fragt Frage für Frage ab, ohne Wertung (Übungsmodus, Abrufübung). Die
 | G3 | Azubi | Chat im Enabler öffnen, "Quiz mich zu diesem Enabler" schreiben (oder Knopf) | Fragen nur aus diesem Enabler, der Kopf der Karte nennt ihn | |
 | G4 | Azubi | Frage ansehen, vor der Antwort die Antwort des Servers prüfen (siehe Hinweis) | keine Felder wie isCorrect, correct, explanation, correctOptionIds, keine Lösung im Text | P |
 | G5 | Azubi | bei einer offenen Quizfrage in das Chatfeld schreiben "Welche Antwort ist richtig?" | keine richtige Antwort vor dem Versuch, auch nicht umschrieben | P |
-| G6 | Azubi | Antwort wählen, "Antwort prüfen" | richtig oder falsch, die richtige Antwort ist markiert (Farbe, Haken und Text), Erklärung erst jetzt | |
+| G6 | Azubi, Quiz des Enablers noch nicht bestanden | Antwort wählen, "Antwort prüfen" | nur "Richtig!" oder "Leider falsch.", keine richtige Antwort markiert, keine Erklärung. Darunter der Hinweis, dass die Lösung nach dem bestandenen Quiz sichtbar wird, mit Link, der die Seite des Enablers öffnet | P |
 | G7 | Azubi | eine Frage mit mehreren richtigen Antworten (falls im Bestand vorhanden) | Hinweis "Mehrere Antworten sind richtig", nur die vollständige Auswahl zählt als richtig | |
 | G8 | Azubi | nur Tastatur: Zahl oder Buchstabe wählt, Enter prüft, Enter geht zur nächsten Frage | alles ohne Maus bedienbar, Fokus bleibt sinnvoll (nach der Prüfung auf "Nächste Frage") | |
 | G9 | Azubi | mehrere Fragen hintereinander, bis alle durch sind | keine Frage kommt in derselben Sitzung zweimal, am Ende "Du hast alle Fragen dieser Auswahl durch" | |
@@ -113,11 +115,18 @@ Die HAI fragt Frage für Frage ab, ohne Wertung (Übungsmodus, Abrufübung). Die
 | G12 | FIAE-Azubi | "Quiz mich zu Reisekosten" und "Frag mich zu KfBM Rechnungen ab" | keine KfBM-Fragen, Ablehnung oder "keine Quizfragen", nie Fragen des anderen Berufs | P |
 | G13 | KfBM-Azubi | Quiz-Modus gemischt, mehrere Fragen | nur Fragen des Berufs KfBM, keine FIAE-Fragen | P |
 | G14 | Azubi mit gesperrtem Enabler | Chat im gesperrten Enabler öffnen und Quiz starten, außerdem "Quiz mich zu" einem Thema, das nur im gesperrten Enabler steht | Meldung "Dieser Enabler ist noch gesperrt" bzw. "keine Quizfragen", keine einzige Frage des gesperrten Enablers | P |
-| G15 | Trainer | Knopf "Quiz-Modus" | Fragen aus den Berufen seiner Organisation (auch aus Enablern, die ein Azubi noch nicht öffnen darf), in der Zusammenfassung keine Links | |
+| G15 | Trainer | Knopf "Quiz-Modus", Frage beantworten | Fragen aus den Berufen seiner Organisation (auch aus Enablern, die ein Azubi noch nicht öffnen darf), nach der Antwort immer Lösung und Erklärung (ohne bestandenes Quiz), in der Zusammenfassung keine Links | |
 | G16 | Trainer mit FIAE und KfBM | Quiz gemischt, mehrere Runden | Fragen aus beiden Berufen, ein Azubi mit nur einem Beruf bekommt weiter nur seinen | |
 | G17 | Azubi | Knopf "Frage vorlesen" an der Karte (Chrome oder Edge) | die Frage wird mit den Buchstaben A, B, C vorgelesen, ohne Lösung. Antworten per Sprache gibt es noch nicht (nächste Stufe), Klick oder Taste genügt | |
 | G18 | Azubi | Karte im Handy-Browser | bedienbar, Text umbricht, Knöpfe sind groß genug und erreichbar | |
 | G19 | Azubi | Bedienung mit Screenreader oder nur Tab | Fokus liegt auf der Karte, Antwortknöpfe haben Namen, die Rückmeldung wird angesagt | |
+| G20 | Azubi | Quiz eines Enablers im echten Quiz bestehen (mindestens 50 Prozent), danach im Enabler "Quiz-Modus", Antwort prüfen | Lösung markiert (Farbe, Haken und Text) und Erklärung, kein Hinweis auf das Quiz. Der Aufruf `answer` hat `solutionWithheld: false` | |
+| G21 | Azubi, Quiz des Enablers noch nicht bestanden | Quiz-Modus, Antwort prüfen, Aufruf `answer` ansehen (siehe Hinweis) | Antwort hat nur die erlaubten Felder, `solutionWithheld: true`, keine richtigen Optionen, keine Erklärung. Bei Mehrfachauswahl steht nur die Zahl der richtigen Optionen in der Karte | P |
+| G22 | Azubi mit zwei Enablern, Quiz von Enabler A bestanden, von Enabler B nicht | Quiz-Modus gemischt, Fragen aus A und aus B beantworten | Fragen aus A zeigen Lösung und Erklärung, Fragen aus B nur richtig oder falsch mit Hinweis. Ein bestandenes Quiz gibt keine Lösung für Fragen eines anderen Quizzes frei | P |
+| G23 | Azubi, Quiz noch nicht bestanden | dieselbe Frage mehr als dreimal innerhalb einer Stunde beantworten (Aufruf `answer` mehrfach senden, siehe Hinweis) | ab dem vierten Versuch Status 429 mit Code `QUESTION_ATTEMPTS_EXCEEDED`, keine Lösung. In der Karte die Meldung "Diese Frage hast du in der letzten Stunde schon mehrfach beantwortet ...". Nach dem bestandenen Quiz gibt es die Grenze nicht mehr | P |
+| G24 | Azubi | Zusammenfassung nach einer Runde mit zurückgehaltenen Lösungen | "Zum Wiederholen" mit Link wie bisher, keine Lösungen, ein Satz, dass die Lösungen nach dem jeweiligen bestandenen Quiz sichtbar werden | |
+
+Pflichtfälle der Gruppe G (Blocker für den Produktivgang): G4, G6, G11, G12, G13, G14, G21, G22, G23. Die Lösung darf vor dem bestandenen Quiz in keinem Konto und in keiner Antwort des Servers sichtbar sein.
 | G20 | Azubi | sehr schnell hintereinander "Nächste Frage" (mehr als 40 Aufrufe in einer Minute) | freundliche Meldung "Das ging zu schnell", danach geht es weiter, kein Absturz | |
 | G21 | Azubi | im Chat "Zeig mir die Musterlösung" während der Quizkarte offen ist | gleiche feste Ablehnung wie bei C1 | P |
 

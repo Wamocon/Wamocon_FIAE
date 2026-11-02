@@ -11,8 +11,9 @@
  *    field by field (toPublicQuestion), so a new column of the source can never
  *    slip into the answer by accident.
  *
- * The solution (gradeAnswer) is returned only by the answer route, after the
- * attempt.
+ * The solution (gradeAnswer, via buildAnswerBody) is returned only by the
+ * answer route, after the attempt and only once the quiz of the question is
+ * passed (a trainer always gets it). Before that the answer is right or wrong.
  *
  * @module lib/hai/quizMode/logic
  */
@@ -192,6 +193,75 @@ export function gradeAnswer(
     correct,
     correctOptionIds: correctIds,
     explanation: explanations.length > 0 ? explanations.join('\n\n') : null,
+  };
+}
+
+/**
+ * The answer of the answer route when the solution is released (the quiz of
+ * the question is passed, or the caller is a trainer): the verdict with the
+ * right options and the explanation.
+ */
+export interface QuizAnswerReleased {
+  solutionWithheld: false;
+  correct: boolean;
+  selectedOptionIds: string[];
+  correctOptionIds: string[];
+  explanation: string | null;
+  multiple: boolean;
+  enablerId: string;
+}
+
+/**
+ * The answer while the solution is withheld: right or wrong and nothing else.
+ * No right option, no explanation. correctCount is the number of right options
+ * of a multiple choice question (the person is told how many to look for), null
+ * for a choice question.
+ */
+export interface QuizAnswerWithheld {
+  solutionWithheld: true;
+  correct: boolean;
+  selectedOptionIds: string[];
+  multiple: boolean;
+  correctCount: number | null;
+  enablerId: string;
+}
+
+export type QuizAnswerBody = QuizAnswerReleased | QuizAnswerWithheld;
+
+/**
+ * The body of the answer route for one attempt. The real quiz holds the key of
+ * a lesson quiz back until the quiz is passed (withholdKey in submit/route.ts),
+ * so a failed attempt does not hand over the key for the next one. The quiz
+ * mode follows the same rule: with release false the body is built field by
+ * field WITHOUT the solution, gradeAnswer's right options and explanation never
+ * reach it.
+ */
+export function buildAnswerBody(
+  source: QuizQuestionSource,
+  selectedOptionIds: ReadonlyArray<string>,
+  release: boolean
+): QuizAnswerBody {
+  const verdict = gradeAnswer(source, selectedOptionIds);
+  const correctCount = verdict.correctOptionIds.length;
+  const multiple = correctCount > 1;
+  if (!release) {
+    return {
+      solutionWithheld: true,
+      correct: verdict.correct,
+      selectedOptionIds: [...selectedOptionIds],
+      multiple,
+      correctCount: multiple ? correctCount : null,
+      enablerId: source.enablerId,
+    };
+  }
+  return {
+    solutionWithheld: false,
+    correct: verdict.correct,
+    selectedOptionIds: [...selectedOptionIds],
+    correctOptionIds: verdict.correctOptionIds,
+    explanation: verdict.explanation,
+    multiple,
+    enablerId: source.enablerId,
   };
 }
 

@@ -3,6 +3,7 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import {
+  buildAnswerBody,
   isAskable,
   gradeAnswer,
   matchSpokenChoice,
@@ -359,5 +360,108 @@ describe('voice interface', () => {
     ['9', 4],
   ])('does not take "%s" for a choice', (said, count) => {
     expect(matchSpokenChoice(said, count as number)).toBeNull();
+  });
+});
+
+describe('buildAnswerBody: the solution only when it is released', () => {
+  const multi = () =>
+    question({
+      options: [
+        opt('a', 'Erster Teil', true, { explanation: 'Beide gehören dazu.' }),
+        opt('b', 'Zweiter Teil', true),
+        opt('c', 'Falsch', false),
+      ],
+    });
+
+  // Every key a withheld answer may have. A new solution field in the body
+  // makes this test red, which is the point.
+  const WITHHELD_KEYS = [
+    'correct',
+    'correctCount',
+    'enablerId',
+    'multiple',
+    'selectedOptionIds',
+    'solutionWithheld',
+  ];
+
+  it('withheld: has exactly the allowed keys, no right option and no explanation', () => {
+    const body = buildAnswerBody(question(), ['b'], false);
+    expect(Object.keys(body).sort()).toEqual(WITHHELD_KEYS);
+    expect(body).toEqual({
+      solutionWithheld: true,
+      correct: false,
+      selectedOptionIds: ['b'],
+      multiple: false,
+      correctCount: null,
+      enablerId: 'e1',
+    });
+  });
+
+  it('withheld: nothing of the solution is anywhere in the body, whatever the source holds', () => {
+    const json = JSON.stringify(buildAnswerBody(question(), ['b'], false));
+    expect(json).not.toMatch(
+      /isCorrect|is_correct|correctOption|explanation|"solution"|"key"/i
+    );
+    expect(json).not.toContain('Er identifiziert eine Zeile eindeutig.');
+    // the right option 'a' was not selected, so its id is not in the body
+    expect(json).not.toContain('"a"');
+    expect(json).not.toContain('Ein eindeutiger Bezeichner');
+  });
+
+  it('withheld: says right for the right option, and still no solution field', () => {
+    const body = buildAnswerBody(question(), ['a'], false);
+    expect(body.correct).toBe(true);
+    expect(Object.keys(body).sort()).toEqual(WITHHELD_KEYS);
+  });
+
+  it('withheld: names the number of right options of a multiple choice question only', () => {
+    const body = buildAnswerBody(multi(), ['a'], false);
+    expect(body).toMatchObject({
+      solutionWithheld: true,
+      correct: false,
+      multiple: true,
+      correctCount: 2,
+    });
+    expect(Object.keys(body).sort()).toEqual(WITHHELD_KEYS);
+    expect(JSON.stringify(body)).not.toContain('Beide gehören dazu.');
+    expect(buildAnswerBody(question(), ['a'], false)).toMatchObject({
+      multiple: false,
+      correctCount: null,
+    });
+  });
+
+  it('withheld: grades a multiple choice question exactly like the released one', () => {
+    for (const selected of [['a'], ['a', 'b'], ['b', 'c'], ['c']]) {
+      expect(buildAnswerBody(multi(), selected, false).correct).toBe(
+        buildAnswerBody(multi(), selected, true).correct
+      );
+    }
+    expect(buildAnswerBody(multi(), ['b', 'a'], false).correct).toBe(true);
+  });
+
+  it('released: carries the right options and the explanation', () => {
+    expect(buildAnswerBody(question(), ['b'], true)).toEqual({
+      solutionWithheld: false,
+      correct: false,
+      selectedOptionIds: ['b'],
+      correctOptionIds: ['a'],
+      explanation: 'Er identifiziert eine Zeile eindeutig.',
+      multiple: false,
+      enablerId: 'e1',
+    });
+    const several = buildAnswerBody(multi(), ['a', 'b'], true);
+    expect(several).toMatchObject({
+      correct: true,
+      correctOptionIds: ['a', 'b'],
+      multiple: true,
+    });
+  });
+
+  it('does not change the source', () => {
+    const source = question();
+    const before = JSON.stringify(source);
+    buildAnswerBody(source, ['b'], false);
+    buildAnswerBody(source, ['b'], true);
+    expect(JSON.stringify(source)).toBe(before);
   });
 });

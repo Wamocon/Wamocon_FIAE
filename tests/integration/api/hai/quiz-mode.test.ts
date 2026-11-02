@@ -10,8 +10,13 @@ import {
   traineeSession,
   type FakeSession,
 } from '../../../helpers/mockNext';
+import { getTableName } from 'drizzle-orm';
 import { resetRateLimits } from '@/lib/rate-limit';
-import { QUIZ_MODE_LIMITS } from '@/lib/hai/quizMode/limits';
+import {
+  QUIZ_MODE_ATTEMPT_LIMIT,
+  QUIZ_MODE_LIMITS,
+} from '@/lib/hai/quizMode/limits';
+import { PASS_THRESHOLD } from '@/lib/catalog/progression';
 
 // HAI quiz mode: POST /api/hai/quiz-mode/next and /answer. A practice without
 // grading with the questions of the lesson quizzes. What this suite pins:
@@ -20,6 +25,10 @@ import { QUIZ_MODE_LIMITS } from '@/lib/hai/quizMode/limits';
 //  - the question before the attempt carries no solution (no is_correct, no
 //    explanation, no list of the right options), in no field
 //  - the answer route grades on the server, one or several options
+//  - the solution and the explanation come only once the quiz of the question is
+//    passed (the rule of the real quiz, same definition of "passed"), before
+//    that the answer is right or wrong and nothing else; a trainer always sees
+//    the solution; attempts at one question are limited while it is withheld
 //  - nothing is written (no submission, no progress)
 //
 // The database mock ignores where conditions, so each test sets the rows the
@@ -295,6 +304,31 @@ function expectNoSolution(body: unknown) {
   expect(json).not.toContain(EXPLANATION);
   expect(json).not.toContain('Beide Teile gehören dazu.');
   expect(json).not.toMatch(/"correct"/);
+}
+
+/** Every key a withheld answer may have. A new field makes the test red. */
+const WITHHELD_ANSWER_KEYS = [
+  'correct',
+  'correctCount',
+  'enablerId',
+  'multiple',
+  'selectedOptionIds',
+  'solutionWithheld',
+];
+
+/**
+ * The whole answer object of a withheld solution: only the allowed keys, and
+ * no solution field or text anywhere in it.
+ */
+function expectWithheldAnswer(body: any) {
+  expect(Object.keys(body).sort()).toEqual(WITHHELD_ANSWER_KEYS);
+  expect(body.solutionWithheld).toBe(true);
+  const json = JSON.stringify(body);
+  expect(json).not.toMatch(
+    /isCorrect|is_correct|correctOption|explanation|"solution"|"key"/i
+  );
+  expect(json).not.toContain(EXPLANATION);
+  expect(json).not.toContain('Beide Teile gehören dazu.');
 }
 
 function expectNoWrites(rec: Awaited<ReturnType<typeof load>>['rec']) {
@@ -696,6 +730,11 @@ describe('POST /api/hai/quiz-mode/answer', () => {
   const answer = (questionId: string, optionIds: string[]) =>
     post('answer', { questionId, optionIds });
 
+  /** The attempts of the trainee T: the quiz Q1 passed with the given score. */
+  const passedQuiz = (score = 80, quizId = Q1, traineeId = T) => ({
+    quizSubmissions: [{ id: 's1', quizId, traineeId, score }],
+  });
+
   it('answers 401 without a session', async () => {
     const { POST } = await load('answer', { session: null });
     expect((await POST(answer(QA1, [uid(0x1001)]))).status).toBe(401);
@@ -725,36 +764,145 @@ describe('POST /api/hai/quiz-mode/answer', () => {
     expect(rec.db.select).not.toHaveBeenCalled();
   });
 
-  it('is right for the right option, and returns the solution and the explanation after the attempt', async () => {
-    const { POST, rec } = await load('answer', { tables: chain() });
-    const res = await POST(answer(QA1, [uid(0x1001)]));
-    expect(res.status).toBe(200);
-    expect(res.headers.get('Cache-Control')).toBe('no-store');
-    const body = await res.json();
-    expect(body).toEqual({
-      correct: true,
-      selectedOptionIds: [uid(0x1001)],
-      correctOptionIds: [uid(0x1001)],
-      explanation: EXPLANATION,
-      multiple: false,
-      enablerId: E1,
+  describe('before the quiz of the question is passed: right or wrong, nothing else', () => {
+    it('says right for the right option and carries no solution and no explanation', async () => {
+      const { POST, rec } = await load('answer', { tables: chain() });
+      const res = await POST(answer(QA1, [uid(0x1001)]));
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      const body = await res.json();
+      expectWithheldAnswer(body);
+      expect(body).toEqual({
+        solutionWithheld: true,
+        correct: true,
+        selectedOptionIds: [uid(0x1001)],
+        multiple: false,
+        correctCount: null,
+        enablerId: E1,
+      });
+      expectNoWrites(rec);
     });
-    expectNoWrites(rec);
+
+    it('says wrong for another option and does not name the right one', async () => {
+      const { POST } = await load('answer', { tables: chain() });
+      const res = await POST(answer(QA1, [uid(0x1002)]));
+      const body = await res.json();
+      expectWithheldAnswer(body);
+      expect(body.correct).toBe(false);
+      // the right option is not in the answer in any form
+      expect(JSON.stringify(body)).not.toContain(uid(0x1001));
+    });
+
+    it('holds the solution back for a failed attempt at the quiz, up to the passing score', async () => {
+      for (const score of [0, 30, PASS_THRESHOLD - 1]) {
+        const { POST } = await load('answer', {
+          tables: chain(passedQuiz(score)),
+        });
+        const body = await (await POST(answer(QA1, [uid(0x1002)]))).json();
+        expectWithheldAnswer(body);
+      }
+    });
+
+    it('does not count the pass of another quiz', async () => {
+      // the person passed Q2 (another enabler), not the quiz Q1 of the question
+      const { POST } = await load('answer', {
+        tables: chain(passedQuiz(95, Q2)),
+      });
+      const body = await (await POST(answer(QA1, [uid(0x1002)]))).json();
+      expectWithheldAnswer(body);
+    });
+
+    it('asks for the attempts of the person of the session at the quiz of the question', async () => {
+      const { POST, rec } = await load('answer', { tables: chain() });
+      await POST(
+        makeRequest('POST', 'http://localhost/api/hai/quiz-mode/answer', {
+          token: 't',
+          body: {
+            questionId: QA1,
+            optionIds: [uid(0x1002)],
+            // a person or quiz named in the request is ignored
+            userId: TR,
+            traineeId: TR,
+            quizId: Q2,
+          },
+        })
+      );
+      const { params } = rec.filters('select', 'quizSubmissions');
+      expect(params).toContain(T);
+      expect(params).toContain(Q1);
+      expect(params).not.toContain(TR);
+      expect(params).not.toContain(Q2);
+    });
+
+    it('tells how many options are right for a multiple choice question, and not which', async () => {
+      const { POST } = await load('answer', {
+        tables: chain({ questions: [questionRow(QA2, Q1)] }),
+      });
+      const body = await (await POST(answer(QA2, [uid(0x100b)]))).json();
+      expectWithheldAnswer(body);
+      expect(body).toMatchObject({
+        correct: false,
+        multiple: true,
+        correctCount: 2,
+      });
+      // the other right option was not selected, so its id is not in the answer
+      expect(JSON.stringify(body)).not.toContain(uid(0x100c));
+    });
   });
 
-  it('is wrong for another option, and still gives the right one', async () => {
-    const { POST } = await load('answer', { tables: chain() });
-    const body = await (await POST(answer(QA1, [uid(0x1002)]))).json();
-    expect(body.correct).toBe(false);
-    expect(body.correctOptionIds).toEqual([uid(0x1001)]);
-    expect(body.explanation).toBe(EXPLANATION);
+  describe('after the quiz of the question is passed: with the solution and the explanation', () => {
+    it.each([[PASS_THRESHOLD], [80], [100]])(
+      'returns the solution and the explanation at a best score of %i',
+      async score => {
+        const { POST, rec } = await load('answer', {
+          tables: chain(passedQuiz(score)),
+        });
+        const res = await POST(answer(QA1, [uid(0x1001)]));
+        expect(res.status).toBe(200);
+        expect(res.headers.get('Cache-Control')).toBe('no-store');
+        expect(await res.json()).toEqual({
+          solutionWithheld: false,
+          correct: true,
+          selectedOptionIds: [uid(0x1001)],
+          correctOptionIds: [uid(0x1001)],
+          explanation: EXPLANATION,
+          multiple: false,
+          enablerId: E1,
+        });
+        expectNoWrites(rec);
+      }
+    );
+
+    it('uses the best attempt: an old pass counts after a later bad attempt', async () => {
+      const { POST } = await load('answer', {
+        tables: chain({
+          quizSubmissions: [
+            { id: 's1', quizId: Q1, traineeId: T, score: 90 },
+            { id: 's2', quizId: Q1, traineeId: T, score: 10 },
+          ],
+        }),
+      });
+      const body = await (await POST(answer(QA1, [uid(0x1002)]))).json();
+      expect(body.solutionWithheld).toBe(false);
+      expect(body.correct).toBe(false);
+      expect(body.correctOptionIds).toEqual([uid(0x1001)]);
+      expect(body.explanation).toBe(EXPLANATION);
+    });
+
+    it('is not limited in the attempts at a question', async () => {
+      const { POST } = await load('answer', { tables: chain(passedQuiz()) });
+      for (let i = 0; i < QUIZ_MODE_ATTEMPT_LIMIT.limit + 2; i++) {
+        expect((await POST(answer(QA1, [uid(0x1002)]))).status).toBe(200);
+      }
+    });
   });
 
   describe('a question with several right options', () => {
-    const multi = () => chain({ questions: [questionRow(QA2, Q1)] });
+    const multi = (extra: Record<string, any[]> = {}) =>
+      chain({ questions: [questionRow(QA2, Q1)], ...extra });
 
     it('is right only with exactly all right options', async () => {
-      const { POST } = await load('answer', { tables: multi() });
+      const { POST } = await load('answer', { tables: multi(passedQuiz()) });
       const body = await (
         await POST(answer(QA2, [uid(0x100c), uid(0x100b)]))
       ).json();
@@ -772,9 +920,69 @@ describe('POST /api/hai/quiz-mode/answer', () => {
         [uid(0x100b), uid(0x100c), uid(0x100d)],
       ],
       ['only the wrong one', [uid(0x100d)]],
-    ])('is wrong with %s', async (_name, ids) => {
+    ])(
+      'is wrong with %s, with and without the solution',
+      async (_name, ids) => {
+        const released = await load('answer', { tables: multi(passedQuiz()) });
+        expect(
+          (await (await released.POST(answer(QA2, ids))).json()).correct
+        ).toBe(false);
+        const withheld = await load('answer', { tables: multi() });
+        expect(
+          (await (await withheld.POST(answer(QA2, ids))).json()).correct
+        ).toBe(false);
+      }
+    );
+
+    it('is right with all right options while the solution is withheld', async () => {
       const { POST } = await load('answer', { tables: multi() });
-      expect((await (await POST(answer(QA2, ids))).json()).correct).toBe(false);
+      const body = await (
+        await POST(answer(QA2, [uid(0x100c), uid(0x100b)]))
+      ).json();
+      expectWithheldAnswer(body);
+      expect(body.correct).toBe(true);
+    });
+  });
+
+  describe('limit of the attempts at one question while the solution is withheld', () => {
+    it('answers 429 with a clear code after the allowed attempts, and without a solution', async () => {
+      const { POST, rec } = await load('answer', { tables: chain() });
+      const options = [uid(0x1002), uid(0x1003), uid(0x1001)];
+      for (let i = 0; i < QUIZ_MODE_ATTEMPT_LIMIT.limit; i++) {
+        const ok = await POST(answer(QA1, [options[i % options.length]]));
+        expect(ok.status).toBe(200);
+      }
+      const res = await POST(answer(QA1, [uid(0x1001)]));
+      expect(res.status).toBe(429);
+      expect(Number(res.headers.get('Retry-After'))).toBeGreaterThan(0);
+      const body = await res.json();
+      expect(body).toEqual({
+        error: 'Too many attempts at this question',
+        code: 'QUESTION_ATTEMPTS_EXCEEDED',
+      });
+      expect(JSON.stringify(body)).not.toMatch(/correct|explanation|Darum/i);
+      expectNoWrites(rec);
+    });
+
+    it('does not count a request that is no attempt (invalid options)', async () => {
+      const { POST } = await load('answer', { tables: chain() });
+      for (let i = 0; i < QUIZ_MODE_ATTEMPT_LIMIT.limit + 2; i++) {
+        // option 21 belongs to another question: a 400, no attempt
+        expect((await POST(answer(QA1, [uid(0x1015)]))).status).toBe(400);
+      }
+      expect((await POST(answer(QA1, [uid(0x1002)]))).status).toBe(200);
+    });
+
+    it('does not apply to a trainer, who always sees the solution', async () => {
+      const { POST } = await load('answer', {
+        session: fakeSession({ id: TR, role: 'TRAINER' }),
+        scope: scopeOf(FIAE, KFBM),
+        tables: chain({ courseMembers: [] }),
+      });
+      for (let i = 0; i < QUIZ_MODE_ATTEMPT_LIMIT.limit + 2; i++) {
+        const res = await POST(answer(QA1, [uid(0x1002)]));
+        expect(res.status).toBe(200);
+      }
     });
   });
 
@@ -897,6 +1105,28 @@ describe('POST /api/hai/quiz-mode/answer', () => {
     expectNoWrites(rec);
   });
 
+  it('always shows a trainer the solution and the explanation, whether or not any quiz is passed', async () => {
+    const { POST, rec } = await load('answer', {
+      session: fakeSession({ id: TR, role: 'TRAINER' }),
+      scope: scopeOf(FIAE, KFBM),
+      tables: chain({ courseMembers: [] }),
+    });
+    const res = await POST(answer(QA1, [uid(0x1002)]));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      solutionWithheld: false,
+      correct: false,
+      selectedOptionIds: [uid(0x1002)],
+      correctOptionIds: [uid(0x1001)],
+      explanation: EXPLANATION,
+      multiple: false,
+      enablerId: E1,
+    });
+    // the pass of a trainer is not asked for
+    expect(rec.calls.filter(c => c.table === 'quiz_submissions')).toEqual([]);
+    expectNoWrites(rec);
+  });
+
   it('limits the calls per person and answers 429', async () => {
     const { POST } = await load('answer', { tables: chain() });
     for (let i = 0; i < QUIZ_MODE_LIMITS.answer.limit; i++) {
@@ -913,5 +1143,45 @@ describe('POST /api/hai/quiz-mode/answer', () => {
     const res = await POST(answer(QA1, [uid(0x1001)]));
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: 'Internal Server Error' });
+  });
+
+  it('answers 500 without detail when the pass cannot be read, and logs no solution', async () => {
+    const { POST, rec } = await load('answer', { tables: chain() });
+    const real = (rec.db.select as jest.Mock).getMockImplementation() as (
+      ...args: unknown[]
+    ) => any;
+    // the database fails on the attempts only, everything before it works
+    (rec.db.select as jest.Mock).mockImplementation((...args: unknown[]) => {
+      const query = real(...args);
+      return {
+        from: (table: any) => {
+          if (getTableName(table) === 'quiz_submissions') {
+            throw new Error('db down');
+          }
+          return query.from(table);
+        },
+      };
+    });
+    const res = await POST(answer(QA1, [uid(0x1001)]));
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body).toEqual({ error: 'Internal Server Error' });
+    expect((console.error as jest.Mock).mock.calls.length).toBeGreaterThan(0);
+    for (const call of (console.error as jest.Mock).mock.calls) {
+      expect(JSON.stringify(call)).not.toContain(EXPLANATION);
+      expect(JSON.stringify(call)).not.toContain(uid(0x1001));
+    }
+  });
+
+  it('never logs the solution, also not for a withheld answer or a limit', async () => {
+    const { POST } = await load('answer', { tables: chain() });
+    for (let i = 0; i < QUIZ_MODE_ATTEMPT_LIMIT.limit + 1; i++) {
+      await POST(answer(QA1, [uid(0x1002)]));
+    }
+    for (const spy of [console.error, console.warn]) {
+      const calls = JSON.stringify((spy as jest.Mock).mock.calls);
+      expect(calls).not.toContain(EXPLANATION);
+      expect(calls).not.toContain(uid(0x1001));
+    }
   });
 });

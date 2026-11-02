@@ -33,6 +33,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** The key of the error text for a failed call. */
 export function errorKeyFor(status: number, code?: unknown): string {
+  if (status === 429 && code === 'QUESTION_ATTEMPTS_EXCEEDED')
+    return 'attemptsExceeded';
   if (status === 429) return 'rateLimited';
   if (status === 403 && (code === 'ENABLER_LOCKED' || code === 'QUIZ_LOCKED'))
     return 'locked';
@@ -145,7 +147,10 @@ export async function fetchNextQuestion(input: {
   }
 }
 
-/** Send the attempt, the answer carries the solution. */
+/**
+ * Send the attempt. The answer carries the solution once the quiz of the
+ * question is passed, before that only right or wrong (solutionWithheld).
+ */
 export async function submitQuizAnswer(
   questionId: string,
   optionIds: string[]
@@ -163,11 +168,27 @@ export async function submitQuizAnswer(
         errorKey: errorKeyFor(status, isRecord(data) ? data.code : undefined),
       };
     }
-    if (
-      !isRecord(data) ||
-      typeof data.correct !== 'boolean' ||
-      !Array.isArray(data.correctOptionIds)
-    ) {
+    if (!isRecord(data) || typeof data.correct !== 'boolean') {
+      return { kind: 'error', errorKey: 'generic' };
+    }
+    if (data.solutionWithheld === true) {
+      // Right or wrong only, whatever else the body might carry is ignored
+      return {
+        kind: 'ok',
+        feedback: {
+          correct: data.correct,
+          selectedOptionIds: optionIds,
+          correctOptionIds: [],
+          explanation: null,
+          solutionWithheld: true,
+          correctCount:
+            typeof data.correctCount === 'number' && data.correctCount > 1
+              ? data.correctCount
+              : null,
+        },
+      };
+    }
+    if (!Array.isArray(data.correctOptionIds)) {
       return { kind: 'error', errorKey: 'generic' };
     }
     return {
@@ -182,6 +203,8 @@ export async function submitQuizAnswer(
           typeof data.explanation === 'string' && data.explanation.trim() !== ''
             ? data.explanation
             : null,
+        solutionWithheld: false,
+        correctCount: null,
       },
     };
   } catch {
