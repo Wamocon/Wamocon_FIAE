@@ -66,9 +66,12 @@ describe('browser calls to /api/hai', () => {
         'src/components/hai/HaiAdminWidget.tsx',
         'src/components/hai/HaiAdminDialog.tsx',
         'src/components/hai/HaiVoiceControl.tsx',
+        'src/lib/hai/quizMode/client.ts',
+        // the voice providers: config, Soniox key, Sokrates recognition and speech
+        'src/lib/hai/voice/client/deps.ts',
       ])
     );
-    expect(occurrences.length).toBeGreaterThanOrEqual(13);
+    expect(occurrences.length).toBeGreaterThanOrEqual(17);
   });
 
   it('sends every call through authFetch', () => {

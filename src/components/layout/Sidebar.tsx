@@ -6,6 +6,7 @@ import {
   adminMenuItems,
   contentStatsMenuItems,
   contentUploadMenuItems,
+  haiAdminMenuItems,
 } from '@/lib/auth/adminMenu';
 import { IS_PREVIEW_SCHEMA } from '@/lib/db-schema';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
@@ -26,6 +27,7 @@ import {
   Briefcase,
   Upload,
   BarChart3,
+  Mic,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -47,6 +49,7 @@ const ADMIN_MENU_ICONS = {
   adminUsers: ShieldCheck,
   contentUpload: Upload,
   contentStats: BarChart3,
+  haiAdmin: Mic,
 } as const;
 
 interface SidebarProps {
@@ -194,6 +197,7 @@ export function Sidebar({
                 role: profile?.role,
                 isPlatformOwner,
               }),
+              ...haiAdminMenuItems({ role: profile?.role, isPlatformOwner }),
               ...contentUploadMenuItems(
                 { role: profile?.role, isPlatformOwner },
                 {

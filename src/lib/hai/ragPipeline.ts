@@ -50,6 +50,7 @@ import {
 } from './persona';
 import { loadHaiPersona } from './personaAccess';
 import { solutionRequestRefusal } from './solutionRequest';
+import { quizModeStartFor, type QuizModeStartSignal } from './quizMode/start';
 import {
   buildSystemPrompt,
   buildRetrievedContext,
@@ -61,6 +62,8 @@ import { fetchDataContext } from './dataContext';
 import type { UserRole } from './dataContext';
 import { handleActionMessage } from './actionFlow';
 import type { PendingAction } from './actionPolicy';
+import { handleNavigationMessage } from './navigation/flow';
+import type { NavigationOffer } from './navigation/offer';
 import type { HaiTrainingScope } from './trainingScope';
 import {
   isLearningTechniqueQuestion,
@@ -81,7 +84,8 @@ export type IntentType =
   | 'code_help'
   | 'web_search'
   | 'off_topic'
-  | 'action';
+  | 'action'
+  | 'navigation';
 
 export interface PipelineContext {
   userId: string;
@@ -118,6 +122,12 @@ export interface PipelineContext {
    * from the text of a message. Same pipeline, same retrieval, same guards.
    */
   voice?: boolean;
+  /**
+   * The person holds an admin level (SUPER_ADMIN, ADMIN, TEMP_ADMIN). Set by the
+   * chat route from the session, only used to pick the admin pages for the
+   * navigation, never taken from a message.
+   */
+  isAdmin?: boolean;
 }
 
 /**
@@ -152,6 +162,10 @@ export interface PipelineResult {
   };
   /** A proposed write for the confirmation card, never executed here */
   pendingAction?: PendingAction;
+  /** A page the interface can offer with a card "Öffnen", never a write */
+  navigationOffer?: NavigationOffer;
+  /** The person asked to be quizzed: the browser opens the quiz card */
+  quizMode?: QuizModeStartSignal;
   error?: string;
   /**
    * Set (true) only when the answer was built with text of a model solution of
@@ -703,11 +717,33 @@ export async function processMessage(
       return { response: solutionRefusal, intent: 'question', citations: [] };
     }
 
+    // A request to be quizzed ("Frag mich zu SQL ab") ends here with a fixed
+    // text and the start signal of the quiz card: no retrieval, no model, so
+    // no question and no answer comes from the model (quiz mode)
+    const quizStart = quizModeStartFor(userMessage, context);
+    if (quizStart) {
+      return {
+        response: quizStart.response,
+        intent: 'quiz_request',
+        citations: [],
+        quizMode: quizStart.quizMode,
+      };
+    }
+
     // Step 1b: An action in the message becomes a proposal, never a write.
     // Behind the persona gate: without a scope or for a message about another
     // occupation there is no proposal.
     const actionResponse = await handleActionMessage(userMessage, context);
     if (actionResponse) return actionResponse;
+
+    // Step 1c: A request to go to a page is answered by the server with a
+    // navigation offer (a card "Öffnen"), no model call, never a write
+    const navigationResponse = await handleNavigationMessage(
+      userMessage,
+      context,
+      access
+    );
+    if (navigationResponse) return navigationResponse;
 
     // Step 1: Classify intent
     const intent = classifyIntent(userMessage, context.quizState, persona);
@@ -791,6 +827,7 @@ export async function processMessage(
       persona,
       learningTechniques: usesLearningTechniques(userMessage, searchResults),
       voice: context.voice === true,
+      navigation: true,
     });
 
     // Step 5: Convert previous messages to provider format
@@ -940,12 +977,36 @@ export async function processMessageStream(
       return { response: solutionRefusal, intent: 'question', citations: [] };
     }
 
+    // A request to be quizzed: fixed text and start signal, like in
+    // processMessage (quiz mode)
+    const quizStart = quizModeStartFor(userMessage, context);
+    if (quizStart) {
+      onChunk(quizStart.response);
+      return {
+        response: quizStart.response,
+        intent: 'quiz_request',
+        citations: [],
+        quizMode: quizStart.quizMode,
+      };
+    }
+
     // An action in the message becomes a proposal, never a write (behind the
     // persona gate, like in processMessage)
     const actionResponse = await handleActionMessage(userMessage, context);
     if (actionResponse) {
       onChunk(actionResponse.response);
       return actionResponse;
+    }
+
+    // A navigation request is answered by the server, like in processMessage
+    const navigationResponse = await handleNavigationMessage(
+      userMessage,
+      context,
+      access
+    );
+    if (navigationResponse) {
+      onChunk(navigationResponse.response);
+      return navigationResponse;
     }
 
     const intent = classifyIntent(userMessage, context.quizState, persona);
@@ -1017,6 +1078,7 @@ export async function processMessageStream(
       persona,
       learningTechniques: usesLearningTechniques(userMessage, searchResults),
       voice: context.voice === true,
+      navigation: true,
     });
 
     // Convert messages to provider format

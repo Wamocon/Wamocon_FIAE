@@ -4,13 +4,21 @@
  * Voice assistant of the HAI (day companion, WMCNL-2907): listen, send, think,
  * read the answer aloud, listen again.
  *
- * Speech stays in the browser. Recognition and reading aloud are the functions of
- * the browser (SpeechRecognition, speechSynthesis); the server gets the recognized
- * TEXT through the normal chat route, exactly as a typed question, and no audio is
- * recorded or stored by this application. Where the browser offers recognition on
- * the device (processLocally), it is used, then no audio leaves the device at all;
- * otherwise the browser itself may send the audio to its speech service (Chrome:
- * Google), which the consent text says.
+ * Who listens and speaks is a provider (src/lib/hai/voice/client/engine.ts): Soniox
+ * (the browser talks to the service over a websocket with a short lived key from
+ * the server), Sokrates (the own server, the audio passes this application) or the
+ * browser itself (SpeechRecognition, speechSynthesis). The platform admin chooses a
+ * main provider and a fallback, the server answers with the chain (GET
+ * /api/hai/voice/config) and the loop walks it: when a provider is not available
+ * the next one takes over, up to the browser. The loop itself does not know which
+ * provider is behind recognition and speech output.
+ *
+ * The server of this application gets the recognized TEXT through the normal chat
+ * route, exactly as a typed question, and records or stores no audio. Where the
+ * audio goes depends on the provider, and the consent text says it: Soniox (external
+ * service, region EU or US), Sokrates (stays in the house) or the browser (where it
+ * offers recognition on the device (processLocally) no audio leaves the device,
+ * otherwise the browser may send it to its speech service, Chrome: Google).
  *
  * The conversation loop is built like the speech mode of damicon, without the live
  * transcription service: the microphone is off while the assistant speaks (no
@@ -20,7 +28,7 @@
  * @module components/hai/useHaiVoice
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   berlinHour,
   dayStartDue,
@@ -31,6 +39,34 @@ import {
   voiceSupport,
   type SimpleStorage,
 } from '@/lib/hai/voice/speech';
+import { createBrowserSpeaker } from '@/lib/hai/voice/client/browserSpeech';
+import {
+  cloudVoiceSupport,
+  createCloudDeps,
+} from '@/lib/hai/voice/client/deps';
+import { createVoiceEnv } from '@/lib/hai/voice/client/engine';
+import type {
+  RecognitionEventLike,
+  RecognitionLike,
+  SpeakerLike,
+  SynthLike,
+  UtteranceLike,
+  VoiceConfig,
+  VoiceEnv,
+  VoiceProviderId,
+} from '@/lib/hai/voice/client/types';
+
+// the shapes the environment of the loop is made of (tests replace them)
+export type {
+  RecognitionEventLike,
+  RecognitionLike,
+  SpeakerLike,
+  SynthLike,
+  UtteranceLike,
+  VoiceConfig,
+  VoiceEnv,
+  VoiceProviderId,
+};
 
 export type VoicePhase =
   | 'idle'
@@ -48,49 +84,6 @@ export type VoiceError =
 // ============================================================================
 // THE BROWSER, REPLACEABLE FOR TESTS
 // ============================================================================
-
-export interface RecognitionEventLike {
-  resultIndex: number;
-  results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }>;
-}
-
-export interface RecognitionLike {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  maxAlternatives: number;
-  processLocally?: boolean;
-  onresult: ((event: RecognitionEventLike) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
-
-export interface UtteranceLike {
-  text: string;
-  lang: string;
-  voice: unknown;
-  rate: number;
-  onend: (() => void) | null;
-  onerror: (() => void) | null;
-}
-
-export interface SynthLike {
-  speak(utterance: UtteranceLike): void;
-  cancel(): void;
-  getVoices(): Array<{ lang: string; localService?: boolean; name?: string }>;
-}
-
-export interface VoiceEnv {
-  /** A recognition object and whether it works on the device only; null if the browser has none. */
-  createRecognition(): Promise<{ rec: RecognitionLike; local: boolean } | null>;
-  synth: SynthLike | null;
-  makeUtterance(text: string): UtteranceLike;
-  storage: SimpleStorage | null;
-  now(): Date;
-}
 
 const LANG = 'de-DE';
 
@@ -172,18 +165,28 @@ export interface UseHaiVoiceOptions {
   stopGeneration: () => void;
   /** Text shown in the message before the first chunk arrives: never read aloud. */
   placeholderText?: string;
-  /** Replaces the browser, for tests. */
+  /**
+   * The providers in charge (GET /api/hai/voice/config). Null or left out: the
+   * browser alone, as before the providers existed.
+   */
+  voiceConfig?: VoiceConfig | null;
+  /** Replaces the browser and the chain of providers, for tests. */
   env?: VoiceEnv | null;
 }
 
+// Consent of the person, in the browser only. v1 is the consent to the browser as
+// the provider (value 'yes' or 'no', as it always was). v2 lists the providers the
+// person agreed to (Soniox and Sokrates have another recipient of the audio than the
+// browser): the consent counts only while every provider of the chain is on it.
 const CONSENT_PREFIX = 'hai-voice-consent-v1:';
+const CONSENT_PROVIDERS_PREFIX = 'hai-voice-consent-v2:';
 const DAY_START_OFF_PREFIX = 'hai-voice-day-start-off:';
 const MAX_SILENT_ROUNDS = 3;
 
 interface SpokenState {
   id: string | null;
   count: number;
-  pending: number;
+  speaker: SpeakerLike | null;
   finished: boolean;
   done: boolean;
 }
@@ -191,10 +194,39 @@ interface SpokenState {
 const freshSpoken = (): SpokenState => ({
   id: null,
   count: 0,
-  pending: 0,
+  speaker: null,
   finished: false,
   done: false,
 });
+
+function listedProviders(
+  storage: SimpleStorage,
+  userId: string
+): VoiceProviderId[] {
+  const raw = storage.getItem(CONSENT_PROVIDERS_PREFIX + userId) ?? '';
+  return raw
+    .split(',')
+    .filter(
+      (id): id is VoiceProviderId =>
+        id === 'soniox' || id === 'haus' || id === 'browser'
+    );
+}
+
+/** Did the person agree to every provider of the chain? */
+function consentCovers(
+  storage: SimpleStorage,
+  userId: string,
+  chain: VoiceProviderId[]
+): boolean {
+  const browserYes = storage.getItem(CONSENT_PREFIX + userId) === 'yes';
+  const listed = listedProviders(storage, userId);
+  if (chain.length === 0) return browserYes;
+  return chain.every(id =>
+    id === 'browser'
+      ? browserYes || listed.includes('browser')
+      : listed.includes(id)
+  );
+}
 
 export function useHaiVoice(options: UseHaiVoiceOptions) {
   const {
@@ -207,9 +239,47 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     placeholderText,
   } = options;
 
-  const envRef = useRef<VoiceEnv | null | undefined>(options.env);
-  if (envRef.current === undefined) envRef.current = browserVoiceEnv();
-  const env = envRef.current;
+  const { voiceConfig, env: testEnv } = options;
+
+  // what this browser can do: the browser's own speech, and the cloud parts
+  const support = useMemo(() => {
+    if (typeof window === 'undefined') return { browser: false, cloud: false };
+    const win = window as unknown as Window & Record<string, unknown>;
+    const own = voiceSupport(win);
+    return {
+      browser: own.recognition && own.synthesis,
+      cloud: cloudVoiceSupport(win),
+    };
+  }, []);
+
+  // the providers to walk, reduced to what this browser can do (a replaced
+  // environment of a test is the browser alone)
+  const chain = useMemo<VoiceProviderId[]>(() => {
+    if (testEnv !== undefined) return ['browser'];
+    const wanted = voiceConfig?.chain ?? ['browser'];
+    return wanted.filter(id =>
+      id === 'browser' ? support.browser : support.cloud
+    );
+  }, [testEnv, voiceConfig, support]);
+
+  const [activeProvider, setActiveProvider] = useState<VoiceProviderId>(
+    chain[0] ?? 'browser'
+  );
+  useEffect(() => {
+    setActiveProvider(chain[0] ?? 'browser');
+  }, [chain]);
+
+  const env = useMemo<VoiceEnv | null>(() => {
+    if (testEnv !== undefined) return testEnv;
+    const base = browserVoiceEnv();
+    if (!base) return null;
+    return createVoiceEnv({
+      base,
+      chain,
+      deps: chain.some(id => id !== 'browser') ? createCloudDeps() : null,
+      onActiveProvider: setActiveProvider,
+    });
+  }, [testEnv, chain]);
 
   const [phase, setPhaseState] = useState<VoicePhase>('idle');
   const [interim, setInterim] = useState('');
@@ -227,16 +297,8 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
   const spokenRef = useRef<SpokenState>(freshSpoken());
   const listenRef = useRef<() => void>(() => undefined);
 
-  const browserSupport =
-    typeof window !== 'undefined'
-      ? voiceSupport(window as unknown as Window & Record<string, unknown>)
-      : { recognition: false, synthesis: false };
   // the replaced environment of a test counts as supported
-  const usable =
-    !!env &&
-    (options.env
-      ? true
-      : browserSupport.recognition && browserSupport.synthesis);
+  const usable = !!env && (testEnv ? true : chain.length > 0);
 
   const setPhase = useCallback((next: VoicePhase) => {
     phaseRef.current = next;
@@ -247,29 +309,41 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
   useEffect(() => {
     if (!userId || !env?.storage) return;
     try {
-      setConsented(env.storage.getItem(CONSENT_PREFIX + userId) === 'yes');
+      setConsented(consentCovers(env.storage, userId, chain));
       setDayStartEnabledState(
         env.storage.getItem(DAY_START_OFF_PREFIX + userId) !== 'yes'
       );
     } catch {
       setConsented(false);
     }
-  }, [userId, env]);
+  }, [userId, env, chain]);
 
   const giveConsent = useCallback(() => {
     if (!userId) return;
     try {
-      env?.storage?.setItem(CONSENT_PREFIX + userId, 'yes');
+      const storage = env?.storage;
+      if (storage) {
+        // the consent names every provider of the chain it was given for
+        const agreed = new Set([...listedProviders(storage, userId), ...chain]);
+        storage.setItem(
+          CONSENT_PROVIDERS_PREFIX + userId,
+          [...agreed].join(',')
+        );
+        if (chain.includes('browser')) {
+          storage.setItem(CONSENT_PREFIX + userId, 'yes');
+        }
+      }
     } catch {
       // the consent then holds for this visit only
     }
     setConsented(true);
-  }, [userId, env]);
+  }, [userId, env, chain]);
 
   const revokeConsent = useCallback(() => {
     if (!userId) return;
     try {
       env?.storage?.setItem(CONSENT_PREFIX + userId, 'no');
+      env?.storage?.setItem(CONSENT_PROVIDERS_PREFIX + userId, '');
     } catch {
       // nothing to remove
     }
@@ -290,12 +364,20 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
   );
 
   const cancelSpeech = useCallback(() => {
+    const state = spokenRef.current;
     try {
-      env?.synth?.cancel();
+      state.speaker?.cancel();
     } catch {
       // nothing is speaking
     }
-    spokenRef.current.pending = 0;
+    state.speaker = null;
+    if (!env?.createSpeaker) {
+      try {
+        env?.synth?.cancel();
+      } catch {
+        // nothing is speaking
+      }
+    }
   }, [env]);
 
   const dropRecognition = useCallback(() => {
@@ -440,6 +522,10 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     stoppedRef.current = false;
     silentRoundsRef.current = 0;
     setError(null);
+    // a tap: let the audio of a provider play (iOS, Safari), and try the chain from the top
+    env.unlockAudio?.();
+    env.resetFallback?.();
+    setActiveProvider(chain[0] ?? 'browser');
     const now = env.now();
     if (dayStartEnabled && dayStartDue(env.storage, userId, now)) {
       markDayStart(env.storage, userId, now);
@@ -448,6 +534,7 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     }
     void listen();
   }, [
+    chain,
     consented,
     dayStartEnabled,
     enabled,
@@ -473,7 +560,7 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
   useEffect(() => {
     if (phaseRef.current !== 'thinking' && phaseRef.current !== 'speaking')
       return;
-    if (!env?.synth) return;
+    if (!env || (!env.createSpeaker && !env.synth)) return;
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'assistant') return;
     if (last.id === baselineIdRef.current || last.id === ignoreIdRef.current)
@@ -483,40 +570,34 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
 
     const state = spokenRef.current;
     if (state.id !== last.id) {
+      state.speaker?.cancel();
       Object.assign(state, freshSpoken(), { id: last.id });
     }
     if (state.done) return;
     const final = streamingMessageId !== last.id;
     const pieces = nextSpeechPieces(text, state.count, final);
-    const synth = env.synth;
-    for (const piece of pieces) {
-      const utterance = env.makeUtterance(piece);
-      utterance.lang = LANG;
-      utterance.rate = 1;
-      const voices = synth.getVoices();
-      utterance.voice =
-        voices.find(v => v.lang === LANG && v.localService) ??
-        voices.find(v => v.lang === LANG) ??
-        voices.find(v => v.lang.startsWith('de')) ??
-        null;
-      const spoken = () => {
-        state.pending = Math.max(0, state.pending - 1);
-        if (state.pending === 0 && state.finished && !state.done) {
+    if (pieces.length > 0 && !state.speaker) {
+      const handlers = {
+        onDone: () => {
+          if (spokenRef.current !== state || state.done) return;
           state.done = true;
           afterAnswer();
-        }
+        },
       };
-      utterance.onend = spoken;
-      utterance.onerror = spoken;
-      state.pending += 1;
-      synth.speak(utterance);
+      state.speaker = env.createSpeaker
+        ? env.createSpeaker(handlers)
+        : createBrowserSpeaker(env, handlers);
     }
+    for (const piece of pieces) state.speaker?.say(piece);
     state.count += pieces.length;
-    if (pieces.length > 0) setPhase('speaking');
+    if (pieces.length > 0 && state.speaker) setPhase('speaking');
     if (final) {
       state.finished = true;
-      // nothing (more) to read: the answer is done
-      if (state.pending === 0 && !state.done) {
+      if (state.speaker) {
+        // the speaker tells when the last piece is spoken
+        state.speaker.end();
+      } else if (!state.done) {
+        // nothing (more) to read: the answer is done
         state.done = true;
         afterAnswer();
       }
@@ -540,6 +621,12 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     interim,
     error,
     localRecognition,
+    /** The provider that listens and speaks now (the head of the chain at the start). */
+    provider: activeProvider,
+    /** The providers in the order they are tried. */
+    chain,
+    /** Region of Soniox ('eu' or 'us') when it is in the chain, for the consent text. */
+    region: voiceConfig?.region ?? null,
     consented,
     giveConsent,
     revokeConsent,

@@ -4,6 +4,7 @@ import path from 'path';
 import {
   adminMenuItems,
   contentStatsMenuItems,
+  haiAdminMenuItems,
   type AdminMenuItem,
 } from '@/lib/auth/adminMenu';
 import { GUARDED_ROUTES } from '../../../helpers/guardedRoutes';
@@ -159,9 +160,48 @@ describe('contentStatsMenuItems', () => {
 
   it('the route behind it is guarded for admins and the target change for the platform admin', () => {
     expect(guardOf('admin/content-stats', 'GET')).toBe('admin');
-    expect(
-      guardOf('admin/catalogs/[catalogId]/content-targets', 'PUT')
-    ).toBe('curriculum');
+    expect(guardOf('admin/catalogs/[catalogId]/content-targets', 'PUT')).toBe(
+      'curriculum'
+    );
+  });
+});
+
+describe('haiAdminMenuItems', () => {
+  it.each([
+    ['SUPER_ADMIN', superAdmin],
+    ['ADMIN of the platform organization', platformAdmin],
+  ])('%s sees the HAI admin page', (_name, subject) => {
+    expect(haiAdminMenuItems(subject)).toEqual([
+      {
+        id: 'haiAdmin',
+        href: '/trainer/admin/hai',
+        labelKey: 'admin.hai.menu',
+      },
+    ]);
+  });
+
+  it('no other level sees it, the routes behind it are for the platform admin only', () => {
+    for (const subject of [
+      admin,
+      tempAdmin,
+      platformTempAdmin,
+      { role: 'TRAINER', isPlatformOwner: true },
+      { role: 'TRAINEE', isPlatformOwner: true },
+      { role: null },
+      null,
+      undefined,
+    ]) {
+      expect(haiAdminMenuItems(subject)).toEqual([]);
+    }
+    expect(guardOf('admin/hai/settings', 'GET')).toBe('superAdmin');
+    expect(guardOf('admin/hai/settings', 'PUT')).toBe('superAdmin');
+    expect(guardOf('admin/hai/voice-status', 'GET')).toBe('superAdmin');
+  });
+
+  it('opens a page that exists', () => {
+    const [item] = haiAdminMenuItems(superAdmin);
+    const page = path.join(process.cwd(), 'src/app', item.href, 'page.tsx');
+    expect(fs.existsSync(page)).toBe(true);
   });
 });
 
@@ -187,6 +227,13 @@ const PAGE_ROUTES: Record<
     { route: 'admin/users/[userId]', method: 'PATCH' },
     { route: 'admin/users/[userId]', method: 'DELETE' },
     { route: 'admin/organizations/[orgId]/catalogs', method: 'GET' },
+  ],
+  contentUpload: [],
+  contentStats: [],
+  haiAdmin: [
+    { route: 'admin/hai/settings', method: 'GET' },
+    { route: 'admin/hai/settings', method: 'PUT' },
+    { route: 'admin/hai/voice-status', method: 'GET' },
   ],
 };
 

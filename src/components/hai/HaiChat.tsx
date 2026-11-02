@@ -14,6 +14,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { HaiMessage } from './HaiMessage';
 import { HaiSessionList } from './HaiSessionList';
 import { HaiVoiceControl } from './HaiVoiceControl';
+import { HaiQuizModeButton, HaiQuizPanel } from './HaiQuizPanel';
+import { useHaiQuizMode } from './HaiQuizMode';
 import { HaiLogoBanner, HaiLogoInline } from './HaiLogoBanner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -56,6 +58,7 @@ function ChatWidget() {
     context,
   } = useHai();
 
+  const quizActive = useHaiQuizMode().active;
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -96,6 +99,7 @@ function ChatWidget() {
         </div>
 
         <div className="flex items-center gap-1">
+          <HaiQuizModeButton className="mr-1 inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20" />
           <button
             onClick={() => setViewMode('full')}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
@@ -117,7 +121,7 @@ function ChatWidget() {
 
       {/* Messages */}
       <div
-        className={`flex-1 space-y-4 bg-[#0f1117] p-4 ${messages.length === 0 ? 'overflow-visible' : 'overflow-y-auto'}`}
+        className={`flex-1 space-y-4 bg-[#0f1117] p-4 ${messages.length === 0 && !quizActive ? 'overflow-visible' : 'overflow-y-auto'}`}
       >
         {messages.length === 0 ? (
           <EmptyState />
@@ -134,6 +138,7 @@ function ChatWidget() {
             />
           ))
         )}
+        <HaiQuizPanel />
         <div ref={messagesEndRef} />
       </div>
 
@@ -291,6 +296,7 @@ function ChatFull() {
             </div>
 
             <div className="flex items-center gap-2">
+              <HaiQuizModeButton />
               <button
                 onClick={newSession}
                 className="hidden items-center gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20 md:flex"
@@ -382,6 +388,7 @@ function ChatFull() {
                   <div ref={messagesEndRef} />
                 </>
               )}
+              <HaiQuizPanel />
             </div>
           </div>
 
