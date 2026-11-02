@@ -365,7 +365,8 @@ async function buildTraineeScheduleText(
  * Serialize trainee learning progress into embeddable text
  */
 async function buildTraineeProgressText(
-  traineeId: string
+  traineeId: string,
+  catalogId: string
 ): Promise<string | null> {
   try {
     const profile = await haiDb
@@ -462,11 +463,13 @@ async function buildTraineeProgressText(
       `Gesamtfortschritt: ${totalCompleted}/${totalEnablers} Enabler (${overallPct}%)`
     );
 
-    // Activity reports
+    // Activity reports of the occupation the chunk belongs to (a report belongs
+    // to one occupation)
     const reportCounts = await haiDb.execute(sql`
             SELECT status, COUNT(*) as cnt
             FROM activity_reports
             WHERE trainee_id = ${traineeId}
+              AND training_catalog_id = ${catalogId}
             GROUP BY status
         `);
     if ((reportCounts as any[]).length > 0) {
@@ -585,7 +588,10 @@ export async function indexTraineeData(
     }
 
     // 3. Index learning progress
-    const progressText = await buildTraineeProgressText(traineeId);
+    const progressText = await buildTraineeProgressText(
+      traineeId,
+      scope.trainingCatalogId ?? TRAINING_CATALOG_IDS.FIAE
+    );
     if (progressText) {
       const progressIndexResult = await indexContent({
         sourceType: 'trainee_progress' as SourceType,

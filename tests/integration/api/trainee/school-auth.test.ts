@@ -20,6 +20,7 @@ const ME = 't1';
 const OTHER = 't2';
 const ORG = 'org-1';
 const DATE = '2027-03-10';
+const FIAE = '00000000-0000-4000-8000-000000000001';
 
 const me = fakeSession({
   id: ME,
@@ -33,7 +34,19 @@ type Tables = Record<string, any>;
 async function loadRoute(route: string, tables: Tables = {}, returns = {}) {
   jest.resetModules();
   mockSession(me);
-  const mock = createTableDb(tables, returns);
+  // The reports belong to an occupation: the trainee works in the one FIAE
+  // occupation (no enrollment counts as FIAE)
+  const mock = createTableDb(
+    {
+      trainingCatalogs: [
+        { id: FIAE, code: 'FIAE', isActive: true },
+      ],
+      organizationCatalogs: [],
+      traineeEnrollments: [],
+      ...tables,
+    },
+    returns
+  );
   const getUserOrgId = jest.fn(async (_id: string) => ORG);
   jest.doMock('@/db', () => ({ __esModule: true, default: mock.db }));
   jest.doMock('@/lib/auth-helpers', () => ({

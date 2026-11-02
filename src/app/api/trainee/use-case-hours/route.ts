@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
         if (scope instanceof Response) return scope;
 
         // Get all non-rejected reports for this trainee (DRAFT + SUBMITTED + APPROVED)
+        // in the occupation of the request (a report belongs to one occupation).
         // This prevents double-booking: if a SUBMITTED report uses 10hrs of a use case,
         // a new report cannot also claim those hours.
         const activeReports = await db
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
             .where(
                 and(
                     eq(activityReports.traineeId, traineeId as any),
+                    catalogCondition(activityReports.trainingCatalogId, scope),
                     ne(activityReports.status, 'REJECTED')
                 )
             );

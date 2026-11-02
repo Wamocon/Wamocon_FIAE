@@ -14,7 +14,8 @@ const mockSearch = jest.fn();
 const mockPageIndex = jest.fn();
 
 jest.mock('@/lib/hai/retrievalAccess', () => ({
-  resolveRetrievalAccess: (userId: string) => mockResolveAccess(userId),
+  resolveRetrievalAccess: (userId: string, code?: string | null) =>
+    mockResolveAccess(userId, code),
 }));
 jest.mock('@/lib/hai/personaAccess', () => {
   const persona = jest.requireActual('@/lib/hai/persona');
@@ -22,14 +23,23 @@ jest.mock('@/lib/hai/personaAccess', () => {
   const all = [fixtures.FIAE_CATALOG, fixtures.KFBM_CATALOG];
   return {
     loadHaiPersona: async (
-      access: { catalogIds: string[]; audience: string } | null,
+      access: {
+        catalogIds: string[];
+        allowedCatalogIds?: string[];
+        audience: string;
+      } | null,
       trainingScope?: { currentPhase: 1 | 2 }
     ) => {
       if (!access) return persona.NEUTRAL_PERSONA;
       const own = all.filter(c => access.catalogIds.includes(c.id));
+      // a choice narrowed the access: the other own occupations are unselected
+      const allOwn = all.filter(c =>
+        (access.allowedCatalogIds ?? access.catalogIds).includes(c.id)
+      );
       return persona.resolveHaiPersona({
         catalogs: own,
-        otherCatalogs: all.filter(c => !access.catalogIds.includes(c.id)),
+        unselectedCatalogs: allOwn.filter(c => !own.includes(c)),
+        otherCatalogs: all.filter(c => !allOwn.includes(c)),
         role: access.audience === 'trainer' ? 'TRAINER' : 'TRAINEE',
         phase: trainingScope?.currentPhase,
       });
@@ -70,6 +80,7 @@ import {
 import {
   DENIAL_BERUF_TEXT,
   DENIAL_NEUTRAL_TEXT,
+  denialSelectionText,
   namesDenialReason,
 } from '@/lib/hai/denial';
 import {
@@ -283,6 +294,87 @@ describe.each([
     const other = await run('Wie funktioniert Fachinformatik?', ctx());
     expect(other.response).toBe(DENIAL_BERUF_TEXT);
     expect(mockChat).not.toHaveBeenCalled();
+  });
+
+  // The occupation chosen in the app limits the HAI to that one (reason AUSWAHL)
+  const narrowed = (catalog: { id: string }) => ({
+    ...access(catalog),
+    allowedCatalogIds: [FIAE_CATALOG.id, KFBM_CATALOG.id],
+  });
+
+  it('the chosen code goes to the access (search and page index follow it)', async () => {
+    await run('Was ist Normalisierung?', ctx({ preferredCatalogCode: 'FIAE' }));
+    expect(mockResolveAccess).toHaveBeenCalledWith(USER, 'FIAE');
+    mockResolveAccess.mockClear();
+    await run('Was ist Normalisierung?', ctx());
+    expect(mockResolveAccess).toHaveBeenCalledWith(USER, undefined);
+  });
+
+  it('FIAE chosen, a question about KfBM: the answer says to switch the tab, before search and model', async () => {
+    mockResolveAccess.mockResolvedValue(narrowed(FIAE_CATALOG));
+    const result = await run(
+      'Erkläre mir die Buchführung im KfBM',
+      ctx({ preferredCatalogCode: 'FIAE' })
+    );
+    expect(result.response).toBe(denialSelectionText('FIAE', 'KfBM'));
+    expect(result.intent).toBe('off_topic');
+    expect(namesDenialReason(result.response, 'AUSWAHL')).toBe(true);
+    // only the names of the own occupations, nothing of the content
+    expect(result.response).not.toMatch(/Buchführung|Büromanagement|Lernfeld/);
+    expect(result.response).not.toBe(DENIAL_BERUF_TEXT);
+    expect(mockChat).not.toHaveBeenCalled();
+    expect(mockSearch).not.toHaveBeenCalled();
+    expect(mockPageIndex).not.toHaveBeenCalled();
+  });
+
+  it('KfBM chosen, a question about FIAE: the answer says to switch the tab', async () => {
+    mockResolveAccess.mockResolvedValue(narrowed(KFBM_CATALOG));
+    const result = await run(
+      'Wie funktioniert Fachinformatik?',
+      ctx({ preferredCatalogCode: 'KFBM' })
+    );
+    expect(result.response).toBe(denialSelectionText('KfBM', 'FIAE'));
+    expect(mockChat).not.toHaveBeenCalled();
+    expect(mockSearch).not.toHaveBeenCalled();
+  });
+
+  it('a question about the chosen occupation is answered, with that persona alone and a search in one catalog', async () => {
+    mockResolveAccess.mockResolvedValue(narrowed(FIAE_CATALOG));
+    const result = await run(
+      'Was ist Normalisierung?',
+      ctx({ preferredCatalogCode: 'FIAE' })
+    );
+    expect(result.response).toBe('Antwort');
+    expect(mockSearch.mock.calls[0][2].catalogIds).toEqual([FIAE_CATALOG.id]);
+    expect(mockPageIndex.mock.calls[0][2].catalogIds).toEqual([
+      FIAE_CATALOG.id,
+    ]);
+    const prompt = systemPrompt();
+    expect(prompt).toContain('Lernzentrum für Auszubildende (LFA)');
+    expect(prompt).not.toContain('Büromanagement');
+  });
+
+  it('a name that is none of the two occupations is no AUSWAHL answer (the BERUF answer of the persona tests stays as it is)', async () => {
+    mockResolveAccess.mockResolvedValue(narrowed(FIAE_CATALOG));
+    const result = await run(
+      'Erkläre mir Demo Beruf',
+      ctx({ preferredCatalogCode: 'FIAE' })
+    );
+    // nothing of the user is named, so the model answers as usual
+    expect(result.response).toBe('Antwort');
+  });
+
+  it('without a choice a question about the second own occupation is answered (all occupations)', async () => {
+    mockResolveAccess.mockResolvedValue({
+      ...access(FIAE_CATALOG),
+      catalogIds: [FIAE_CATALOG.id, KFBM_CATALOG.id],
+    });
+    const result = await run('Erkläre mir die Buchführung im KfBM', ctx());
+    expect(result.response).toBe('Antwort');
+    expect(mockSearch.mock.calls[0][2].catalogIds).toEqual([
+      FIAE_CATALOG.id,
+      KFBM_CATALOG.id,
+    ]);
   });
 
   it('a trainer of both occupations may ask about both', async () => {

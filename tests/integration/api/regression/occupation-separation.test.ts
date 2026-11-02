@@ -600,6 +600,35 @@ const COVERED_ELSEWHERE: Record<string, string> = {
     'tests/integration/api/trainer/documents-scope.test.ts',
   'trainer/use-cases/[useCaseId]/documents':
     'tests/integration/api/trainer/documents-scope.test.ts',
+  // Activity reports belong to one occupation (migration 20261102000300): the routes
+  // that read reports use the helpers of the report filter, checked in the test named
+  // here, the behaviour with two occupations is tested in activity-reports/occupation.test.ts
+  'trainee/annual-summary':
+    'tests/integration/api/regression/report-catalog-routes.test.ts',
+  'trainee/school/reports':
+    'tests/integration/api/regression/report-catalog-routes.test.ts',
+  'trainer/annual-overview':
+    'tests/integration/api/regression/report-catalog-routes.test.ts',
+  'trainer/arbeitszeugnis/aggregate/[traineeId]':
+    'tests/integration/api/regression/report-catalog-routes.test.ts',
+  'trainer/arbeitszeugnis/evidence/[traineeId]':
+    'tests/integration/api/regression/report-catalog-routes.test.ts',
+  'trainer/evaluations':
+    'tests/integration/api/regression/report-catalog-routes.test.ts',
+  'trainee/evaluations':
+    'tests/integration/api/regression/report-catalog-routes.test.ts',
+  'trainer/arbeitszeugnis/skill-radar/[traineeId]':
+    'tests/integration/api/regression/report-catalog-routes.test.ts',
+  'trainer/school/activity-reports':
+    'tests/integration/api/regression/report-catalog-routes.test.ts',
+  'trainer/school/stats':
+    'tests/integration/api/regression/report-catalog-routes.test.ts',
+  'trainer/trainees/with-stats':
+    'tests/integration/api/regression/report-catalog-routes.test.ts',
+  // the insights of the HAI follow the chosen occupation (requireCatalogScope); the
+  // identity test covers the session of the route, a test of its own for the two
+  // occupations is still to be written
+  'hai/insights': 'tests/integration/api/hai/identity.test.ts',
 };
 
 // Sub routes that run the same content scope check as a route tested above: the
@@ -618,7 +647,7 @@ const SHARES_PARENT_SCOPE: Record<string, string[]> = {
 };
 
 const CATALOG_MARKERS =
-  /requireCatalogScope|requireCatalogScopeForUser|requireContentScope|requireContentScopeForUser|catalogCondition|getCatalogScope/;
+  /requireCatalogScope|requireCatalogScopeForUser|requireContentScope|requireContentScopeForUser|catalogCondition|getCatalogScope|requireReportCatalogFilter|resolveCatalogChoice|requestedCatalogCode/;
 
 function routeFiles(dir: string): string[] {
   return readdirSync(dir).flatMap(name => {

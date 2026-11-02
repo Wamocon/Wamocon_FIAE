@@ -17,6 +17,8 @@ import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { requireReportCatalogFilter } from '@/lib/auth/activity-report-access';
+import { requireCatalogScope } from '@/lib/catalog/scope';
 
 // Helper to get ISO week number
 function getISOWeek(date: Date): number {
@@ -77,8 +79,11 @@ export async function GET(req: NextRequest) {
     const year = searchParams.get('year');
     const ausbildungsjahr = searchParams.get('ausbildungsjahr');
 
-    // Build conditions
+    // Build conditions: the reports of the occupation the trainee works in
+    const reportCatalog = await requireReportCatalogFilter(session, req);
+    if (isErrorResponse(reportCatalog)) return reportCatalog;
     const conditions = [eq(activityReports.traineeId, traineeId as any)];
+    if (reportCatalog.condition) conditions.push(reportCatalog.condition);
 
     if (
       status &&
@@ -160,6 +165,10 @@ export async function POST(req: NextRequest) {
 
     const organizationId = await getUserOrgId(traineeId);
 
+    // The report belongs to the occupation the trainee works in
+    const catalogScope = await requireCatalogScope(session, req);
+    if (catalogScope instanceof Response) return catalogScope;
+
     // Use provided or current week/year
     const reportWeek = weekNumber || getISOWeek(new Date());
     const reportYear = year || new Date().getFullYear();
@@ -171,6 +180,7 @@ export async function POST(req: NextRequest) {
       .where(
         and(
           eq(activityReports.traineeId, traineeId as any),
+          eq(activityReports.trainingCatalogId, catalogScope.activeCatalogId),
           eq(activityReports.weekNumber, reportWeek),
           eq(activityReports.year, reportYear)
         )
@@ -219,6 +229,7 @@ export async function POST(req: NextRequest) {
       .values({
         traineeId: traineeId as any,
         organizationId,
+        trainingCatalogId: catalogScope.activeCatalogId,
         ausbildungsjahr: calculatedAusbildungsjahr,
         weekNumber: reportWeek,
         year: reportYear,

@@ -42,12 +42,24 @@ export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID.test(value);
 }
 
-/** Condition on `profiles` for the trainees the caller may see. */
+/**
+ * Condition on `profiles` for the trainees the caller may see.
+ *
+ * `byEnrollment: false` leaves out the occupation of the enrollments (the role
+ * and the organization still count). It is for lists of RECORDS that carry an
+ * occupation of their own (activity reports): they are filtered by the
+ * occupation of the record, see requireReportCatalogFilter, not by the
+ * enrollments of the trainee.
+ */
 export async function requireTraineeScopeCondition(
   session: SessionUser,
-  request: CatalogRequestLike
+  request: CatalogRequestLike,
+  options: { byEnrollment?: boolean } = {}
 ): Promise<{ condition: SQL } | NextResponse> {
-  const catalogFilter = await requireTraineeCatalogFilter(session, request);
+  const catalogFilter =
+    options.byEnrollment === false
+      ? { condition: null }
+      : await requireTraineeCatalogFilter(session, request);
   if (catalogFilter instanceof Response) return catalogFilter as NextResponse;
   const condition = and(
     eq(profiles.role, ROLE.TRAINEE as any),

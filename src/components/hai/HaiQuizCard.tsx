@@ -201,6 +201,14 @@ export function HaiQuizCard({
             <GraduationCap className="h-4 w-4 shrink-0" aria-hidden="true" />
             {t('hai.quiz.title')}
           </div>
+          {state.occupation && (
+            <p
+              data-testid="hai-quiz-occupation"
+              className="mt-1 text-xs font-semibold text-cyan-300"
+            >
+              {t('hai.quiz.occupation', { name: state.occupation })}
+            </p>
+          )}
           <p className="mt-1 text-xs text-gray-400">{t('hai.quiz.practice')}</p>
           <p className="mt-1 text-xs break-words text-gray-300">{scopeLabel}</p>
         </div>
@@ -471,6 +479,14 @@ export function HaiQuizCard({
           >
             {t('hai.quiz.summary.title')}
           </h3>
+          {state.occupation && (
+            <p
+              data-testid="hai-quiz-summary-occupation"
+              className="mt-1 text-xs text-cyan-300"
+            >
+              {t('hai.quiz.occupation', { name: state.occupation })}
+            </p>
+          )}
           <div role="status" className="mt-2 space-y-2">
             {summary.total === 0 ? (
               <p className="text-gray-300">{t('hai.quiz.summary.none')}</p>

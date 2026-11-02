@@ -21,6 +21,13 @@ jest.mock('@/components/hai/HaiProvider', () => ({
   ),
 }));
 
+// the voice session needs the chat and the language: not what this test is about
+jest.mock('@/components/hai/voice-mode/HaiVoiceSession', () => ({
+  HaiVoiceSessionProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+}));
+
 function auth(profile: Record<string, unknown> | null, plan = 'PRO') {
   (useAuth as jest.Mock).mockReturnValue({
     user: { id: 'u1' },

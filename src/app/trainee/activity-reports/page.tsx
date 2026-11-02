@@ -126,10 +126,6 @@ export default function TraineeActivityReportsPage() {
     });
   }, [profile?.id, authLoading, refreshProfile, queryClient]);
 
-  // Data fetching via React Query (cached, deduped, auto-refresh on focus)
-  const reportsUrl = profile?.id
-    ? `/api/activity-reports?userId=${profile.id}&limit=500`
-    : null;
   // The lists belong to the occupation of the user (?catalog= only for an
   // occupation other than FIAE, so FIAE requests stay unchanged)
   const {
@@ -137,6 +133,14 @@ export default function TraineeActivityReportsPage() {
     withCatalog,
     phaseOneMonthsFor,
   } = useRequestCatalog(profile?.id);
+  // Data fetching via React Query (cached, deduped, auto-refresh on focus).
+  // A report belongs to one occupation: the url names it (like the lists below),
+  // so a switch of the occupation tab is a new query and loads the reports of
+  // that occupation. The server also reads the choice from the x-catalog header.
+  const reportsUrl =
+    profile?.id && catalogReady
+      ? withCatalog(`/api/activity-reports?userId=${profile.id}&limit=500`)
+      : null;
   const { data: compData } = useApiQuery<{ components: TrainingComponent[] }>(
     catalogReady ? withCatalog('/api/training-components') : null
   );
@@ -167,7 +171,8 @@ export default function TraineeActivityReportsPage() {
     [ucData?.useCases]
   );
   const reports = reportData?.reports || [];
-  const loading = reportsLoading;
+  // the list waits for the occupation, so a spinner shows until it is known
+  const loading = reportsLoading || (!!profile?.id && !catalogReady);
   const error = reportsError?.message || null;
   const profileDurationYears =
     (profile as { ausbildungDurationYears?: number | null } | null)

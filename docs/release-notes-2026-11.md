@@ -14,12 +14,13 @@ Die Lernplattform führt jetzt zwei Ausbildungsberufe in einem System: Fachinfor
 | Verwaltung | Berufe je Organisation, Plätze und Rollengrenzen, Freigabe- und Zuweisungswerkzeug, Inhaltsstatistik mit Soll |
 | HAI | Berufstrennung, Lösungsschutz, Lernkarten, Tagesbegleiter, Sprachassistent, Einbettung und Chat über Sokrates |
 | Sicherheit | Server-Sitzung für alle Routen, Zeilenschutz, Speicherrechte, Passwortregel, Bucket mit signierten Links |
-| Betrieb | 38 Migrationen mit Freigabetor, Release-Strecke mit zwei Schemas, Inhaltsübertragung per Id |
+| Betrieb | 39 Migrationen mit Freigabetor, Release-Strecke mit zwei Schemas, Inhaltsübertragung per Id |
 
 ## 2. Neu für Auszubildende
 
 - Auswahl und Anzeige der eigenen Berufe, bei mehreren Ausbildungen ein Reiter je Beruf (PR 95, 96, 112, 151, 167).
 - Phasenplan, Berufsschule, Prüfungen und Beschriftungen folgen dem Beruf (PR 98, 111).
+- Ausbildungsnachweise gehören zu einem Beruf: Bei mehreren Ausbildungen zeigt jeder Reiter nur die Nachweise seines Berufs, und für dieselbe Woche lässt sich je Beruf ein Nachweis anlegen. Das gilt auch für die Berufsschul-Ansicht und die HAI-Aktionen.
 - Reihenfolge der Arbeit: ein Enabler nach dem anderen, Quiz wiederholbar, gesperrte Enabler mit Erklärung und Material, ein Use Case bleibt zu, solange sein Enabler gesperrt ist (PR 168, 202).
 - Lernfeld-Seite mit Enablern und Use Cases (PR 163).
 - Globale Quizze lassen sich abschließen, Freitextfragen ohne Musterantwort werden nicht bewertet (PR 132, 172).
@@ -45,10 +46,13 @@ Die Lernplattform führt jetzt zwei Ausbildungsberufe in einem System: Fachinfor
 - Aktionen brauchen eine Bestätigung und prüfen die Zuständigkeit (PR 122).
 - Lernkarten (zwölf, geprüft und freigegeben am 01.11.2026) mit Quelle Dunlosky, keine Lerntypen, kein Burnout-Rat (PR 179, 232).
 - Tagesbegleiter ("Was steht heute an?") mit höchstens drei Punkten aus echten Daten (PR 233).
+- Tagesbegleiter erkennt natürliche Fragen ("Was steht für mich an?", "Was habe ich diese Woche zu tun?", "Was ist offen?") und antwortet mit Fortschritt je Beruf, nächstem Schritt, Terminen, Nachweisen und Rückmeldungen statt "keine Daten", ohne Quellenkarten von Enablern (PR 262).
 - Sprachassistent mit Einwilligung, Schalter je Organisation, Standard aus (PR 233). Anbieterwahl in der neuen HAI-Admin-Seite: Soniox (Region EU) als Hauptanbieter, Sokrates und der Browser als Rückfallebene, Umschalten ohne neuen Release (PR 241).
 - Quiz-Modus: Abfrage Frage für Frage aus den Lektionsquizzen ohne Wertung, nur aus freigeschalteten Enablern des eigenen Berufs. Die richtige Antwort und die Erklärung gibt es erst, wenn das Quiz zu der Frage bestanden ist (wie im echten Quiz, gleiche Definition von bestanden), davor nur "Richtig!" oder "Leider falsch." mit Link zum Enabler. Trainer sehen die Lösung immer. Gegen das Durchprobieren gelten höchstens drei Versuche je Frage und Stunde (PR 240, 249, Beschluss vom 02.11.2026).
 - Agentenschicht: Die HAI führt gezielt durch die Plattform, Navigationskarten mit Knopf "Öffnen" aus einer festen Zulassungsliste je Rolle, "Weiter lernen", keine Schreibwirkung (PR 239).
+- Sprachmodus mit Maskottchen: Der Knopf "Gespräch" im Chat öffnet ein Gesprächsfenster mit dem Hai, der zuhört, nachdenkt und spricht, mit Untertiteln (abschaltbar). Alles Gesprochene steht im selben Chat zum Nachlesen. Sagt der Azubi "Ja" zu einer angebotenen Seite, öffnet sie sich und der Hai bleibt als kleine Einheit am Rand und hört weiter zu. Schalter je Organisation, Einwilligung mit Anbieter und alle Regeln der HAI unverändert, der Quiz-Modus läuft noch nicht im Sprachmodus (PR 263, `docs/hai-sprachmodus.md`, Testplan J).
 - Begründungen bei Ablehnungen: Kann die HAI etwas wegen Rolle, Beruf, gesperrtem Enabler, Lösungsschutz, Freigabe, Plan, Schalter, Zuständigkeit oder Umfang nicht, nennt sie den Grund in einem freundlichen Satz und sagt, was stattdessen geht. Feste Texte vor Suche und Modell, ein Hinweis im Prompt nur bei Zugriffsgrund, neue stabile Codes der Routen (`PRO_REQUIRED`, `COURSE_NOT_ASSIGNED`), Klartext statt "Fehler" im Browser, nichts aus einem fremden Beruf in den Texten, eine technische Störung wird nie als fehlende Berechtigung ausgegeben (PR 259, `docs/hai-ablehnungen.md`).
+- HAI folgt dem gewählten Beruf: Wählt ein Azubi mit zwei Berufen den Reiter FIAE oder KfBM, antwortet die HAI nur zu diesem Beruf (Suche, Persona, Titel), wie die übrige Plattform und der Quiz-Modus. Eine Frage zum anderen eigenen Beruf bekommt den festen Hinweis, oben auf den Reiter zu wechseln (Kategorie Auswahl). Die Quizkarte nennt den Beruf ("Quiz: FIAE"). Die Tageslage ("Was steht heute an?") bleibt berufsübergreifend, ohne Reiter bleibt alles wie bisher (alle Berufe). Eine Kennung, die nicht zu den Berufen der Person gehört, wird ignoriert (PR 261, `docs/hai-persona-per-occupation.md`).
 - Einbettung und Chat über Sokrates (Qwen3-Embedding, gemma4:31b), Rückfall des Chats nur auf Sokrates, nie auf einen externen Anbieter (PR 171, 199, 209).
 - Vektorindex (halfvec) beschleunigt die Suche von 26 auf 0,9 Sekunden, hinter einem Schalter (PR 231).
 - Prüfsatz mit 98 Fällen: kein Leck, Antworten 93,1 Prozent, Fremdberuf 100 Prozent, Lösungen verweigern 100 Prozent.
@@ -70,7 +74,7 @@ Die Lernplattform führt jetzt zwei Ausbildungsberufe in einem System: Fachinfor
 
 ## 7. Datenbank und Betrieb
 
-- 38 neue Migrationsdateien von `20261023100000` bis `20261102000200`, rückwärtskompatibel geschrieben. Eine Datei (`20261025000000`, Backfill SUPER_ADMIN) hält das Freigabetor an, bis `KFBM_ROLLOUT_APPROVED` gesetzt ist.
+- 39 neue Migrationsdateien von `20261023100000` bis `20261102000300`, rückwärtskompatibel geschrieben. Die jüngste (`20261102000300`) legt den Beruf an den Ausbildungsnachweisen an und füllt vorhandene Nachweise aus ihren Einträgen, der Einschreibung oder FIAE (in Production alle FIAE). Eine Datei (`20261025000000`, Backfill SUPER_ADMIN) hält das Freigabetor an, bis `KFBM_ROLLOUT_APPROVED` gesetzt ist.
 - Release-Strecke mit zwei Schemas: `public` ist Production, `public_preview` die Preview. Ablauf `guard`, `migrate`, `content-sync`, `deploy`, Beschreibung in `docs/release-prozess.md`.
 - Generalprobe am 31.10.2026 auf einem Wegwerf-Container: 34 Migrationen (damals), längste Datei 2,4 Sekunden, Nachchecks N01 bis N09 wie erwartet, FIAE-Übertragung angewendet, zweiter Lauf ohne Änderung, Rückbau erprobt. Die vier später hinzugekommenen Dateien (Check der Lernkarten-Quelle, Schalter Sprachassistent, Tabelle `hai_settings` und die Bereinigung ihres Fremdschlüssels) sind additiv.
 - Rückweg: Sicherung der Datenbank vor dem Fenster, Rückbau der Katalogreihe (`docs/rollback/`), App über "Production Deploy" nur mit dem Release, das die Migrationsdateien kennt.
@@ -87,6 +91,7 @@ Für bestehende FIAE-Azubis bleibt der Weg gleich. Sichtbar neu sind die Reiter 
 - Die HAI braucht Sokrates. Fällt der Server aus, antwortet sie nicht, Lernen und Abgaben laufen weiter.
 - Offene Fehler zur späteren Behebung: WMCNL-2887 (Blocked), FIAE-Regressionsfehler (von Niko angelegt).
 - E-Mail-Bestätigung (WMCNL-2847) wartet auf den SMTP-Zugang von Resend, Schlüsselwechsel und Passwörter folgen nach dem Rollout.
+- Wochenbewertungen sind weiter je Azubi, Woche und Jahr eindeutig, nicht je Beruf. Ein Azubi in zwei Berufen kann für dieselbe Woche zwei Nachweise (je Beruf einen) schreiben, die Wochenbewertung dieser Woche gibt es aber nur einmal. Das betrifft nur Konten mit zwei Ausbildungen, in Production heute niemanden.
 
 ## 10. Reihenfolge im Fenster
 

@@ -38,10 +38,8 @@ import {
 import { getProviderStatus } from '@/lib/hai/providers';
 import { buildHaiTrainingScope } from '@/lib/hai/trainingScope';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
-import {
-  getCatalogScopeForUserId,
-  requestedCatalogCode,
-} from '@/lib/catalog/scope';
+import { requestedCatalogCode } from '@/lib/catalog/scope';
+import { resolveCatalogChoice } from '@/lib/hai/retrievalAccess';
 import {
   getUserOrgIdStrict,
   requireProPlan,
@@ -939,11 +937,17 @@ export async function POST(req: NextRequest) {
       await loadUserMemory(userId, sessionId, allowTrainerKnowledge);
 
     // Get context titles (only for an enabler or course of the user's occupation)
-    const catalogScope = await getCatalogScopeForUserId(userId);
+    // The occupation chosen in the app limits the titles too: an enabler of
+    // another occupation of the user is dropped like one of a foreign occupation
+    // (same rule as the search, a code outside the occupations is ignored)
+    const catalogChoice = await resolveCatalogChoice(
+      userId,
+      requestedCatalogCode(req)
+    );
     const { enablerTitle, courseTitle, inScope } = await getContextTitles(
       context?.enablerId,
       context?.courseId,
-      catalogScope?.allowedCatalogIds
+      catalogChoice?.catalogIds
     );
 
     // Build pipeline context (Phase 1: pass userRole for live data context)

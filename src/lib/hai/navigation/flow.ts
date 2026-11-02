@@ -86,7 +86,12 @@ export async function handleNavigationMessage(
     outcome = await resolveNavigation(intent, {
       userId: access.userId,
       level,
-      catalogIds: access.catalogIds,
+      // the targets follow all occupations of the person, the chosen one (if
+      // the access was narrowed to it) is looked at first
+      catalogIds: access.allowedCatalogIds ?? access.catalogIds,
+      preferredCatalogIds: access.allowedCatalogIds
+        ? access.catalogIds
+        : undefined,
       plan: scope
         ? {
             currentPhase: scope.currentPhase,

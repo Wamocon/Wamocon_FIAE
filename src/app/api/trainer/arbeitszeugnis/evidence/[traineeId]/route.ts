@@ -1,5 +1,6 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { requireReportCatalogFilter } from '@/lib/auth/activity-report-access';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import {
@@ -37,6 +38,11 @@ export async function GET(
 
     const access = await requireTraineeAccess(session, traineeId, request);
     if (isErrorResponse(access)) return access;
+
+    // Only the reports of the occupation the trainer chose
+    const reportCatalog = await requireReportCatalogFilter(session, request);
+    if (isErrorResponse(reportCatalog)) return reportCatalog;
+    const catalogCondition = reportCatalog.condition ?? undefined;
 
     const { searchParams } = new URL(request.url);
     const ausbildungsjahr = parseInt(
@@ -97,6 +103,7 @@ export async function GET(
           eq(activityReports.status, 'APPROVED'),
           gte(activityReports.periodStart, yearStart),
           lte(activityReports.periodStart, yearEnd),
+          catalogCondition,
           isNotNull(activityReportEntries.betrieblicheTaetigkeit)
         )
       )
@@ -190,6 +197,7 @@ export async function GET(
           eq(activityReports.status, 'APPROVED'),
           gte(activityReports.periodStart, yearStart),
           lte(activityReports.periodStart, yearEnd),
+          catalogCondition,
           inArray(activityReportUseCaseEntries.trainerGrade, ['1', '2'])
         )
       );

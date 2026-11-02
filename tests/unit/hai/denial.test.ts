@@ -27,6 +27,7 @@ import {
   denialAreaText,
   denialContinueText,
   denialLockedText,
+  denialSelectionText,
   denialUnknownPageText,
   isDenialCategory,
   namesDenialReason,
@@ -109,10 +110,16 @@ const TEXTS: Array<[DenialCategory, string, string]> = [
   ['UMFANG', 'record not found', DENIAL_RECORD_NOT_FOUND_TEXT],
   ['UMFANG', 'record of an action not found', DENIAL_ACTION_NOT_FOUND_TEXT],
   ['UMFANG', 'no quiz questions', tDe['hai.quiz.empty.no_content']],
+  // placeholders for the two occupations of the person, see the block below
+  [
+    'AUSWAHL',
+    'question about the other own occupation',
+    denialSelectionText('Beruf Eins', 'Beruf Zwei'),
+  ],
 ];
 
 describe('the categories', () => {
-  it('are the nine of the order, each with a meaning and a keyword', () => {
+  it('are the ten of the order, each with a meaning and a keyword', () => {
     expect([...DENIAL_CATEGORIES]).toEqual([
       'ROLLE',
       'BERUF',
@@ -123,6 +130,7 @@ describe('the categories', () => {
       'SCHALTER_AUS',
       'ZUSTAENDIGKEIT',
       'UMFANG',
+      'AUSWAHL',
     ]);
     for (const category of DENIAL_CATEGORIES) {
       expect(isDenialCategory(category)).toBe(true);
@@ -236,6 +244,47 @@ describe('what the texts must never do', () => {
     expect(denialAreaText('ADMIN', EXAMPLES)).toContain(
       'Verwaltungsbereich der Administratoren'
     );
+  });
+});
+
+describe('AUSWAHL: the person chose one occupation and asks about the other own one', () => {
+  it('says what is chosen, why only that is answered and where to switch', () => {
+    const text = denialSelectionText('FIAE', 'KfBM');
+    expect(text).toBe(
+      'Du hast gerade FIAE ausgewählt, deshalb antworte ich hier nur dazu. Wechsle oben auf den Reiter KfBM, dann helfe ich dir auch dazu.'
+    );
+    expect(namesDenialReason(text, 'AUSWAHL')).toBe(true);
+    const en = denialSelectionText('FIAE', 'KfBM', 'en');
+    expect(en).toContain('You have selected FIAE');
+    expect(en).toContain('Switch to the tab KfBM');
+    expect(namesDenialReason(en, 'AUSWAHL')).toBe(true);
+  });
+
+  it('names only the two occupations it is given, nothing else', () => {
+    for (const lang of ['de', 'en'] as const) {
+      const text = denialSelectionText('Beruf Eins', 'Beruf Zwei', lang);
+      const bare = text.replace('Beruf Eins', '').replace('Beruf Zwei', '');
+      expect(bare).not.toMatch(/[0-9]/);
+      for (const word of FOREIGN) expect(bare).not.toContain(word);
+      expect(text).not.toMatch(/[–—]/);
+    }
+  });
+
+  it('cleans a name so it cannot carry markup, a link or an id into the text', () => {
+    const text = denialSelectionText('[x](http://evil.example)', '<b>KfBM</b>');
+    expect(text).not.toMatch(/[<>\[\]()/:]/);
+    expect(text).toContain('xhttpevilexample');
+    expect(denialSelectionText('', '  ')).toContain('deinen Beruf');
+    expect(denialSelectionText('', '  ')).toContain('den anderen Beruf');
+  });
+
+  it('has the interface text in German and English with both placeholders', () => {
+    for (const locale of [tDe, tEn]) {
+      expect(locale['hai.denial.selection']).toContain('{chosen}');
+      expect(locale['hai.denial.selection']).toContain('{other}');
+    }
+    expect(tDe['hai.quiz.occupation']).toBe('Quiz: {name}');
+    expect(tEn['hai.quiz.occupation']).toBe('Quiz: {name}');
   });
 });
 

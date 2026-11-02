@@ -41,6 +41,12 @@ type ReadCase = {
   table: string;
   /** How the scope shows up: the profiles columns or a sub-select. */
   inSelect?: boolean;
+  /**
+   * Reports and evaluations carry the occupation of the REPORT: the table whose
+   * select holds the condition on activity_reports.training_catalog_id (not the
+   * enrollments of the trainee).
+   */
+  catalogOnReport?: string;
 };
 
 const traineeRow = {
@@ -120,6 +126,7 @@ const readCases: ReadCase[] = [
     url: `${API}/evaluations`,
     tables: { weeklyEvaluations: [], profiles: [] },
     table: 'weekly_evaluations',
+    catalogOnReport: 'weekly_evaluations',
   },
   {
     name: 'GET /annual-overview',
@@ -140,6 +147,7 @@ const readCases: ReadCase[] = [
     },
     table: 'activity_reports',
     inSelect: true,
+    catalogOnReport: 'activity_reports',
   },
   {
     name: 'GET /school/stats (exams)',
@@ -171,6 +179,7 @@ const readCases: ReadCase[] = [
     tables: { activityReports: [], activityReportEntries: [] },
     table: 'activity_reports',
     inSelect: true,
+    catalogOnReport: 'activity_reports',
   },
   {
     name: 'GET /school/exams',
@@ -206,6 +215,7 @@ const readCases: ReadCase[] = [
       activityReportUseCaseEntries: [],
     },
     table: 'profiles',
+    catalogOnReport: 'activity_reports',
   },
   {
     name: 'GET /quiz-submissions',
@@ -296,6 +306,17 @@ describe.each(readCases)('$name', entry => {
   it('with an occupation (x-catalog) only the trainees of that occupation', async () => {
     const { res, mock } = await run(entry, { header: 'KFBM' });
     expect(res.status).toBe(200);
+    if (entry.catalogOnReport) {
+      // the occupation of the report counts, not the enrollments of the trainee
+      const onReport = mock.filters('select', entry.catalogOnReport);
+      expect(onReport.sql).toContain(
+        '"activity_reports"."training_catalog_id" = $'
+      );
+      expect(onReport.params).toContain(KFBM);
+      expect(onReport.params).not.toContain(FIAE);
+      expect(scopeSql(entry, mock).sql).not.toContain('trainee_enrollments');
+      return;
+    }
     const filter = scopeSql(entry, mock);
     expect(filter.sql).toContain('exists (select 1 from "trainee_enrollments"');
     expect(filter.params).toContain(KFBM);

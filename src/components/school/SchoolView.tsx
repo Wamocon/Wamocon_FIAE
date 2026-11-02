@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { authFetch } from '@/lib/authFetch';
+import { useCatalog } from '@/contexts/CatalogContext';
 import {
     Calendar,
     FileText,
@@ -61,6 +62,9 @@ const TABS: TabConfig[] = [
 
 export function SchoolView() {
     const { profile } = useAuth();
+    // The numbers of the overview follow the occupation tab (a report belongs to
+    // one occupation), a switch loads them again
+    const { activeCode: catalog } = useCatalog();
     const { t } = useLanguage();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -141,7 +145,7 @@ export function SchoolView() {
         };
 
         loadStats();
-    }, [profile?.id]);
+    }, [profile?.id, catalog]);
 
     const renderTabContent = () => {
         switch (activeTab) {

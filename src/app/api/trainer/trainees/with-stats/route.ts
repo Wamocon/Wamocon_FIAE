@@ -10,6 +10,7 @@ import {
   activityReports,
 } from '@/db/migrations/schemas/schema';
 import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
+import { requireReportCatalogFilter } from '@/lib/auth/activity-report-access';
 
 /**
  * GET /api/trainer/trainees/with-stats
@@ -33,6 +34,9 @@ export async function GET(req: NextRequest) {
     // platform-owner flag of an organization does not widen the list.
     const traineeScope = await requireTraineeScopeCondition(session, req);
     if (isErrorResponse(traineeScope)) return traineeScope;
+    // The report numbers count the reports of the chosen occupation
+    const reportCatalog = await requireReportCatalogFilter(session, req);
+    if (isErrorResponse(reportCatalog)) return reportCatalog;
 
     const traineeRows = await db
       .select({
@@ -65,7 +69,12 @@ export async function GET(req: NextRequest) {
         reportCount: count(),
       })
       .from(activityReports)
-      .where(inArray(activityReports.traineeId, traineeIds as any))
+      .where(
+        and(
+          inArray(activityReports.traineeId, traineeIds as any),
+          reportCatalog.condition ?? undefined
+        )
+      )
       .groupBy(activityReports.traineeId, activityReports.status);
 
     // Build a map of traineeId -> { approved, pending }

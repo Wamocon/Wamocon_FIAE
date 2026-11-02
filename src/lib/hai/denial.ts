@@ -32,6 +32,7 @@ export const DENIAL_CATEGORIES = [
   'SCHALTER_AUS',
   'ZUSTAENDIGKEIT',
   'UMFANG',
+  'AUSWAHL',
 ] as const;
 
 export type DenialCategory = (typeof DENIAL_CATEGORIES)[number];
@@ -57,6 +58,8 @@ export const DENIAL_MEANING: Readonly<Record<DenialCategory, string>> =
     SCHALTER_AUS: 'für deine Organisation ausgeschaltet',
     ZUSTAENDIGKEIT: 'nur für die eigenen Auszubildenden',
     UMFANG: 'in deinen freigeschalteten Inhalten nichts gefunden',
+    AUSWAHL:
+      'nur zum ausgewählten Beruf beantwortet, der andere eigene Beruf steht auf dem anderen Reiter',
   });
 
 /**
@@ -75,6 +78,7 @@ export const DENIAL_KEYWORDS: Readonly<Record<DenialCategory, RegExp>> =
     SCHALTER_AUS: /ausgeschaltet|abgeschaltet/i,
     ZUSTAENDIGKEIT: /zuständig/i,
     UMFANG: /freigeschalteten (?:Inhalten|Enablern)/i,
+    AUSWAHL: /ausgewählt.*Reiter|selected.*tab/i,
   });
 
 /** Whether a text names the reason of the category in plain words. */
@@ -123,6 +127,37 @@ export const DENIAL_ACTION_OCCUPATION_TEXT =
  */
 export const DENIAL_ACTION_NOT_FOUND_TEXT =
   'Diesen Eintrag finde ich in deinen freigeschalteten Inhalten und in deinem Zuständigkeitsbereich nicht, das heißt aber nicht, dass es ihn nicht gibt. Bitte prüfe die Angabe oder öffne den Eintrag direkt in der Plattform.';
+
+/** A name for a text: letters, digits, space, hyphen and underscore only. */
+function plainName(value: string, fallback: string): string {
+  const name = value.replace(/[^\p{L}\p{N} _-]/gu, '').trim();
+  return name || fallback;
+}
+
+/**
+ * AUSWAHL: the person has chosen one occupation in the app and asks about
+ * ANOTHER occupation that she has too. The answer is fixed, before search and
+ * model, and names only the two occupations of the person as the tabs show them
+ * (never a content, a title of a record or an id). `lang` is 'de' (the chat) or
+ * 'en'.
+ */
+export function denialSelectionText(
+  chosen: string,
+  other: string,
+  lang: 'de' | 'en' = 'de'
+): string {
+  const a = plainName(
+    chosen,
+    lang === 'en' ? 'your occupation' : 'deinen Beruf'
+  );
+  const b = plainName(
+    other,
+    lang === 'en' ? 'the other occupation' : 'den anderen Beruf'
+  );
+  return lang === 'en'
+    ? `You have selected ${a} right now, so I only answer about that here. Switch to the tab ${b} at the top, and I will help you with that too.`
+    : `Du hast gerade ${a} ausgewählt, deshalb antworte ich hier nur dazu. Wechsle oben auf den Reiter ${b}, dann helfe ich dir auch dazu.`;
+}
 
 /** A failed check is a technical failure, said as such (never as a missing right). */
 export const DENIAL_TECHNICAL_TEXT =

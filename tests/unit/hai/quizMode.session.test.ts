@@ -158,6 +158,33 @@ describe('quizReducer', () => {
     expect(state.question).toBeNull();
   });
 
+  it('takes the occupation from the server and keeps it through the round', () => {
+    const state = run([
+      { type: 'start', scope: { enablerId: null, topic: null } },
+      {
+        type: 'question',
+        question: question('q1'),
+        total: 2,
+        remaining: 2,
+        occupation: 'FIAE',
+      },
+      { type: 'answered', feedback: feedback(true) },
+      // a later answer without the name does not erase it
+      { type: 'question', question: question('q2'), total: 2, remaining: 1 },
+      { type: 'finish' },
+    ]);
+    expect(state.occupation).toBe('FIAE');
+    expect(quizReducer(state, { type: 'restart' }).occupation).toBe('FIAE');
+    expect(initialQuizState().occupation).toBeNull();
+    // an empty result names it too
+    expect(
+      run([
+        { type: 'start', scope: { enablerId: null, topic: null } },
+        { type: 'empty', reason: 'no_content', occupation: 'KfBM' },
+      ]).occupation
+    ).toBe('KfBM');
+  });
+
   it('restart keeps the scope and starts the history again', () => {
     const state = run([
       { type: 'start', scope: { enablerId: null, topic: 'SQL' } },

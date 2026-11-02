@@ -33,6 +33,7 @@ import {
     schoolExamResults,
     activityReports,
     notifications,
+    trainingCatalogs,
 } from '@/db/migrations/schemas/schema';
 import { toHaiRole } from '@/lib/auth-helpers';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
@@ -41,6 +42,10 @@ import { isLearningTechniqueQuestion } from './learningTechniques/detect';
 import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 import { traineeSearchNotFoundLine } from './denial';
+import { foldUmlauts, isDayBriefingMessage } from './dayQuestion';
+import { formatDayProgress, loadDayProgress } from './dayProgress';
+import type { DayProgress } from './dayProgress';
+import type { HaiTrainingScope } from './trainingScope';
 
 // ============================================================================
 // TYPES
@@ -71,6 +76,14 @@ export interface LiveDataContext {
     tokenEstimate: number;
     /** Which data intent was detected */
     dataIntent: DataIntent;
+}
+
+/** What the pipeline knows about the turn, only used for the day companion. */
+export interface DataContextOptions {
+    /** Code of the occupation chosen in the app (x-catalog): only the order of the progress per occupation. */
+    preferredCatalogCode?: string | null;
+    /** Training scope of the trainee (phase plan), for the next step. */
+    trainingScope?: Pick<HaiTrainingScope, 'currentPhase' | 'allowedComponentPhases'>;
 }
 
 export interface UserSnapshot {
@@ -108,6 +121,21 @@ export interface CalendarInfo {
 }
 
 export interface ReportStatus {
+    draft: number;
+    submitted: number;
+    approved: number;
+    rejected: number;
+    currentWeekExists: boolean;
+    /**
+     * Only set for a trainee in several occupations: a report belongs to one
+     * occupation, so the numbers above are those of the default occupation and
+     * this list gives every occupation its own numbers.
+     */
+    occupations?: ReportStatusOccupation[];
+}
+
+export interface ReportStatusOccupation {
+    code: string;
     draft: number;
     submitted: number;
     approved: number;
@@ -168,22 +196,18 @@ const KW_PROGRESS = ['fortschritt', 'wie weit', 'status', 'abgeschlossen', 'erle
 const KW_CALENDAR = ['kalender', 'woche', 'berufsschule', 'schulblock', 'betrieb', 'urlaub', 'ferien', 'wann habe ich', 'naechste woche', 'diese woche', 'block', 'zeitplan', 'stundenplan', 'schultag', 'frei', 'wann bin ich'];
 const KW_EXAM_RESULTS = ['note', 'noten', 'bestanden', 'durchgefallen', 'ergebnis', 'punkte', 'prozent', 'wie habe ich abgeschnitten', 'klausurergebnis', 'pruefungsergebnis', 'zeugnis', 'welche note', 'meine noten', 'notenspiegel', 'notenuebersicht', 'schnitt'];
 const KW_EXAM = ['pruefung', 'klausur', 'ihk', 'abschlusspruefung', 'examen', 'naechste pruefung', 'wann schreibe ich', 'ap1', 'ap2', 'teil 1', 'teil 2', 'zwischenpruefung', 'pruefungstermin'];
-const KW_SUBMISSION = ['abgabe', 'abgaben', 'eingereicht', 'einreichung', 'submission', 'abgegeben', 'was habe ich abgegeben', 'feedback', 'bewertung meiner', 'rueckmeldung', 'meine loesung', 'meine abgabe', 'korrektur', 'bewertet'];
+const KW_SUBMISSION = ['abgabe', 'abgaben', 'eingereicht', 'einreichung', 'submission', 'abgegeben', 'was habe ich abgegeben', 'feedback', 'bewertung meiner', 'rueckmeldung', 'rückmeldung', 'meine loesung', 'meine abgabe', 'korrektur', 'bewertet'];
 const KW_USE_CASE = ['use case', 'use-case', 'usecase', 'fallstudie', 'praktische aufgabe', 'praxisaufgabe'];
 const KW_REPORT = ['nachweis', 'taetigkeitsnachweis', 'bericht', 'berichtsheft', 'wochenbericht', 'activity report', 'nachweise', 'ausbildungsnachweis', 'wie viele berichte', 'taetigkeit'];
 const KW_NOTIFICATION = ['benachrichtigung', 'neuigkeiten', 'notification', 'neue nachrichten', 'was gibt es neues', 'updates', 'ungelesen', 'inbox'];
 const KW_REVIEW = ['bewerten', 'ausstehend', 'korrigieren', 'review', 'eingereicht', 'submissions', 'pruefe', 'zu bewerten', 'offene abgaben', 'pending', 'was muss ich'];
-// The day at a glance (day companion, voice or chat). Checked first: "was muss ich heute"
-// would otherwise land in the review list of the trainers. Written without umlauts, the
-// message is folded the same way (foldUmlauts).
-const KW_DAY = ['was steht heute an', 'was steht an', 'was steht heute', 'was liegt heute an', 'was liegt an', 'was ansteht', 'mein tag', 'meinen tag', 'tagesplan', 'tageslage', 'tagesstart', 'tagesueberblick', 'guten morgen', 'plan fuer heute', 'plane heute', 'heute dringend', 'heute wichtig', 'was muss ich heute', 'was ist heute wichtig', 'was ist dringend'];
-
-const UMLAUT_FOLD: Record<string, string> = { 'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss' };
+// The day at a glance (day companion, voice or chat) is recognized by dayQuestion.ts:
+// fixed phrases and natural questions about the own tasks, with folded umlauts. It is
+// checked first: "was muss ich heute" would otherwise land in the review list of the
+// trainers.
 
 /** Lower case with ae, oe, ue, ss: a spoken or typed "für" meets the keyword "fuer". */
-export function foldUmlauts(text: string): string {
-    return text.toLowerCase().replace(/[äöüß]/g, c => UMLAUT_FOLD[c]);
-}
+export { foldUmlauts };
 
 const KW_OVERVIEW =['ueberblick', 'meine azubis', 'wie stehen', 'fortschritt meiner', 'alle azubis', 'azubi-uebersicht', 'meine auszubildenden'];
 
@@ -242,11 +266,11 @@ function extractPotentialTraineeName(message: string): string | null {
 export function classifyDataIntent(message: string, userRole: UserRole): DataIntent {
     const lower = message.toLowerCase();
 
-    // The day at a glance, for both roles. Only this list reads the message with
-    // folded umlauts (a spoken "für" must meet "fuer"); the older lists keep their
-    // behavior, so a learning question with the word "Prüfung" stays a learning one.
-    const folded = foldUmlauts(message);
-    if (KW_DAY.some(k => folded.includes(k))) return 'day_briefing';
+    // The day at a glance, for both roles. Only this recognition reads the message
+    // with folded umlauts (a spoken "für" must meet "fuer"); the older lists keep
+    // their behavior, so a learning question with the word "Prüfung" stays a
+    // learning one.
+    if (isDayBriefingMessage(message)) return 'day_briefing';
 
     // Trainer-only intents first (more specific)
     if (userRole === 'TRAINER') {
@@ -580,9 +604,17 @@ export async function fetchCalendar(userId: string): Promise<CalendarInfo> {
 }
 
 /**
- * Fetch activity report (Taetigkeitsnachweis) status.
+ * Fetch activity report (Taetigkeitsnachweis) status. A report belongs to one
+ * occupation, so the numbers are counted per occupation: with `catalogId` for
+ * that occupation only, without it for every occupation of the trainee (a
+ * trainee in one occupation gets the plain numbers, one in several gets the
+ * default occupation plus a list with each occupation, see ReportStatus).
+ * Fail closed: without a catalog scope nothing is counted.
  */
-export async function fetchReportStatus(userId: string): Promise<ReportStatus> {
+export async function fetchReportStatus(
+    userId: string,
+    catalogId?: string | null
+): Promise<ReportStatus> {
     const defaultResult: ReportStatus = {
         draft: 0,
         submitted: 0,
@@ -592,21 +624,38 @@ export async function fetchReportStatus(userId: string): Promise<ReportStatus> {
     };
 
     try {
-        // Count reports by status
-        const statusCounts = await db.execute(sql`
-            SELECT status, COUNT(*) as cnt
-            FROM activity_reports
-            WHERE trainee_id = ${userId}
-            GROUP BY status
-        `);
+        const catalogScope = catalogId ? null : await getCatalogScopeForUserId(userId);
+        const catalogIds = catalogId ? [catalogId] : (catalogScope?.allowedCatalogIds ?? []);
+        if (catalogIds.length === 0) return defaultResult;
+        const defaultCatalogId = catalogId ?? catalogScope!.activeCatalogId;
 
-        for (const row of statusCounts as any[]) {
+        const perCatalog = new Map<string, Omit<ReportStatusOccupation, 'code'>>(
+            catalogIds.map(id => [id, { draft: 0, submitted: 0, approved: 0, rejected: 0, currentWeekExists: false }])
+        );
+
+        // Count reports by occupation and status
+        const statusCounts = await db
+            .select({
+                catalogId: activityReports.trainingCatalogId,
+                status: activityReports.status,
+                cnt: count(),
+            })
+            .from(activityReports)
+            .where(and(
+                eq(activityReports.traineeId, userId),
+                inArray(activityReports.trainingCatalogId, catalogIds),
+            ))
+            .groupBy(activityReports.trainingCatalogId, activityReports.status);
+
+        for (const row of statusCounts) {
+            const entry = perCatalog.get(String(row.catalogId));
+            if (!entry) continue;
             const s = row.status as string;
             const c = Number(row.cnt);
-            if (s === 'DRAFT') defaultResult.draft = c;
-            else if (s === 'SUBMITTED') defaultResult.submitted = c;
-            else if (s === 'APPROVED') defaultResult.approved = c;
-            else if (s === 'REJECTED') defaultResult.rejected = c;
+            if (s === 'DRAFT') entry.draft = c;
+            else if (s === 'SUBMITTED') entry.submitted = c;
+            else if (s === 'APPROVED') entry.approved = c;
+            else if (s === 'REJECTED') entry.rejected = c;
         }
 
         // Check if current week report exists
@@ -618,16 +667,33 @@ export async function fetchReportStatus(userId: string): Promise<ReportStatus> {
         const currentWeek = Math.ceil((dayOfYear + janFirst.getDay()) / 7);
 
         const weekCheck = await db
-            .select({ id: activityReports.id })
+            .selectDistinct({ catalogId: activityReports.trainingCatalogId })
             .from(activityReports)
             .where(and(
                 eq(activityReports.traineeId, userId),
+                inArray(activityReports.trainingCatalogId, catalogIds),
                 eq(activityReports.weekNumber, currentWeek),
                 eq(activityReports.year, currentYear),
-            ))
-            .limit(1);
+            ));
+        for (const row of weekCheck) {
+            const entry = perCatalog.get(String(row.catalogId));
+            if (entry) entry.currentWeekExists = true;
+        }
 
-        defaultResult.currentWeekExists = weekCheck.length > 0;
+        const own = perCatalog.get(defaultCatalogId) ?? perCatalog.get(catalogIds[0])!;
+        Object.assign(defaultResult, own);
+
+        if (catalogIds.length > 1) {
+            const codeRows = await db
+                .select({ id: trainingCatalogs.id, code: trainingCatalogs.code })
+                .from(trainingCatalogs)
+                .where(inArray(trainingCatalogs.id, catalogIds));
+            const codes = new Map(codeRows.map(r => [String(r.id), String(r.code)]));
+            defaultResult.occupations = catalogIds.map(id => ({
+                code: codes.get(id) ?? id,
+                ...perCatalog.get(id)!,
+            }));
+        }
 
         return defaultResult;
     } catch (error) {
@@ -1090,26 +1156,37 @@ async function fetchTraineeDetailForTrainer(
             }
         }
 
-        // 4. Report status
+        // 4. Report status, per occupation (a report belongs to one occupation)
         const reports = await db.execute(sql`
-            SELECT status, COUNT(*) as cnt
-            FROM activity_reports
-            WHERE trainee_id = ${trainee.id}
-            GROUP BY status
+            SELECT tc.code AS catalog_code, ar.status, COUNT(*) as cnt
+            FROM activity_reports ar
+            JOIN training_catalogs tc ON tc.id = ar.training_catalog_id
+            WHERE ar.trainee_id = ${trainee.id}
+            GROUP BY tc.code, ar.status
+            ORDER BY tc.code
         `);
 
         if ((reports as any[]).length > 0) {
-            const reportMap: Record<string, number> = {};
+            const byCatalog = new Map<string, Record<string, number>>();
             for (const r of reports as any[]) {
+                const code = String(r.catalog_code);
+                const reportMap = byCatalog.get(code) ?? {};
                 reportMap[r.status] = Number(r.cnt);
+                byCatalog.set(code, reportMap);
             }
             const reportLabels: Record<string, string> = {
                 DRAFT: 'Entwurf', SUBMITTED: 'Eingereicht', APPROVED: 'Genehmigt', REVISION_NEEDED: 'Korrektur noetig',
             };
-            const reportParts = Object.entries(reportMap)
-                .map(([status, cnt]) => `${reportLabels[status] || status}: ${cnt}`)
-                .join(', ');
-            parts.push(`**Nachweise:** ${reportParts}`);
+            for (const [code, reportMap] of byCatalog) {
+                const reportParts = Object.entries(reportMap)
+                    .map(([status, cnt]) => `${reportLabels[status] || status}: ${cnt}`)
+                    .join(', ');
+                parts.push(
+                    byCatalog.size > 1
+                        ? `**Nachweise ${code}:** ${reportParts}`
+                        : `**Nachweise:** ${reportParts}`
+                );
+            }
         }
     } catch (error) {
         console.error('HAI.ai DataContext: Error fetching trainee detail:', error);
@@ -1218,6 +1295,23 @@ function formatCalendar(cal: CalendarInfo): string {
 }
 
 function formatReports(reports: ReportStatus): string {
+    // A trainee in several occupations: every occupation has its own reports
+    if (reports.occupations && reports.occupations.length > 1) {
+        const blocks = reports.occupations.map(o => {
+            const sum = o.draft + o.submitted + o.approved + o.rejected;
+            return [
+                `**Taetigkeitsnachweise ${o.code} gesamt:** ${sum}`,
+                `- Entwurf: ${o.draft}`,
+                `- Eingereicht: ${o.submitted}`,
+                `- Genehmigt: ${o.approved}`,
+                `- Abgelehnt: ${o.rejected}`,
+                o.currentWeekExists
+                    ? `**Aktuelle Woche (${o.code}):** Nachweis vorhanden.`
+                    : `**Hinweis:** Fuer die aktuelle Woche existiert in ${o.code} noch kein Nachweis!`,
+            ].join('\n');
+        });
+        return blocks.join('\n');
+    }
     const total = reports.draft + reports.submitted + reports.approved + reports.rejected;
     const lines: string[] = [
         `**Taetigkeitsnachweise gesamt:** ${total}`,
@@ -1249,6 +1343,53 @@ function formatNotifications(notifs: NotificationInfo): string {
     }
 
     return lines.join('\n');
+}
+
+/**
+ * What is empty on the day of a trainee, in words, so the answer can name it
+ * ("Für heute sind keine Termine eingetragen") instead of "no data". Returns
+ * null when nothing is missing. When every area is empty it says so too, the
+ * answer then suggests to go on learning.
+ */
+export function formatDayGaps(input: {
+    progress: DayProgress;
+    calendar: CalendarInfo;
+    reports: ReportStatus;
+    submissions: SubmissionInfo[];
+    notifs: NotificationInfo;
+}): string | null {
+    const { progress, calendar, reports, submissions, notifs } = input;
+    const lines: string[] = [];
+
+    const noAppointments =
+        !calendar.currentBlockType &&
+        calendar.upcomingExams.length === 0 &&
+        !calendar.nextSchoolBlock;
+    if (noAppointments) {
+        lines.push('- Termine: Für heute und die nächsten 14 Tage sind keine Termine eingetragen (keine Blockzuordnung, keine Prüfung, kein Schulblock).');
+    }
+    if (submissions.length === 0) {
+        lines.push('- Abgaben: Es gibt noch keine Abgaben und damit keine Rückmeldungen.');
+    }
+    if (notifs.unreadCount === 0) {
+        lines.push('- Benachrichtigungen: Keine ungelesenen.');
+    }
+
+    const reportTotal = reports.draft + reports.submitted + reports.approved + reports.rejected;
+    const nothingToReport =
+        noAppointments &&
+        progress.occupations.length === 0 &&
+        !progress.failed &&
+        submissions.length === 0 &&
+        notifs.unreadCount === 0 &&
+        notifs.recentTitles.length === 0 &&
+        reportTotal === 0;
+    if (nothingToReport) {
+        lines.push('- Insgesamt: Zu Terminen, Lernfortschritt, Abgaben, Nachweisen und Benachrichtigungen liegt aktuell nichts vor. Sage das ehrlich und schlage einen Schritt vor, zum Beispiel weiter lernen.');
+    }
+
+    if (lines.length === 0) return null;
+    return ['**Leere Bereiche (nenne sie konkret, nicht pauschal "keine Daten"):**', ...lines].join('\n');
 }
 
 function formatExamResults(exams: ExamResultInfo[]): string {
@@ -1382,7 +1523,8 @@ function formatTraineeOverview(trainees: TrainerTraineeInfo[]): string {
 export async function fetchDataContext(
     userId: string,
     userRole: UserRole,
-    message: string
+    message: string,
+    options: DataContextOptions = {}
 ): Promise<LiveDataContext | null> {
     const startTime = Date.now();
 
@@ -1465,9 +1607,11 @@ export async function fetchDataContext(
                     }
                     case 'day_briefing': {
                         // Only what the person sees in the platform anyway, the
-                        // short version: trainees get appointments, report status,
-                        // feedback on submissions and notifications, trainers get
-                        // the open reviews and notifications
+                        // short version: trainees get progress with the next step
+                        // (per occupation, the chosen one first), appointments,
+                        // report status, feedback on submissions and
+                        // notifications, trainers get the open reviews and
+                        // notifications. Across all occupations of the person.
                         if (userRole === 'TRAINER') {
                             const reviews = await fetchTrainerPendingReviews(userId);
                             parts.push(formatTrainerReviews(reviews));
@@ -1475,6 +1619,17 @@ export async function fetchDataContext(
                             parts.push(formatNotifications(notifs));
                             intentTokenEstimate = 350;
                         } else {
+                            const plan = options.trainingScope
+                                ? {
+                                    currentPhase: options.trainingScope.currentPhase,
+                                    allowedStages: options.trainingScope.allowedComponentPhases,
+                                }
+                                : null;
+                            const dayProgress = await loadDayProgress(userId, {
+                                preferredCatalogCode: options.preferredCatalogCode,
+                                plan,
+                            });
+                            parts.push(formatDayProgress(dayProgress, options.preferredCatalogCode));
                             const calendar = await fetchCalendar(userId);
                             parts.push(formatCalendar(calendar));
                             const reports = await fetchReportStatus(userId);
@@ -1483,7 +1638,15 @@ export async function fetchDataContext(
                             parts.push(formatSubmissions(submissions));
                             const notifs = await fetchNotifications(userId);
                             parts.push(formatNotifications(notifs));
-                            intentTokenEstimate = 900;
+                            const gaps = formatDayGaps({
+                                progress: dayProgress,
+                                calendar,
+                                reports,
+                                submissions,
+                                notifs,
+                            });
+                            if (gaps) parts.push(gaps);
+                            intentTokenEstimate = 1150;
                         }
                         break;
                     }

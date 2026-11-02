@@ -26,7 +26,44 @@ person.
 - **The texts of the refusals** (no occupation, another occupation) are fixed texts with the reason in plain words and an alternative, see `docs/hai-ablehnungen.md` (`src/lib/hai/denial.ts`). `NEUTRAL_REFUSAL` and `FOREIGN_OCCUPATION_TEXT` in `persona.ts` are no longer sent by the pipeline.
 - **Questions about another occupation** (code, title, short name or the names in the
   settings of a catalog the user may not use) get a neutral refusal. Nothing of the other
-  occupation is named. A person with several occupations may ask about all of them.
+  occupation is named. Without a choice in the app (next point) a person with several
+  occupations may ask about all of them.
+- **The chosen occupation (the tab, rule since 02.11.2026).** The app sends the occupation the
+  person works in as the header `x-catalog` (`PipelineContext.preferredCatalogCode`). If it is one
+  of the occupations of the person (or of the scope of a trainer), the HAI works ONLY in that
+  occupation, like the rest of the platform and like the quiz mode:
+  - **search and page index**: `resolveRetrievalAccess(userId, code)` narrows `catalogIds` to that
+    one catalog. It asks `getCatalogScopeForUserId` with the header, the same rule as the routes,
+    so chat and quiz mode cannot drift apart. The full list of the person stays next to it
+    (`allowedCatalogIds`), only the persona and the navigation read it.
+  - **persona**: the single persona of that occupation. The merged persona (PR 257, one persona for
+    all occupations) applies only WITHOUT a choice.
+  - **titles of the open enabler or course** (`getContextTitles` in the chat route): an enabler of
+    the other own occupation is dropped like one of a foreign occupation, and the model gets the
+    hint UMFANG.
+  - **A code that is none of the occupations of the person is ignored**: no 403, nothing lost,
+    nothing gained. Role, occupation and scope come from the server only.
+  - **A question about the OTHER occupation the person also has** (FIAE chosen, question about
+    KfBM) is answered before search and model with a fixed text of the category AUSWAHL: "Du hast
+    gerade FIAE ausgewählt, deshalb antworte ich hier nur dazu. Wechsle oben auf den Reiter KfBM,
+    dann helfe ich dir auch dazu." Only the names of the two own occupations appear, as the tabs
+    show them (`tabNameOf`: short name of the branding, else the code). The persona carries
+    them as `unselectedOwn` (own markers, the same marker rules as for foreign occupations:
+    start of a word, spellings, spelled-out letters) and `chosenLabel`. `personaRefusal` checks the
+    foreign occupations first (BERUF, the user does not have it), then this list (AUSWAHL). For
+    occupations the user does not have nothing changes.
+  - **Without a header** everything stays as before: all occupations of the person, merged
+    persona. The quiz mode takes the first occupation then (like every trainee route). That is no
+    conflict: the app sends the header as soon as the occupations are loaded.
+- **Daily briefing and live data stay across occupations.** `dataContext.ts` ("Was steht heute
+  an", progress, calendar, reports, notifications) reads the data of the person over ALL of their
+  occupations, with or without a choice: the day is not split by occupation. It is a decision of
+  02.11.2026, not an omission. Only the knowledge search, the persona and the quiz follow the tab.
+- **Navigation** (`src/lib/hai/navigation/*`) offers targets of ALL occupations of the person, the
+  chosen occupation is looked at first: "Weiter lernen" takes an open step of the chosen occupation
+  and only then of the others, "Enabler 3" means the enabler 3 of the chosen occupation and only
+  falls back to the others when the chosen one has no such enabler. Nothing the person may see is
+  hidden by it.
 - **Off-topic filter**: the block list stays the base. Per occupation, `offtopic_exceptions`
   are words that keep a message out of the filter (procurement, travel costs, hospitality).
   Without code help (`code_help` false) code words no longer count as code help.
@@ -163,7 +200,12 @@ To roll back: `update training_catalogs set settings = settings - 'hai' where co
 
 ## Limits
 
-- A person with several occupations gets the texts of the first (primary) catalog and the
-  exception words of all of them.
+- Without a choice in the app a person with several occupations gets one merged persona for all of
+  them (the base is the first catalog) and the exception words of all of them. With a choice the
+  persona is the one of the chosen occupation alone.
+- A question about the other own occupation is recognized by its names (code, short name, names in
+  the settings, "Fachinformatik" for FIAE). A question that names it only indirectly goes to the
+  model, but the search then reads the chosen occupation only, so no content of the other one
+  appears.
 - The classifier works on words. A question about another occupation without naming it
   cannot be recognized; the index search is filtered by occupation anyway (PR 118).
