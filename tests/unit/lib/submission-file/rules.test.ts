@@ -16,6 +16,7 @@ import {
   mimeOf,
   parseSubmissionPath,
   parseUploadId,
+  previewKindOf,
   sanitizeFileName,
   signatureRejectionCode,
   submissionFolder,
@@ -354,5 +355,27 @@ describe('bucket settings', () => {
         'image/jpeg',
       ],
     });
+  });
+});
+
+// WMCNL-2927: which files can be looked at in the platform
+describe('previewKindOf', () => {
+  it('shows a PDF in the viewer and a PNG or JPG as an image', () => {
+    expect(previewKindOf('Loesung.pdf')).toBe('pdf');
+    expect(previewKindOf('Bild.PNG')).toBe('image');
+    expect(previewKindOf('foto.jpg')).toBe('image');
+    expect(previewKindOf('foto.jpeg')).toBe('image');
+  });
+
+  it('has no preview for Word and Excel, they are only downloaded', () => {
+    expect(previewKindOf('Bericht.docx')).toBeNull();
+    expect(previewKindOf('Tabelle.xlsx')).toBeNull();
+  });
+
+  it('has no preview for anything else or for no extension', () => {
+    expect(previewKindOf('a.exe')).toBeNull();
+    expect(previewKindOf('a.pdf.exe')).toBeNull();
+    expect(previewKindOf('ohne')).toBeNull();
+    expect(previewKindOf('')).toBeNull();
   });
 });

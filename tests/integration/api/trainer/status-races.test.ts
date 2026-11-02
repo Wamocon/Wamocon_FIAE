@@ -233,12 +233,67 @@ describe('PATCH /reviews/*: feedback on a submission', () => {
       }
     );
 
-    it.each(['PENDING', 'APPROVED', 'REJECTED'])(
-      'accepts the status %s',
+    it.each(['PENDING', 'APPROVED'])(
+      'accepts the status %s without a feedback',
       async status => {
         const { res } = await patch({ status });
         expect(res.status).toBe(200);
       }
     );
+
+    // WMCNL-3000: a rejection tells the trainee what to improve, so it needs a
+    // feedback. Before, a use case could be rejected with an empty field.
+    it('accepts the status REJECTED with a feedback', async () => {
+      const { res } = await patch({
+        status: 'REJECTED',
+        trainerFeedback: 'Bitte die Umsetzung genauer beschreiben.',
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it.each([
+      ['no feedback at all', {}],
+      ['an empty feedback', { trainerFeedback: '' }],
+      [
+        'a feedback of blanks',
+        { trainerFeedback: '  ' + String.fromCharCode(10) + ' ' },
+      ],
+      ['null', { trainerFeedback: null }],
+      ['a feedback that is no text', { trainerFeedback: 5 }],
+      ['empty feedbacks per scenario', { feedbacks: [] }],
+      [
+        'blank feedbacks per scenario',
+        { feedbacks: [{ scenarioIndex: 0, feedback: ' ' }] },
+      ],
+    ])(
+      'answers 400 FEEDBACK_REQUIRED for REJECTED with %s and changes nothing',
+      async (_label, extra) => {
+        const { res, mock } = await patch({ status: 'REJECTED', ...extra });
+        expect(res.status).toBe(400);
+        expect(await res.json()).toMatchObject({ code: 'FEEDBACK_REQUIRED' });
+        expect(mock.writes('update', entry.table)).toEqual([]);
+        expect(mock.writes('insert', 'notifications')).toEqual([]);
+      }
+    );
+  });
+
+  // the lesson form with one feedback per scenario counts as a feedback
+  it('enablers: accepts REJECTED with a feedback for one scenario', async () => {
+    const entry = cases[0];
+    const { mod } = await loadScoped(entry.route, {
+      tables: { profiles: [trainee], ...entry.tables },
+      returns: { [entry.returnKey]: [entry.row] },
+    });
+    const res = await mod.PATCH(
+      scopeReq(`${API}/reviews/enablers/${SUB_ID}`, {
+        method: 'PATCH',
+        body: {
+          status: 'REJECTED',
+          feedbacks: [{ scenarioIndex: 0, feedback: 'Zu knapp.' }],
+        },
+      }),
+      { params: Promise.resolve({ submissionId: SUB_ID }) }
+    );
+    expect(res.status).toBe(200);
   });
 });

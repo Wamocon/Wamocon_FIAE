@@ -13,6 +13,8 @@ import { getFile } from '@/lib/submission-file/service';
 // (own organization, chosen occupation; admins of the organization are trainer level too).
 // Answers { file: null } when the trainee attached none, otherwise name, size, date and a
 // read link that works for two minutes (it forces a download, nothing is shown inline).
+// With ?link=0 the answer holds name, size and date only (the preview asks for the kind of
+// the file first and then reads the bytes from the content route next to this one).
 
 export async function GET(
   req: NextRequest,
@@ -29,7 +31,9 @@ export async function GET(
     const storage = openStorage();
     if (storage instanceof Response) return storage;
     return respond(
-      await getFile({ storage }, scope, { withLink: true }),
+      await getFile({ storage }, scope, {
+        withLink: new URL(req.url).searchParams.get('link') !== '0',
+      }),
       'file'
     );
   } catch (error) {

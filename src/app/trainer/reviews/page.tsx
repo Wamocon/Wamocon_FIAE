@@ -1,7 +1,15 @@
 'use client';
 
 import { authFetch } from '@/lib/authFetch';
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -17,6 +25,23 @@ import {
 import { useSearchParams } from 'next/navigation';
 import { FlipbookViewer } from '@/components/ui/FlipbookViewer';
 import { SubmissionFileLink } from '@/components/trainer/SubmissionFileLink';
+import { isQuizPassed } from '@/lib/catalog/progression';
+import { viewerSubtitle } from '@/lib/documentTypeLabel';
+import {
+  hasReviewFeedback,
+  FEEDBACK_REQUIRED,
+} from '@/lib/trainer/review-feedback';
+import {
+  MAX_RESTORED_ROWS,
+  saveReviewListState,
+  readReviewListState,
+  clearReviewListState,
+} from '@/lib/trainer/review-list-state';
+import {
+  REVIEWS_MAX_PAGE_SIZE,
+  REVIEWS_PAGE_SIZE,
+  type ReviewStatusFilter,
+} from '@/lib/trainer/review-paging';
 
 type EnablerReviewItem = {
   id: string;
@@ -59,24 +84,92 @@ type QuizSubmissionItem = {
 };
 type SolutionDocInfo = { url: string; title: string };
 
+type Tab = 'enablers' | 'usecases' | 'quizzes';
+type Kind = 'enabler' | 'usecase' | 'quiz';
+type Filters = {
+  status: ReviewStatusFilter;
+  quizType: 'all' | 'LESSON' | 'GLOBAL';
+  search: string;
+};
+
+const TABS: readonly Tab[] = ['enablers', 'usecases', 'quizzes'];
+const STATUS_FILTERS: readonly ReviewStatusFilter[] = [
+  'pending',
+  'all',
+  'approved',
+  'rejected',
+];
+const SEARCH_DELAY_MS = 400;
+
+const kindOfTab = (tab: Tab): Kind =>
+  tab === 'enablers' ? 'enabler' : tab === 'usecases' ? 'usecase' : 'quiz';
+
+/** The filter named in the address: `status`, or the older `onlyPending` of the dashboard links. */
+function filterFromParams(
+  status: string | null,
+  onlyPending: string | null
+): ReviewStatusFilter | null {
+  if (status && (STATUS_FILTERS as readonly string[]).includes(status)) {
+    return status as ReviewStatusFilter;
+  }
+  if (onlyPending === 'true') return 'pending';
+  if (onlyPending === 'false') return 'all';
+  return null;
+}
+
+/** The element of the page that scrolls (the layout scrolls inside a box, not the window). */
+function scrollParentOf(element: HTMLElement | null): HTMLElement | null {
+  let node = element?.parentElement ?? null;
+  while (node) {
+    const overflowY = window.getComputedStyle(node).overflowY;
+    if (overflowY === 'auto' || overflowY === 'scroll') return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/** Rows once, in the order of the first appearance (a row that moved between two pages is not doubled). */
+function mergeById<T extends { id: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter(r => {
+    if (seen.has(r.id)) return false;
+    seen.add(r.id);
+    return true;
+  });
+}
+
+/** Whether a name says something the quiz title does not (WMCNL-3004). */
+const sameText = (a?: string | null, b?: string | null) =>
+  (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+
 export default function TrainerReviewsPage() {
   const { profile } = useAuth();
   const { t } = useLanguage();
   const searchParams = useSearchParams();
   const viewParam = searchParams.get('view'); // 'enablers' | 'usecases' | 'quizzes'
-  const onlyPendingParam = searchParams.get('onlyPending'); // 'true' | 'false'
+  const statusParam = searchParams.get('status'); // pending | all | approved | rejected
+  const onlyPendingParam = searchParams.get('onlyPending'); // 'true' | 'false' (links of the dashboard)
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<
-    'enablers' | 'usecases' | 'quizzes'
-  >('enablers');
+  // The tab and the filter come from the address, so a reload keeps them
+  const [activeTab, setActiveTab] = useState<Tab>(
+    (TABS as readonly string[]).includes(viewParam ?? '')
+      ? (viewParam as Tab)
+      : 'enablers'
+  );
+  // One filter for the page. The quiz list knows only open or all, a status
+  // that a quiz does not have counts as "all" there.
+  const [statusFilter, setStatusFilter] = useState<ReviewStatusFilter>(
+    filterFromParams(statusParam, onlyPendingParam) ?? 'pending'
+  );
 
   // Enabler/UseCase state
   const [enablerSubs, setEnablerSubs] = useState<EnablerReviewItem[]>([]);
   const [useCaseSubs, setUseCaseSubs] = useState<UseCaseReviewItem[]>([]);
-  const [statusFilter, setStatusFilter] = useState<
-    'all' | 'pending' | 'approved' | 'rejected'
-  >('pending');
+  const [enablerTotal, setEnablerTotal] = useState(0);
+  const [useCaseTotal, setUseCaseTotal] = useState(0);
   const [feedbackMap, setFeedbackMap] = useState<Record<string, string>>({});
   const [feedbacksMap, setFeedbacksMap] = useState<
     Record<string, Array<{ scenarioIndex: number; feedback: string }>>
@@ -84,15 +177,19 @@ export default function TrainerReviewsPage() {
   const [solutionIndexMap, setSolutionIndexMap] = useState<
     Record<string, number>
   >({});
+  // Rejections that were tried without a feedback (WMCNL-3000)
+  const [feedbackMissingIds, setFeedbackMissingIds] = useState<Set<string>>(
+    new Set()
+  );
 
   // Quiz state
   const [quizzes, setQuizzes] = useState<QuizSubmissionItem[]>([]);
-  const [pendingFilter, setPendingFilter] = useState<'pending' | 'all'>(
-    'pending'
-  );
+  const [quizTotal, setQuizTotal] = useState(0);
   const [quizTypeFilter, setQuizTypeFilter] = useState<
     'all' | 'LESSON' | 'GLOBAL'
   >('all');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
 
   // Double-click protection: track IDs currently being processed
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -114,6 +211,14 @@ export default function TrainerReviewsPage() {
     Record<string, 'APPROVED' | 'REJECTED' | null>
   >({});
 
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  // Counts the loads, so the answer of an older load never replaces a newer one
+  const loadRun = useRef(0);
+  // Scroll position to restore after the list is loaded (back from "Details")
+  const pendingScroll = useRef<number | null>(null);
+
+  const quizPending = statusFilter === 'pending';
+
   const filteredEnablers = useMemo(
     () =>
       enablerSubs.filter(s =>
@@ -129,14 +234,8 @@ export default function TrainerReviewsPage() {
     [useCaseSubs, statusFilter]
   );
   const quizzesFiltered = useMemo(
-    () =>
-      quizzes.filter(q => {
-        const pendingOk = pendingFilter === 'pending' ? !q.isReviewed : true;
-        const typeOk =
-          quizTypeFilter === 'all' ? true : q.quizType === quizTypeFilter;
-        return pendingOk && typeOk;
-      }),
-    [quizzes, pendingFilter, quizTypeFilter]
+    () => quizzes.filter(q => (quizPending ? !q.isReviewed : true)),
+    [quizzes, quizPending]
   );
 
   // Fetch solution document (TRAINER_SOLUTION) for a use case
@@ -165,7 +264,7 @@ export default function TrainerReviewsPage() {
           ...prev,
           [useCaseId]: {
             url: solutionDoc.storageUrl,
-            title: solutionDoc.title || 'Solution PDF',
+            title: solutionDoc.title || t('trainer.reviews.solutionPdf'),
           },
         }));
       } else {
@@ -174,6 +273,7 @@ export default function TrainerReviewsPage() {
     } catch {
       setSolutionDocsMap(prev => ({ ...prev, [useCaseId]: null }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load solution documents when use case submissions change
@@ -188,109 +288,243 @@ export default function TrainerReviewsPage() {
   const closeFlipbook = () =>
     setFlipbookState({ isOpen: false, url: '', title: '' });
 
-  // Sync state from URL params (deep-linking from dashboard)
+  // Sync state from URL params (deep-linking from dashboard and notifications)
   useEffect(() => {
-    const allowed = ['enablers', 'usecases', 'quizzes'] as const;
-    if (viewParam && (allowed as readonly string[]).includes(viewParam)) {
-      setActiveTab(viewParam as any);
+    if (viewParam && (TABS as readonly string[]).includes(viewParam)) {
+      setActiveTab(viewParam as Tab);
     }
-    if (onlyPendingParam === 'true') {
-      setStatusFilter('pending');
-      setPendingFilter('pending');
-    } else if (onlyPendingParam === 'false') {
-      setStatusFilter('all');
-      setPendingFilter('all');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewParam, onlyPendingParam]);
+    const fromUrl = filterFromParams(statusParam, onlyPendingParam);
+    if (fromUrl) setStatusFilter(fromUrl);
+  }, [viewParam, statusParam, onlyPendingParam]);
 
-  // load Enablers/UseCases
+  // The tab and the filter stay in the address (WMCNL-3002): a reload, the way
+  // back from "Details" and a link keep them. Everything else in the address
+  // (the chosen occupation) stays as it is.
   useEffect(() => {
-    const loadEU = async () => {
-      if (!profile?.id) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const onlyPending = statusFilter === 'pending';
-        const r = await authFetch(
-          `/api/trainer/reviews?onlyPending=${onlyPending ? 'true' : 'false'}`,
-          { cache: 'no-store' }
-        );
-        if (!r.ok) throw new Error(t('trainer.reviews.loadError'));
-        const data = await r.json();
-        setEnablerSubs(
-          (data.enablerSubmissions || []).map((x: any) => ({
-            ...x,
-            status: x.status,
-            attemptNumber: x.attemptNumber,
-          }))
-        );
-        setUseCaseSubs(
-          (data.useCaseSubmissions || []).map((x: any) => ({
-            ...x,
-            status: x.status,
-            attemptNumber: x.attemptNumber,
-          }))
-        );
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', activeTab);
+    params.set('status', statusFilter);
+    params.delete('onlyPending');
+    const next = params.toString();
+    if (next !== window.location.search.replace(/^\?/, '')) {
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${window.location.pathname}?${next}`
+      );
+    }
+  }, [activeTab, statusFilter]);
 
-        // Pre-fill feedback maps
-        const newFeedback: Record<string, string> = {};
-        const newFeedbacks: Record<string, any[]> = {};
-        [
-          ...(data.enablerSubmissions || []),
-          ...(data.useCaseSubmissions || []),
-        ].forEach(s => {
-          if (s.trainerFeedback) newFeedback[s.id] = s.trainerFeedback;
-          if (s.feedbacks) newFeedbacks[s.id] = s.feedbacks;
+  // The search text is sent a moment after the last key
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setSearch(searchInput.trim()),
+      SEARCH_DELAY_MS
+    );
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  const filters: Filters = useMemo(
+    () => ({ status: statusFilter, quizType: quizTypeFilter, search }),
+    [statusFilter, quizTypeFilter, search]
+  );
+
+  // One page of one list, with the total of the same filter
+  const fetchPage = useCallback(
+    async (
+      kind: Kind,
+      f: Filters,
+      offset: number,
+      limit: number
+    ): Promise<{ items: any[]; total: number }> => {
+      if (kind === 'quiz') {
+        const q = new URLSearchParams({
+          onlyPending: String(f.status === 'pending'),
+          limit: String(limit),
+          offset: String(offset),
         });
-        setFeedbackMap(prev => ({ ...prev, ...newFeedback }));
-        setFeedbacksMap(prev => ({ ...prev, ...newFeedbacks }));
-      } catch (e: any) {
-        setError(e?.message || t('trainer.reviews.unknownError'));
-      } finally {
-        setLoading(false);
+        if (f.quizType !== 'all') q.set('quizType', f.quizType);
+        if (f.search) q.set('q', f.search);
+        const res = await authFetch(`/api/trainer/quiz-submissions?${q}`, {
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error(t('trainer.reviews.quizLoadError'));
+        const data = await res.json();
+        return {
+          items: data.submissions || [],
+          total: Number(data.total) || 0,
+        };
       }
-    };
-    if (activeTab === 'enablers' || activeTab === 'usecases') loadEU();
-  }, [profile?.id, statusFilter, activeTab]);
+      const q = new URLSearchParams({
+        type: kind,
+        status: f.status,
+        limit: String(limit),
+        offset: String(offset),
+      });
+      const res = await authFetch(`/api/trainer/reviews?${q}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error(t('trainer.reviews.loadError'));
+      const data = await res.json();
+      return kind === 'enabler'
+        ? {
+            items: data.enablerSubmissions || [],
+            total: Number(data.enablerTotal) || 0,
+          }
+        : {
+            items: data.useCaseSubmissions || [],
+            total: Number(data.useCaseTotal) || 0,
+          };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
-  // load Quizzes
+  const prefillFeedback = (rows: any[]) => {
+    const newFeedback: Record<string, string> = {};
+    const newFeedbacks: Record<string, any[]> = {};
+    rows.forEach(s => {
+      if (s.trainerFeedback) newFeedback[s.id] = s.trainerFeedback;
+      if (s.feedbacks) newFeedbacks[s.id] = s.feedbacks;
+    });
+    setFeedbackMap(prev => ({ ...newFeedback, ...prev }));
+    setFeedbacksMap(prev => ({ ...newFeedbacks, ...prev }));
+  };
+
+  const applyRows = (kind: Kind, rows: any[], total: number) => {
+    if (kind === 'enabler') {
+      setEnablerSubs(rows);
+      setEnablerTotal(total);
+    } else if (kind === 'usecase') {
+      setUseCaseSubs(rows);
+      setUseCaseTotal(total);
+    } else {
+      setQuizzes(rows);
+      setQuizTotal(total);
+    }
+    prefillFeedback(rows);
+  };
+
+  // The identity of the list a scroll position belongs to
+  const listKey = (tab: Tab, f: Filters) =>
+    [
+      tab,
+      f.status,
+      f.quizType,
+      f.search,
+      new URLSearchParams(
+        typeof window === 'undefined' ? '' : window.location.search
+      ).get('catalog') ?? '',
+    ].join('|');
+
+  // Load the first page of the active list. A position stored when "Details"
+  // was opened is restored: that many rows are loaded and the page scrolls back.
   useEffect(() => {
-    const loadQR = async () => {
-      if (!profile?.id) return;
-      setLoading(true);
-      setError(null);
+    if (!profile?.id) return;
+    const kind = kindOfTab(activeTab);
+    const run = ++loadRun.current;
+    const restore = readReviewListState(listKey(activeTab, filters));
+    const target = Math.min(
+      restore?.loaded ?? REVIEWS_PAGE_SIZE,
+      MAX_RESTORED_ROWS
+    );
+    setLoading(true);
+    setError(null);
+    setMoreError(false);
+    void (async () => {
       try {
-        if (activeTab === 'quizzes') {
-          const res = await authFetch(
-            `/api/trainer/quiz-submissions?onlyPending=${pendingFilter === 'pending'}`,
-            { cache: 'no-store' }
+        const first = await fetchPage(kind, filters, 0, REVIEWS_PAGE_SIZE);
+        let rows = first.items;
+        let total = first.total;
+        // more pages only to get back to a stored position
+        while (restore && rows.length < Math.min(target, total)) {
+          const next = await fetchPage(
+            kind,
+            filters,
+            rows.length,
+            Math.min(REVIEWS_MAX_PAGE_SIZE, target - rows.length)
           );
-          if (!res.ok) throw new Error(t('trainer.reviews.quizLoadError'));
-          const data = await res.json();
-          const subs = (data.submissions || []).map((x: any) => ({
-            ...x,
-            attemptNumber: x.attemptNumber,
-            difficulty: x.difficulty || null,
-            enablerTitle: x.enablerTitle || null,
-          }));
-          setQuizzes(subs);
-
-          // Pre-fill quiz feedback
-          const quizFeedback: Record<string, string> = {};
-          subs.forEach((s: any) => {
-            if (s.trainerFeedback) quizFeedback[s.id] = s.trainerFeedback;
-          });
-          setFeedbackMap(prev => ({ ...prev, ...quizFeedback }));
+          if (next.items.length === 0) break;
+          rows = mergeById([...rows, ...next.items]);
+          total = next.total;
+        }
+        if (run !== loadRun.current) return;
+        applyRows(kind, rows, total);
+        if (restore) {
+          clearReviewListState();
+          pendingScroll.current = restore.scrollTop;
         }
       } catch (e: any) {
-        setError(e.message || t('trainer.reviews.unknownError'));
+        if (run !== loadRun.current) return;
+        setError(e?.message || t('trainer.reviews.unknownError'));
       } finally {
-        setLoading(false);
+        if (run === loadRun.current) setLoading(false);
       }
-    };
-    if (activeTab === 'quizzes') loadQR();
-  }, [profile?.id, activeTab, pendingFilter]);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id, activeTab, filters]);
+
+  // Back from "Details": scroll to where the trainer was
+  useEffect(() => {
+    if (loading || pendingScroll.current === null) return;
+    const top = pendingScroll.current;
+    pendingScroll.current = null;
+    const scroller = scrollParentOf(containerRef.current);
+    if (scroller) scroller.scrollTop = top;
+  }, [loading, enablerSubs, useCaseSubs, quizzes]);
+
+  // The next page of the active list
+  const loadMore = async () => {
+    if (loadingMore) return;
+    const kind = kindOfTab(activeTab);
+    const run = loadRun.current;
+    const offset =
+      kind === 'enabler'
+        ? enablerSubs.length
+        : kind === 'usecase'
+          ? useCaseSubs.length
+          : quizzes.length;
+    setLoadingMore(true);
+    setMoreError(false);
+    try {
+      const page = await fetchPage(kind, filters, offset, REVIEWS_PAGE_SIZE);
+      if (run !== loadRun.current) return;
+      if (kind === 'enabler') {
+        setEnablerSubs(prev => mergeById([...prev, ...page.items]));
+        setEnablerTotal(page.total);
+      } else if (kind === 'usecase') {
+        setUseCaseSubs(prev => mergeById([...prev, ...page.items]));
+        setUseCaseTotal(page.total);
+      } else {
+        setQuizzes(prev => mergeById([...prev, ...page.items]));
+        setQuizTotal(page.total);
+      }
+      prefillFeedback(page.items);
+    } catch {
+      if (run === loadRun.current) setMoreError(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Remember where the trainer is before a detail page is opened
+  const rememberListState = (loaded: number) => {
+    const scroller = scrollParentOf(containerRef.current);
+    saveReviewListState({
+      search: window.location.search.replace(/^\?/, ''),
+      key: listKey(activeTab, filters),
+      scrollTop: scroller?.scrollTop ?? 0,
+      loaded,
+    });
+  };
+
+  const clearFeedbackMissing = (id: string) =>
+    setFeedbackMissingIds(prev => {
+      if (!prev.has(id)) return prev;
+      const n = new Set(prev);
+      n.delete(id);
+      return n;
+    });
 
   const reviewItem = async (
     kind: 'enabler' | 'usecase',
@@ -298,6 +532,27 @@ export default function TrainerReviewsPage() {
     status: 'APPROVED' | 'REJECTED'
   ) => {
     if (!profile?.id) return;
+
+    const feedback = feedbackMap[id] || '';
+    const feedbacks = feedbacksMap[id] || [];
+    const sendsFeedbacks = kind === 'enabler' && feedbacks.length > 0;
+    const sentFeedbacks = feedbacks.filter(f => f.feedback.trim().length > 0);
+
+    // A rejection tells the trainee what to improve: it needs a feedback
+    // (WMCNL-3000). The server asks for it as well.
+    if (
+      status === 'REJECTED' &&
+      !hasReviewFeedback(
+        sendsFeedbacks ? undefined : feedback,
+        sendsFeedbacks ? sentFeedbacks : undefined
+      )
+    ) {
+      setFeedbackMissingIds(prev => new Set(prev).add(id));
+      toast.error(t('trainer.reviews.rejectNeedsFeedback'));
+      return;
+    }
+    clearFeedbackMissing(id);
+
     setLoadingActions(prev => ({ ...prev, [id]: status }));
 
     // Save previous state for rollback
@@ -316,20 +571,25 @@ export default function TrainerReviewsPage() {
     }
     setFadingOutIds(prev => new Set(prev).add(id));
 
+    const rollback = () => {
+      setEnablerSubs(prevEnablers);
+      setUseCaseSubs(prevUseCases);
+    };
+    const stopFading = () =>
+      setFadingOutIds(prev => {
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
+
     try {
-      const feedback = feedbackMap[id] || '';
-      const feedbacks = feedbacksMap[id] || [];
       const url =
         kind === 'enabler'
           ? `/api/trainer/reviews/enablers/${id}`
           : `/api/trainer/reviews/use-cases/${id}`;
-      const body =
-        kind === 'enabler' && feedbacks.length > 0
-          ? {
-              status,
-              feedbacks: feedbacks.filter(f => f.feedback.trim().length > 0),
-            }
-          : { status, trainerFeedback: feedback };
+      const body = sendsFeedbacks
+        ? { status, feedbacks: sentFeedbacks }
+        : { status, trainerFeedback: feedback };
       const r = await authFetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -337,14 +597,15 @@ export default function TrainerReviewsPage() {
       });
       if (!r.ok) {
         // Rollback on failure
-        setEnablerSubs(prevEnablers);
-        setUseCaseSubs(prevUseCases);
-        setFadingOutIds(prev => {
-          const n = new Set(prev);
-          n.delete(id);
-          return n;
-        });
-        toast.error(t('trainer.reviews.saveError'));
+        rollback();
+        stopFading();
+        const errData = await r.json().catch(() => ({}));
+        if (errData?.code === FEEDBACK_REQUIRED) {
+          setFeedbackMissingIds(prev => new Set(prev).add(id));
+          toast.error(t('trainer.reviews.rejectNeedsFeedback'));
+        } else {
+          toast.error(t('trainer.reviews.saveError'));
+        }
         return;
       }
       toast.success(
@@ -359,50 +620,23 @@ export default function TrainerReviewsPage() {
         return n;
       });
 
-      // Background refresh (non-blocking) to sync with server
-      const onlyPending = statusFilter === 'pending';
-      authFetch(
-        `/api/trainer/reviews?onlyPending=${onlyPending ? 'true' : 'false'}`,
-        { cache: 'no-store' }
-      )
-        .then(rr => rr.json())
-        .then(data => {
-          setEnablerSubs(
-            (data.enablerSubmissions || []).map((x: any) => ({
-              ...x,
-              status: x.status,
-              attemptNumber: x.attemptNumber,
-            }))
-          );
-          setUseCaseSubs(
-            (data.useCaseSubmissions || []).map((x: any) => ({
-              ...x,
-              status: x.status,
-              attemptNumber: x.attemptNumber,
-            }))
-          );
-          setFadingOutIds(prev => {
-            const n = new Set(prev);
-            n.delete(id);
-            return n;
-          });
-        })
-        .catch(() => {
-          setFadingOutIds(prev => {
-            const n = new Set(prev);
-            n.delete(id);
-            return n;
-          });
-        });
+      // A row that left the filter (decided in the list of the open ones) is
+      // gone from the list and from the total, so the counter and the next
+      // page stay right without loading the list again
+      if (statusFilter !== 'all' && statusFilter !== status.toLowerCase()) {
+        if (kind === 'enabler') {
+          setEnablerSubs(prev => prev.filter(s => s.id !== id));
+          setEnablerTotal(n => Math.max(0, n - 1));
+        } else {
+          setUseCaseSubs(prev => prev.filter(s => s.id !== id));
+          setUseCaseTotal(n => Math.max(0, n - 1));
+        }
+      }
+      stopFading();
     } catch {
       // Rollback on network error
-      setEnablerSubs(prevEnablers);
-      setUseCaseSubs(prevUseCases);
-      setFadingOutIds(prev => {
-        const n = new Set(prev);
-        n.delete(id);
-        return n;
-      });
+      rollback();
+      stopFading();
       toast.error(t('trainer.reviews.saveError'));
     } finally {
       setLoadingActions(prev => ({ ...prev, [id]: null }));
@@ -420,9 +654,15 @@ export default function TrainerReviewsPage() {
     setQuizzes(prev =>
       prev.map(q => (q.id === id ? { ...q, isReviewed: !current } : q))
     );
-    if (!current && pendingFilter === 'pending') {
+    if (!current && quizPending) {
       setFadingOutIds(prev => new Set(prev).add(id));
     }
+    const stopFading = () =>
+      setFadingOutIds(prev => {
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
 
     try {
       const r = await authFetch(`/api/trainer/quiz-submissions/${id}`, {
@@ -435,11 +675,7 @@ export default function TrainerReviewsPage() {
       if (!r.ok) {
         // Rollback
         setQuizzes(prevQuizzes);
-        setFadingOutIds(prev => {
-          const n = new Set(prev);
-          n.delete(id);
-          return n;
-        });
+        stopFading();
         const errData = await r.json().catch(() => ({}));
         toast.error(errData?.error || t('trainer.reviews.saveError'));
         return;
@@ -450,35 +686,18 @@ export default function TrainerReviewsPage() {
           : t('trainer.reviews.unmarkedReviewed')
       );
 
-      // Background refresh (non-blocking)
-      authFetch(
-        `/api/trainer/quiz-submissions?onlyPending=${pendingFilter === 'pending'}`,
-        { cache: 'no-store' }
-      )
-        .then(res => res.json())
-        .then(data => {
-          setQuizzes(data.submissions || []);
-          setFadingOutIds(prev => {
-            const n = new Set(prev);
-            n.delete(id);
-            return n;
-          });
-        })
-        .catch(() => {
-          setFadingOutIds(prev => {
-            const n = new Set(prev);
-            n.delete(id);
-            return n;
-          });
-        });
+      // A quiz marked as reviewed leaves the list of the open ones: it is gone
+      // from the list and from the total, so the counter and the next page
+      // stay right without loading the list again
+      if (!current && quizPending) {
+        setQuizzes(prev => prev.filter(q => q.id !== id));
+        setQuizTotal(n => Math.max(0, n - 1));
+      }
+      stopFading();
     } catch {
       // Rollback
       setQuizzes(prevQuizzes);
-      setFadingOutIds(prev => {
-        const n = new Set(prev);
-        n.delete(id);
-        return n;
-      });
+      stopFading();
       toast.error(t('trainer.reviews.saveError'));
     } finally {
       setBusyIds(prev => {
@@ -489,13 +708,52 @@ export default function TrainerReviewsPage() {
     }
   };
 
+  const titleKey = {
+    pending: 'trainer.reviews.title',
+    all: 'trainer.reviews.titleAll',
+    approved: 'trainer.reviews.titleApproved',
+    rejected: 'trainer.reviews.titleRejected',
+  }[quizPending || activeTab !== 'quizzes' ? statusFilter : 'all'];
+
+  const statusLabel = (status: string) => t(`trainer.reviews.status.${status}`);
+
+  // "50 of 2158 shown" and the button for the next page, under the active list
+  const listFooter = (shown: number, total: number): ReactNode => (
+    <div className="flex flex-col items-center gap-2 pt-1">
+      {shown > 0 && (
+        <div
+          className="text-muted-foreground text-sm"
+          data-testid="reviews-count"
+        >
+          {t('trainer.reviews.count')
+            .replace('{shown}', String(shown))
+            .replace('{total}', String(Math.max(total, shown)))}
+        </div>
+      )}
+      {shown < total && (
+        <button
+          type="button"
+          disabled={loadingMore}
+          onClick={loadMore}
+          className="border-accent/30 hover:bg-accent/10 inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60"
+        >
+          {loadingMore && <LoadingSpinner size="sm" />}
+          {t('trainer.reviews.loadMore')}
+        </button>
+      )}
+      {moreError && (
+        <div role="alert" className="text-sm text-red-500">
+          {t('trainer.reviews.loadMoreError')}
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
+    <div ref={containerRef} className="mx-auto max-w-6xl space-y-6 p-6">
       <div className="glass-effect border-accent/30 bg-card/90 rounded-3xl border p-5 shadow-lg">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h1 className="text-foreground text-xl font-bold">
-            {t('trainer.reviews.title')}
-          </h1>
+          <h1 className="text-foreground text-xl font-bold">{t(titleKey)}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -541,8 +799,10 @@ export default function TrainerReviewsPage() {
               <>
                 <span>{t('trainer.reviews.filter')}</span>
                 <select
-                  value={pendingFilter}
-                  onChange={e => setPendingFilter(e.target.value as any)}
+                  value={quizPending ? 'pending' : 'all'}
+                  onChange={e =>
+                    setStatusFilter(e.target.value as ReviewStatusFilter)
+                  }
                   className="border-accent/30 bg-background/50 rounded-xl border px-2 py-1"
                 >
                   <option value="pending">
@@ -560,12 +820,21 @@ export default function TrainerReviewsPage() {
                     >
                       <option value="all">{t('trainer.reviews.all')}</option>
                       <option value="LESSON">
-                        {t('trainer.reviews.lesson')}
+                        {t('trainer.reviews.quizType.LESSON')}
                       </option>
                       <option value="GLOBAL">
-                        {t('trainer.reviews.global')}
+                        {t('trainer.reviews.quizType.GLOBAL')}
                       </option>
                     </select>
+                    <input
+                      type="search"
+                      value={searchInput}
+                      onChange={e => setSearchInput(e.target.value)}
+                      placeholder={t('trainer.reviews.searchPlaceholder')}
+                      aria-label={t('trainer.reviews.searchPlaceholder')}
+                      maxLength={100}
+                      className="border-accent/30 bg-background/50 w-56 rounded-xl border px-2 py-1"
+                    />
                   </>
                 )}
               </>
@@ -612,7 +881,7 @@ export default function TrainerReviewsPage() {
                 <div
                   className={`rounded-full px-2.5 py-1 text-xs ${it.status === 'PENDING' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' : 'bg-green-500/10 text-green-600 dark:text-green-400'} ${it.status === 'REJECTED' ? 'bg-red-500/10 text-red-600 dark:text-red-400' : ''}`}
                 >
-                  {it.status}
+                  {statusLabel(it.status)}
                 </div>
               </div>
               {(it.solutions || it.solutionText) && (
@@ -706,6 +975,7 @@ export default function TrainerReviewsPage() {
                                       ...prev,
                                       [it.id]: newFeedbacks,
                                     }));
+                                    clearFeedbackMissing(it.id);
                                   }}
                                   placeholder={
                                     (it.solutions?.length || 0) > 1
@@ -805,17 +1075,49 @@ export default function TrainerReviewsPage() {
                             it.status !== 'PENDING' && !editingIds.has(it.id)
                           }
                           value={feedbackMap[it.id] || ''}
-                          onChange={e =>
+                          onChange={e => {
                             setFeedbackMap(prev => ({
                               ...prev,
                               [it.id]: e.target.value,
-                            }))
-                          }
+                            }));
+                            clearFeedbackMissing(it.id);
+                          }}
                         />
                       </div>
                     </>
                   ) : null}
                 </div>
+              )}
+              {/* A submission without any text still needs a place for the
+                  feedback, a rejection cannot be sent without one */}
+              {!(it.solutions && it.solutions.length > 0) &&
+                !it.solutionText && (
+                  <div className="mt-3">
+                    <label className="mb-1 block text-sm font-medium">
+                      {t('trainer.reviews.feedback')}
+                    </label>
+                    <textarea
+                      className="border-accent/30 bg-muted/50 w-full rounded-xl border px-3 py-2 disabled:opacity-80"
+                      rows={3}
+                      disabled={
+                        it.status !== 'PENDING' && !editingIds.has(it.id)
+                      }
+                      value={feedbackMap[it.id] || ''}
+                      placeholder={t('trainer.reviews.feedbackPlaceholder')}
+                      onChange={e => {
+                        setFeedbackMap(prev => ({
+                          ...prev,
+                          [it.id]: e.target.value,
+                        }));
+                        clearFeedbackMissing(it.id);
+                      }}
+                    />
+                  </div>
+                )}
+              {feedbackMissingIds.has(it.id) && (
+                <p role="alert" className="mt-2 text-sm text-red-500">
+                  {t('trainer.reviews.rejectNeedsFeedback')}
+                </p>
               )}
               <div className="mt-3 flex justify-end gap-2">
                 {it.status !== 'PENDING' && !editingIds.has(it.id) ? (
@@ -868,6 +1170,7 @@ export default function TrainerReviewsPage() {
               </div>
             </div>
           ))}
+          {listFooter(filteredEnablers.length, enablerTotal)}
         </div>
       )}
 
@@ -918,7 +1221,7 @@ export default function TrainerReviewsPage() {
                   <div
                     className={`rounded-full px-2.5 py-1 text-xs ${it.status === 'PENDING' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' : 'bg-green-500/10 text-green-600 dark:text-green-400'} ${it.status === 'REJECTED' ? 'bg-red-500/10 text-red-600 dark:text-red-400' : ''}`}
                   >
-                    {it.status}
+                    {statusLabel(it.status)}
                   </div>
                 </div>
               </div>
@@ -942,13 +1245,20 @@ export default function TrainerReviewsPage() {
                   rows={3}
                   disabled={it.status !== 'PENDING' && !editingIds.has(it.id)}
                   value={feedbackMap[it.id] || ''}
-                  onChange={e =>
+                  aria-invalid={feedbackMissingIds.has(it.id) || undefined}
+                  onChange={e => {
                     setFeedbackMap(prev => ({
                       ...prev,
                       [it.id]: e.target.value,
-                    }))
-                  }
+                    }));
+                    clearFeedbackMissing(it.id);
+                  }}
                 />
+                {feedbackMissingIds.has(it.id) && (
+                  <p role="alert" className="mt-1 text-sm text-red-500">
+                    {t('trainer.reviews.rejectNeedsFeedback')}
+                  </p>
+                )}
               </div>
               <div className="mt-3 flex justify-end gap-2">
                 {it.status !== 'PENDING' && !editingIds.has(it.id) ? (
@@ -1001,6 +1311,7 @@ export default function TrainerReviewsPage() {
               </div>
             </div>
           ))}
+          {listFooter(filteredUseCases.length, useCaseTotal)}
         </div>
       )}
 
@@ -1034,21 +1345,24 @@ export default function TrainerReviewsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="bg-muted text-muted-foreground rounded-full px-2.5 py-1 text-xs">
-                    {s.quizType || '-'}
+                    {s.quizType
+                      ? t(`trainer.reviews.quizType.${s.quizType}`)
+                      : '-'}
                   </span>
                   {s.quizType === 'LESSON' && s.difficulty && (
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs ${s.difficulty === 'LOW' ? 'bg-green-500/20 text-green-600 dark:text-green-400' : s.difficulty === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400' : 'bg-red-500/20 text-red-600 dark:text-red-400'}`}
                     >
-                      {s.difficulty}
+                      {t(`trainer.reviews.difficulty.${s.difficulty}`)}
                     </span>
                   )}
-                  <a
+                  <Link
                     href={`/trainer/reviews/quizzes/${s.id}`}
+                    onClick={() => rememberListState(quizzes.length)}
                     className="border-accent/30 hover:border-accent/60 hover:bg-accent/10 hover:text-accent rounded-md border px-3 py-2 text-sm transition-all duration-200"
                   >
                     {t('trainer.reviews.details')}
-                  </a>
+                  </Link>
                   <button
                     disabled={busyIds.has(s.id)}
                     onClick={() => toggleSubmissionReviewed(s.id, s.isReviewed)}
@@ -1068,44 +1382,38 @@ export default function TrainerReviewsPage() {
                   </button>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-5">
-                <div>
-                  <div className="text-muted-foreground text-xs">
-                    {t('trainer.reviews.participant')}
-                  </div>
-                  <div className="text-sm">{s.traineeName}</div>
-                </div>
+              {/* The trainee is named in the header, the quiz title is the title of
+                  the card: only what the header does not say is repeated here
+                  (WMCNL-3004). The score is coloured by the passing score. */}
+              <div className="mt-3 flex flex-wrap gap-x-8 gap-y-3">
                 <div>
                   <div className="text-muted-foreground text-xs">
                     {t('trainer.reviews.score')}
                   </div>
-                  <div className="text-sm">
+                  <div
+                    className={`text-sm font-medium ${
+                      s.score === null
+                        ? ''
+                        : isQuizPassed(s.score)
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
                     {s.score === null
                       ? t('quizGrading.trainerNotGraded')
                       : `${s.score}%`}
                   </div>
                 </div>
-                {s.quizType === 'LESSON' && (
-                  <div>
-                    <div className="text-muted-foreground text-xs">
-                      {t('trainer.reviews.lesson')}
+                {s.quizType === 'LESSON' &&
+                  s.enablerTitle &&
+                  !sameText(s.enablerTitle, s.quizTitle) && (
+                    <div>
+                      <div className="text-muted-foreground text-xs">
+                        {t('trainer.reviews.theme')}
+                      </div>
+                      <div className="text-sm">{s.enablerTitle}</div>
                     </div>
-                    <div className="text-sm">{s.enablerTitle || '-'}</div>
-                  </div>
-                )}
-                <div className="md:col-span-2">
-                  <div className="text-muted-foreground text-xs">
-                    {t('trainer.reviews.progress')}
-                  </div>
-                  <div className="bg-muted mt-1 h-1.5 w-full rounded-full">
-                    <div
-                      className="bg-primary h-1.5 rounded-full"
-                      style={{
-                        width: `${Math.max(0, Math.min(100, s.score ?? 0))}%`,
-                      }}
-                    ></div>
-                  </div>
-                </div>
+                  )}
               </div>
               <div className="mt-3">
                 <label className="mb-1 block text-sm font-medium">
@@ -1168,12 +1476,6 @@ export default function TrainerReviewsPage() {
                               n.delete(s.id);
                               return n;
                             });
-                            const res = await authFetch(
-                              `/api/trainer/quiz-submissions?onlyPending=${pendingFilter === 'pending'}`,
-                              { cache: 'no-store' }
-                            );
-                            const data = await res.json();
-                            setQuizzes(data.submissions || []);
                           } catch {
                             toast.error(t('trainer.reviews.saveError'));
                           } finally {
@@ -1208,13 +1510,16 @@ export default function TrainerReviewsPage() {
               </div>
             </div>
           ))}
+          {listFooter(quizzesFiltered.length, quizTotal)}
         </div>
       )}
 
-      {/* Solution PDF Flipbook Viewer */}
+      {/* Solution PDF Flipbook Viewer. Only the model solution of a use case is
+          opened here, so the line under the title says that (WMCNL-3005) */}
       <FlipbookViewer
         pdfUrl={flipbookState.url}
         title={flipbookState.title}
+        subtitle={viewerSubtitle('TRAINER_SOLUTION', t)}
         isOpen={flipbookState.isOpen}
         onClose={closeFlipbook}
       />

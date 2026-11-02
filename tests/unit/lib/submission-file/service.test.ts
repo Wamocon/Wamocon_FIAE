@@ -6,6 +6,7 @@ import {
   announceUpload,
   completeUpload,
   getFile,
+  getFileContent,
   removeFile,
 } from '@/lib/submission-file/service';
 import {
@@ -443,6 +444,61 @@ describe('removeFile', () => {
   it('refuses a scope with an id that is no uuid', async () => {
     const { deps } = setup();
     expect(await removeFile(deps, { ...scope, traineeId: 'x' })).toEqual({
+      ok: false,
+      status: 400,
+      code: 'INVALID_SCOPE',
+    });
+  });
+});
+
+// WMCNL-2927: the bytes of the file for the preview in the platform
+describe('getFileContent', () => {
+  it('gives name, content type and bytes of the newest file', async () => {
+    const { storage, deps } = setup();
+    storage.objects.set(filePath(folder, 1761700000000, 'alt.pdf'), PDF_BYTES);
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    storage.objects.set(filePath(folder, 1761700009999, 'neu.png'), png);
+    expect(await getFileContent(deps, scope)).toEqual({
+      ok: true,
+      value: { fileName: 'neu.png', contentType: 'image/png', bytes: png },
+    });
+  });
+
+  it('has no content without a file', async () => {
+    const { deps } = setup();
+    expect(await getFileContent(deps, scope)).toEqual({
+      ok: true,
+      value: null,
+    });
+  });
+
+  it('refuses a Word or Excel file: those are only downloaded', async () => {
+    const { storage, deps } = setup();
+    storage.objects.set(
+      filePath(folder, 1761700000000, 'a.docx'),
+      new Uint8Array([0x50, 0x4b, 3, 4])
+    );
+    expect(await getFileContent(deps, scope)).toEqual({
+      ok: false,
+      status: 415,
+      code: 'NOT_PREVIEWABLE',
+    });
+  });
+
+  it('does not read the bytes of a file that has no preview', async () => {
+    const { storage, deps } = setup();
+    storage.objects.set(
+      filePath(folder, 1761700000000, 'a.xlsx'),
+      new Uint8Array([0x50, 0x4b, 3, 4])
+    );
+    storage.failNext('download');
+    // the failure armed for download is not reached
+    expect((await getFileContent(deps, scope)).ok).toBe(false);
+  });
+
+  it('refuses a scope with an id that is no uuid', async () => {
+    const { deps } = setup();
+    expect(await getFileContent(deps, { ...scope, useCaseId: 'x' })).toEqual({
       ok: false,
       status: 400,
       code: 'INVALID_SCOPE',

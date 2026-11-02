@@ -56,6 +56,18 @@ function rendered(mock: any, table: string) {
   );
 }
 
+/**
+ * The list answers one page and the total of the same filter (WMCNL-2999): the
+ * count query and the page query of a list carry the same condition, so the
+ * conditions are compared once.
+ */
+function listConditions(mock: any, table: string) {
+  const all = rendered(mock, table);
+  expect(all).toHaveLength(2);
+  expect(all[1]).toBe(all[0]);
+  return [all[0]];
+}
+
 async function dashboard(header = 'KFBM') {
   const { mod, mock } = await loadScoped('trainer/dashboard/route', {
     tables: tables(),
@@ -91,8 +103,7 @@ describe('pending reviews: the count and the list use the same filter', () => {
   it('enabler submissions: the count is limited to the trainer courses like the list', async () => {
     const { mock: dash } = await dashboard();
     const list = await reviews();
-    const listWhere = rendered(list, 'enabler_submissions');
-    expect(listWhere).toHaveLength(1);
+    const listWhere = listConditions(list, 'enabler_submissions');
     expect(listWhere[0]).toContain('"enablers"."course_id" in');
     expect(rendered(dash, 'enabler_submissions')).toContain(listWhere[0]);
   });
@@ -100,8 +111,7 @@ describe('pending reviews: the count and the list use the same filter', () => {
   it('use case submissions: the count is limited to the trainer courses like the list', async () => {
     const { mock: dash } = await dashboard();
     const list = await reviews();
-    const listWhere = rendered(list, 'use_case_submissions');
-    expect(listWhere).toHaveLength(1);
+    const listWhere = listConditions(list, 'use_case_submissions');
     expect(listWhere[0]).toContain('"use_cases"."course_id" in');
     expect(rendered(dash, 'use_case_submissions')).toContain(listWhere[0]);
   });
@@ -109,8 +119,7 @@ describe('pending reviews: the count and the list use the same filter', () => {
   it('quiz submissions: the count is limited to the occupation of the quiz like the list', async () => {
     const { mock: dash } = await dashboard();
     const list = await quizList();
-    const listWhere = rendered(list, 'quiz_submissions');
-    expect(listWhere).toHaveLength(1);
+    const listWhere = listConditions(list, 'quiz_submissions');
     expect(listWhere[0]).toContain('"quizzes"."training_catalog_id" =');
     expect(rendered(dash, 'quiz_submissions')).toContain(listWhere[0]);
   });
@@ -146,7 +155,7 @@ describe('whole organization: the courses do not depend on the trainer', () => {
     expect(where[0]).toContain('"enablers"."course_id" in');
     // the list of a trainer who has no course at all is not empty any more
     const list = await reviews();
-    expect(rendered(list, 'enabler_submissions')).toHaveLength(1);
+    expect(rendered(list, 'enabler_submissions').length).toBeGreaterThan(0);
   });
 });
 
