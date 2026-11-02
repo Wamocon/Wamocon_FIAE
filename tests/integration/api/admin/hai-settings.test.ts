@@ -292,7 +292,7 @@ describe('GET /api/admin/hai/voice-status', () => {
     });
   });
 
-  it('Sokrates does not list the audio model: not set up, MODEL_NOT_OFFERED', async () => {
+  it('Sokrates does not list its audio models: no proof, so it stays ready (Open WebUI hides them)', async () => {
     process.env.OPENAI_COMPATIBLE_API_KEY = SECRET;
     process.env.HAI_STT_HAUS_MODEL = 'whisper-1';
     process.env.HAI_TTS_HAUS_MODEL = 'tts-1';
@@ -304,10 +304,11 @@ describe('GET /api/admin/hai/voice-status', () => {
     const r = await load(SUPER);
     const body = await (await r.status(get())).json();
     expect(body.providers.haus).toMatchObject({
-      status: 'not_configured',
-      reason: 'MODEL_NOT_OFFERED',
+      status: 'ready',
+      reason: null,
+      reachable: true,
       sttOffered: true,
-      ttsOffered: false,
+      ttsOffered: null,
     });
   });
 });
