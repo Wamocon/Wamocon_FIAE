@@ -4,9 +4,11 @@
  * Microphone of the HAI chat (voice assistant, day companion, WMCNL-2907).
  *
  * Shown only where the organization has the voice assistant on (GET
- * /api/hai/voice) and the browser can recognize and read speech. The first use
- * asks for consent and says plainly where the audio goes. Speech stays in the
- * browser, the HAI gets the recognized text and records no audio.
+ * /api/hai/voice) and the browser can use one provider of the chain (Soniox,
+ * Sokrates or the browser itself, read from GET /api/hai/voice/config). The first
+ * use asks for consent and says plainly where the audio goes: the text names the
+ * effective provider and the one that takes over. The HAI gets the recognized
+ * text and records no audio.
  */
 
 import { useEffect, useState } from 'react';
@@ -15,7 +17,18 @@ import { authFetch } from '@/lib/authFetch';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useHai } from './HaiProvider';
-import { useHaiVoice, type VoiceError } from './useHaiVoice';
+import { useHaiVoice, type VoiceConfig, type VoiceError } from './useHaiVoice';
+import { fetchVoiceConfig } from '@/lib/hai/voice/client/deps';
+import { consentParagraphs } from '@/lib/hai/voice/consentText';
+
+function sameConfig(a: VoiceConfig | null, b: VoiceConfig): boolean {
+  return (
+    !!a &&
+    a.region === b.region &&
+    a.chain.length === b.chain.length &&
+    a.chain.every((id, i) => id === b.chain[i])
+  );
+}
 
 let enabledCache: boolean | null = null;
 
@@ -54,16 +67,37 @@ export function HaiVoiceControl() {
     useHai();
   const orgEnabled = useVoiceEnabled();
   const [askConsent, setAskConsent] = useState(false);
+  // who listens and speaks: the providers in charge, read from the server
+  const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
 
   const voice = useHaiVoice({
     userId: user?.id,
     enabled: orgEnabled,
+    voiceConfig,
     messages,
     streamingMessageId,
     sendMessage,
     stopGeneration,
     placeholderText: t('hai.loading.thinking') || 'Thinking...',
   });
+
+  // Read the providers when the control appears and after every conversation, so a
+  // change of the platform admin (or a provider that failed) is picked up at the
+  // next start. A failing call leaves the browser alone as the provider.
+  const idle = voice.phase === 'idle';
+  useEffect(() => {
+    if (!orgEnabled || !idle) return;
+    let cancelled = false;
+    void fetchVoiceConfig().then(config => {
+      if (cancelled || !config) return;
+      setVoiceConfig(previous =>
+        sameConfig(previous, config) ? previous : config
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgEnabled, idle]);
 
   if (!voice.available) return null;
 
@@ -169,9 +203,13 @@ export function HaiVoiceControl() {
           <p className="mb-1 font-medium text-gray-100">
             {t('hai.voice.consent.title')}
           </p>
-          <p className="mb-3 text-xs leading-relaxed text-gray-300">
-            {t('hai.voice.consent.text')}
-          </p>
+          <div className="mb-3 space-y-2 text-xs leading-relaxed text-gray-300">
+            {consentParagraphs(voice.chain, voice.region, t).map(
+              (paragraph, index) => (
+                <p key={index}>{paragraph}</p>
+              )
+            )}
+          </div>
           <div className="flex gap-2">
             <button
               type="button"
@@ -197,9 +235,17 @@ export function HaiVoiceControl() {
         </summary>
         <div className="mt-2 space-y-2">
           <p>
-            {voice.localRecognition
-              ? t('hai.voice.local')
-              : t('hai.voice.cloud')}
+            {voice.provider === 'browser'
+              ? voice.localRecognition
+                ? t('hai.voice.local')
+                : t('hai.voice.cloud')
+              : t(`hai.voice.provider.${voice.provider}`, {
+                  region: t(
+                    voice.region === 'us'
+                      ? 'hai.voice.region.us'
+                      : 'hai.voice.region.eu'
+                  ),
+                })}
           </p>
           <p>{t('hai.voice.hint')}</p>
           <label className="flex items-center gap-2">
