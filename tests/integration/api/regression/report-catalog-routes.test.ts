@@ -15,8 +15,7 @@ import { join } from 'path';
 // test of the regression suite (occupation-separation.test.ts) names this file for them.
 
 const API = join(process.cwd(), 'src/app/api');
-const HELPERS =
-  /requireReportCatalogFilter|ensureReportInChosenCatalog|evaluationReportCatalogCondition/;
+const HELPERS = /requireReportCatalogFilter|ensureReportInChosenCatalog/;
 
 /** The GET routes that read the reports (or evaluations of reports) of a person. */
 const REPORT_CATALOG_ROUTES = [
@@ -26,6 +25,7 @@ const REPORT_CATALOG_ROUTES = [
   'trainer/arbeitszeugnis/aggregate/[traineeId]',
   'trainer/arbeitszeugnis/evidence/[traineeId]',
   'trainer/evaluations',
+  'trainer/evaluations/[id]',
   'trainer/activity-reports',
   'trainee/evaluations',
   'trainer/arbeitszeugnis/skill-radar/[traineeId]',

@@ -625,10 +625,8 @@ const COVERED_ELSEWHERE: Record<string, string> = {
     'tests/integration/api/regression/report-catalog-routes.test.ts',
   'trainer/trainees/with-stats':
     'tests/integration/api/regression/report-catalog-routes.test.ts',
-  // the insights of the HAI follow the chosen occupation (requireCatalogScope); the
-  // identity test covers the session of the route, a test of its own for the two
-  // occupations is still to be written
-  'hai/insights': 'tests/integration/api/hai/identity.test.ts',
+  // the insights of the HAI follow the chosen occupation (requireCatalogScope)
+  'hai/insights': 'tests/integration/api/hai/insights-occupation.test.ts',
 };
 
 // Sub routes that run the same content scope check as a route tested above: the
