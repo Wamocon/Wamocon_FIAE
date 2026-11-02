@@ -12,6 +12,7 @@ import { trainingCatalogLearningFields as learningFields } from '@/db/migrations
 import { catalogCondition } from '@/lib/catalog/scope';
 import { requireOptionalSessionScope } from '@/lib/catalog/public';
 import { legacyLearningFieldSelect } from '@/lib/catalog/learning-fields';
+import { compareLernfeldLabels } from '@/lib/school/lernfeld-label';
 
 // GET /api/trainee/school/lernfelder
 export async function GET(req: NextRequest) {
@@ -24,6 +25,10 @@ export async function GET(req: NextRequest) {
       .from(learningFields)
       .where(catalogCondition(learningFields.trainingCatalogId, scope))
       .orderBy(asc(learningFields.code));
+
+    // The database orders the code as text (LF-10 before LF-2), people read
+    // LF-1, LF-2, ... LF-12
+    rows.sort((a, b) => compareLernfeldLabels(a.label, b.label));
 
     // Map DB fields to the format expected by the frontend
     const lernfelder = rows.map((lf, index) => ({
