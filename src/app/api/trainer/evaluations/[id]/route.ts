@@ -1,4 +1,5 @@
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { ensureReportInChosenCatalog } from '@/lib/auth/activity-report-access';
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
@@ -24,6 +25,9 @@ import {
     normalizeSoftskillGrades,
     unknownCriterion,
 } from '@/lib/evaluation-input';
+
+const evaluationNotFound = () =>
+    NextResponse.json({ error: 'Evaluation not found' }, { status: 404 });
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -54,6 +58,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
         const access = await requireTraineeAccess(session, String(evaluation.traineeId), request, 'Evaluation not found');
         if (isErrorResponse(access)) return access;
+
+        // The evaluation belongs to one occupation: with another occupation
+        // chosen (x-catalog) it is answered like a missing one
+        const outOfCatalog = await ensureReportInChosenCatalog(
+            session,
+            request,
+            evaluation,
+            evaluationNotFound
+        );
+        if (outOfCatalog) return outOfCatalog;
 
         // Fetch trainee info
         const traineeRows = await db
@@ -112,6 +126,16 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
         const access = await requireTraineeAccess(session, String(evaluation.traineeId), request, 'Evaluation not found');
         if (isErrorResponse(access)) return access;
+
+        // The evaluation belongs to one occupation: with another occupation
+        // chosen (x-catalog) it is answered like a missing one
+        const outOfCatalog = await ensureReportInChosenCatalog(
+            session,
+            request,
+            evaluation,
+            evaluationNotFound
+        );
+        if (outOfCatalog) return outOfCatalog;
 
         // A body that is no JSON object, a grade outside 1 to 6, an unknown
         // criterion and texts over the limit are a 400, checked before a write
@@ -336,6 +360,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
         const access = await requireTraineeAccess(session, String(evaluation.traineeId), request, 'Evaluation not found');
         if (isErrorResponse(access)) return access;
+
+        // The evaluation belongs to one occupation: with another occupation
+        // chosen (x-catalog) it is answered like a missing one
+        const outOfCatalog = await ensureReportInChosenCatalog(
+            session,
+            request,
+            evaluation,
+            evaluationNotFound
+        );
+        if (outOfCatalog) return outOfCatalog;
 
         const body = await readJsonObject(request);
         if (isErrorResponse(body)) return body;

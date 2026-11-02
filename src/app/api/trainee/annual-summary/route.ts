@@ -5,7 +5,6 @@ import { eq, and } from 'drizzle-orm';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { resolveTraineeForRead } from '@/lib/auth/trainee-data-access';
 import {
-    evaluationReportCatalogCondition,
     requireReportCatalogFilter,
 } from '@/lib/auth/activity-report-access';
 
@@ -29,8 +28,8 @@ export async function GET(request: NextRequest) {
         if (isErrorResponse(resolved)) return resolved;
         const traineeId = resolved;
 
-        // The evaluations of the occupation the caller works in (the one of the
-        // activity report an evaluation belongs to)
+        // The evaluations of the occupation the caller works in (an evaluation
+        // carries its own occupation, weekly_evaluations.training_catalog_id)
         const reportCatalog = await requireReportCatalogFilter(session, request);
         if (isErrorResponse(reportCatalog)) return reportCatalog;
 
@@ -39,7 +38,7 @@ export async function GET(request: NextRequest) {
             eq(weeklyEvaluations.traineeId, traineeId),
             eq(weeklyEvaluations.status, 'APPROVED'),
         ];
-        const catalogCondition = evaluationReportCatalogCondition(reportCatalog.condition);
+        const catalogCondition = reportCatalog.evaluationCondition ?? undefined;
         if (catalogCondition) conditions.push(catalogCondition);
 
         if (ausbildungsjahr) {

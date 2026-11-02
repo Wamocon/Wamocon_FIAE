@@ -1,7 +1,6 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import {
-  evaluationReportCatalogCondition,
   requireReportCatalogFilter,
 } from '@/lib/auth/activity-report-access';
 import { NextRequest, NextResponse } from 'next/server';
@@ -183,12 +182,12 @@ export async function GET(
       (customStartDate && customEndDate) || ausbildungsjahr === 0
         ? and(
             eq(weeklyEvaluations.traineeId, traineeId),
-            evaluationReportCatalogCondition(reportCatalog.condition)
+            reportCatalog.evaluationCondition ?? undefined
           )
         : and(
             eq(weeklyEvaluations.traineeId, traineeId),
             eq(weeklyEvaluations.ausbildungsjahr, ausbildungsjahr),
-            evaluationReportCatalogCondition(reportCatalog.condition)
+            reportCatalog.evaluationCondition ?? undefined
           );
 
     const softSkillRatings = await db
