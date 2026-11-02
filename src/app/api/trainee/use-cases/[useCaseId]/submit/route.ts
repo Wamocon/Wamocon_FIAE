@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { submissionNoticeText } from '@/lib/notifications/submissionNotice';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
@@ -136,10 +137,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
           userId: uid,
           actorId: traineeId,
           type: 'USE_CASE_SUBMITTED',
-          title: 'Use Case eingereicht',
-          message: `Ein Trainee hat einen Use Case eingereicht: ${u.title}`,
+          ...submissionNoticeText('USE_CASE_SUBMITTED', {
+            traineeName: session.fullName,
+            subject: u.title,
+          }),
           linkUrl: '/trainer/reviews?view=usecases&onlyPending=true',
-          context: { useCaseId, submissionId: result },
+          context: {
+            useCaseId,
+            submissionId: result,
+            traineeName: session.fullName,
+            subjectTitle: u.title,
+          },
           organizationId,
         }));
         await db.insert(notifications).values(values);

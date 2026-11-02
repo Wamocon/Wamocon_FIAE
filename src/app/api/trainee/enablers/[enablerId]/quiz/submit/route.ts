@@ -3,6 +3,7 @@ import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import { requireEnablerOpen } from '@/lib/catalog/progression-db';
 import db from '@/db';
+import { submissionNoticeText } from '@/lib/notifications/submissionNotice';
 import { and, eq, inArray } from 'drizzle-orm';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import {
@@ -184,10 +185,18 @@ export async function POST(
           userId: uid,
           actorId: traineeId,
           type: 'ENABLER_QUIZ_SUBMITTED',
-          title: 'Mini-Quiz eingereicht',
-          message: `Ein Trainee hat ein Mini-Quiz abgegeben: ${enabler.title}`,
+          ...submissionNoticeText('ENABLER_QUIZ_SUBMITTED', {
+            traineeName: session.fullName,
+            subject: enabler.title,
+          }),
           linkUrl: '/trainer/reviews?view=quizzes&onlyPending=true',
-          context: { enablerId, quizId: quiz.id, submissionId: sub.id },
+          context: {
+            enablerId,
+            quizId: quiz.id,
+            submissionId: sub.id,
+            traineeName: session.fullName,
+            subjectTitle: enabler.title,
+          },
           organizationId,
         }));
         await db.insert(notifications).values(values);

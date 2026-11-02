@@ -9,11 +9,14 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { DB_SCHEMA } from '@/lib/db-schema';
 import { authFetch } from '@/lib/authFetch';
+import { formatNotification, sortNewestFirst } from '@/lib/notifications/format';
 
 export type UINotification = {
   id: string;
   userId: string;
   actorId: string | null;
+  /** Name of the person behind actorId (the API adds it). */
+  actorName?: string | null;
   type: string;
   title: string;
   message: string | null;
@@ -240,9 +243,15 @@ export default function NotificationsBell() {
             {(() => {
               const unreadItems = items.filter(i => !i.isRead);
               const readItems = items.filter(i => i.isRead);
-              const visible = [...unreadItems, ...readItems.slice(0, 5)];
+              // All unread and the five newest read ones, newest first
+              const visible = sortNewestFirst([
+                ...unreadItems,
+                ...sortNewestFirst(readItems).slice(0, 5),
+              ]);
 
-              return visible.map(n => (
+              return visible.map(n => {
+                const text = formatNotification(n, t);
+                return (
                 <button
                   key={n.id}
                   onClick={() => onItemClick(n)}
@@ -254,11 +263,11 @@ export default function NotificationsBell() {
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="text-foreground line-clamp-1">
-                        {n.title}
+                        {text.title}
                       </div>
-                      {n.message && (
+                      {text.message && (
                         <div className="text-muted-foreground line-clamp-2 text-xs font-normal">
-                          {n.message}
+                          {text.message}
                         </div>
                       )}
                       <div className="text-muted-foreground mt-1 text-[10px] font-normal">
@@ -267,7 +276,8 @@ export default function NotificationsBell() {
                     </div>
                   </div>
                 </button>
-              ));
+                );
+              });
             })()}
           </div>
         </div>
