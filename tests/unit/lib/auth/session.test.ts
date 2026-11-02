@@ -113,6 +113,71 @@ describe('auth/session', () => {
     });
   });
 
+  describe('a failure of Supabase Auth itself', () => {
+    const failWith = async (error: Record<string, unknown>) => {
+      const { requireUser, getUser } = await load({});
+      getUser.mockResolvedValueOnce({ data: { user: null }, error } as never);
+      const res = (await requireUser(authed())) as Response;
+      return res;
+    };
+
+    it.each([
+      ['no answer', { name: 'AuthRetryableFetchError', status: 0 }],
+      ['server error', { status: 502, message: 'bad gateway' }],
+      ['rate limit', { status: 429, code: 'over_request_rate_limit' }],
+    ])('503, not 401, for %s', async (_label, error) => {
+      const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const res = await failWith(error);
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ error: 'Authentication unavailable' });
+      spy.mockRestore();
+    });
+
+    it('does not cache the failure, the next request asks again', async () => {
+      const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const { requireUser, getUser } = await load({});
+      getUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: { status: 502, message: 'bad gateway' },
+      } as never);
+      expect(((await requireUser(authed())) as Response).status).toBe(503);
+      expect(await requireUser(authed())).toMatchObject({ id: 'session-user' });
+      expect(getUser).toHaveBeenCalledTimes(2);
+      spy.mockRestore();
+    });
+
+    it('401 for a token the service refuses, and logs why (never the token)', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const res = await failWith({
+        status: 403,
+        code: 'session_not_found',
+        message: 'Session from session_id claim in JWT does not exist',
+      });
+      expect(res.status).toBe(401);
+      expect(warn).toHaveBeenCalledWith(
+        '[session] token rejected:',
+        '403 | session_not_found | Session from session_id claim in JWT does not exist'
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('good');
+      warn.mockRestore();
+    });
+
+    it('401 when the answer has neither user nor error', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const { requireUser, getUser } = await load({});
+      getUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: null,
+      } as never);
+      expect(((await requireUser(authed())) as Response).status).toBe(401);
+      expect(warn).toHaveBeenCalledWith(
+        '[session] token rejected:',
+        'no user in the answer'
+      );
+      warn.mockRestore();
+    });
+  });
+
   describe('requireUser', () => {
     it('401 without a token', async () => {
       const { requireUser, isErrorResponse } = await load({});
