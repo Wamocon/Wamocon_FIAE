@@ -90,7 +90,7 @@ Alle Routen verlangen eine angemeldete Person und den Schalter der Organisation 
 
 ### Betrieb
 
-1. **Migration:** `supabase/migrations/20261102000100_hai_settings.sql` legt die Tabelle an (Preview zuerst, Production durch den Release). Ohne Tabelle gelten die Standardwerte (Soniox, Rückfall Browser), die Sprachfunktion läuft weiter, nur das Speichern der Wahl in der Admin-Oberfläche meldet einen Fehler.
+1. **Migrationen:** `supabase/migrations/20261102000100_hai_settings.sql` legt die Tabelle an, `20261102000200_hai_settings_updated_by_plain.sql` entfernt den Fremdschlüssel von `updated_by` (ein Hinweis, wer zuletzt gespeichert hat, soll das Zusammenführen von Profilen nicht berühren). Preview zuerst, Production durch den Release. Ohne Tabelle gelten die Standardwerte (Soniox, Rückfall Browser), die Sprachfunktion läuft weiter, nur das Speichern der Wahl in der Admin-Oberfläche meldet einen Fehler.
 2. **Variablen** in Vercel setzen (Tabelle oben). Danach zeigt die Admin-Seite den Zustand: Schlüssel gesetzt ja oder nein, bei Sokrates erreichbar und Modelle angeboten ja oder nein, jeweils mit dem Grund, nie mit einem Wert.
 3. **Anbieter wählen** (Hauptanbieter und Rückfallebene speichern). Die Änderung gilt beim nächsten Start eines Gesprächs.
 4. **Ausfall prüfen:** Testplan `docs/hai-testplan.md`, Abschnitt E (E16 bis E20). Ein Ausfall von Soniox zeigt sich in der Admin-Seite als "Gestört" mit dem Grund, bis eine Minute ohne Fehler vergangen ist.

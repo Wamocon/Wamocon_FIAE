@@ -28,15 +28,23 @@ const sql = raw
   .join('\n');
 const statements = sql.replace(/'(?:[^']|'')*'/g, "''");
 
+const FOLLOW_UP = '20261102000200_hai_settings_updated_by_plain.sql';
+const followUp = fs
+  .readFileSync(path.join(MIGRATIONS_DIR, FOLLOW_UP), 'utf-8')
+  .split(/\r?\n/)
+  .filter(line => !line.trim().startsWith('--'))
+  .join('\n');
+
 const allFiles = fs
   .readdirSync(MIGRATIONS_DIR)
   .filter(name => name.endsWith('.sql'))
   .sort();
 
 describe('hai_settings migration: place in the series', () => {
-  it('has a 14 digit version and sorts behind every other migration', () => {
+  it('has a 14 digit version and sorts behind every other migration, the follow-up last', () => {
     expect(FILE).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
-    expect(allFiles[allFiles.length - 1]).toBe(FILE);
+    expect(allFiles).toContain(FILE);
+    expect(allFiles.slice(-2)).toEqual([FILE, FOLLOW_UP]);
   });
 });
 
@@ -89,6 +97,8 @@ describe('hai_settings migration: the table', () => {
     expect(statements).toMatch(
       /updated_at timestamptz not null default now\(\)/i
     );
+    // as it was applied to the Preview schema (the file must not change any more,
+    // the runner refuses it); the second migration below drops the foreign key
     expect(statements).toMatch(
       /updated_by uuid references public\.profiles \(id\) on delete set null/i
     );
@@ -129,5 +139,21 @@ describe('hai_settings migration: the table', () => {
     expect(config.checks.map(check => check.name)).toEqual([
       'hai_settings_key_length',
     ]);
+    // the final state has no foreign key (see the follow-up migration)
+    expect(config.foreignKeys).toHaveLength(0);
+  });
+});
+
+describe('hai_settings follow-up migration: updated_by is a plain id', () => {
+  it('drops only the foreign key, idempotently, with the timeouts of the series', () => {
+    expect(followUp).toMatch(
+      /alter table public\.hai_settings\s+drop constraint if exists hai_settings_updated_by_fkey\s*;/i
+    );
+    expect(followUp).toMatch(/set\s+local\s+lock_timeout\s*=\s*'5s'/i);
+    expect(followUp).toMatch(/set\s+local\s+statement_timeout\s*=\s*'60s'/i);
+    expect(followUp).not.toMatch(
+      /\b(create|insert|update|delete|truncate|grant|revoke)\b/i
+    );
+    expect(followUp.match(/alter\s+table/gi)).toHaveLength(1);
   });
 });

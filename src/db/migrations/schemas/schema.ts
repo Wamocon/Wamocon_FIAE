@@ -2125,9 +2125,9 @@ export const haiSettings = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
-    updatedBy: uuid('updated_by').references(() => profiles.id, {
-      onDelete: 'set null',
-    }),
+    // the admin who saved last: a plain id, no foreign key (an audit note, it
+    // must not hold up the deletion or the merge of a profile)
+    updatedBy: uuid('updated_by'),
   },
   table => ({
     pk: primaryKey({ name: 'hai_settings_pkey', columns: [table.key] }),
