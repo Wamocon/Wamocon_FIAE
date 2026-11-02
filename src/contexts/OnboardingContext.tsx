@@ -69,7 +69,16 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
   const startTour = useCallback((type: TourType) => {
     if (!profile?.role) return;
-    const tourSteps = getSteps(profile.role as 'trainee' | 'trainer', type);
+    // A step whose target is not on the page for this person is left out
+    const tourSteps = getSteps(
+      profile.role as 'trainee' | 'trainer',
+      type
+    ).filter(
+      step =>
+        !step.optional ||
+        (typeof document !== 'undefined' &&
+          document.querySelector(step.targetSelector) !== null)
+    );
     setSteps(tourSteps);
     setTourType(type);
     setCurrentStepIndex(0);
