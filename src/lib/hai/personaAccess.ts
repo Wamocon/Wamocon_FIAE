@@ -29,7 +29,8 @@ import {
  */
 export async function loadHaiPersona(
   access: RetrievalAccess | null,
-  trainingScope?: Pick<HaiTrainingScope, 'currentPhase'>
+  trainingScope?: Pick<HaiTrainingScope, 'currentPhase'>,
+  preferredCatalogCode?: string | null
 ): Promise<HaiPersona> {
   if (!access || access.catalogIds.length === 0) return NEUTRAL_PERSONA;
 
@@ -50,6 +51,14 @@ export async function loadHaiPersona(
       .map(id => byId.get(id))
       .filter((row): row is CatalogPersonaSource => !!row);
     if (own.length === 0) return NEUTRAL_PERSONA;
+    // The occupation the user has chosen in the app (header x-catalog) comes
+    // first. It only changes the order, never what the user may read: a code
+    // outside the occupations of the user is ignored.
+    const preferred = (preferredCatalogCode ?? '').trim().toLowerCase();
+    if (preferred) {
+      const index = own.findIndex(row => row.code.toLowerCase() === preferred);
+      if (index > 0) own.unshift(...own.splice(index, 1));
+    }
     const ownIds = new Set(own.map(row => String(row.id)));
 
     return resolveHaiPersona({

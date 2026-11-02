@@ -38,7 +38,10 @@ import {
 import { getProviderStatus } from '@/lib/hai/providers';
 import { buildHaiTrainingScope } from '@/lib/hai/trainingScope';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
-import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
+import {
+  getCatalogScopeForUserId,
+  requestedCatalogCode,
+} from '@/lib/catalog/scope';
 import {
   getUserOrgIdStrict,
   requireProPlan,
@@ -949,6 +952,8 @@ export async function POST(req: NextRequest) {
     const pipelineContext: PipelineContext = {
       userId,
       sessionId,
+      // the occupation chosen in the app comes first in the persona
+      preferredCatalogCode: requestedCatalogCode(req),
       currentEnablerId: inScope ? context?.enablerId : undefined,
       currentCourseId: inScope ? context?.courseId : undefined,
       enablerTitle,

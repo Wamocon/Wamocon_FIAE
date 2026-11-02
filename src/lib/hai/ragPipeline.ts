@@ -88,6 +88,11 @@ export type IntentType =
   | 'navigation';
 
 export interface PipelineContext {
+  /**
+   * Code of the occupation the user has chosen in the app (header x-catalog).
+   * Only the order of the occupations of the persona, never an access right.
+   */
+  preferredCatalogCode?: string | null;
   userId: string;
   sessionId?: string;
   currentEnablerId?: string;
@@ -637,7 +642,11 @@ export async function resolveTurnPersona(
   context: PipelineContext
 ): Promise<TurnPersona> {
   const access = await resolveRetrievalAccess(context.userId);
-  const persona = await loadHaiPersona(access, context.trainingScope);
+  const persona = await loadHaiPersona(
+    access,
+    context.trainingScope,
+    context.preferredCatalogCode
+  );
   return { access, persona };
 }
 

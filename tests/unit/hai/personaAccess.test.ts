@@ -67,6 +67,37 @@ describe('loadHaiPersona', () => {
     expect(persona.examModeTitle).not.toContain('Teil 1');
   });
 
+  it('puts the occupation the user has chosen first, for both orders', async () => {
+    const both = access([KFBM_CATALOG.id, FIAE_CATALOG.id]);
+    // chosen FIAE: the base is the FIAE persona, both occupations are named
+    const fiae = await loadHaiPersona(both, undefined, 'fiae');
+    expect(fiae.source).toBe('fiae-default');
+    expect(fiae.occupationName.startsWith('Fachinformatik')).toBe(true);
+    expect(fiae.occupationName).toContain('Büromanagement');
+    // chosen KFBM (any case): the KfBM persona is the base
+    const kfbm = await loadHaiPersona(both, undefined, ' KfBM ');
+    expect(kfbm.source).toBe('catalog-settings');
+    expect(kfbm.occupationName.startsWith('Kaufleute')).toBe(true);
+    expect(kfbm.occupationName).toContain('Fachinformatik');
+  });
+
+  it('ignores a chosen occupation the user does not have: no access is gained, nothing is lost', async () => {
+    const only = await loadHaiPersona(
+      access([KFBM_CATALOG.id]),
+      undefined,
+      'FIAE'
+    );
+    expect(only.source).toBe('catalog-settings');
+    expect(only.occupationName).not.toContain('Fachinformatik und');
+    const both = await loadHaiPersona(
+      access([KFBM_CATALOG.id, FIAE_CATALOG.id]),
+      undefined,
+      'unknown'
+    );
+    expect(both.occupationName).toContain('Büromanagement');
+    expect(both.occupationName).toContain('Fachinformatik');
+  });
+
   it('is neutral when the catalogs of the access are unknown', async () => {
     expect(await loadHaiPersona(access(['unknown-id']))).toBe(NEUTRAL_PERSONA);
   });
