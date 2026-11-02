@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Copy, Check, Star } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { useLanguage } from '@/contexts/LanguageContext';
 
 interface EvidenceItem {
   id: string;
