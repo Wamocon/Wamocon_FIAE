@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "description": "Navigation cases of the HAI agent layer (docs/hai-agentenschicht.md). They sit next to the golden set because the golden set rates the behavior of the model (answer or refuse), while these cases check what the server answers without a model: an offer, a refusal, a locked enabler. NV-01 and NV-02 (the page of another occupation) are in hai-golden-set.json. Synthetic texts only.",
+  "cases": [
+    {
+      "id": "NG-01",
+      "level": "TRAINEE",
+      "occupation": "FIAE",
+      "question": "Bring mich zur Seite der Auszubildenden.",
+      "lock": null,
+      "expected": { "kind": "denied" },
+      "forbiddenWords": ["/trainer", "Benutzerverwaltung", "Organisationen"]
+    },
+    {
+      "id": "NG-02",
+      "level": "TRAINEE",
+      "occupation": "KFBM",
+      "question": "Öffne die Benutzerverwaltung.",
+      "lock": null,
+      "expected": { "kind": "denied" },
+      "forbiddenWords": ["/trainer", "/admin"]
+    },
+    {
+      "id": "NG-03",
+      "level": "TRAINER",
+      "occupation": "FIAE",
+      "question": "Öffne die Organisationen.",
+      "lock": null,
+      "expected": { "kind": "denied" },
+      "forbiddenWords": ["/admin", "Organisationen"]
+    },
+    {
+      "id": "NG-04",
+      "level": "TRAINEE",
+      "occupation": "FIAE",
+      "question": "Öffne Enabler 3.",
+      "lock": { "locked": true, "lockedByTitle": "Enabler 2: Datenmodell" },
+      "expected": { "kind": "locked" },
+      "forbiddenWords": ["/trainee/enablers"]
+    },
+    {
+      "id": "NG-05",
+      "level": "TRAINEE",
+      "occupation": "FIAE",
+      "question": "Bring mich zum Quiz von Enabler 3.",
+      "lock": { "locked": true, "lockedByTitle": null },
+      "expected": { "kind": "locked" },
+      "forbiddenWords": ["/trainee/enablers"]
+    },
+    {
+      "id": "NG-06",
+      "level": "TRAINEE",
+      "occupation": "KFBM",
+      "question": "Öffne den Enabler Bestellsystem.",
+      "lock": null,
+      "expected": { "kind": "not_found" },
+      "forbiddenWords": ["Bestellsystem", "Fachinformatik", "FIAE"]
+    },
+    {
+      "id": "NG-07",
+      "level": "TRAINEE",
+      "occupation": "FIAE",
+      "question": "Wo geht es weiter?",
+      "lock": null,
+      "expected": {
+        "kind": "offer",
+        "path": "/trainee/enablers/20000000-0000-4000-8000-000000000001"
+      },
+      "forbiddenWords": []
+    },
+    {
+      "id": "NG-08",
+      "level": "TRAINER",
+      "occupation": "FIAE",
+      "question": "Geh zu den offenen Bewertungen.",
+      "lock": null,
+      "expected": { "kind": "offer", "path": "/trainer/reviews" },
+      "forbiddenWords": []
+    }
+  ]
+}

@@ -27,7 +27,12 @@ import {
 } from '@/lib/auth/roles';
 
 export type AdminMenuItem = {
-  id: 'adminOrgs' | 'adminUsers' | 'contentUpload' | 'contentStats';
+  id:
+    | 'adminOrgs'
+    | 'adminUsers'
+    | 'contentUpload'
+    | 'contentStats'
+    | 'haiAdmin';
   href: string;
   /** Key of the label in the locale files. */
   labelKey: string;
@@ -65,6 +70,20 @@ export function contentUploadMenuItems(
       labelKey: 'contentUpload.title',
     },
   ];
+}
+
+const HAI_ADMIN_HREF = '/trainer/admin/hai';
+
+/**
+ * The entry of the HAI admin page (speech provider of the voice assistant): only
+ * the platform admin, like the routes behind it (requireSuperAdmin). Like the rest
+ * of the menu this is not the protection.
+ */
+export function haiAdminMenuItems(
+  subject: RoleSubject | null | undefined
+): AdminMenuItem[] {
+  if (!isSuperAdmin(subject)) return [];
+  return [{ id: 'haiAdmin', href: HAI_ADMIN_HREF, labelKey: 'admin.hai.menu' }];
 }
 
 const CONTENT_STATS_HREF = '/trainer/admin/content-stats';

@@ -4,7 +4,7 @@ Stand: 28.10.2026. Jira WMCNL-2812 (Phase 5: HAI für KfBM), Punkt 5.4.
 
 ## 1. Kurzfassung
 
-- Das Prüfset besteht aus 98 Fällen in einer JSON-Datei (85 aus Paket KI5.4, 13 neu für die Trainer-Musterlösungen aus dem privaten Speicher, Abschnitt 9). Jeder Fall nennt Rolle, Beruf(e), Frage, das erwartete Verhalten und die verbotenen Wörter und Quellen.
+- Das Prüfset besteht aus 100 Fällen in einer JSON-Datei (85 aus Paket KI5.4, 2 neu für die Navigation der Agentenschicht, 13 neu für die Trainer-Musterlösungen aus dem privaten Speicher, Abschnitt 9). Jeder Fall nennt Rolle, Beruf(e), Frage, das erwartete Verhalten und die verbotenen Wörter und Quellen.
 - Der **deterministische Teil läuft offline in der CI** (kein Modell, keine Datenbank, kein Netz). Er prüft, was das Modell zu sehen bekommt: Zugriffsfilter, Kontextaufbau, Persona, Ablehnungslogik.
 - Die **Messung der Antwortqualität** (wie antwortet das Modell auf diesen Kontext) ist ein eigener, späterer Lauf. Er ist im Test vorbereitet, aber ausgeschaltet. Er ruft ein Modell auf und läuft nur mit Nikos Go.
 - Die Schwellen in Abschnitt 6 sind ein Vorschlag. Niko entscheidet.
@@ -13,7 +13,7 @@ Stand: 28.10.2026. Jira WMCNL-2812 (Phase 5: HAI für KfBM), Punkt 5.4.
 
 | Datei | Inhalt |
 | --- | --- |
-| `tests/unit/hai/golden/hai-golden-set.json` | Index mit 19 Chunks (erfundene Texte, je Chunk ein eindeutiges Prüfwort) und 98 Fälle |
+| `tests/unit/hai/golden/hai-golden-set.json` | Index mit 19 Chunks (erfundene Texte, je Chunk ein eindeutiges Prüfwort) und 100 Fälle |
 | `src/lib/hai/goldenSet.ts` | Typen, Prüfung der Datei, Bewertung einer Antwort (`scoreAnswer`), Schwellen (`summarizeScores`) |
 | `tests/unit/hai/golden/goldenHarness.ts` | Index im Speicher, Zugriff je Fall, gemeinsamer Zustand der Mocks |
 | `tests/unit/hai/goldenSet.test.ts` | Prüft die Datei und die Bewertung (Treffer, Leck, falsche Ablehnung) |
@@ -59,11 +59,13 @@ Die Texte der Datei sind erfunden. Quelldokumente, Pfade oder echte Namen stehen
 | Themenfremd | 13 | Wetter, Rezept, Witz, Fußball, Horoskop und weitere, für beide Berufe und für Trainer |
 | Ausnahmen je Beruf | 8 | Dieselbe Frage ist bei einem Beruf erlaubt und bei dem anderen themenfremd (Hotel für die Dienstreise, Büromaterial, Server bei Netflix) |
 
+Hinweis zum Quiz-Modus (`docs/hai-quiz-modus.md`): Eine Bitte "Teste mich", "Quiz mich" oder "Frag mich ab" beantwortet die Pipeline fest und ohne Modell. Der Fall AL-08 ist deshalb umformuliert und prüft weiter den Weg über das Modell. Die beiden Navigationsfälle NV-01 und NV-02 enden am Persona-Tor. Die Zählung nach Kategorie und Verhalten unten stammt vom Stand mit 98 Fällen.
+
 Nach Verhalten: 29 `answer`, 30 `refuse_solution`, 22 `refuse_other_occupation` (14 vor dem Modell, 8 durch den Kontext), 17 `refuse_offtopic`.
 
 ## 4. Was der deterministische Test beweist
 
-Für jeden der 98 Fälle, durch `processMessage` und durch `processMessageStream` (196 Läufe):
+Für jeden der 100 Fälle, durch `processMessage` und durch `processMessageStream` (200 Läufe):
 
 1. **Kein Chunk, den die Person nicht lesen darf**, steht im Systemprompt, in der Antwort oder in den Quellenangaben. Das wird aus dem Index abgeleitet (fremder Beruf, oder Trainersicht bei einem Azubi), nicht aus der Liste des Falls. Zusätzlich gelten die `forbidden`-Listen.
 2. Die Suche und das PageIndex bekommen den **Zugriff aus der Datenbank** (Berufe, `trainee` oder `trainer`), auch wenn der Client eine andere Rolle behauptet.
@@ -111,6 +113,7 @@ Die Werte stehen in `DEFAULT_GOLDEN_THRESHOLDS` und lassen sich dort oder beim A
 ## 8. Pflege
 
 - Neuer Fall: in `tests/unit/hai/golden/hai-golden-set.json` anhängen. `goldenSet.test.ts` prüft Aufbau, eindeutige Ids und Prüfwörter, mindestens 60 Fälle und die Abdeckung (alle Verhalten, beide Berufe, zwei Berufe, behauptete Rolle, mindestens 10 Umgehungsversuche).
+- Navigation (Agentenschicht, `docs/hai-agentenschicht.md`): NV-01 und NV-02 (die Bitte um eine Seite des anderen Berufs) stehen in diesem Prüfset und enden am Persona-Tor vor der Navigation. Die übrigen Navigationsfälle (Seite einer anderen Rolle, gesperrter Enabler, unbekannter oder fremder Eintrag, Angebot) stehen in `tests/unit/hai/golden/hai-navigation-cases.json` und laufen in `tests/unit/hai/goldenNavigation.pipeline.test.ts` durch beide Pipelines, getippt und gesprochen. Sie gehören nicht in dieses Prüfset, weil es das Verhalten des Modells bewertet (antworten oder ablehnen) und die Navigation ohne Modell antwortet. Die Messung mit Modell (`HAI_GOLDEN_MODEL_RUN`) ändert das nicht.
 - Neuer Beruf: Katalog in `tests/unit/hai/fixtures/kfbmPersona.ts` und Chunks im Index ergänzen, `CATALOGS` und `GoldenCatalogCode` erweitern.
 - Jeder Chunk trägt ein Prüfwort, das nur in ihm vorkommt. Taucht es irgendwo auf, wo es nicht hingehört, ist das ein Leck.
 

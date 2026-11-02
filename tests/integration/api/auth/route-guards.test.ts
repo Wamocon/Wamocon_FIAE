@@ -215,18 +215,24 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
 
   it('lists every exported HAI handler in the table', () => {
     // A new method on a HAI route without a guard entry fails here
-    const dir = path.join(process.cwd(), 'src/app/api/hai');
+    const root = path.join(process.cwd(), 'src/app/api/hai');
     const found: string[] = [];
-    for (const name of fs.readdirSync(dir)) {
-      const file = path.join(dir, name, 'route.ts');
-      if (!fs.existsSync(file)) continue;
-      const source = fs.readFileSync(file, 'utf8');
-      for (const m of source.matchAll(
-        /export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\b/g
-      )) {
-        found.push(`${m[1]} hai/${name}`);
+    // every depth: hai/voice/haus/speech is a handler of the HAI as well
+    const walk = (dir: string, prefix: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          walk(path.join(dir, entry.name), `${prefix}/${entry.name}`);
+        } else if (entry.name === 'route.ts') {
+          const source = fs.readFileSync(path.join(dir, entry.name), 'utf8');
+          for (const m of source.matchAll(
+            /export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\b/g
+          )) {
+            found.push(`${m[1]} ${prefix}`);
+          }
+        }
       }
-    }
+    };
+    walk(root, 'hai');
     const listed = GUARDED_ROUTES.filter(r => r.route.startsWith('hai/')).map(
       r => `${r.method} ${r.route}`
     );

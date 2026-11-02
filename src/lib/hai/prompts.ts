@@ -62,6 +62,12 @@ export interface PromptContext {
    * the last word. Without it the prompt is unchanged (FIAE byte for byte).
    */
   voice?: boolean;
+  /**
+   * The pipeline offers navigation cards (agent layer): adds the short section
+   * that tells the model to invent no links or paths. Without it the prompt is
+   * unchanged (FIAE byte for byte), the pipelines set it for every chat turn.
+   */
+  navigation?: boolean;
 }
 
 // ============================================================================
@@ -171,6 +177,19 @@ export function buildVoiceRules(userRole?: PromptContext['userRole']): string {
     '- Tagesbegleiter: Fragt der Nutzer, was heute ansteht, bittet er um einen Plan oder begrüßt er dich am Tagesbeginn, nutze nur die Daten im Abschnitt "Aktuelle Plattform-Daten". Nenne höchstens drei Punkte, das Dringendste zuerst (Frist, Prüfung, Rückmeldung zu einer Abgabe), begründe den ersten kurz und schließe mit genau einer Frage, womit er beginnen will. Erfinde keine Termine, Fristen oder Noten. Fehlen Daten, sage es und verweise auf die Plattform.',
     '- Höchstens eine Frage je Antwort, nie dieselbe zweimal. Nach einer reinen Auskunft endet die Antwort ohne Frage.',
     '- Keine Einschätzung von Stimme, Tonfall oder Stimmung des Nutzers und keine Diagnosen.',
+  ].join('\n');
+}
+
+/**
+ * Guidance through the platform (agent layer): the platform itself offers the
+ * navigation card when someone wants to open a page or asks where it goes on.
+ * The model invents no link and no path, it only names the menu entry.
+ */
+export function buildNavigationRules(): string {
+  return [
+    '## Führung durch die Plattform',
+    '- Wenn jemand eine Seite öffnen will oder fragt, wie es weitergeht, bietet die Plattform selbst eine Karte mit dem Knopf "Öffnen" an. Du öffnest keine Seiten und füllst nichts aus.',
+    '- Erfinde keine Links, Pfade oder Adressen von Plattform-Seiten und schreibe keine in die Antwort. Wenn jemand wissen will, wo etwas zu finden ist, nenne in Worten den Namen des Menüpunkts (zum Beispiel Berufsschule oder Ausbildungsnachweis).',
   ].join('\n');
 }
 
@@ -394,6 +413,9 @@ Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, a
   // the last part when it applies.
   if (context.voice) {
     parts.push(buildVoiceRules(context.userRole));
+  }
+  if (context.navigation) {
+    parts.push(buildNavigationRules());
   }
   parts.push(buildBoundaryRules(context.userRole));
 
