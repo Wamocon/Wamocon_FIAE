@@ -195,12 +195,9 @@ export default function TraineeDashboard() {
   // Derived module progress for charts
 
   const moduleProgress = modules.map((module: any) => ({
-    // The whole name for the lists, a short one only for the axis of the chart
+    // The whole name for lists and tooltips (the axis of the bar chart cuts it
+    // itself and carries the whole name as its tooltip)
     name: module.title,
-    shortName:
-      module.title.length > 20
-        ? module.title.substring(0, 20) + '...'
-        : module.title,
     progress: module.progress ?? 0,
     color:
       (module.progress ?? 0) > 70
@@ -279,37 +276,51 @@ export default function TraineeDashboard() {
         <DashboardOccupation />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
-            {/* Continue Learning Card */}
-            <div
-              className="glass-effect-enhanced border-accent/40 hover:border-accent/70 hover:shadow-accent/20 transform cursor-pointer rounded-2xl border-2 p-6 shadow-2xl transition-all duration-300 hover:-translate-y-1"
-              onClick={() => nextLesson && handleLessonClick(nextLesson.id)}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-accent mb-3 text-sm font-bold tracking-wider uppercase">
-                    {t('dashboard.continueLearning').toUpperCase()}
-                  </h3>
-                  <p className="text-foreground text-2xl leading-tight font-bold">
-                    {nextLesson
-                      ? nextLesson.title
-                      : t('dashboard.keepLearning')}
-                  </p>
-                  <p className="text-muted-foreground mt-2">
-                    {t('dashboard.module')}{' '}
-                    {nextLesson ? nextLesson.module : '-'}
-                  </p>
+            {/* Continue Learning Card. Without a next step (no question set
+                assigned yet) it says so, with no Play button, no empty clock and
+                nothing to click (WMCNL-2953) */}
+            {nextLesson ? (
+              <div
+                className="glass-effect-enhanced border-accent/40 hover:border-accent/70 hover:shadow-accent/20 transform cursor-pointer rounded-2xl border-2 p-6 shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                onClick={() => handleLessonClick(nextLesson.id)}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-accent mb-3 text-sm font-bold tracking-wider uppercase">
+                      {t('dashboard.continueLearning').toUpperCase()}
+                    </h3>
+                    <p className="text-foreground text-2xl leading-tight font-bold">
+                      {nextLesson.title}
+                    </p>
+                    <p className="text-muted-foreground mt-2">
+                      {t('dashboard.module')} {nextLesson.module}
+                    </p>
+                  </div>
+                  <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br shadow-lg">
+                    <Play className="text-foreground h-8 w-8" />
+                  </div>
                 </div>
-                <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br shadow-lg">
-                  <Play className="text-foreground h-8 w-8" />
-                </div>
+                {nextLesson.estimatedTime && (
+                  <div className="text-accent mt-4 flex items-center">
+                    <Clock className="mr-2 h-4 w-4" />
+                    <span className="text-sm font-medium">
+                      {nextLesson.estimatedTime}
+                    </span>
+                  </div>
+                )}
               </div>
-              <div className="text-accent mt-4 flex items-center">
-                <Clock className="mr-2 h-4 w-4" />
-                <span className="text-sm font-medium">
-                  {nextLesson ? nextLesson.estimatedTime : ''}
-                </span>
+            ) : (
+              <div className="glass-effect-enhanced border-accent/40 rounded-2xl border-2 p-6 shadow-2xl">
+                <h3 className="text-accent mb-3 text-sm font-bold tracking-wider uppercase">
+                  {t('dashboard.continueLearning').toUpperCase()}
+                </h3>
+                <p className="text-muted-foreground text-lg">
+                  {modules.length === 0
+                    ? t('dashboard.noQuestionSets')
+                    : t('dashboard.nothingToContinue')}
+                </p>
               </div>
-            </div>
+            )}
 
             {/* Learning Path Section - Textual Information Above Charts */}
             <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
@@ -445,7 +456,11 @@ export default function TraineeDashboard() {
                   <div className="bg-muted/20 mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full">
                     <Filter className="h-6 w-6 opacity-50" />
                   </div>
-                  <p>No modules found for this filter.</p>
+                  <p>
+                    {modules.length === 0
+                      ? t('dashboard.noQuestionSets')
+                      : t('dashboard.noModulesForFilter')}
+                  </p>
                 </div>
               )}
             </div>
@@ -587,7 +602,13 @@ export default function TraineeDashboard() {
                 </div>
                 {t('dashboard.skills')}
               </h3>
-              <SkillRadarChart data={skillRadar} />
+              {skillRadar.length === 0 ? (
+                <p className="text-muted-foreground py-8 text-center text-sm">
+                  {t('dashboard.noSkillData')}
+                </p>
+              ) : (
+                <SkillRadarChart data={skillRadar} />
+              )}
               {/* Compact skills display */}
               <div className="mt-4 grid grid-cols-2 gap-2">
                 {skillRadar.map((item: any, index: number) => (
@@ -614,7 +635,13 @@ export default function TraineeDashboard() {
                 </div>
                 {t('dashboard.moduleProgress')}
               </h3>
-              <ModuleBarChart data={moduleProgress} />
+              {moduleProgress.length === 0 ? (
+                <p className="text-muted-foreground py-8 text-center text-sm">
+                  {t('dashboard.noModuleProgress')}
+                </p>
+              ) : (
+                <ModuleBarChart data={moduleProgress} />
+              )}
               {/* Compact module progress display */}
               <div className="mt-4 space-y-2">
                 <AnimatePresence mode="popLayout">
