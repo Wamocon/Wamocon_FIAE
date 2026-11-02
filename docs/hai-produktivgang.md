@@ -38,12 +38,24 @@ Folgerung: Die Nutzung ist gering, das Risiko für Nutzer beim Umbau des Index i
 
 Reihenfolge-Hinweis: H7 erst nach H3 bis H6. Wer die Variablen vorher umstellt, lässt die App mit Qwen-Fragen gegen Gemini-Vektoren suchen. Solange H3 läuft, bleibt der alte Zustand stehen (die Nutzung ist gering, ein Hinweis an die Nutzer genügt).
 
-## 4. Entscheidungen, die Niko braucht
+## 4. Entscheidungen
 
-1. **Weg:** Dieses Dokument geht von Sokrates für Chat und Einbettung aus (Beschluss vom 29.10.2026, Messung am 01.11.: Einbettung gleich gut wie Gemini, Chat `gemma4:31b` erfüllt alle Schwellen). Die Alternative wäre Gemini mit aufgeladenem Guthaben (Neuindexierung KfBM und geänderter FIAE-Inhalt, rund 1 USD, etwa eine halbe Stunde). Sie ist schneller, hält Production aber nicht vom Haus-Server unabhängig und widerspricht dem Beschluss. Solange nichts anderes entschieden ist, gilt Sokrates.
-2. **Go** für H3 (Neuindexierung Production) und H7 (Umstellung der Anbieter).
-3. **Zeitfenster** für Sokrates mit dem Projekt WAMO (etwa drei Stunden für H3).
-4. **Abhängigkeit von Sokrates:** Fällt der Server aus, antwortet die HAI nicht (kein Fallback auf Gemini, Entscheidung CF1). Die Oberfläche zeigt dann einen Hinweis. Akzeptiert?
+Von Niko entschieden am 02.11.2026:
+
+1. **Weg:** Die HAI steigt in Production auf Sokrates um, Chat (`gemma4:31b`) und Einbettung (Qwen3-Embedding). Gemini bleibt nicht als Rückfall.
+2. **Abhängigkeit von Sokrates akzeptiert:** Fällt der Server aus, antwortet die HAI nicht (kein Fallback auf Gemini, Entscheidung CF1). Die Oberfläche zeigt dann einen Hinweis. Lernen und Abgaben laufen weiter.
+3. **PR 183 (preview nach master):** noch nicht. Master wird nach Preview gemergt (PR 237 am 02.11.2026), nicht umgekehrt.
+
+Noch offen:
+
+1. **Go** für H3 (Neuindexierung Production) und H7 (Umstellung der Anbieter), bisher nicht erteilt.
+2. **Zeitfenster** für Sokrates mit dem Projekt WAMO (etwa drei Stunden für H3).
+
+### Wird der Index mit dem Rollout übernommen?
+
+Nein. Der Index ist Datenbankinhalt, kein Code. `hai_embeddings` liegt in Production im Schema `public` und in der Preview im Schema `public_preview`, es sind zwei getrennte Tabellen. Der App-Release, die Migrationen und die FIAE-Übertragung (`fiae-content-promote`) ändern die Tabelle `hai_embeddings` in Production nicht. Deshalb braucht Production einen eigenen Lauf (H3).
+
+Eine Abkürzung gibt es nur teilweise. Das Neuindexierungsskript überspringt jede Quelle, deren Textstücke (Quelle, Nummer, `content_hash`) und Modellmarke schon stimmen. Würde man die Zeilen der Preview vorher nach Production kopieren, liefe H3 danach nur noch für die Unterschiede. Das trägt aber nur, wo die Quell-Ids in beiden Schemas gleich sind. Das gilt für den FIAE-Inhalt (Übertragung per Id). Der KfBM-Inhalt kommt per Inhaltsabgleich mit eigenen Ids, dort würden kopierte Zeilen auf falsche Quellen zeigen. Empfehlung: nicht kopieren, H3 vollständig mit Sokrates laufen lassen (rund drei Stunden, wiederaufnehmbar). Eine Kopie nur für FIAE wäre eine spätere Optimierung mit eigener Prüfung.
 
 ## 5. Rückweg
 
