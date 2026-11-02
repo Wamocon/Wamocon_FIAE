@@ -3043,5 +3043,22 @@
   "hai.quiz.error.planRequired": "HAI is not part of your organization or your plan, so quiz mode is not available for you. Contact your trainer or administrator, who can enable the package. You can still use the quizzes in the enablers.",
   "hai.quiz.error.awaitingActivation": "Your account is still waiting to be released by your trainer or administrator, so I cannot quiz you yet. Once your account is released, it works.",
   "hai.quiz.error.notAssigned": "The course for this question is not yet assigned to you, so I cannot quiz you on it. Ask your trainer, who can assign you to a course.",
-  "hai.quiz.error.invalid": "The request was not valid."
+  "hai.quiz.error.invalid": "The request was not valid.",
+  "hai.voiceMode.open": "Conversation",
+  "hai.voiceMode.openLabel": "Start a conversation with HAI (voice mode)",
+  "hai.voiceMode.title": "Voice mode",
+  "hai.voiceMode.dialogLabel": "Voice mode: conversation with HAI",
+  "hai.voiceMode.close": "End voice mode",
+  "hai.voiceMode.captions": "Subtitles",
+  "hai.voiceMode.captionsLabel": "Subtitles of the conversation",
+  "hai.voiceMode.heard": "You say",
+  "hai.voiceMode.answer": "HAI says",
+  "hai.voiceMode.state.waiting": "HAI is waiting",
+  "hai.voiceMode.state.paused": "HAI is taking a break",
+  "hai.voiceMode.state.error": "The conversation is paused",
+  "hai.voiceMode.error.noSpeech": "I did not hear anything. Tap HAI to keep talking.",
+  "hai.voiceMode.listenAgain": "Listen again",
+  "hai.voiceMode.hint": "Say “End voice mode” or press Esc to end the conversation. A tap on HAI interrupts it. Everything said is in the chat to read afterwards.",
+  "hai.voiceMode.mini.label": "Voice mode active",
+  "hai.voiceMode.mini.restore": "Show voice mode large again"
 }

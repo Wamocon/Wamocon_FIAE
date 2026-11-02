@@ -287,6 +287,12 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
   const [localRecognition, setLocalRecognition] = useState(false);
   const [consented, setConsented] = useState(false);
   const [dayStartEnabled, setDayStartEnabledState] = useState(true);
+  // what the voice mode shows: what was understood last, the pieces of the answer
+  // handed to the speaker, and the loudness of the recording when the provider
+  // reports one (0 to 1)
+  const [heard, setHeard] = useState('');
+  const [spoken, setSpoken] = useState<string[]>([]);
+  const [level, setLevel] = useState<number | null>(null);
 
   const phaseRef = useRef<VoicePhase>('idle');
   const stoppedRef = useRef(true);
@@ -412,6 +418,9 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     cancelSpeech();
     ignoreIdRef.current = spokenRef.current.id;
     setInterim('');
+    setHeard('');
+    setSpoken([]);
+    setLevel(null);
     setError(null);
     setPhase('idle');
   }, [cancelSpeech, dropRecognition, setPhase]);
@@ -424,6 +433,8 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       baselineIdRef.current = lastAssistant?.id ?? null;
       spokenRef.current = freshSpoken();
       setInterim('');
+      setSpoken([]);
+      setLevel(null);
       setPhase('thinking');
       void sendMessage(text, { voice: true });
     },
@@ -437,6 +448,7 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
         return;
       }
       silentRoundsRef.current = 0;
+      setHeard(text);
       submit(text);
     },
     [stop, submit]
@@ -467,6 +479,14 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
         else live += piece;
       }
       setInterim((finalText + live).trim());
+    };
+    // Optional: a provider that measures the recording reports its loudness (0 to 1)
+    (
+      rec as RecognitionLike & { onlevel?: ((value: number) => void) | null }
+    ).onlevel = value => {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        setLevel(Math.min(1, Math.max(0, value)));
+      }
     };
     rec.onerror = event => {
       if (event.error === 'aborted' || event.error === 'no-speech') return;
@@ -590,6 +610,11 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     }
     for (const piece of pieces) state.speaker?.say(piece);
     state.count += pieces.length;
+    if (pieces.length > 0 && state.speaker) {
+      // the first pieces of an answer replace what the last answer showed
+      const first = state.count === pieces.length;
+      setSpoken(previous => (first ? pieces : [...previous, ...pieces]));
+    }
     if (pieces.length > 0 && state.speaker) setPhase('speaking');
     if (final) {
       state.finished = true;
@@ -621,6 +646,12 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     interim,
     error,
     localRecognition,
+    /** What was understood in the last round, the question that went to the HAI. */
+    heard,
+    /** The pieces of the answer handed to the speaker so far (subtitles of the voice mode). */
+    spoken,
+    /** Loudness of the recording (0 to 1) if the provider reports one, else null. */
+    level,
     /** The provider that listens and speaks now (the head of the chain at the start). */
     provider: activeProvider,
     /** The providers in the order they are tried. */

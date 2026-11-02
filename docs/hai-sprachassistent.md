@@ -9,6 +9,7 @@ Stand: 02.11.2026 (WMCNL-2907, Anbieter Soniox und Sokrates ergänzt). Azubis sp
 - Der Ablauf: zuhören, den erkannten Text wie eine getippte Frage an die HAI schicken, die Antwort Satz für Satz vorlesen, wieder zuhören. Das Mikrofon ist beim Vorlesen aus (kein Echo). Ein Tipp auf den Knopf unterbricht, "Stopp" oder "Sprachmodus beenden" beendet das Gespräch. Nach drei stillen Runden schaltet sich das Mikrofon mit einem Hinweis ab.
 - **Tagesbegleiter:** Beim ersten Gespräch des Tages fragt die HAI selbst "Guten Morgen, was steht heute an?" (nach Tageszeit, Berliner Zeit). Sie nennt höchstens drei Punkte, das Dringendste zuerst, und schließt mit genau einer Frage. Abschaltbar in den Einstellungen des Sprachassistenten. Dieselbe Frage lässt sich jederzeit stellen, getippt oder gesprochen ("Was steht heute an?", "Was steht für mich an?", "Was habe ich diese Woche zu tun?", "Plane meinen Tag"). Die Antwort enthält den Fortschritt und den nächsten Lernschritt, siehe Abschnitt 7.
 - Alles Gesprochene steht im Chat zum Nachlesen.
+- Der Knopf "Gespräch" neben dem Mikrofon öffnet den **Sprachmodus**: ein Gesprächsfenster mit dem Hai als Maskottchen, mit Untertiteln, auf demselben Chat und derselben Schleife (`docs/hai-sprachmodus.md`).
 
 ## 2. Aufbau
 

@@ -65,7 +65,8 @@ describe('browser calls to /api/hai', () => {
         'src/components/hai/HaiProvider.tsx',
         'src/components/hai/HaiAdminWidget.tsx',
         'src/components/hai/HaiAdminDialog.tsx',
-        'src/components/hai/HaiVoiceControl.tsx',
+        // the organization switch of the voice assistant, read by the voice session
+        'src/components/hai/voice-mode/useVoiceEnabled.ts',
         'src/lib/hai/quizMode/client.ts',
         // the voice providers: config, Soniox key, Sokrates recognition and speech
         'src/lib/hai/voice/client/deps.ts',
