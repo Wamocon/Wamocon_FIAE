@@ -98,6 +98,11 @@ export const organizations = pgTable('organizations', {
   maxTrainerSeats: integer('max_trainer_seats').notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   isPlatformOwner: boolean('is_platform_owner').default(false).notNull(),
+  // Voice assistant of the HAI (day companion, WMCNL-2907): off until a platform
+  // administrator turns it on for the organization
+  voiceAssistantEnabled: boolean('voice_assistant_enabled')
+    .default(false)
+    .notNull(),
   contactEmail: text('contact_email'),
   contactPerson: text('contact_person'),
   notes: text('notes'),

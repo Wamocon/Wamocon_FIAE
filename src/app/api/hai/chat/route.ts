@@ -46,6 +46,7 @@ import {
 } from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
+import { isVoiceAssistantEnabled } from '@/lib/hai/voiceAccess';
 import { badRequestUnlessUuid } from '@/lib/uuid';
 import {
   TRAINER_KNOWLEDGE_PATCH,
@@ -70,6 +71,12 @@ interface ChatRequestBody {
     scenarioText?: string;
   };
   stream?: boolean;
+  /**
+   * The question was spoken and the answer is read aloud (voice assistant, day
+   * companion). Allowed only where the organization has the switch on; the
+   * route decides, the text of the message never does.
+   */
+  voice?: boolean;
 }
 
 // ============================================================================
@@ -632,6 +639,19 @@ export async function POST(req: NextRequest) {
       context,
       stream = false,
     } = body;
+    const wantsVoice = body.voice === true;
+
+    // The voice assistant is a switch per organization, decided here (fails closed)
+    if (wantsVoice && !(await isVoiceAssistantEnabled(userId))) {
+      return NextResponse.json(
+        {
+          error:
+            'Der Sprachassistent ist für Ihre Organisation nicht freigeschaltet.',
+          code: 'VOICE_DISABLED',
+        },
+        { status: 403 }
+      );
+    }
 
     // Validate message
     if (
@@ -946,6 +966,7 @@ export async function POST(req: NextRequest) {
       ...(holdsTrainerKnowledge || memoryHolds
         ? { holdsTrainerKnowledge: true }
         : {}),
+      voice: wantsVoice,
       trainingScope: buildHaiTrainingScope({
         role: userRole,
         startOfTrainingDate: user[0].startOfTrainingDate,

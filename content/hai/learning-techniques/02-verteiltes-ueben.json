@@ -33,11 +33,11 @@
     "note": "Verteiltes Üben ist die zweite Technik mit hohem Nutzen. Die genannten Abstände sind ein eigener Richtwert, keine Angabe der Studie."
   },
   "review": {
-    "reviewed": false,
-    "status": "Entwurf, ungeprüft gegen Originaltext",
-    "reviewedBy": null,
-    "reviewedAt": null,
-    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
-    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt. Die Abstände (1 Tag, 1 Woche, 2 Wochen) sind ein Richtwert ohne Beleg im Originaltext."
+    "reviewed": true,
+    "status": "Freigegeben",
+    "reviewedBy": "Nikolaj Schefner",
+    "reviewedAt": "2026-11-01",
+    "checked": "Am 29.10.2026 gegen den Volltext von Dunlosky et al. (2013) geprüft (Prüfdokument, WMCNL-2845): Die Einstufung hoch und die Bedingungen der Gesamtbewertung stimmen mit dem Artikel überein (S. 37, 39 und 45).",
+    "notChecked": "Der Richtwert der Schritte (nach einem Tag, einer Woche, zwei Wochen) steht nicht im Artikel. Der Artikel nennt als Faustregel einen Abstand von etwa 10 bis 20 Prozent der gewünschten Behaltensdauer (S. 37). Die Karte nennt den Richtwert ausdrücklich als keine feste Regel. Schritte, Beispiele und einzelne Formulierungen der Beschreibung sind eigener Text und nicht Zeile für Zeile am Artikel belegt."
   }
 }

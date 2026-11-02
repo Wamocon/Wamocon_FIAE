@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
         maxTrainerSeats: organizations.maxTrainerSeats,
         isActive: organizations.isActive,
         isPlatformOwner: organizations.isPlatformOwner,
+        voiceAssistantEnabled: organizations.voiceAssistantEnabled,
         contactEmail: organizations.contactEmail,
         contactPerson: organizations.contactPerson,
         notes: organizations.notes,

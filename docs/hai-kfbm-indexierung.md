@@ -239,3 +239,14 @@ Die Entscheidung trifft `planDocumentIndexing` in `src/lib/hai/indexScope.ts` (n
 - Löscht oder ersetzt jemand eine Musterlösung im Bucket, bleibt der Chunk bis zum nächsten Lauf mit Schalter stehen. Ein Lauf mit ausgeschaltetem Schalter entfernt alle Chunks der Lösungszeilen.
 - Das Skript wurde in diesem Paket nicht gegen eine Datenbank oder einen Speicher ausgeführt. Der Lesepfad ist durch Tests mit gestelltem Netz (Leser, Plan, statische Prüfung des Skripts) belegt, nicht durch einen Lauf. Vor dem ersten echten Lauf: Probelauf in der Preview ohne Schalter (zählt nur), dann mit Schalter und `--target local` gegen einen lokalen Wegwerf-Speicher, erst danach Preview.
 - Die Messung der Antworten mit dem Modell (Golden Set, Abschnitt 5) läuft nur mit Nikos Go. Die 13 neuen Fälle sind darin enthalten.
+
+## 9. Suche über den halfvec-Index (Stand 01.11.2026)
+
+Die Spalte `hai_embeddings.embedding` ist `vector(3072)`. Ein HNSW-Index auf `vector` geht nur bis 2000 Dimensionen, deshalb liegt der Index auf `embedding::halfvec(3072)` (bis 4000). Ohne Index liest jede Suche alle Zeilen: auf dem Preview-Index mit 49.372 Einträgen dauerte die gefilterte Abfrage der App 24 bis 32 Sekunden (Einbettung 0,5 Sekunden).
+
+- **Index:** `scripts/db/hai-halfvec-index.sql`, kein Migrationsschritt, einmal je Schema vom Eigentümer mit `psql` (CONCURRENTLY, keine parallelen Arbeiter, 256 MB). Preview: 877 Sekunden, 375 MB. In Production nur mit Go nach dem Rollout.
+- **Schalter:** `HAI_HALFVEC_SEARCH=on` (Standard aus). Mit Schalter läuft die Suche in einer Transaktion mit `hnsw.iterative_scan = relaxed_order`, `hnsw.ef_search = 100`, `hnsw.max_scan_tuples = 40000` und sortiert nach dem halfvec-Ausdruck. Die Ähnlichkeit kommt weiter aus dem vollen Vektor, das Ergebnis wird nach Ähnlichkeit sortiert. Ohne Schalter bleibt die genaue Suche wie bisher. Ohne Index ist der Schalter nur langsamer, nie falsch.
+- **Warum iterativ:** Der Filter (Beruf, Sichtbarkeit, Organisation) greift nach dem Indexlauf. Ohne iterative Suche lieferte der Index bei engen Filtern 0 oder 2 statt 5 Treffer.
+- **Messung (8 Fragen, 2 Berufe, 16 Abfragen):** genau 26,4 s im Mittel, Index mit iterativer Suche 0,9 s im Mittel (die meisten 0,1 s, die schlechteste 5,9 s), 74 von 80 Treffern gleich wie bei der genauen Suche, alle 80 geliefert. Messskripte im Scratchpad (hnsw_test.cjs).
+- **Rückweg:** Schalter aus, danach `drop index concurrently if exists idx_hai_embeddings_embedding_hnsw`.
+- **Nicht umgestellt:** `findRelatedContent` und die übrigen Abfragen mit `embedding <=>` nutzen den Index nicht.

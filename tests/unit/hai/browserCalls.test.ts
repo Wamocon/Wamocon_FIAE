@@ -65,6 +65,7 @@ describe('browser calls to /api/hai', () => {
         'src/components/hai/HaiProvider.tsx',
         'src/components/hai/HaiAdminWidget.tsx',
         'src/components/hai/HaiAdminDialog.tsx',
+        'src/components/hai/HaiVoiceControl.tsx',
       ])
     );
     expect(occurrences.length).toBeGreaterThanOrEqual(13);

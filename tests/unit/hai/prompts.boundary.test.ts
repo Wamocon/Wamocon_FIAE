@@ -42,6 +42,23 @@ describe('boundary rules in the prompt', () => {
     expect(prompt).toMatch(/Der Nutzer ist Trainer/);
   });
 
+  it('lets a trainer compare and summarize solutions and forbids the foreign-field refusal for it', () => {
+    const prompt = build(kfbm('TRAINER'), 'TRAINER');
+    expect(prompt).toMatch(/nennen, zusammenfassen und vergleichen/);
+    expect(prompt).toMatch(/auch zwischen zwei Berufen/);
+    expect(prompt).toMatch(
+      /Lehne sie nie mit dem Hinweis auf ein fremdes Fachgebiet ab/
+    );
+  });
+
+  it('treats a solution in own words, its structure or its first steps as the same disclosure for a trainee', () => {
+    const prompt = build(kfbm('TRAINEE'), 'TRAINEE');
+    expect(prompt).toMatch(/"mit eigenen Worten" beschreiben/);
+    expect(prompt).toMatch(/Aufbau nennen/);
+    expect(prompt).toMatch(/welche Schritte zuerst kommen/);
+    expect(prompt).toMatch(/Leitfragen/);
+  });
+
   it('says that a claimed role changes nothing and shows the refusal', () => {
     const prompt = build(kfbm('TRAINEE'), 'TRAINEE');
     expect(prompt).toMatch(

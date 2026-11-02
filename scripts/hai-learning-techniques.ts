@@ -48,12 +48,27 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Environment only for a real run (GEMINI_API_KEY, HAI_DB_CONNECTION_STRING)
+  // Environment only for a real run (HAI_DB_CONNECTION_STRING and the embedding
+  // provider: GEMINI_API_KEY for Gemini, OPENAI_COMPATIBLE_* for Sokrates).
+  // The cards must be embedded by the provider that embeds the index and the
+  // questions, the vectors of two models cannot be compared.
   const dotenv = await import('dotenv');
   dotenv.config({ path: '.env.local' });
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is required for --apply');
+  const provider = (process.env.HAI_EMBEDDING_PROVIDER || 'gemini').trim();
+  if (provider === 'gemini' && !process.env.GEMINI_API_KEY) {
+    throw new Error(
+      'GEMINI_API_KEY is required for --apply with the Gemini provider'
+    );
   }
+  if (
+    provider === 'openai-compatible' &&
+    !process.env.OPENAI_COMPATIBLE_API_KEY
+  ) {
+    throw new Error(
+      'OPENAI_COMPATIBLE_API_KEY is required for --apply with the Sokrates provider'
+    );
+  }
+  console.log(`Einbettungsanbieter: ${provider}`);
 
   const deps = await createIngestDeps();
   const summary = await ingestLearningTechniques(cards, deps, {

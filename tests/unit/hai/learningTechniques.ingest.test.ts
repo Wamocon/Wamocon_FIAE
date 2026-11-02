@@ -32,8 +32,20 @@ jest.mock('@/db/haiDb', () => ({
   default: { execute: (...args: unknown[]) => mockExecute(...args) },
 }));
 
+// the files in the repository are released: the tests of the release gate work with drafts
 const cards = loadLearningTechniqueCards(
   path.join(process.cwd(), LEARNING_TECHNIQUES_DIR)
+).map(
+  (card): LearningTechniqueCard => ({
+    ...card,
+    review: {
+      ...card.review,
+      reviewed: false,
+      status: 'Entwurf, ungeprüft gegen Originaltext',
+      reviewedBy: null,
+      reviewedAt: null,
+    },
+  })
 );
 
 function release(card: LearningTechniqueCard): LearningTechniqueCard {
