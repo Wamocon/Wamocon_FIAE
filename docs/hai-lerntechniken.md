@@ -1,6 +1,6 @@
 # HAI: Wissen zu Lerntechniken (Paket B, WMCNL-2814)
 
-Stand: 28.10.2026. Die HAI gibt Auszubildenden belegbare Tipps zum Lernen und Merken, berufsübergreifend auf Plattformebene, mit Beispielen je Beruf. Dieses Dokument beschreibt Aufbau, Freigabeablauf, Quelle, Grenzen und die offenen Prüfpunkte.
+Stand: 01.11.2026. Alle zwölf Karten sind von Nikolaj Schefner am 01.11.2026 freigegeben (Prüfung gegen den Volltext am 29.10.2026, WMCNL-2845). Die Prüfvermerke je Karte stehen in den Kartendateien (`review.checked`, `review.notChecked`). Zwei Hinweise aus der Prüfung bleiben in den Karten vermerkt: Der Richtwert der Karte Verteiltes Üben (1 Tag, 1 Woche, 2 Wochen) steht nicht im Artikel (dort: 10 bis 20 Prozent der Behaltensdauer), die Karten Quizfehler wiederholen und Lernplan rückwärts sind eigene Anwendungen. Die HAI gibt Auszubildenden belegbare Tipps zum Lernen und Merken, berufsübergreifend auf Plattformebene, mit Beispielen je Beruf. Dieses Dokument beschreibt Aufbau, Freigabeablauf, Quelle, Grenzen und die offenen Prüfpunkte.
 
 **Status der Inhalte: Entwurf, ungeprüft gegen Originaltext.** Keine Karte ist freigegeben. Solange das so ist, liefert der Index keine einzige Karte aus, die HAI antwortet ohne Lernkarten und nutzt nur den Abschnitt mit den Grenzen.
 
@@ -67,11 +67,11 @@ Eine Änderung am Text einer freigegebenen Karte ändert deren Hash, die Karte w
 
 **Beweis:** Die echte SQL-Bedingung wurde gegen einen lokalen Wegwerf-Container (pgvector, Postgres 15) mit zehn Testzeilen geprüft: FIAE-Azubi sieht seinen Beruf plus Karte, KfBM-Azubi seinen Beruf plus Karte, Trainer die Karten, keine Zeile ohne Beruf einer anderen Quellart, keine Karte mit fremdem Eigentümer. Zusätzlich prüfen Tests das gerenderte SQL und beide Pipelines.
 
-**Migration: nicht nötig.** `hai_embeddings.training_catalog_id` ist in der Datenbank nullable, `visibility` hat den Check `all` oder `trainer`, es gibt keine NOT-NULL-Regel und keinen Check auf `source_type` in den Migrationen der Katalogreihe. Der Trigger `hai_embeddings_set_scope` leitet für `learning_technique` keinen Beruf ab (die Ableitung findet keine Quelle) und lässt NULL stehen.
+**Migration: nötig (Stand 01.11.2026).** Der erste Schreibversuch in die Preview scheiterte am Check `hai_embeddings_source_type_check`: Er stammt aus dem Basisschema (in keiner Migrationsdatei), steht in Preview und Production und erlaubt nur `enabler`, `course`, `document`, `quiz`, `use_case` und `trainee_*`. Die Migration `20261101000100_hai_embeddings_learning_technique_source.sql` erweitert ihn um `learning_technique` (keine Zeile ändert sich). Sie gehört in die Reihe des Rollouts (sie ist die Datei nach den 34 offenen) und muss vor dem Einlesen der Karten in Production laufen. Sonst gilt unverändert: `training_catalog_id` ist nullable, `visibility` hat den Check `all` oder `trainer`, und der Trigger `hai_embeddings_set_scope` leitet für `learning_technique` keinen Beruf ab und lässt NULL stehen.
 
 Drei Punkte, die vor dem ersten `--apply` zu prüfen sind (aus dem Code und den Migrationsdateien gelesen, nicht gegen die gehostete Datenbank geprüft):
 
-1. In der Datenbank darf kein Check auf `source_type` aktiv sein, der `learning_technique` ablehnt. Die alte Migration `0019` legte einen solchen Check mit vier Werten an. Da die Schreiber schon `use_case` und `trainee_*` verwenden, ist er vermutlich nicht aktiv. Prüfung: `select conname, pg_get_constraintdef(oid) from pg_constraint where conrelid = 'public.hai_embeddings'::regclass;`
+1. In der Datenbank darf kein Check auf `source_type` aktiv sein, der `learning_technique` ablehnt. Er war aktiv (siehe oben) und ist durch die neue Migration erweitert. Prüfung: `select conname, pg_get_constraintdef(oid) from pg_constraint where conrelid = 'public.hai_embeddings'::regclass;`
 2. Die Migration `20261027000100` schreibt am Ende alle Zeilen ohne Beruf auf FIAE. Läuft sie nach dem Einlesen der Karten noch einmal, würden die Karten FIAE zugeordnet und wären für KfBM nicht mehr auffindbar. Die Migration läuft vor dem Einlesen, nie danach.
 3. Das Neuindexierungs-Skript löscht je Katalog und Quellart, die Karten (ohne Katalog) sind davon nicht betroffen. Wechselt die Einbettung (zum Beispiel auf ein anderes Modell), müssen die Karten mit `--apply` neu eingebettet werden, sonst passen Anfrage- und Kartenvektoren nicht zusammen.
 

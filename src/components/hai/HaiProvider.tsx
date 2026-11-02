@@ -134,7 +134,8 @@ interface HaiProviderState {
   setContext: (context: HaiContext) => void;
   clearContext: () => void;
 
-  sendMessage: (message: string) => Promise<void>;
+  /** `voice`: the question was spoken and the answer is read aloud (voice assistant). */
+  sendMessage: (message: string, options?: { voice?: boolean }) => Promise<void>;
   stopGeneration: () => void;
   updateMessage: (messageId: string, newContent: string) => Promise<void>;
   regenerateFromEdit: (messageId: string, newContent: string) => Promise<void>;
@@ -1023,7 +1024,7 @@ export function HaiProvider({
   );
 
   const sendMessage = useCallback(
-    async (message: string) => {
+    async (message: string, options?: { voice?: boolean }) => {
       if (!message.trim()) return;
 
       // Abort any previous in-flight stream
@@ -1089,6 +1090,8 @@ export function HaiProvider({
               scenarioText: context.scenarioText,
             },
             stream: true,
+            // only the voice assistant sends it; the server checks the organization
+            ...(options?.voice === true ? { voice: true } : {}),
           }),
           signal: abortController.signal,
         });

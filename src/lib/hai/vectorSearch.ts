@@ -122,6 +122,26 @@ export function isUuid(value: unknown): value is string {
  *  - personal rows (trainee_* rows, rows with metadata.userId) match only
  *    their owner
  */
+/**
+ * Search through the halfvec HNSW index (scripts/db/hai-halfvec-index.sql).
+ * Off by default: without the index the cast would only cost time. Switch on
+ * with HAI_HALFVEC_SEARCH=on once the index exists in the database.
+ */
+export function halfvecSearchEnabled(): boolean {
+  return process.env.HAI_HALFVEC_SEARCH === 'on';
+}
+
+/**
+ * Settings of the index scan, valid for the transaction only. Iterative scan:
+ * the scope filter runs after the index, without it a narrow filter (one
+ * occupation of two) returns too few or no rows. relaxed_order may deliver
+ * the rows slightly out of order, the caller sorts by similarity.
+ */
+export const HALFVEC_SEARCH_SETTINGS = sql`SELECT
+  set_config('hnsw.iterative_scan', 'relaxed_order', true),
+  set_config('hnsw.ef_search', '100', true),
+  set_config('hnsw.max_scan_tuples', '40000', true)`;
+
 export function buildScopeCondition(scope: SearchScope): SQL | null {
   const catalogIds = [...new Set((scope.catalogIds ?? []).filter(isUuid))];
   if (catalogIds.length === 0) return null;
@@ -228,9 +248,17 @@ export async function searchSimilar(
       ? topK * CANDIDATE_FACTOR
       : topK;
 
-    // Execute vector similarity search
-    const results = await haiDb.execute(sql`
-      SELECT 
+    // Execute vector similarity search. With the switch on, the order comes
+    // from the halfvec index (see scripts/db/hai-halfvec-index.sql): the filter
+    // above runs after the index scan, so the scan must go on until the filter
+    // finds enough rows (iterative scan). The similarity still comes from the
+    // full vector.
+    const halfvec = halfvecSearchEnabled();
+    const orderBy = halfvec
+      ? sql`embedding::halfvec(3072) <=> ${embeddingVector}::halfvec(3072)`
+      : sql`embedding <=> ${embeddingVector}::vector`;
+    const searchStatement = sql`
+      SELECT
         id,
         source_type,
         source_id,
@@ -241,9 +269,15 @@ export async function searchSimilar(
       FROM hai_embeddings
       WHERE ${whereClause}
         AND embedding IS NOT NULL
-      ORDER BY embedding <=> ${embeddingVector}::vector
+      ORDER BY ${orderBy}
       LIMIT ${candidateLimit}
-    `);
+    `;
+    const results = halfvec
+      ? await haiDb.transaction(async tx => {
+          await tx.execute(HALFVEC_SEARCH_SETTINGS);
+          return tx.execute(searchStatement);
+        })
+      : await haiDb.execute(searchStatement);
 
     // Filter by minimum similarity and format results
     const mapped = (results as any[])
@@ -256,7 +290,9 @@ export async function searchSimilar(
         content: row.content,
         similarity: parseFloat(row.similarity.toFixed(4)),
         metadata: row.metadata || {},
-      }));
+      }))
+      // the relaxed order of the index scan may be slightly off
+      .sort((a, b) => b.similarity - a.similarity);
 
     return filterSearchResultsForTrainingScope(
       mapped,
@@ -332,13 +368,17 @@ export async function searchWithContext(
 
     // Step 1: Search in current enabler context first (highest priority)
     if (context.currentEnablerId && topK > 0) {
-      const contextResults = await searchSimilar(query, {
-        ...options,
-        topK: Math.min(3, topK),
-        sourceType: 'enabler',
-        sourceIds: [context.currentEnablerId],
-        userId: options.userId,
-      }, cachedEmbeddingVector);
+      const contextResults = await searchSimilar(
+        query,
+        {
+          ...options,
+          topK: Math.min(3, topK),
+          sourceType: 'enabler',
+          sourceIds: [context.currentEnablerId],
+          userId: options.userId,
+        },
+        cachedEmbeddingVector
+      );
 
       // Mark as current context (no artificial boost — trust semantic similarity)
       results.push(
@@ -351,12 +391,16 @@ export async function searchWithContext(
 
     // Step 2: Search in same course (if we need more results)
     if (results.length < topK && context.currentCourseId) {
-      const courseResults = await searchSimilar(query, {
-        ...options,
-        topK: topK - results.length,
-        sourceType: 'enabler',
-        courseId: context.currentCourseId,
-      }, cachedEmbeddingVector);
+      const courseResults = await searchSimilar(
+        query,
+        {
+          ...options,
+          topK: topK - results.length,
+          sourceType: 'enabler',
+          courseId: context.currentCourseId,
+        },
+        cachedEmbeddingVector
+      );
 
       // Add non-duplicate results
       for (const r of courseResults) {
@@ -368,10 +412,14 @@ export async function searchWithContext(
 
     // Step 3: Global search for remaining slots
     if (results.length < topK) {
-      const globalResults = await searchSimilar(query, {
-        ...options,
-        topK: topK - results.length,
-      }, cachedEmbeddingVector);
+      const globalResults = await searchSimilar(
+        query,
+        {
+          ...options,
+          topK: topK - results.length,
+        },
+        cachedEmbeddingVector
+      );
 
       for (const r of globalResults) {
         if (!reserved.has(r.id) && !results.find(e => e.id === r.id)) {

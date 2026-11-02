@@ -13,7 +13,11 @@ const mockGenerateEmbedding = jest.fn();
 
 jest.mock('@/db/haiDb', () => ({
   __esModule: true,
-  default: { execute: (...args: unknown[]) => mockExecute(...args) },
+  default: {
+    execute: (...args: unknown[]) => mockExecute(...args),
+    transaction: (fn: (tx: unknown) => unknown) =>
+      fn({ execute: (...args: unknown[]) => mockExecute(...args) }),
+  },
 }));
 jest.mock('@/lib/hai/providers', () => ({
   getEmbeddingProvider: () => ({

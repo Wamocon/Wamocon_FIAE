@@ -18,6 +18,7 @@ import {
   Power,
   Users,
   Crown,
+  Mic,
   X,
   Trash2,
 } from 'lucide-react';
@@ -32,6 +33,8 @@ type OrgItem = {
   maxTrainerSeats: number;
   isActive: boolean;
   isPlatformOwner: boolean;
+  // Voice assistant of the HAI (WMCNL-2907), off by default
+  voiceAssistantEnabled?: boolean;
   contactEmail: string | null;
   contactPerson: string | null;
   notes: string | null;
@@ -154,6 +157,30 @@ export default function AdminOrganizationsPage() {
       toast.error(e?.message || t('admin.org.failedSave'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleVoice = async (org: OrgItem) => {
+    setTogglingIds(prev => new Set(prev).add(org.id));
+    try {
+      const res = await authFetch(`/api/admin/organizations/${org.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voiceAssistantEnabled: !org.voiceAssistantEnabled }),
+      });
+      if (!res.ok) throw new Error(t('admin.org.voiceFailed'));
+      toast.success(
+        org.voiceAssistantEnabled ? t('admin.org.voiceDisabled') : t('admin.org.voiceEnabled')
+      );
+      await loadOrgs();
+    } catch (e: any) {
+      toast.error(e?.message || t('admin.org.voiceFailed'));
+    } finally {
+      setTogglingIds(prev => {
+        const n = new Set(prev);
+        n.delete(org.id);
+        return n;
+      });
     }
   };
 
@@ -477,6 +504,24 @@ export default function AdminOrganizationsPage() {
                 <Pencil className="h-4 w-4" />
                 {t('common.edit')}
               </button>
+              {isSuperAdmin && (
+                <button
+                  onClick={() => toggleVoice(org)}
+                  disabled={togglingIds.has(org.id)}
+                  aria-pressed={org.voiceAssistantEnabled === true}
+                  title={
+                    org.voiceAssistantEnabled
+                      ? t('admin.org.voiceStatusOn')
+                      : t('admin.org.voiceStatusOff')
+                  }
+                  className="text-muted hover:text-foreground hover:bg-accent/10 flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                >
+                  <Mic className="h-4 w-4" />
+                  {org.voiceAssistantEnabled
+                    ? t('admin.org.voiceTurnOff')
+                    : t('admin.org.voiceTurnOn')}
+                </button>
+              )}
               {isSuperAdmin && !org.isPlatformOwner && (
                 <>
                   <button

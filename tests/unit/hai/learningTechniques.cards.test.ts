@@ -17,6 +17,7 @@ import {
 } from '@/lib/hai/learningTechniques/loader';
 import {
   DRAFT_STATUS,
+  RELEASED_STATUS,
   parseLearningTechniqueCard,
   validateCardSet,
   type LearningTechniqueCard,
@@ -71,17 +72,25 @@ describe('the card files of the repository', () => {
     });
   });
 
-  it('are all drafts: no card is released by default', () => {
+  it('are all released by the owner (01.11.2026), with what was checked and what was not', () => {
     for (const card of cards) {
-      expect(card.review.reviewed).toBe(false);
-      expect(card.review.status).toBe(DRAFT_STATUS);
-      expect(card.review.reviewedBy).toBeNull();
-      expect(card.review.reviewedAt).toBeNull();
+      expect(card.review.reviewed).toBe(true);
+      expect(card.review.status).toBe(RELEASED_STATUS);
+      expect(card.review.reviewedBy).toBe('Nikolaj Schefner');
+      expect(card.review.reviewedAt).toBe('2026-11-01');
       // what was checked and what was not is recorded on every card
       expect(card.review.checked.length).toBeGreaterThan(20);
       expect(card.review.notChecked.length).toBeGreaterThan(20);
+      expect(card.review.checked).toContain('Volltext');
     }
-    expect(deliverableCards(cards)).toEqual([]);
+    expect(deliverableCards(cards)).toHaveLength(12);
+  });
+
+  it('say on the card what the article does not contain (spacing rule, derived cards)', () => {
+    const byId = new Map(cards.map(card => [card.id, card.review.notChecked]));
+    expect(byId.get('verteiltes-ueben')).toMatch(/10 bis 20 Prozent/);
+    expect(byId.get('quizfehler-wiederholen')).toMatch(/Eigene Anwendung/);
+    expect(byId.get('lernplan-rueckwaerts')).toMatch(/Eigene Anwendung/);
   });
 
   it('name the source and have one example for FIAE and one for KfBM', () => {
@@ -137,7 +146,19 @@ describe('the card files of the repository', () => {
 });
 
 describe('the release gate', () => {
-  const cards = loadLearningTechniqueCards(CARD_DIR);
+  // the mechanism is tested with drafts, the files in the repository are released
+  const cards = loadLearningTechniqueCards(CARD_DIR).map(
+    (card): LearningTechniqueCard => ({
+      ...card,
+      review: {
+        ...card.review,
+        reviewed: false,
+        status: DRAFT_STATUS,
+        reviewedBy: null,
+        reviewedAt: null,
+      },
+    })
+  );
 
   function released(card: LearningTechniqueCard): LearningTechniqueCard {
     const copy = clone(card);

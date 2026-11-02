@@ -141,13 +141,25 @@ const pipelines: Array<
   ],
 ];
 
-function contextFor(goldenCase: GoldenCase): PipelineContext {
+function contextFor(goldenCase: GoldenCase, voice = false): PipelineContext {
   return {
     userId: USER,
     // what the client claims: the pipeline must not use it for access
     userRole: goldenCase.claimedRole ?? goldenCase.role,
+    // the spoken way (voice assistant, WMCNL-2907): same pipeline, same guards
+    ...(voice ? { voice: true } : {}),
   };
 }
+
+// every case runs typed and spoken: the voice assistant changes the way of speaking,
+// never the access (acceptance criterion of WMCNL-2907)
+const modes = [
+  ['typed', false],
+  ['spoken', true],
+] as const;
+const pipelinesByMode = modes.flatMap(([mode, voice]) =>
+  pipelines.map(([name, run]) => [`${name}, ${mode}`, run, voice] as const)
+);
 
 /** Persona of the person of a case, built like the loader builds it. */
 function personaFor(goldenCase: GoldenCase) {
@@ -174,16 +186,26 @@ beforeEach(() => {
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
 });
 
-describe.each(pipelines)('golden set through %s', (_name, run) => {
+describe.each(pipelinesByMode)('golden set through %s', (_name, run, voice) => {
   it.each(set.cases.map(c => [c.id, c.expected.behavior, c] as const))(
     '%s (%s)',
     async (_id, behavior, goldenCase) => {
       goldenState.access = accessFor(goldenCase);
-      const result = await run(goldenCase.question, contextFor(goldenCase));
+      const result = await run(
+        goldenCase.question,
+        contextFor(goldenCase, voice)
+      );
 
       const prompt = goldenState.systemPrompts.at(-1) ?? '';
       const modelCalls = goldenState.systemPrompts.length;
       const citationIds = result.citations.map(c => c.title);
+
+      // --- The voice section is in the prompt of a spoken question and only there
+      if (modelCalls > 0) {
+        const section = '## Sprachassistent (Tagesbegleiter)';
+        if (voice) expect(prompt).toContain(section);
+        else expect(prompt).not.toContain(section);
+      }
 
       // --- Always: nothing the person may not read reaches the model, the
       // citations or the response (derived from the index, not from the case)
@@ -616,7 +638,8 @@ const RUN_MODEL = process.env.HAI_GOLDEN_MODEL_RUN === 'yes';
           };
           const result = await processMessage(
             goldenCase.question,
-            contextFor(goldenCase)
+            // HAI_GOLDEN_VOICE=yes measures the spoken way (voice assistant)
+            contextFor(goldenCase, process.env.HAI_GOLDEN_VOICE === 'yes')
           );
           const score = scoreAnswer(goldenCase, result.response, canaries);
           scores.push(score);

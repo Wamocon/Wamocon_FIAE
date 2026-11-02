@@ -69,12 +69,16 @@ export async function PATCH(
     // Plan, seats and activation are commercial settings of the platform
     if (
       !session.isSuperAdmin &&
-      ['subscriptionPlan', 'maxTraineeSeats', 'maxTrainerSeats', 'isActive'].some(
-        key => body[key] !== undefined
-      )
+      [
+        'subscriptionPlan',
+        'maxTraineeSeats',
+        'maxTrainerSeats',
+        'isActive',
+        'voiceAssistantEnabled',
+      ].some(key => body[key] !== undefined)
     ) {
       return NextResponse.json(
-        { error: 'Only the platform admin can change plan, seats or activation' },
+        { error: 'Only the platform admin can change plan, seats, activation or the voice assistant' },
         { status: 403 }
       );
     }
@@ -104,6 +108,8 @@ export async function PATCH(
       }
       updates.isActive = body.isActive;
     }
+    // Voice assistant of the HAI (WMCNL-2907): on only by an explicit true
+    if (typeof body.voiceAssistantEnabled === 'boolean') updates.voiceAssistantEnabled = body.voiceAssistantEnabled;
     if (typeof body.contactEmail === 'string') updates.contactEmail = body.contactEmail.trim();
     if (typeof body.contactPerson === 'string') updates.contactPerson = body.contactPerson.trim();
     if (typeof body.notes === 'string') updates.notes = body.notes.trim();
