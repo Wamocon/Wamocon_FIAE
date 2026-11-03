@@ -113,7 +113,11 @@ export function CatalogTiles() {
     return (
       <div role="alert" className="space-y-4">
         <p className="text-foreground text-sm">
-          {t('catalog.tiles.userError')}
+          {t(
+            isTrainee
+              ? 'catalog.tiles.userErrorTrainee'
+              : 'catalog.tiles.userError'
+          )}
         </p>
         <button
           type="button"

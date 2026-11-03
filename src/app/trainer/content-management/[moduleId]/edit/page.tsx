@@ -23,6 +23,15 @@ import { PdfUploader } from '@/components/trainer/PdfUploader';
 import { FlipbookViewer } from '@/components/ui/FlipbookViewer';
 import { documentTypeLabel } from '@/lib/documentTypeLabel';
 
+// One comparable string of the course form, to tell unsaved changes
+const courseFormKey = (form: {
+  title: string;
+  year: string;
+  chapter: string;
+  examPart: string;
+  skills: string;
+}) => JSON.stringify(form);
+
 export default function EditCoursePage() {
   const router = useRouter();
   const params = useParams<{ moduleId: string }>();
@@ -61,6 +70,9 @@ export default function EditCoursePage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // The form values as loaded or last saved. Only a curriculum editor can
+  // change them, so only an editor can have unsaved changes (WMCNL-3022)
+  const [loadedForm, setLoadedForm] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewPdf, setPreviewPdf] = useState<{
     title: string;
@@ -196,6 +208,15 @@ export default function EditCoursePage() {
         setChapter(String(data.course.chapter ?? ''));
         setExamPart(String(data.course.examPart ?? '') as any);
         setSkills((data.skills || []).join(', '));
+        setLoadedForm(
+          courseFormKey({
+            title: data.course.title,
+            year: String(data.course.year ?? ''),
+            chapter: String(data.course.chapter ?? ''),
+            examPart: String(data.course.examPart ?? ''),
+            skills: (data.skills || []).join(', '),
+          })
+        );
         setEnablers(
           (data.enablers || []).map((e: any) => ({
             id: e.id,
@@ -242,6 +263,31 @@ export default function EditCoursePage() {
     };
     if (courseId) load();
   }, [courseId]);
+
+  const hasUnsavedChanges =
+    canEditCurriculum &&
+    loadedForm !== null &&
+    courseFormKey({ title, year, chapter, examPart, skills }) !== loadedForm;
+
+  // Reloading or closing the tab with unsaved changes asks first
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasUnsavedChanges]);
+
+  const handleCancel = () => {
+    if (
+      hasUnsavedChanges &&
+      !window.confirm(t('trainer.content.confirmDiscard'))
+    )
+      return;
+    router.back();
+  };
 
   useEffect(() => {
     const q = searchTrainer.trim();
@@ -329,6 +375,7 @@ export default function EditCoursePage() {
       );
       if (!res.ok) throw new Error(t('trainer.content.errorSaveFailed'));
 
+      setLoadedForm(courseFormKey({ title, year, chapter, examPart, skills }));
       router.replace('/trainer/content-management');
     } catch (e: any) {
       setError(e?.message || t('common.unknownError'));
@@ -350,21 +397,31 @@ export default function EditCoursePage() {
             </div>
             <div>
               <h1 className="text-foreground text-xl font-bold">
-                {t('trainer.content.editCourse')}
+                {canEditCurriculum
+                  ? t('trainer.content.editCourse')
+                  : t('trainer.content.viewCourse')}
               </h1>
               <div className="text-muted-foreground text-xs">
-                {t('trainer.content.editCourseSub')}
+                {canEditCurriculum
+                  ? t('trainer.content.editCourseSub')
+                  : t('trainer.content.viewCourseSub')}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={handleCancel}
               className="border-accent/30 text-foreground hover:bg-background/60 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
             >
-              <X className="h-4 w-4" /> {t('common.cancel')}
+              <X className="h-4 w-4" />{' '}
+              {canEditCurriculum ? t('common.cancel') : t('common.close')}
             </button>
+            {hasUnsavedChanges && (
+              <span className="text-xs text-amber-500" role="status">
+                {t('trainer.content.unsavedChanges')}
+              </span>
+            )}
             {canEditCurriculum && (
               <button
                 onClick={e => handleSave(e as any)}
@@ -470,6 +527,7 @@ export default function EditCoursePage() {
                     value={examPart}
                     onChange={e => setExamPart(e.target.value as any)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    disabled={!canEditCurriculum}
                   >
                     <option value="">
                       {t('trainer.content.examPartNone')}
@@ -485,7 +543,8 @@ export default function EditCoursePage() {
                   <input
                     value={skills}
                     onChange={e => setSkills(e.target.value)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    disabled={!canEditCurriculum}
+                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder={t('trainer.content.skillsPlaceholder')}
                   />
                 </div>
@@ -1087,8 +1146,9 @@ export default function EditCoursePage() {
                     type="number"
                     min={0}
                     value={enablerDuration}
+                    disabled={!canEditCurriculum}
                     onChange={e => setEnablerDuration(e.target.value)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder={t('trainer.content.durationPlaceholder')}
                   />
                 </div>
@@ -1097,6 +1157,7 @@ export default function EditCoursePage() {
                     <input
                       type="checkbox"
                       checked={enablerActive}
+                      disabled={!canEditCurriculum}
                       onChange={e => setEnablerActive(e.target.checked)}
                     />
                     <span>{t('common.active')}</span>
@@ -1719,7 +1780,9 @@ export default function EditCoursePage() {
           <div className="glass-effect border-accent/30 bg-background relative z-10 max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-3xl border p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">
-                {t('trainer.content.editLesson')}
+                {canEditCurriculum
+                  ? t('trainer.content.editLesson')
+                  : t('trainer.content.viewLesson')}
               </h2>
               <button
                 className="border-accent/30 rounded-md border px-2 py-1 text-sm"
@@ -2077,8 +2140,9 @@ export default function EditCoursePage() {
                     type="number"
                     min={0}
                     value={enablerDuration}
+                    disabled={!canEditCurriculum}
                     onChange={e => setEnablerDuration(e.target.value)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder={t('trainer.content.durationPlaceholder')}
                   />
                 </div>
@@ -2087,6 +2151,7 @@ export default function EditCoursePage() {
                     <input
                       type="checkbox"
                       checked={enablerActive}
+                      disabled={!canEditCurriculum}
                       onChange={e => setEnablerActive(e.target.checked)}
                     />
                     <span>{t('common.active')}</span>
@@ -2198,13 +2263,15 @@ export default function EditCoursePage() {
                     >
                       <Eye className="h-3 w-3" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setEnablerScenarioPdf('')}
-                      className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+                    {canEditCurriculum && (
+                      <button
+                        type="button"
+                        onClick={() => setEnablerScenarioPdf('')}
+                        className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -2271,6 +2338,18 @@ export default function EditCoursePage() {
                         alert(t('trainer.content.errorNoTitle'));
                         return;
                       }
+                      // Switching a lesson off hides it for every trainee
+                      const wasActive = enablers.find(
+                        x => x.id === editingEnablerId
+                      )?.isActive;
+                      if (
+                        wasActive &&
+                        !enablerActive &&
+                        !window.confirm(
+                          t('trainer.content.confirmDeactivateLesson')
+                        )
+                      )
+                        return;
                       try {
                         const pr = await authFetch(
                           `/api/trainer/enablers/${editingEnablerId}`,
@@ -2334,7 +2413,9 @@ export default function EditCoursePage() {
           <div className="glass-effect border-accent/30 bg-background relative z-10 max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-3xl border p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">
-                {t('trainer.content.editUseCase')}
+                {canEditCurriculum
+                  ? t('trainer.content.editUseCase')
+                  : t('trainer.content.viewUseCase')}
               </h2>
               <button
                 className="border-accent/30 rounded-md border px-2 py-1 text-sm"

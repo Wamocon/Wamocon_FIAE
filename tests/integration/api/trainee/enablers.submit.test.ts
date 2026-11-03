@@ -73,6 +73,36 @@ describe('API: POST /api/trainee/enablers/[enablerId]/submit', () => {
     });
   });
 
+  it('notifies the trainer with the name of the trainee in German (WMCNL-3029)', async () => {
+    const { db, writes } = createTableDb({
+      profiles: [orgRow],
+      enablers: [enablerRow],
+      courses: [{ id: 'c1', createdById: 'trainer1' }],
+      courseMembers: [{ userId: 't1', courseId: 'c1' }],
+      enablerSubmissions: [],
+    });
+    const POST = await importHandlerWithDb(db);
+    const res = await POST(
+      makePost('http://localhost/api/trainee/enablers/e1/submit', {
+        solutionText: 'Hello',
+      }),
+      { params: Promise.resolve({ enablerId: 'e1' }) }
+    );
+    expect((res as any).status).toBe(200);
+    const [notice] = writes('insert', 'notifications')[0] as any[];
+    expect(notice).toMatchObject({
+      userId: 'trainer1',
+      actorId: 't1',
+      type: 'ENABLER_SUBMITTED',
+      title: 'Szenario eingereicht',
+      message: 'Test Trainee hat ein Szenario eingereicht: Enabler 1',
+      context: { traineeName: 'Test Trainee', subjectTitle: 'Enabler 1' },
+    });
+    expect(`${notice.title} ${notice.message}`).not.toMatch(
+      /Ein Trainee|Enabler-Szenario/
+    );
+  });
+
   it('updates the latest submission on resubmit and bumps the attempt', async () => {
     const existing = [
       {

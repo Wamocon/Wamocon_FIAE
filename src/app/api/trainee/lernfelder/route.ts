@@ -9,6 +9,7 @@ import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
 import { catalogCacheKey, catalogCondition } from '@/lib/catalog/scope';
 import { requireOptionalSessionScope } from '@/lib/catalog/public';
 import { legacyLearningFieldSelect } from '@/lib/catalog/learning-fields';
+import { compareLernfeldLabels } from '@/lib/school/lernfeld-label';
 
 /**
  * GET /api/trainee/lernfelder
@@ -51,10 +52,14 @@ export async function GET(req: NextRequest) {
         );
         const countMap = new Map(countResults.map(r => [r.key, r.count]));
 
-        const result = list.map(l => ({
-          ...l,
-          useCaseCount: countMap.get(`${l.trainingCatalogId}:${l.label}`) || 0,
-        }));
+        // LF-1, LF-2, ... LF-12 by their number, not as text
+        const result = list
+          .map(l => ({
+            ...l,
+            useCaseCount:
+              countMap.get(`${l.trainingCatalogId}:${l.label}`) || 0,
+          }))
+          .sort((a, b) => compareLernfeldLabels(a.label, b.label));
 
         return { lernfelder: result };
       },

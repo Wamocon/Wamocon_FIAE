@@ -16,7 +16,11 @@ import {
   mesSoftskillCriteria,
 } from '@/db/migrations/schemas/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
-import { getTrainingYearDateRange } from '@/lib/ausbildung/duration';
+import {
+  TRAINING_START_MISSING_CODE,
+  TRAINING_START_MISSING_MESSAGE,
+  resolveTrainingYearPeriod,
+} from '@/lib/arbeitszeugnis/period';
 
 /**
  * GET /api/trainer/arbeitszeugnis/skill-radar/[traineeId]
@@ -73,13 +77,21 @@ export async function GET(
         yearEnd.setUTCHours(23, 59, 59, 999);
       }
     } else {
-      const startOfTraining =
-        traineeProfile[0]?.startDate || new Date('2025-08-01');
-      const range = getTrainingYearDateRange(
-        startOfTraining,
+      // Counted from the start of the training, nothing is invented without one
+      const range = resolveTrainingYearPeriod({
+        startDate: traineeProfile[0]?.startDate,
         ausbildungsjahr,
-        traineeProfile[0]?.ausbildungDurationYears
-      );
+        durationYears: traineeProfile[0]?.ausbildungDurationYears,
+      });
+      if (!range) {
+        return NextResponse.json(
+          {
+            error: TRAINING_START_MISSING_MESSAGE,
+            code: TRAINING_START_MISSING_CODE,
+          },
+          { status: 422 }
+        );
+      }
       yearStart = range.startDate;
       yearEnd = range.endDate;
     }

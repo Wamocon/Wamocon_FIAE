@@ -164,13 +164,13 @@ describe('trainer quiz submission review page', () => {
     expect(String(authFetchMock.mock.calls[0][0])).toBe(
       '/api/trainer/quiz-submissions/s1'
     );
-    expect(screen.getByText(/Tina Trainee/)).toBeInTheDocument();
-    expect(screen.getByText(/Score: 50%/)).toBeInTheDocument();
-    expect(screen.getByText(/Lesson: Enabler One/)).toBeInTheDocument();
+    expect(screen.getByText(/Azubi: Tina Trainee/)).toBeInTheDocument();
+    expect(screen.getByText(/Ergebnis: 50%/)).toBeInTheDocument();
+    expect(screen.getByText(/Themenkreis: Enabler One/)).toBeInTheDocument();
     const alpha = screen.getByText('Alpha').closest('div') as HTMLElement;
-    expect(within(alpha).getByText('Correct')).toBeInTheDocument();
+    expect(within(alpha).getByText('Richtige Antwort')).toBeInTheDocument();
     const beta = screen.getByText('Beta').closest('div') as HTMLElement;
-    expect(within(beta).getByText('Selected')).toBeInTheDocument();
+    expect(within(beta).getByText('Antwort des Azubis')).toBeInTheDocument();
     expect(screen.getByText('Erwartete Antwort')).toBeInTheDocument();
     expect(
       screen.getByText('Automatisch als korrekt bewertet')
@@ -195,14 +195,16 @@ describe('trainer quiz submission review page', () => {
       json({ error: 'Submission not found' }, false, 404)
     );
     renderWithProviders(<QuizSubmissionReviewPage />);
-    expect(await screen.findByText('Submission not found')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Abgabe nicht gefunden')
+    ).toBeInTheDocument();
   });
 
   it('shows an error, and no key, when the route refuses (403)', async () => {
     authFetchMock.mockResolvedValue(json({ error: 'Forbidden' }, false, 403));
     renderWithProviders(<QuizSubmissionReviewPage />);
     expect(await screen.findByRole('alert')).toBeInTheDocument();
-    expect(screen.queryByText('Correct')).toBeNull();
+    expect(screen.queryByText('Richtige Antwort')).toBeNull();
   });
 
   it('waits for the answer before it shows anything', async () => {
@@ -213,7 +215,7 @@ describe('trainer quiz submission review page', () => {
       })
     );
     const { container } = renderWithProviders(<QuizSubmissionReviewPage />);
-    expect(screen.queryByText('Correct')).toBeNull();
+    expect(screen.queryByText('Richtige Antwort')).toBeNull();
     expect(container.textContent).not.toContain('Alpha');
     release(json(review));
     await waitFor(() => expect(screen.getByText('Alpha')).toBeInTheDocument());

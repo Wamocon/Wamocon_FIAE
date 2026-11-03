@@ -2,7 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Paperclip } from 'lucide-react';
+import { Eye, Paperclip } from 'lucide-react';
+import { SubmissionFileViewer } from '@/components/submission/SubmissionFileViewer';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { authFetch } from '@/lib/authFetch';
 import { apiQueryKey, useApiQuery } from '@/lib/hooks/useApiQuery';
@@ -11,6 +12,7 @@ import {
   MEGABYTE,
   SUBMISSION_EXTENSIONS,
   checkAnnouncedFile,
+  previewKindOf,
 } from '@/lib/submission-file/rules';
 
 // The optional file of a use case submission (trainee side). The browser asks the server
@@ -62,6 +64,7 @@ export function SubmissionFileField({
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(
     null
   );
@@ -186,6 +189,8 @@ export function SubmissionFileField({
   };
 
   const file = data.file;
+  // a PDF or an image can be looked at in the page, other formats only downloaded
+  const previewKind = file ? previewKindOf(file.fileName) : null;
   const sizeText =
     file?.size != null ? ` (${(file.size / 1024).toFixed(0)} KB)` : '';
 
@@ -206,6 +211,16 @@ export function SubmissionFileField({
             {file.fileName}
             {sizeText}
           </span>
+          {previewKind && (
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(true)}
+              className="border-accent/30 hover:bg-background/60 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              {t('submissionFile.preview')}
+            </button>
+          )}
           <button
             type="button"
             onClick={open}
@@ -231,19 +246,41 @@ export function SubmissionFileField({
       )}
       {canEdit && (
         <div>
+          {/* The native file input is hidden: its own text ("Keine ausgewählt")
+              would repeat the status above and does not fit the design */}
           <input
             ref={input}
             type="file"
             accept={ACCEPT}
             disabled={busy}
-            aria-label={t('submissionFile.choose')}
-            className="text-sm"
+            tabIndex={-1}
+            aria-hidden="true"
+            data-testid="submission-file-input"
+            className="sr-only"
             onChange={event => {
               const picked = event.target.files?.[0];
               if (picked) void upload(picked);
             }}
           />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => input.current?.click()}
+            className="border-accent/30 bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium disabled:opacity-60"
+          >
+            <Paperclip className="h-4 w-4" aria-hidden="true" />
+            {t('submissionFile.choose')}
+          </button>
         </div>
+      )}
+      {file && previewKind && (
+        <SubmissionFileViewer
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          contentUrl={`${base}/content`}
+          fileName={file.fileName}
+          kind={previewKind}
+        />
       )}
       {busy && (
         <p className="text-muted-foreground text-sm">

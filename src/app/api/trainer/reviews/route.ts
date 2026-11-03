@@ -1,7 +1,7 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, inArray } from 'drizzle-orm';
+import { countDistinct, desc, eq, inArray } from 'drizzle-orm';
 import {
   enablers,
   enablerSubmissions,
@@ -17,6 +17,13 @@ import {
   newestFirst,
   submissionsOfUseCasesWhere,
 } from '@/lib/trainer/pending-reviews';
+import { parsePaging, parseStatusFilter } from '@/lib/trainer/review-paging';
+
+// GET /api/trainer/reviews?type=enabler|usecase&status=pending|all|approved|rejected&limit=&offset=
+// One page of the lesson (enabler) and use case submissions, newest first, and
+// the total of the same filter (enablerTotal, useCaseTotal), so the page can say
+// "50 of 2158" and load more (WMCNL-2999). Without `type` both lists are read.
+// `onlyPending=true` is the older form of `status=pending`.
 
 export async function GET(req: NextRequest) {
   try {
@@ -27,7 +34,8 @@ export async function GET(req: NextRequest) {
     if (isErrorResponse(scope)) return scope;
 
     const { searchParams } = new URL(req.url);
-    const onlyPending = searchParams.get('onlyPending') === 'true';
+    const statusFilter = parseStatusFilter(searchParams);
+    const { limit, offset } = parsePaging(searchParams);
     const type = searchParams.get('type'); // 'enabler' | 'usecase' | undefined (all)
 
     // Only submissions of trainees of the own organization (the super admin:
@@ -45,6 +53,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         enablerSubmissions: [],
         useCaseSubmissions: [],
+        enablerTotal: 0,
+        useCaseTotal: 0,
       });
 
     let enablerRows: Array<{
@@ -72,14 +82,22 @@ export async function GET(req: NextRequest) {
       traineeName?: string;
       attemptNumber?: number | null;
     }> = [];
+    let enablerTotal = 0;
+    let useCaseTotal = 0;
     if (!type || type === 'enabler') {
       // Get enabler submissions for trainer's courses
       // The same filter the dashboard counts the pending reviews with
       const esWhere = enablerSubmissionsWhere(
         courseIds,
         traineeScope.condition,
-        onlyPending
+        statusFilter
       );
+      const [enablerCount] = await db
+        .select({ c: countDistinct(enablerSubmissions.id) })
+        .from(enablerSubmissions)
+        .innerJoin(enablers, eq(enablers.id, enablerSubmissions.enablerId))
+        .where(esWhere);
+      enablerTotal = Number(enablerCount?.c) || 0;
       const es = await db
         .select({
           id: enablerSubmissions.id,
@@ -95,7 +113,13 @@ export async function GET(req: NextRequest) {
         })
         .from(enablerSubmissions)
         .leftJoin(enablers, eq(enablers.id, enablerSubmissions.enablerId))
-        .where(esWhere);
+        .where(esWhere)
+        .orderBy(
+          desc(enablerSubmissions.submittedAt),
+          desc(enablerSubmissions.id)
+        )
+        .limit(limit)
+        .offset(offset);
       enablerRows = es;
 
       if (enablerRows.length) {
@@ -133,8 +157,14 @@ export async function GET(req: NextRequest) {
       const usWhere = submissionsOfUseCasesWhere(
         courseIds,
         traineeScope.condition,
-        onlyPending
+        statusFilter
       );
+      const [useCaseCount] = await db
+        .select({ c: countDistinct(useCaseSubmissions.id) })
+        .from(useCaseSubmissions)
+        .innerJoin(useCases, eq(useCases.id, useCaseSubmissions.useCaseId))
+        .where(usWhere);
+      useCaseTotal = Number(useCaseCount?.c) || 0;
       const us = await db
         .select({
           id: useCaseSubmissions.id,
@@ -147,7 +177,13 @@ export async function GET(req: NextRequest) {
         })
         .from(useCaseSubmissions)
         .leftJoin(useCases, eq(useCases.id, useCaseSubmissions.useCaseId))
-        .where(usWhere);
+        .where(usWhere)
+        .orderBy(
+          desc(useCaseSubmissions.submittedAt),
+          desc(useCaseSubmissions.id)
+        )
+        .limit(limit)
+        .offset(offset);
       useCaseRows = us;
 
       if (useCaseRows.length) {
@@ -183,6 +219,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       enablerSubmissions: newestFirst(enablerRows),
       useCaseSubmissions: newestFirst(useCaseRows),
+      enablerTotal,
+      useCaseTotal,
     });
   } catch (e) {
     console.error('Trainer reviews GET error', e);

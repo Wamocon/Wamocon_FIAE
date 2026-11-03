@@ -39,6 +39,7 @@ export default function TraineeModuleDetailPage() {
     }>;
     useCases: Array<{
       id: string;
+      code?: string | null;
       title: string;
       attemptNumber?: number | null;
       status?: string | null;
@@ -204,6 +205,12 @@ export default function TraineeModuleDetailPage() {
                     <div className="flex min-w-0 flex-1 items-start gap-3">
                       <StatusIndicator status={u.status} />
                       <span className="group-hover:text-accent transition-colors duration-200">
+                        {/* The code tells a use case from the Themenkreis of the same name */}
+                        {u.code && (
+                          <span className="text-accent mr-2 text-xs font-semibold">
+                            {t('useCase.label').replace('{code}', u.code)}
+                          </span>
+                        )}
                         {capitalizeFirst(u.title)}
                       </span>
                       {u.attemptNumber && !u.status ? (

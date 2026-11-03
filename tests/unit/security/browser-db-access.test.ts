@@ -170,6 +170,9 @@ describe('browser access to the database', () => {
     expect(creators).toEqual([
       'src/app/api/admin/users/[userId]/route.ts',
       'src/app/api/admin/users/route.ts',
+      // the change of the own password: public key only, a client of its own that
+      // keeps no session, signs in with the current password of the session user
+      'src/app/api/auth/change-password/route.ts',
       'src/app/api/auth/resend-confirmation/route.ts',
       'src/app/api/auth/sync-profile/route.ts',
       'src/app/api/register/route.ts',

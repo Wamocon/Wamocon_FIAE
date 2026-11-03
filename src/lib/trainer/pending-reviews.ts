@@ -18,10 +18,11 @@
  *  - Status: PENDING for enablers and use cases, not reviewed for quizzes.
  */
 
-import { and, eq, inArray, type SQL } from 'drizzle-orm';
+import { and, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
 import db from '@/db';
 import {
   courses,
+  profiles,
   enablers,
   enablerSubmissions,
   quizSubmissions,
@@ -31,6 +32,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { traineeIdInScope } from '@/lib/auth/trainee-scope-conditions';
 import { catalogCondition, type CatalogScope } from '@/lib/catalog/scope';
+import type { ReviewStatusFilter } from '@/lib/trainer/review-paging';
 
 /**
  * The courses whose submissions a trainer may review: every course inside the
@@ -48,18 +50,33 @@ export async function reviewableCourseIds(
 }
 
 /**
+ * The status condition of a list. `true` is the old "only pending" flag, the
+ * words are the filter of the list page (WMCNL-3002); `all` and `false` do not
+ * limit.
+ */
+function statusCondition(
+  column: typeof enablerSubmissions.status | typeof useCaseSubmissions.status,
+  filter: boolean | ReviewStatusFilter
+): SQL | undefined {
+  if (filter === true || filter === 'pending') return eq(column, 'PENDING');
+  if (filter === 'approved') return eq(column, 'APPROVED');
+  if (filter === 'rejected') return eq(column, 'REJECTED');
+  return undefined;
+}
+
+/**
  * where() for enabler submissions. The query has to join `enablers` (the
  * course of the submission is the course of its enabler).
  */
 export function enablerSubmissionsWhere(
   courseIds: string[],
   traineeCondition: SQL,
-  onlyPending: boolean
+  status: boolean | ReviewStatusFilter
 ): SQL | undefined {
   return and(
     inArray(enablers.courseId, courseIds as any),
     traineeIdInScope(enablerSubmissions.traineeId, traineeCondition),
-    onlyPending ? eq(enablerSubmissions.status, 'PENDING') : undefined
+    statusCondition(enablerSubmissions.status, status)
   );
 }
 
@@ -67,25 +84,43 @@ export function enablerSubmissionsWhere(
 export function submissionsOfUseCasesWhere(
   courseIds: string[],
   traineeCondition: SQL,
-  onlyPending: boolean
+  status: boolean | ReviewStatusFilter
 ): SQL | undefined {
   return and(
     inArray(useCases.courseId, courseIds as any),
     traineeIdInScope(useCaseSubmissions.traineeId, traineeCondition),
-    onlyPending ? eq(useCaseSubmissions.status, 'PENDING') : undefined
+    statusCondition(useCaseSubmissions.status, status)
   );
 }
 
-/** where() for quiz submissions. The query has to join `quizzes`. */
+/** The text of a search as a LIKE pattern: % and _ are plain characters. */
+export function likePattern(text: string): string {
+  return `%${text.replace(/[\\%_]/g, ch => `\\${ch}`)}%`;
+}
+
+/**
+ * where() for quiz submissions. The query has to join `quizzes`. A `search`
+ * text (the quiz list, WMCNL-3001) also needs the join of `profiles` and
+ * narrows the list to a trainee or a quiz whose name contains the text; the
+ * dashboard counts without it. `quizType` limits the list to one kind of quiz
+ * (the type filter of the page, so the total stays the total of the filter).
+ */
 export function quizSubmissionsWhere(
   scope: CatalogScope,
   traineeCondition: SQL,
-  onlyPending: boolean
+  onlyPending: boolean,
+  search?: string | null,
+  quizType?: 'LESSON' | 'GLOBAL' | null
 ): SQL | undefined {
+  const pattern = search ? likePattern(search) : null;
   return and(
     traineeIdInScope(quizSubmissions.traineeId, traineeCondition),
     catalogCondition(quizzes.trainingCatalogId, scope),
-    onlyPending ? eq(quizSubmissions.isReviewed, false as any) : undefined
+    onlyPending ? eq(quizSubmissions.isReviewed, false as any) : undefined,
+    quizType ? eq(quizzes.quizType, quizType) : undefined,
+    pattern
+      ? or(ilike(profiles.fullName, pattern), ilike(quizzes.title, pattern))
+      : undefined
   );
 }
 

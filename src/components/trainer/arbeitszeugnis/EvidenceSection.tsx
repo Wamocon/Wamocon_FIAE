@@ -1,5 +1,6 @@
 import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Copy, Check, Star } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -23,6 +24,7 @@ export function EvidenceSection({
   query = '',
   onCopy,
 }: EvidenceSectionProps) {
+  const { t } = useLanguage();
   const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -70,11 +72,10 @@ export function EvidenceSection({
     <div className="bg-card border-border rounded-2xl border p-6">
       <h3 className="mb-4 flex items-center gap-2 text-lg font-bold">
         <Star className="text-accent h-5 w-5" />
-        Vorschläge aus Tätigkeitsnachweisen
+        {t('arbeitszeugnis.evidenceTitle')}
       </h3>
       <p className="text-muted-foreground mb-4 text-sm">
-        Klicken Sie auf &quot;Kopieren&quot;, um Highlights in den Abschlusstext zu
-        übernehmen.
+        {t('arbeitszeugnis.evidenceHint')}
       </p>
       <div className="max-h-60 space-y-3 overflow-y-auto pr-2">
         {evidence.map(item => (
@@ -91,7 +92,9 @@ export function EvidenceSection({
                   <span
                     className={`rounded px-1.5 py-0.5 text-xs font-medium ${item.grade <= 2 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-700'}`}
                   >
-                    Note: {item.grade.toFixed(1)}
+                    {t('arbeitszeugnis.evidenceGrade', {
+                      grade: item.grade.toFixed(1),
+                    })}
                   </span>
                 )}
                 {item.relevantComponent && (
@@ -105,7 +108,7 @@ export function EvidenceSection({
             <button
               onClick={() => handleCopy(item)}
               className="hover:bg-background text-muted-foreground hover:text-foreground ml-3 rounded-lg p-2 transition"
-              title="In Zusammenfassung kopieren"
+              title={t('arbeitszeugnis.evidenceCopy')}
             >
               {copiedId === item.id ? (
                 <Check className="h-4 w-4 text-emerald-500" />

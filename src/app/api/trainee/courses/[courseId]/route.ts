@@ -60,7 +60,7 @@ export async function GET(
       .where(and(eq(enablers.courseId, courseId), eq(enablers.isActive, true)))
       .orderBy(enablers.orderIndex);
     const ucs = await db
-      .select({ id: useCases.id, title: useCases.title })
+      .select({ id: useCases.id, title: useCases.title, code: useCases.code })
       .from(useCases)
       .where(and(eq(useCases.courseId, courseId), eq(useCases.isActive, true)))
       .orderBy(useCases.orderIndex);
@@ -201,6 +201,7 @@ export async function GET(
       }),
       useCases: ucs.map(u => ({
         id: u.id,
+        code: u.code ?? null,
         title: u.title,
         attemptNumber: latestUc[String(u.id)]?.attemptNumber ?? null,
         status: latestUc[String(u.id)]?.status ?? null, // PENDING, APPROVED, REJECTED

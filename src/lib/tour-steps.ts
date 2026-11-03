@@ -4,8 +4,21 @@ export interface TourStep {
   titleKey: string;
   descriptionKey: string;
   placement: 'top' | 'bottom' | 'left' | 'right';
+  /**
+   * The target exists only for some people (the occupation choice of a person
+   * with several occupations): the step is left out if it is not on the page
+   * when the tour starts.
+   */
+  optional?: boolean;
 }
 
+/**
+ * The tour of a trainee goes through the menu in the order of the menu
+ * (Dashboard, Ausbildungsnachweis, Berufsschule, Lernen, Ausbilder-Feedback,
+ * Quizze, Profil, then the occupation choice for people with several
+ * occupations) and names the entries exactly like the menu: the titles are the
+ * keys of the menu (nav.*). The two steps of the header come last.
+ */
 export const TRAINEE_MAIN_STEPS: TourStep[] = [
   {
     id: 'welcome',
@@ -17,37 +30,59 @@ export const TRAINEE_MAIN_STEPS: TourStep[] = [
   {
     id: 'dashboard',
     targetSelector: '[data-tour="sidebar-dashboard"]',
-    titleKey: 'onboarding.dashboard.title',
+    titleKey: 'nav.dashboard',
     descriptionKey: 'onboarding.trainee.dashboard.desc',
-    placement: 'right',
-  },
-  {
-    id: 'courses',
-    targetSelector: '[data-tour="sidebar-courses"]',
-    titleKey: 'onboarding.courses.title',
-    descriptionKey: 'onboarding.courses.desc',
-    placement: 'right',
-  },
-  {
-    id: 'quizzes',
-    targetSelector: '[data-tour="sidebar-quizzes"]',
-    titleKey: 'onboarding.quizzes.title',
-    descriptionKey: 'onboarding.trainee.quizzes.desc',
     placement: 'right',
   },
   {
     id: 'activity-reports',
     targetSelector: '[data-tour="sidebar-activityReports"]',
-    titleKey: 'onboarding.activityReports.title',
+    titleKey: 'nav.activityReports',
     descriptionKey: 'onboarding.trainee.activityReports.desc',
+    placement: 'right',
+  },
+  {
+    id: 'school',
+    targetSelector: '[data-tour="sidebar-school"]',
+    titleKey: 'nav.school',
+    descriptionKey: 'onboarding.school.desc',
+    placement: 'right',
+  },
+  {
+    id: 'courses',
+    targetSelector: '[data-tour="sidebar-courses"]',
+    titleKey: 'nav.courses',
+    descriptionKey: 'onboarding.courses.desc',
     placement: 'right',
   },
   {
     id: 'trainer-feedback',
     targetSelector: '[data-tour="sidebar-lessons"]',
-    titleKey: 'onboarding.trainerFeedback.title',
+    titleKey: 'nav.trainerFeedback',
     descriptionKey: 'onboarding.trainerFeedback.desc',
     placement: 'right',
+  },
+  {
+    id: 'quizzes',
+    targetSelector: '[data-tour="sidebar-quizzes"]',
+    titleKey: 'nav.quizzes',
+    descriptionKey: 'onboarding.trainee.quizzes.desc',
+    placement: 'right',
+  },
+  {
+    id: 'profile',
+    targetSelector: '[data-tour="sidebar-profile"]',
+    titleKey: 'nav.profile',
+    descriptionKey: 'onboarding.profile.desc',
+    placement: 'right',
+  },
+  {
+    id: 'catalog',
+    targetSelector: '[data-tour="sidebar-catalog"]',
+    titleKey: 'catalog.tiles.nav',
+    descriptionKey: 'onboarding.catalog.desc',
+    placement: 'right',
+    optional: true,
   },
   {
     id: 'notifications',

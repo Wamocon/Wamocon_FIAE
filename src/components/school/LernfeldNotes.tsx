@@ -5,7 +5,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { authFetch } from '@/lib/authFetch';
-import { formatLernfeldLabel } from '@/lib/school/lernfeld-label';
+import {
+  compareLernfeldLabels,
+  formatLernfeldLabel,
+} from '@/lib/school/lernfeld-label';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useEscapeKey } from '@/lib/hooks/useEscapeKey';
+import { joinHardLineBreaks } from '@/lib/text/paragraphs';
 import {
   BookOpen,
   ChevronDown,
@@ -85,8 +91,12 @@ export function LernfeldNotes() {
 
         if (!lfRes.ok) throw new Error(t('notes.error.loadFields'));
         const lfData = await lfRes.json();
-        // Flatten all lernfelder into a single list
-        setLernfelder(lfData.lernfelder || []);
+        // One list in the order of the numbers: LF-1, LF-2, ... LF-12
+        setLernfelder(
+          [...(lfData.lernfelder || [])].sort((a: Lernfeld, b: Lernfeld) =>
+            compareLernfeldLabels(a.code, b.code)
+          )
+        );
 
         if (notesRes.ok) {
           const notesData = await notesRes.json();
@@ -284,14 +294,15 @@ export function LernfeldNotes() {
                       </span>
                     )}
                   </div>
-                  {lf.description ? (
-                    <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">
-                      {lf.description}
+                  {/* The name of the Lernfeld is in every row, the start of
+                      its description only follows it (WMCNL-2959) */}
+                  <span className="text-foreground mt-1 block text-sm font-medium">
+                    {lf.name}
+                  </span>
+                  {lf.description && (
+                    <p className="text-muted-foreground mt-0.5 line-clamp-1 text-xs">
+                      {joinHardLineBreaks(lf.description)}
                     </p>
-                  ) : (
-                    <span className="text-foreground text-sm font-medium">
-                      {lf.name}
-                    </span>
                   )}
                 </div>
               </div>
@@ -431,6 +442,7 @@ function NoteCard({
   note: Note;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useLanguage();
   const [deleting, setDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -438,6 +450,7 @@ function NoteCard({
     setDeleting(true);
     await onDelete(note.id);
     setDeleting(false);
+    setShowConfirm(false);
   };
 
   return (
@@ -460,39 +473,26 @@ function NoteCard({
               <ExternalLink className="h-4 w-4" />
             </a>
           )}
-          {showConfirm ? (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="bg-destructive/10 text-destructive hover:bg-destructive/20 rounded-lg p-1.5 transition-colors"
-              >
-                {deleting ? (
-                  <div className="border-destructive/30 border-t-destructive h-4 w-4 animate-spin rounded-full border-2" />
-                ) : (
-                  <CheckCircle className="h-4 w-4" />
-                )}
-              </button>
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="hover:bg-muted text-muted-foreground rounded-lg p-1.5 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowConfirm(true)}
-              className="hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg p-1.5 transition-colors"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          )}
+          <button
+            onClick={() => setShowConfirm(true)}
+            aria-label={t('common.delete')}
+            className="hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg p-1.5 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
       </div>
       <p className="text-muted-foreground mt-2 text-[10px]">
         {new Date(note.createdAt).toLocaleDateString('de-DE')}
       </p>
+      {showConfirm && (
+        <ConfirmDialog
+          message={t('notes.deleteConfirm')}
+          busy={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setShowConfirm(false)}
+        />
+      )}
     </div>
   );
 }
@@ -516,6 +516,7 @@ function AddNoteModal({
   status: 'idle' | 'success' | 'error';
 }) {
   const { t } = useLanguage();
+  useEscapeKey(onClose);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [oneDriveLink, setOneDriveLink] = useState('');

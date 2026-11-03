@@ -38,6 +38,12 @@ const courseRows = [
   { id: 'c3', title: 'P3', year: 3 },
 ];
 
+// The rows also carry labelCode and labelParams (the page writes the label in
+// the language of the trainee, WMCNL-2970): the checks of the dates look at the
+// German label and the date only
+const legacy = (rows: any[]) =>
+  rows.map(({ labelCode, labelParams, ...row }) => row);
+
 async function dashboard(options: {
   catalogId: string;
   settings?: unknown;
@@ -82,7 +88,7 @@ describe('dashboard deadlines per occupation', () => {
         durationYears: 3,
       });
       expect(res.status).toBe(200);
-      expect(body.deadlines).toEqual([
+      expect(legacy(body.deadlines)).toEqual([
         {
           label: 'Phase 1 (1. bis 18. Ausbildungsmonat)',
           dueDate: iso(2101, 1),
@@ -107,7 +113,7 @@ describe('dashboard deadlines per occupation', () => {
         settings: fiaeSettings,
         durationYears: 2,
       });
-      expect(body.deadlines).toEqual([
+      expect(legacy(body.deadlines)).toEqual([
         {
           label: 'Phase 1 (1. bis 12. Ausbildungsmonat)',
           dueDate: iso(2100, 7),
@@ -151,7 +157,7 @@ describe('dashboard deadlines per occupation', () => {
         settings: kfbmSettings,
         durationYears: 3,
       });
-      expect(body.deadlines).toEqual([
+      expect(legacy(body.deadlines)).toEqual([
         {
           label: 'Phase 1 (1. bis 15. Ausbildungsmonat)',
           dueDate: iso(2100, 10),
@@ -199,12 +205,31 @@ describe('dashboard deadlines per occupation', () => {
         },
         durationYears: 2,
       });
-      expect(body.deadlines[0]).toEqual({
+      expect(legacy(body.deadlines)[0]).toEqual({
         label: 'Phase 1 (1. bis 12. Ausbildungsmonat)',
         dueDate: iso(2100, 7),
         year: 1,
       });
     });
+  });
+});
+
+describe('dashboard deadlines carry the code of the label (WMCNL-2970)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('names the phase and its months, so the page can translate the label', async () => {
+    const { body } = await dashboard({
+      catalogId: FIAE,
+      settings: fiaeSettings,
+      durationYears: 3,
+    });
+    expect(
+      body.deadlines.map((d: any) => [d.labelCode, d.labelParams])
+    ).toEqual([
+      ['phase', { stage: 1, startMonth: 1, endMonth: 18 }],
+      ['phase', { stage: 2, startMonth: 19, endMonth: 36 }],
+      ['phaseIntegrative', { months: 36 }],
+    ]);
   });
 });
 
@@ -265,7 +290,7 @@ describe('dashboard deadlines for a trainee in two trainings', () => {
       kfbmStart: '2100-03-01',
       kfbmDuration: 2,
     });
-    expect(body.deadlines[0]).toEqual({
+    expect(legacy(body.deadlines)[0]).toEqual({
       label: 'Phase 1 (1. bis 18. Ausbildungsmonat)',
       dueDate: iso(2101, 1),
       year: 1,
@@ -296,7 +321,7 @@ describe('dashboard deadlines for a trainee in two trainings', () => {
       kfbmStart: null,
       kfbmDuration: 3,
     });
-    expect(body.deadlines[0]).toEqual({
+    expect(legacy(body.deadlines)[0]).toEqual({
       label: 'Phase 1 (1. bis 15. Ausbildungsmonat)',
       dueDate: iso(2100, 10),
       year: 1,

@@ -48,9 +48,17 @@ const FALLBACK_WIDTH = 800;
 
 const stop = (event: SyntheticEvent) => event.preventDefault();
 
-/** Only the routes of the trainee area deliver a document to this viewer. */
+/**
+ * Only the routes of the trainee area deliver a document to this viewer, and
+ * the route that delivers the file of a use case submission to the trainer who
+ * reviews it (WMCNL-2927).
+ */
 const isContentPath = (src: unknown): src is string =>
-  typeof src === 'string' && /^\/api\/trainee\/[A-Za-z0-9\-_/]+$/.test(src);
+  typeof src === 'string' &&
+  (/^\/api\/trainee\/[A-Za-z0-9\-_/]+$/.test(src) ||
+    /^\/api\/trainer\/reviews\/use-cases\/[A-Za-z0-9-]+\/file\/content$/.test(
+      src
+    ));
 
 interface PageSlotProps {
   pdf: PDFDocumentProxy;
@@ -176,7 +184,10 @@ function PageSlot({
 }
 
 export interface SecurePdfViewerProps {
-  /** The route that delivers the PDF, a path under /api/trainee/. */
+  /**
+   * The route that delivers the PDF: a path under /api/trainee/, or the file
+   * route of a submission under /api/trainer/reviews/use-cases/.
+   */
   src: string;
   title: string;
   className?: string;

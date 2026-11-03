@@ -541,7 +541,8 @@ function TrainerAddBlockModal({
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [description, setDescription] = useState('');
-  const [sendInvitation, setSendInvitation] = useState(true);
+  // Off by default: an invitation is sent only on purpose (WMCNL-3017)
+  const [sendInvitation, setSendInvitation] = useState(false);
 
   // Multi-select state
   const [selectedTraineeIds, setSelectedTraineeIds] = useState<string[]>([

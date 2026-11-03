@@ -116,6 +116,7 @@ export async function GET(
       lock,
       useCase: {
         id: u.id,
+        code: u.code,
         title: u.title,
         descriptionText: u.descriptionText,
         isActive: u.isActive,

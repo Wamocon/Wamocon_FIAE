@@ -14,6 +14,18 @@ import {
   traineeRecordCondition,
 } from '@/lib/auth/trainee-scope-conditions';
 
+/** The longest name that fits the lists and the header. */
+const FULL_NAME_MAX = 120;
+
+function isWebUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ traineeId: string }> }
@@ -88,10 +100,39 @@ export async function PATCH(
     if (isErrorResponse(access)) return access;
 
     const updates: any = {};
-    if (typeof body?.full_name === 'string')
-      updates.fullName = body.full_name.trim();
-    if (typeof body?.avatar_url === 'string')
-      updates.avatarUrl = body.avatar_url.trim();
+    if (typeof body?.full_name === 'string') {
+      // A name is required: an empty one left the header with "Auszubildender"
+      // and every list with an empty line (WMCNL-2985)
+      const fullName = body.full_name.trim();
+      if (!fullName) {
+        return NextResponse.json(
+          { error: 'full_name must not be empty', code: 'FULL_NAME_REQUIRED' },
+          { status: 400 }
+        );
+      }
+      if (fullName.length > FULL_NAME_MAX) {
+        return NextResponse.json(
+          { error: 'full_name is too long', code: 'FULL_NAME_TOO_LONG' },
+          { status: 400 }
+        );
+      }
+      updates.fullName = fullName;
+    }
+    if (typeof body?.avatar_url === 'string') {
+      // An empty value removes the picture, anything else has to be a web
+      // address (the value ends up in an image tag)
+      const avatarUrl = body.avatar_url.trim();
+      if (avatarUrl && !isWebUrl(avatarUrl)) {
+        return NextResponse.json(
+          {
+            error: 'avatar_url must be an http(s) address',
+            code: 'AVATAR_URL_INVALID',
+          },
+          { status: 400 }
+        );
+      }
+      updates.avatarUrl = avatarUrl || null;
+    }
     if (body?.start_of_training_date)
       updates.startOfTrainingDate = new Date(body.start_of_training_date);
     if (body?.ausbildung_duration_years !== undefined) {

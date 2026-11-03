@@ -20,9 +20,12 @@ import {
   filePath,
   incomingFolder,
   incomingPath,
+  extensionOf,
   matchesSignature,
+  mimeOf,
   parseSubmissionPath,
   parseUploadId,
+  previewKindOf,
   sanitizeFileName,
   signatureRejectionCode,
   submissionFolder,
@@ -232,6 +235,39 @@ export async function getFile(
     info.url = url;
   }
   return ok(info);
+}
+
+export interface FileContent {
+  fileName: string;
+  contentType: string;
+  bytes: Uint8Array;
+}
+
+/**
+ * The bytes of the newest file, for the preview in the platform (WMCNL-2927).
+ * Only a PDF, a PNG or a JPG is delivered (415 NOT_PREVIEWABLE for the other
+ * formats, which can only be downloaded), the content type comes from the
+ * checked extension, never from the client. null when there is no file.
+ */
+export async function getFileContent(
+  deps: SubmissionFileDeps,
+  scope: SubmissionScope
+): Promise<ServiceResult<FileContent | null>> {
+  const folder = folderOf(deps, scope);
+  if (!folder) return fail(400, 'INVALID_SCOPE');
+  const [newest] = await filesOf(deps, folder);
+  if (!newest) return ok(null);
+  const ext = extensionOf(newest.fileName);
+  if (!ext || !previewKindOf(newest.fileName)) {
+    return fail(415, 'NOT_PREVIEWABLE');
+  }
+  const bytes = await deps.storage.download(newest.path);
+  if (!bytes) return ok(null);
+  return ok({
+    fileName: newest.fileName,
+    contentType: mimeOf(ext),
+    bytes,
+  });
 }
 
 export async function removeFile(

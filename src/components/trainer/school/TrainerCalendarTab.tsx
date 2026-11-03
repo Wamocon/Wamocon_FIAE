@@ -2,6 +2,7 @@
 
 import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -550,7 +551,7 @@ export function TrainerCalendarTab() {
             className="btn-accent flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium"
           >
             <Plus className="h-4 w-4" />
-            Blocker erstellen
+            {t('trainer.calendar.createBlock')}
           </button>
         )}
       </div>
@@ -847,7 +848,9 @@ function AddBlockerModal({
   const [endTime, setEndTime] = useState('17:00');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [sendInvitation, setSendInvitation] = useState(true);
+  // Off by default: an invitation is sent to the trainee only on purpose
+  // (WMCNL-3017), trying out the dialog must not send mail
+  const [sendInvitation, setSendInvitation] = useState(false);
   const [selectedTraineeIds, setSelectedTraineeIds] = useState<string[]>([
     initialTraineeId,
   ]);
@@ -864,17 +867,53 @@ function AddBlockerModal({
     else if (mode === 'all') setSelectedTraineeIds(trainees.map(t => t.id));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!startDate || !endDate || selectedTraineeIds.length === 0) return;
+  // What keeps "Erstellen" from working is said next to the fields, not only
+  // by a grey button: the end must lie after the start (at least a minute)
+  const endBeforeStart = (() => {
+    if (!startDate || !endDate) return false;
     const start = new Date(`${startDate}T${startTime}:00`);
     const end = new Date(`${endDate}T${endTime}:00`);
-    if (end <= start || end.getTime() - start.getTime() < 60000) {
-      setError(
-        'Endzeit muss nach Startzeit liegen und mindestens 1 Minute dauern.'
-      );
-      return;
-    }
+    return end <= start || end.getTime() - start.getTime() < 60000;
+  })();
+  const noRecipient = selectedTraineeIds.length === 0;
+
+  // Esc closes the dialog like the other dialogs
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  const initialTrainee = trainees.find(item => item.id === initialTraineeId);
+  const initialName = initialTrainee ? traineeDisplayName(initialTrainee) : '';
+  const recipientsLabel =
+    selectionMode === 'all'
+      ? t('trainer.calendar.modal.forAllTrainees')
+      : selectedTraineeIds.length === 1
+        ? t('trainer.calendar.modal.forTrainee').replace(
+            '{name}',
+            traineeDisplayName(
+              trainees.find(item => item.id === selectedTraineeIds[0]) ??
+                initialTrainee ?? {
+                  id: '',
+                  firstName: null,
+                  lastName: null,
+                  email: null,
+                }
+            )
+          )
+        : t('trainer.calendar.modal.forMultiple').replace(
+            '{count}',
+            String(selectedTraineeIds.length)
+          );
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!startDate || !endDate || noRecipient || endBeforeStart) return;
+    const start = new Date(`${startDate}T${startTime}:00`);
+    const end = new Date(`${endDate}T${endTime}:00`);
     setError(null);
     onAdd({
       startDate: start.toISOString(),
@@ -888,22 +927,32 @@ function AddBlockerModal({
     });
   };
 
-  return (
+  // The dialog hangs in the body, not inside the glass panel of the page: a
+  // blurred parent is the frame of a fixed child and cut the dialog off
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="bg-card border-border max-h-[90vh] w-full max-w-lg overflow-hidden overflow-y-auto rounded-2xl border shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-blocker-title"
+        className="bg-card border-border max-h-[90vh] w-full max-w-lg overflow-hidden overflow-y-auto rounded-2xl border shadow-2xl"
+      >
         <div className="border-border border-b bg-indigo-500/10 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-foreground text-lg font-bold">
-                Blocker erstellen
+              <h3
+                id="add-blocker-title"
+                className="text-foreground text-lg font-bold"
+              >
+                {t('trainer.calendar.modal.title')}
               </h3>
-              <p className="text-muted-foreground text-sm">
-                {selectionMode === 'all'
-                  ? `Für alle ${trainees.length} Azubis`
-                  : `Für ${selectedTraineeIds.length} Azubi(s)`}
-              </p>
+              <p className="text-muted-foreground text-sm">{recipientsLabel}</p>
             </div>
-            <button onClick={onClose} className="hover:bg-muted rounded-lg p-2">
+            <button
+              onClick={onClose}
+              aria-label={t('common.close')}
+              className="hover:bg-muted rounded-lg p-2"
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -911,7 +960,9 @@ function AddBlockerModal({
 
         <form onSubmit={handleSubmit} className="space-y-5 p-6">
           <div className="bg-muted/30 border-border space-y-3 rounded-xl border p-4">
-            <label className="block text-sm font-medium">Empfänger</label>
+            <label className="block text-sm font-medium">
+              {t('trainer.calendar.modal.recipients')}
+            </label>
             <div className="bg-muted flex rounded-lg p-1">
               {(['single', 'custom', 'all'] as const).map(mode => (
                 <button
@@ -921,10 +972,16 @@ function AddBlockerModal({
                   className={`flex-1 rounded-md py-1.5 text-xs font-medium transition ${selectionMode === mode ? 'bg-background text-foreground shadow' : 'text-muted-foreground'}`}
                 >
                   {mode === 'single'
-                    ? 'Einzeln'
+                    ? t('trainer.calendar.modal.onlySelected').replace(
+                        '{name}',
+                        initialName.split(' ')[0]
+                      )
                     : mode === 'all'
-                      ? `Alle (${trainees.length})`
-                      : 'Auswählen'}
+                      ? t('trainer.calendar.modal.all').replace(
+                          '{count}',
+                          String(trainees.length)
+                        )
+                      : t('trainer.calendar.modal.select')}
                 </button>
               ))}
             </div>
@@ -954,7 +1011,9 @@ function AddBlockerModal({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div
+            className={`grid gap-3 ${blockType === 'EXAM' ? 'grid-cols-2' : 'grid-cols-1'}`}
+          >
             <div>
               <label className="mb-2 block text-sm font-medium">
                 {t('calendar.modal.blockType')}
@@ -974,10 +1033,10 @@ function AddBlockerModal({
                 ))}
               </select>
             </div>
-            {blockType === 'EXAM' ? (
+            {blockType === 'EXAM' && (
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Prüfungs-Art
+                  {t('calendar.modal.examType')}
                 </label>
                 <select
                   value={examSubType}
@@ -985,39 +1044,46 @@ function AddBlockerModal({
                   className="bg-muted border-border focus:ring-accent/50 w-full rounded-xl border px-4 py-3 outline-none focus:ring-2"
                   required
                 >
-                  <option value="">Auswählen...</option>
+                  <option value="">{t('calendar.modal.selectPlaceholder')}</option>
                   <option value="IHK_ABSCHLUSSPRUEFUNG_T1">
-                    IHK Abschlussprüfung Teil 1
+                    {t('calendar.examSubTypes.ihkT1')}
                   </option>
                   <option value="IHK_ABSCHLUSSPRUEFUNG_T2">
-                    IHK Abschlussprüfung Teil 2
+                    {t('calendar.examSubTypes.ihkT2')}
                   </option>
-                  <option value="KLAUSUR_WMC">Klausur WMC</option>
-                  <option value="KLAUSUR_ALLGEMEIN">Klausur (Allgemein)</option>
+                  <option value="KLAUSUR_WMC">
+                    {t('calendar.examSubTypes.klausurWmc')}
+                  </option>
+                  <option value="KLAUSUR_ALLGEMEIN">
+                    {t('calendar.examSubTypes.klausurAllgemein')}
+                  </option>
                   <option value="PRAKTISCHE_PRUEFUNG">
-                    Praktische Prüfung
+                    {t('calendar.examSubTypes.praktisch')}
                   </option>
-                  <option value="MUENDLICHE_PRUEFUNG">Mündliche Prüfung</option>
-                  <option value="PROJEKTARBEIT">Projektarbeit</option>
-                  <option value="ANDERE">Sonstige</option>
+                  <option value="MUENDLICHE_PRUEFUNG">
+                    {t('calendar.examSubTypes.muendlich')}
+                  </option>
+                  <option value="PROJEKTARBEIT">
+                    {t('calendar.examSubTypes.projekt')}
+                  </option>
+                  <option value="ANDERE">
+                    {t('calendar.examSubTypes.andere')}
+                  </option>
                 </select>
-              </div>
-            ) : (
-              <div className="pointer-events-none opacity-50">
-                <label className="mb-2 block text-sm font-medium">
-                  Prüfungs-Art
-                </label>
-                <div className="bg-muted border-border text-muted-foreground w-full rounded-xl border px-4 py-3">
-                  N/A
-                </div>
               </div>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-2 block text-sm font-medium">Start</label>
+              <label
+                htmlFor="blocker-start-date"
+                className="mb-2 block text-sm font-medium"
+              >
+                {t('calendar.modal.startDate')}
+              </label>
               <input
+                id="blocker-start-date"
                 type="date"
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
@@ -1026,8 +1092,14 @@ function AddBlockerModal({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium">Ende</label>
+              <label
+                htmlFor="blocker-end-date"
+                className="mb-2 block text-sm font-medium"
+              >
+                {t('calendar.modal.endDate')}
+              </label>
               <input
+                id="blocker-end-date"
                 type="date"
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
@@ -1039,10 +1111,14 @@ function AddBlockerModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-2 block text-sm font-medium">
-                Startzeit
+              <label
+                htmlFor="blocker-start-time"
+                className="mb-2 block text-sm font-medium"
+              >
+                {t('calendar.modal.startTime')}
               </label>
               <input
+                id="blocker-start-time"
                 type="time"
                 value={startTime}
                 onChange={e => setStartTime(e.target.value)}
@@ -1051,8 +1127,14 @@ function AddBlockerModal({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium">Endzeit</label>
+              <label
+                htmlFor="blocker-end-time"
+                className="mb-2 block text-sm font-medium"
+              >
+                {t('calendar.modal.endTime')}
+              </label>
               <input
+                id="blocker-end-time"
                 type="time"
                 value={endTime}
                 onChange={e => setEndTime(e.target.value)}
@@ -1061,27 +1143,34 @@ function AddBlockerModal({
               />
             </div>
           </div>
+          {endBeforeStart && (
+            <p role="alert" className="text-destructive text-sm">
+              {t('trainer.school.calendar.endBeforeStart')}
+            </p>
+          )}
 
           <div>
-            <label className="mb-2 block text-sm font-medium">Titel</label>
+            <label className="mb-2 block text-sm font-medium">
+              {t('trainer.calendar.modal.titleField')}
+            </label>
             <input
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
               className="bg-muted border-border w-full rounded-xl border px-4 py-3"
-              placeholder="z.B. Besprechung..."
+              placeholder={t('trainer.calendar.modal.titlePlaceholder')}
             />
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-medium">
-              Beschreibung
+              {t('trainer.calendar.modal.descriptionField')}
             </label>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
               className="bg-muted border-border min-h-[80px] w-full rounded-xl border px-4 py-3"
-              placeholder="Details..."
+              placeholder={t('trainer.calendar.modal.descriptionPlaceholder')}
             />
           </div>
 
@@ -1106,21 +1195,23 @@ function AddBlockerModal({
             </button>
             <button
               type="submit"
-              className="btn-accent flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 font-medium"
-              disabled={(() => {
-                const start = new Date(`${startDate}T${startTime}:00`);
-                const end = new Date(`${endDate}T${endTime}:00`);
-                return end <= start || end.getTime() - start.getTime() < 60000;
-              })()}
+              className="btn-accent flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={endBeforeStart || noRecipient}
             >
               <Check className="h-4 w-4" />
               {t('common.create')}
             </button>
-            {error && <p className="text-destructive mt-2 text-sm">{error}</p>}
           </div>
+          {noRecipient && (
+            <p role="alert" className="text-destructive text-sm">
+              {t('trainer.calendar.modal.selectAtLeastOne')}
+            </p>
+          )}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1172,9 +1263,22 @@ function BlockDetailModal({
     setDeleting(false);
   };
 
-  return (
+  // Esc closes the dialog like the other dialogs
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="bg-card border-border w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="bg-card border-border max-h-[90vh] w-full max-w-md overflow-hidden overflow-y-auto rounded-2xl border shadow-2xl"
+      >
         {/* Header */}
         <div className={`p-6 ${config.lightBg}`}>
           <div className="flex items-center justify-between">
@@ -1206,13 +1310,16 @@ function BlockDetailModal({
           <div>
             <p className="text-muted-foreground mb-1 flex items-center gap-1 text-xs tracking-wide uppercase">
               <Clock className="h-3 w-3" />
-              Zeitraum
+              {t('calendar.block.period')}
             </p>
             <p className="text-foreground font-medium">
               {formatDate(block.startDate)} • {formatTime(block.startDate)}
             </p>
             <p className="text-foreground">
-              bis {formatDate(block.endDate)} • {formatTime(block.endDate)}
+              {t('calendar.block.until').replace(
+                '{date}',
+                `${formatDate(block.endDate)} • ${formatTime(block.endDate)}`
+              )}
             </p>
           </div>
 
@@ -1220,7 +1327,7 @@ function BlockDetailModal({
           {block.description && (
             <div>
               <p className="text-muted-foreground mb-1 text-xs tracking-wide uppercase">
-                Beschreibung
+                {t('calendar.block.descriptionLabel')}
               </p>
               <p className="text-foreground">{block.description}</p>
             </div>
@@ -1230,7 +1337,7 @@ function BlockDetailModal({
           {block.notes && (
             <div>
               <p className="text-muted-foreground mb-1 text-xs tracking-wide uppercase">
-                Notizen
+                {t('calendar.block.notes')}
               </p>
               <p className="text-foreground">{block.notes}</p>
             </div>
@@ -1250,7 +1357,7 @@ function BlockDetailModal({
           {confirmDelete ? (
             <div className="bg-destructive/10 border-destructive/20 space-y-3 rounded-xl border p-4">
               <p className="text-foreground text-sm font-medium">
-                {t('exams.deleteConfirm')}
+                {t('trainer.school.calendar.deleteBlockerConfirm')}
               </p>
               <div className="flex gap-2">
                 <button
@@ -1306,7 +1413,8 @@ function BlockDetailModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1347,9 +1455,22 @@ function EditBlockModal({
     setSaving(false);
   };
 
-  return (
+  // Esc closes the dialog like the other dialogs
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="bg-card border-border w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="bg-card border-border max-h-[90vh] w-full max-w-md overflow-hidden overflow-y-auto rounded-2xl border shadow-2xl"
+      >
         <div className="border-border bg-accent/10 border-b p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -1459,7 +1580,8 @@ function EditBlockModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 function setError(arg0: string | null) {

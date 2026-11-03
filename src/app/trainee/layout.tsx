@@ -34,7 +34,7 @@ function BirthdateBlocker() {
       await refreshProfile();
       toast.success(t('profile.updateSuccess') || 'Profil aktualisiert');
     } catch {
-      toast.error('Fehler beim Speichern');
+      toast.error(t('reports.error.save'));
     } finally {
       setSaving(false);
     }
@@ -52,7 +52,7 @@ function BirthdateBlocker() {
           </h2>
           <p className="text-muted-foreground mt-2 text-sm">
             {t('profile.birthDateRequiredText') ||
-              'Bitte geben Sie Ihr Geburtsdatum ein, um die Plattform nutzen zu können.'}
+              'Bitte gib dein Geburtsdatum ein, um die Plattform nutzen zu können.'}
           </p>
         </div>
 

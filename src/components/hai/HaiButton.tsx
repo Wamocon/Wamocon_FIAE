@@ -23,7 +23,9 @@ export function HaiButton() {
     const hasMessages = messages.length > 0;
 
     return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2" data-tour="hai-button">
+        // z-40, one level under the viewers and dialogs (z-50): the button is
+        // part of the page, an open viewer or dialog lies over it (WMCNL-2969)
+        <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2" data-tour="hai-button">
             {/* Minimized Indicator */}
             <AnimatePresence>
                 {viewMode === 'minimized' && hasMessages && (

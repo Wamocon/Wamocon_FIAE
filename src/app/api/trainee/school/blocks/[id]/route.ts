@@ -13,6 +13,7 @@ import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { isoWeekOf } from '@/lib/school/day';
 import { refreshTraineeDashboard } from '@/lib/school/dashboard-cache';
 
 interface RouteParams {
@@ -67,13 +68,44 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             return notFound();
         }
 
+        // An entry a trainer put in the calendar is the trainer's to change
+        if (existing.createdByTrainerId) {
+            return NextResponse.json(
+                { error: 'Entries created by a trainer cannot be edited' },
+                { status: 403 }
+            );
+        }
+
         // Build update object - only include provided fields
         const updateData: Record<string, any> = {};
 
         if (body.calendarWeek !== undefined) updateData.calendarWeek = body.calendarWeek;
         if (body.year !== undefined) updateData.year = body.year;
-        if (body.startDate !== undefined) updateData.startDate = new Date(body.startDate);
-        if (body.endDate !== undefined) updateData.endDate = new Date(body.endDate);
+        if (body.startDate !== undefined) {
+            const start = new Date(body.startDate);
+            if (Number.isNaN(start.getTime())) {
+                return NextResponse.json({ error: 'Valid startDate required' }, { status: 400 });
+            }
+            updateData.startDate = start;
+            // The week and the year follow the start date unless the client names them
+            if (body.calendarWeek === undefined) updateData.calendarWeek = isoWeekOf(start);
+            if (body.year === undefined) updateData.year = start.getFullYear();
+        }
+        if (body.endDate !== undefined) {
+            const end = new Date(body.endDate);
+            if (Number.isNaN(end.getTime())) {
+                return NextResponse.json({ error: 'Valid endDate required' }, { status: 400 });
+            }
+            updateData.endDate = end;
+        }
+        // A change of the dates keeps the end behind the start (the form checks it too)
+        if (updateData.startDate || updateData.endDate) {
+            const newStart: Date | undefined = updateData.startDate ?? existing.startDate;
+            const newEnd: Date | undefined = updateData.endDate ?? existing.endDate;
+            if (newStart && newEnd && newEnd.getTime() <= newStart.getTime()) {
+                return NextResponse.json({ error: 'endDate must be after startDate' }, { status: 400 });
+            }
+        }
         if (body.blockType !== undefined) {
             if (!['SCHOOL', 'COMPANY', 'HOLIDAY', 'EXAM', 'PERSONAL', 'SONSTIGES', 'TRAINER_BLOCKER'].includes(body.blockType)) {
                 return NextResponse.json({ error: 'Invalid blockType' }, { status: 400 });
@@ -86,6 +118,20 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         if (body.schuljahr !== undefined) updateData.schuljahr = body.schuljahr;
         if (body.ausbildungsjahr !== undefined) updateData.ausbildungsjahr = body.ausbildungsjahr;
         if (body.isPersonal !== undefined) updateData.isPersonal = body.isPersonal;
+        if (body.examSubType !== undefined) updateData.examSubType = body.examSubType || null;
+        if (body.description !== undefined) updateData.description = body.description || null;
+        if (body.inviteeEmails !== undefined) updateData.inviteeEmails = body.inviteeEmails || null;
+
+        // Like on creation: an entry of the type SONSTIGES needs its description
+        const resultingType = updateData.blockType ?? existing.blockType;
+        const resultingDescription =
+            'description' in updateData ? updateData.description : existing.description;
+        if (resultingType === 'SONSTIGES' && !resultingDescription) {
+            return NextResponse.json(
+                { error: 'Description required for SONSTIGES block type' },
+                { status: 400 }
+            );
+        }
 
         if (body.startDate !== undefined || body.ausbildungsjahr !== undefined) {
             const [trainee] = await db
@@ -121,6 +167,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             .where(and(eq(ausbildungBlocks.id, id as any), eq(ausbildungBlocks.traineeId, session.id as any)))
             .returning();
 
+        // The calendar card of the dashboard shows the entry at once
+        refreshTraineeDashboard();
         return NextResponse.json({ block: updated });
     } catch (e) {
         console.error('Update block error:', e);

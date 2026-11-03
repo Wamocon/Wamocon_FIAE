@@ -395,3 +395,14 @@ describe('Quiz: questions without a solution are not graded', () => {
     expect(screen.getAllByText('Nicht bewertet')).toHaveLength(2);
   });
 });
+
+describe('Quiz: no click without an answer (WMCNL-2939)', () => {
+  it('says why the next button is disabled and takes the hint away after an answer', () => {
+    renderWithProviders(<Quiz quiz={quiz} />);
+    expect(screen.getByTestId('quiz-answer-hint')).toHaveTextContent(
+      'Bitte wähle eine Antwort.'
+    );
+    fireEvent.click(screen.getByLabelText('Eindeutiger Bezeichner'));
+    expect(screen.queryByTestId('quiz-answer-hint')).toBeNull();
+  });
+});

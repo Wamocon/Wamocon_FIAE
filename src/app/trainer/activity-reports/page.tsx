@@ -17,6 +17,11 @@ import {
 } from '@/lib/ausbildung/duration';
 import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
 import {
+  approveMissing,
+  formatHours,
+  reviewTitleKey,
+} from '@/lib/trainer/report-review';
+import {
   ClipboardList,
   AlertTriangle,
   Check,
@@ -751,7 +756,7 @@ export default function TrainerActivityReportsPage() {
           className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 font-medium text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl"
         >
           <Award className="h-5 w-5" />
-          <span>Arbeitszeugnis erstellen</span>
+          <span>{t('arbeitszeugnis.title')}</span>
         </button>
       </div>
 
@@ -1003,7 +1008,7 @@ function ReportReviewModal({
   trainerId: string;
   reloadEntries: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -1046,7 +1051,27 @@ function ReportReviewModal({
       );
       return firstCriterion && softskillRatings[firstCriterion.id]?.rating;
     });
-  const canApprove = allEntriesGraded && allSoftskillsRated && softskillsSaved;
+  // Approving is reachable from every tab. What is still missing is shown next
+  // to the button and a click on it leads to the tab that needs the trainer.
+  const missingForApproval = approveMissing({
+    entryCount: entries.length,
+    allEntriesGraded,
+    allSkillsRated: allSoftskillsRated,
+  });
+  const approveHint =
+    missingForApproval.length === 0
+      ? null
+      : missingForApproval.includes('entries')
+        ? t('trainer.reports.modal.approveMissingEntries')
+        : `${t('trainer.reports.modal.approveMissingPrefix')} ${missingForApproval
+            .map(m =>
+              t(
+                m === 'grades'
+                  ? 'trainer.reports.modal.approveMissingGrades'
+                  : 'trainer.reports.modal.approveMissingSkills'
+              )
+            )
+            .join(', ')}`;
   const isLastTab = activeTab === 'softskills';
   const canProceedNext =
     activeTab === 'details'
@@ -1066,6 +1091,21 @@ function ReportReviewModal({
       setActiveTab('softskills');
     }
   };
+
+  // Esc closes the dialog (a reject form that is open closes first, a running
+  // approval is not interrupted)
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || processing) return;
+      if (showRejectForm) {
+        setShowRejectForm(false);
+        return;
+      }
+      onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose, processing, showRejectForm]);
 
   // Initialize grades from existing entries
   useEffect(() => {
@@ -1283,6 +1323,12 @@ function ReportReviewModal({
   };
 
   const handleApprove = async () => {
+    // A report without an entry has nothing to approve, only to reject
+    if (entries.length === 0) {
+      toast.error(t('trainer.reports.modal.approveMissingEntries'));
+      return;
+    }
+
     // Validate: all entries must have grades
     if (!allEntriesGraded) {
       toast.error(t('trainer.reports.modal.gradesRequired'));
@@ -1400,6 +1446,9 @@ function ReportReviewModal({
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="report-review-title"
         className="bg-card border-border flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border"
         onMouseDown={e => e.stopPropagation()}
         onClick={e => e.stopPropagation()}
@@ -1408,8 +1457,11 @@ function ReportReviewModal({
         <div className="border-border/50 border-b p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-foreground text-xl font-bold">
-                {t('trainer.reports.modal.title')}
+              <h2
+                id="report-review-title"
+                className="text-foreground text-xl font-bold"
+              >
+                {t(reviewTitleKey(report.status))}
               </h2>
               <div className="text-muted-foreground mt-1 flex items-center gap-2 text-sm">
                 <User className="h-4 w-4" />
@@ -1426,6 +1478,7 @@ function ReportReviewModal({
             <button
               type="button"
               onClick={onClose}
+              aria-label={t('trainer.reports.modal.close')}
               className="hover:bg-muted rounded-lg p-2 transition-colors"
             >
               <X className="text-muted-foreground h-5 w-5" />
@@ -1439,7 +1492,9 @@ function ReportReviewModal({
                 {t('trainer.reports.modal.planTotal')}
               </p>
               <p className="text-foreground text-lg font-bold">
-                {totalPlanned} {t('trainer.reports.modal.hours')}
+                {totalPlanned > 0
+                  ? `${formatHours(totalPlanned, language)} ${t('trainer.reports.modal.hours')}`
+                  : t('reports.noPlannedHours')}
               </p>
             </div>
             <div className="bg-muted/50 rounded-lg p-3">
@@ -1447,22 +1502,27 @@ function ReportReviewModal({
                 {t('trainer.reports.modal.actualTotal')}
               </p>
               <p
-                className={`text-lg font-bold ${totalActual > totalPlanned ? 'text-yellow-500' : 'text-foreground'}`}
+                className={`text-lg font-bold ${totalPlanned > 0 && totalActual > totalPlanned ? 'text-yellow-500' : 'text-foreground'}`}
               >
-                {totalActual} {t('trainer.reports.modal.hours')}
+                {formatHours(totalActual, language)}{' '}
+                {t('trainer.reports.modal.hours')}
               </p>
             </div>
             <div className="bg-muted/50 rounded-lg p-3">
               <p className="text-muted-foreground text-xs">
                 {t('trainer.reports.modal.difference')}
               </p>
-              <p
-                className={`text-lg font-bold ${totalActual > totalPlanned ? 'text-yellow-500' : 'text-green-500'}`}
-              >
-                {totalActual > totalPlanned ? '+' : ''}
-                {(totalActual - totalPlanned).toFixed(1)}{' '}
-                {t('trainer.reports.modal.hours')}
-              </p>
+              {totalPlanned > 0 ? (
+                <p
+                  className={`text-lg font-bold ${totalActual > totalPlanned ? 'text-yellow-500' : 'text-green-500'}`}
+                >
+                  {totalActual > totalPlanned ? '+' : ''}
+                  {formatHours(totalActual - totalPlanned, language, true)}{' '}
+                  {t('trainer.reports.modal.hours')}
+                </p>
+              ) : (
+                <p className="text-muted-foreground text-lg font-bold">–</p>
+              )}
             </div>
             <div
               className={`rounded-lg p-3 ${totalActual > 40 ? 'border border-red-500/30 bg-red-500/10' : 'bg-muted/50'}`}
@@ -1473,7 +1533,8 @@ function ReportReviewModal({
               <p
                 className={`text-lg font-bold ${totalActual > 40 ? 'text-red-500' : totalActual > 32 ? 'text-yellow-500' : 'text-green-500'}`}
               >
-                {totalActual} / 40 Std.
+                {formatHours(totalActual, language)} / 40{' '}
+                {t('trainer.reports.modal.hours')}
               </p>
             </div>
           </div>
@@ -1573,8 +1634,9 @@ function ReportReviewModal({
                             {t('trainer.reports.modal.plan')}
                           </p>
                           <p className="text-foreground font-medium">
-                            {entry.plannedHours}{' '}
-                            {t('trainer.reports.modal.hours')}
+                            {entry.plannedHours > 0
+                              ? `${formatHours(entry.plannedHours, language)} ${t('trainer.reports.modal.hours')}`
+                              : t('reports.noPlannedHours')}
                           </p>
                         </div>
                         <div>
@@ -1584,7 +1646,7 @@ function ReportReviewModal({
                           <p
                             className={`font-medium ${entry.isOverbooked ? 'text-yellow-500' : 'text-foreground'}`}
                           >
-                            {entry.actualHours}{' '}
+                            {formatHours(entry.actualHours, language)}{' '}
                             {t('trainer.reports.modal.hours')}
                           </p>
                         </div>
@@ -1592,15 +1654,23 @@ function ReportReviewModal({
                           <p className="text-muted-foreground text-xs">
                             {t('trainer.reports.modal.difference')}
                           </p>
-                          <p
-                            className={`font-medium ${entry.isOverbooked ? 'text-yellow-500' : 'text-green-500'}`}
-                          >
-                            {entry.isOverbooked ? '+' : ''}
-                            {(entry.actualHours - entry.plannedHours).toFixed(
-                              1
-                            )}{' '}
-                            {t('trainer.reports.modal.hours')}
-                          </p>
+                          {entry.plannedHours > 0 ? (
+                            <p
+                              className={`font-medium ${entry.isOverbooked ? 'text-yellow-500' : 'text-green-500'}`}
+                            >
+                              {entry.isOverbooked ? '+' : ''}
+                              {formatHours(
+                                entry.actualHours - entry.plannedHours,
+                                language,
+                                true
+                              )}{' '}
+                              {t('trainer.reports.modal.hours')}
+                            </p>
+                          ) : (
+                            <p className="text-muted-foreground font-medium">
+                              –
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -1647,7 +1717,7 @@ function ReportReviewModal({
                 <div className="flex items-center justify-between">
                   <p className="text-foreground text-sm">
                     {report.status === 'APPROVED'
-                      ? 'Bewertung für den Auszubildenden. Sie können Noten bei Bedarf bearbeiten.'
+                      ? t('trainer.reports.modal.gradeInfoApproved')
                       : t('trainer.reports.modal.gradeInfo')}
                   </p>
                   {report.status === 'APPROVED' && !isEditingGrades && (
@@ -1657,7 +1727,7 @@ function ReportReviewModal({
                       className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/30"
                     >
                       <Pencil className="h-3.5 w-3.5" />
-                      Noten bearbeiten
+                      {t('trainer.reports.modal.editGrades')}
                     </button>
                   )}
                 </div>
@@ -1667,13 +1737,13 @@ function ReportReviewModal({
               {isEditingGrades && (
                 <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
                   <label className="text-foreground mb-1.5 block text-xs font-medium">
-                    Grund der Änderung (optional)
+                    {t('trainer.reports.modal.editReasonLabel')}
                   </label>
                   <input
                     type="text"
                     value={editReason}
                     onChange={e => setEditReason(e.target.value)}
-                    placeholder="z.B. Nach Rücksprache mit dem Auszubildenden..."
+                    placeholder={t('trainer.reports.modal.editReasonPlaceholder')}
                     className="bg-background border-border text-foreground w-full rounded-lg border px-3 py-2 text-sm"
                   />
                 </div>
@@ -1865,7 +1935,7 @@ function ReportReviewModal({
                     <div className="flex items-center justify-between">
                       <p className="text-foreground text-sm">
                         {report.status === 'APPROVED'
-                          ? 'Bewertung abgeschlossen. Sie können die Kompetenzbewertung bei Bedarf bearbeiten.'
+                          ? t('trainer.reports.modal.softskillInfoApproved')
                           : t('trainer.reports.modal.softskillInfo')}
                       </p>
                       {report.status === 'APPROVED' && !isEditingSoftskills && (
@@ -1878,7 +1948,7 @@ function ReportReviewModal({
                           className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/30"
                         >
                           <Pencil className="h-3.5 w-3.5" />
-                          Noten bearbeiten
+                          {t('trainer.reports.modal.editGrades')}
                         </button>
                       )}
                     </div>
@@ -1888,13 +1958,15 @@ function ReportReviewModal({
                   {isEditingSoftskills && (
                     <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
                       <label className="text-foreground mb-1.5 block text-xs font-medium">
-                        Grund der Änderung (optional)
+                        {t('trainer.reports.modal.editReasonLabel')}
                       </label>
                       <input
                         type="text"
                         value={editReason}
                         onChange={e => setEditReason(e.target.value)}
-                        placeholder="z.B. Nach Rücksprache mit dem Auszubildenden..."
+                        placeholder={t(
+                          'trainer.reports.modal.editReasonPlaceholder'
+                        )}
                         className="bg-background border-border text-foreground w-full rounded-lg border px-3 py-2 text-sm"
                       />
                     </div>
@@ -1997,7 +2069,9 @@ function ReportReviewModal({
                                   e.target.value
                                 )
                               }
-                              placeholder="Ausbilder-Kommentar (optional)..."
+                              placeholder={t(
+                                'trainer.reports.modal.trainerCommentPlaceholder'
+                              )}
                               rows={2}
                               className="bg-muted/50 border-border/50 text-foreground placeholder:text-muted-foreground/50 w-full resize-none rounded-md border px-3 py-2 text-sm"
                             />
@@ -2025,7 +2099,7 @@ function ReportReviewModal({
                         }}
                         className="text-muted-foreground hover:text-foreground px-4 py-2 text-sm"
                       >
-                        Abbrechen
+                        {t('trainer.reports.modal.cancel')}
                       </button>
                     )}
                     <button
@@ -2090,52 +2164,62 @@ function ReportReviewModal({
                 </div>
               </div>
             ) : (
-              <div className="flex justify-between">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="text-muted-foreground hover:text-foreground px-4 py-2"
-                >
-                  {t('trainer.reports.modal.close')}
-                </button>
-                <div className="flex gap-3">
+              <>
+                {approveHint && (
+                  <p
+                    className="text-muted-foreground mb-3 text-right text-xs"
+                    data-testid="approve-missing"
+                  >
+                    {approveHint}
+                  </p>
+                )}
+                <div className="flex justify-between">
                   <button
                     type="button"
-                    onClick={() => setShowRejectForm(true)}
-                    disabled={processing}
-                    className="bg-destructive/20 text-destructive hover:bg-destructive/30 flex items-center gap-2 rounded-lg px-4 py-2"
+                    onClick={onClose}
+                    className="text-muted-foreground hover:text-foreground px-4 py-2"
                   >
-                    <X className="h-4 w-4" />
-                    {t('trainer.reports.modal.reject')}
+                    {t('trainer.reports.modal.close')}
                   </button>
-                  <button
-                    key="approve-btn"
-                    type="button"
-                    onClick={handleApprove}
-                    disabled={processing || !canApprove}
-                    className={`text-primary-foreground flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 hover:bg-green-700 disabled:opacity-50 dark:text-white ${isLastTab ? '' : 'hidden'}`}
-                  >
-                    <span className="flex h-4 w-4 items-center justify-center">
-                      {processing ? (
-                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      ) : (
-                        <Check className="h-4 w-4" />
-                      )}
-                    </span>
-                    <span>{t('trainer.reports.modal.approve')}</span>
-                  </button>
-                  <button
-                    key="next-btn"
-                    type="button"
-                    onClick={goNextTab}
-                    disabled={processing || !canProceedNext}
-                    className={`bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 disabled:opacity-50 ${isLastTab ? 'hidden' : ''}`}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                    Next
-                  </button>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowRejectForm(true)}
+                      disabled={processing}
+                      className="bg-destructive/20 text-destructive hover:bg-destructive/30 flex items-center gap-2 rounded-lg px-4 py-2"
+                    >
+                      <X className="h-4 w-4" />
+                      {t('trainer.reports.modal.reject')}
+                    </button>
+                    <button
+                      key="approve-btn"
+                      type="button"
+                      onClick={handleApprove}
+                      disabled={processing || entries.length === 0}
+                      className="text-primary-foreground flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 hover:bg-green-700 disabled:opacity-50 dark:text-white"
+                    >
+                      <span className="flex h-4 w-4 items-center justify-center">
+                        {processing ? (
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                      </span>
+                      <span>{t('trainer.reports.modal.approve')}</span>
+                    </button>
+                    <button
+                      key="next-btn"
+                      type="button"
+                      onClick={goNextTab}
+                      disabled={processing || !canProceedNext}
+                      className={`bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 disabled:opacity-50 ${isLastTab ? 'hidden' : ''}`}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                      {t('trainer.reports.modal.next')}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </>
             )
           ) : report.status === 'APPROVED' ? (
             <div className="flex justify-between">
@@ -2163,7 +2247,7 @@ function ReportReviewModal({
                           <Check className="h-4 w-4" />
                         )}
                       </span>
-                      <span>Änderungen speichern</span>
+                      <span>{t('trainer.reports.modal.saveChanges')}</span>
                     </button>
                   )}
                 <button
