@@ -19,6 +19,8 @@ jest.mock('@/components/hai/HaiProvider', () => ({
   HaiProvider: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="hai-provider">{children}</div>
   ),
+  // the dock host of the wrapper reads whether the chat is shown as a panel
+  useHai: () => ({ viewMode: 'hidden' }),
 }));
 
 // the voice session needs the chat and the language: not what this test is about

@@ -3,14 +3,18 @@
 /**
  * HAI Chat Interface
  *
- * Master component that handles the side panel (slides in from the right, the
- * HAI symbol is its handle) and the Full-Screen mode.
+ * Master component that handles the side panel (a column of the app layout at
+ * the right edge that the person can pull wider or narrower, the HAI symbol is
+ * its handle) and the Full-Screen mode.
  */
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { useHai } from './HaiProvider';
 import { HAI_HEADER_OFFSET_CLASS, HAI_PANEL_ID } from './haiLayout';
+import { useOptionalHaiDock } from './HaiDockContext';
+import { HaiDockHandle } from './HaiDockHandle';
 import { useOptionalHaiVoiceSession } from './voice-mode/voiceSessionContext';
 import { usePrefersReducedMotion } from './voice-mode/usePrefersReducedMotion';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -36,8 +40,9 @@ import {
 export function HaiChat() {
   const { viewMode } = useHai();
 
-  if (viewMode === 'hidden') return null;
-
+  // No early return for 'hidden': the panel plays its closing animation first
+  // (the column of the layout shrinks at the same time), AnimatePresence
+  // removes it afterwards.
   return (
     <AnimatePresence mode="wait">
       {viewMode === 'widget' && <ChatPanel key="panel" />}
@@ -47,7 +52,7 @@ export function HaiChat() {
 }
 
 // ============================================================================
-// SIDE PANEL (slides in from the right, the HAI symbol is its handle)
+// SIDE PANEL (a column of the layout at the right, the HAI symbol is its handle)
 // ============================================================================
 
 /** Moves the focus back to the HAI symbol (the handle of the panel). */
@@ -59,11 +64,24 @@ function focusHandle() {
 
 /**
  * The text chat as a panel at the right edge of the page (the main navigation
- * is at the left, so they never meet). It is an overlay: the page behind does not move,
- * is not darkened and stays usable, so there is no focus trap and no modal. The
- * focus goes to the input when it opens and back to the HAI symbol when it
- * closes (symbol, close button, Esc). Only `transform` is animated; with reduced
- * motion the panel appears and disappears without moving.
+ * is at the left, so they never meet).
+ *
+ * Docked (from 768 px up, while the page keeps 480 px, haiDock.ts): the panel is
+ * rendered into the column of the app layout (HaiDockColumn, MainLayout) by a
+ * portal, so it is a part of the layout: the header and the page get narrower
+ * and move to the left, nothing lies under the panel. It has the chosen width
+ * (--hai-panel-width, HaiDockHandle pulls it) and clings to the left edge of the
+ * column, so it slides in with the edge of the page. The portal keeps it in the
+ * chat provider: the history stays and the panel is not mounted again when the
+ * HAI opens another page.
+ *
+ * Not docked (a phone, a narrow window, no layout around): a sheet over the
+ * page that slides in from the right, the page behind does not move.
+ *
+ * The page behind stays usable and is not darkened in both cases, so there is no
+ * focus trap and no modal. The focus goes to the input when it opens and back to
+ * the HAI symbol when it closes (symbol, close button, Esc). With reduced motion
+ * the panel appears and disappears without moving.
  */
 function ChatPanel() {
   const { t } = useLanguage();
@@ -87,6 +105,8 @@ function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLElement>(null);
+  const dock = useOptionalHaiDock();
+  const slot = dock?.docked ? dock.slotEl : null;
 
   // the focus jumps into the input when the panel opens
   useEffect(() => {
@@ -151,37 +171,49 @@ function ChatPanel() {
     setInputValue('');
   };
 
-  return (
+  const panel = (
     <motion.aside
       ref={panelRef}
       id={HAI_PANEL_ID}
       aria-label={t('hai.panel.label')}
       data-testid="hai-chat-panel"
       data-side="right"
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
+      data-docked={slot ? 'true' : 'false'}
+      // Docked: the column moves, the panel only fades (the edge of the page
+      // carries it in). Sheet: slides in from the right.
+      initial={slot ? { opacity: 0 } : { x: '100%' }}
+      animate={slot ? { opacity: 1 } : { x: 0 }}
+      exit={slot ? { opacity: 0 } : { x: '100%' }}
       transition={{
         duration: reduced ? 0 : 0.28,
         ease: [0.32, 0.72, 0, 1],
       }}
-      // Right edge, under the page header (top-16); the navigation is at the
-      // left. Phone: full width as a sheet that leaves a strip below for the
-      // symbol. z-40 like the symbol, under viewers and dialogs (z-50). No backdrop.
-      className={`${HAI_HEADER_OFFSET_CLASS} fixed right-0 bottom-24 z-40 flex w-full flex-col rounded-b-2xl border-l border-cyan-500/30 bg-[#0f1117] text-gray-100 shadow-2xl shadow-cyan-950/50 md:bottom-0 md:w-[420px] md:rounded-none`}
+      // Docked: full height of the column (beside the header, which is narrower
+      // now), at the left edge of the column. Sheet: right edge, under the page
+      // header (top-16); the navigation is at the left; on a phone full width
+      // that leaves a strip below for the symbol. z-40 like the symbol, under
+      // viewers and dialogs (z-50). No backdrop.
+      className={
+        slot
+          ? '@container absolute inset-y-0 left-0 flex w-[var(--hai-panel-width,420px)] flex-col border-l border-cyan-500/30 bg-[#0f1117] text-gray-100'
+          : `@container ${HAI_HEADER_OFFSET_CLASS} fixed right-0 bottom-24 z-40 flex w-full flex-col rounded-b-2xl border-l border-cyan-500/30 bg-[#0f1117] text-gray-100 shadow-2xl shadow-cyan-950/50 md:bottom-0 md:w-[420px] md:rounded-none`
+      }
     >
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/10 bg-[#161b22] px-4 py-3">
+      {slot && <HaiDockHandle />}
+      {/* Header (h-16 like the page header, so the two lines meet) */}
+      <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-[#161b22] px-4">
         <div className="flex items-center gap-3">
           <HaiLogoInline />
-          <span className="rounded-full bg-cyan-500 px-2 py-0.5 text-[10px] font-bold text-black">
+          {/* the header follows the width of the panel (the person pulls it, a
+              container query): the badge goes first, then the labels */}
+          <span className="hidden rounded-full bg-cyan-500 px-2 py-0.5 text-[10px] font-bold text-black @[28rem]:inline-block">
             BETA
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
-          <HaiVoiceModeButton className="mr-1 inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20" />
-          <HaiQuizModeButton className="mr-1 inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20" />
+        <div className="flex shrink-0 items-center gap-1">
+          <HaiVoiceModeButton className="mr-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-cyan-400 transition-colors hover:bg-cyan-500/20 @max-[24rem]:[&>span]:hidden" />
+          <HaiQuizModeButton className="mr-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-cyan-400 transition-colors hover:bg-cyan-500/20 @max-[24rem]:[&>span]:hidden" />
           <button
             onClick={() => setViewMode('full')}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
@@ -266,6 +298,8 @@ function ChatPanel() {
       </div>
     </motion.aside>
   );
+
+  return slot ? createPortal(panel, slot) : panel;
 }
 
 // ============================================================================

@@ -4,9 +4,10 @@
  * HAI symbol: the round fish pond with the pixel shark (shark-new.gif).
  *
  * It sits at the bottom right of the page and is the handle of the chat panel:
- * a click slides the panel in from the right, another click slides it back.
- * While the panel is open the symbol rides on its left edge (haiLayout.ts),
- * stays visible and clickable and shows a small arrow.
+ * a click opens the panel as a column of the layout at the right edge (the page
+ * moves to the left), another click closes it. While the panel is open the
+ * symbol sits at the bottom right of the page that is left, next to the panel
+ * (haiLayout.ts), stays visible and clickable and shows a small arrow.
  *
  * In the voice mode the symbol itself becomes the pond of the HAI figure: the
  * same round pond, grown (scale only, so the border and the glow grow with it),
@@ -42,10 +43,12 @@ export function HaiButton() {
     // part of the page, an open viewer or dialog lies over it (WMCNL-2969).
     // Bottom right: the HAI lives in the corner, as it always did (haiLayout.ts).
     <div
+      ref={anchor.ref}
       className={`${anchor.className} flex flex-col items-end gap-2`}
       data-tour="hai-button"
       data-hai-anchor=""
       data-panel={isActive ? 'open' : 'closed'}
+      data-docked={anchor.docked ? 'true' : 'false'}
     >
       {/* Minimized Indicator */}
       <AnimatePresence>

@@ -50,9 +50,9 @@ export function Header({
 
   return (
     <>
-    <header className="bg-card/80 border-border/60 relative z-50 flex h-16 items-center justify-between border-b px-6 shadow-lg backdrop-blur-md">
+    <header className="bg-card/80 border-border/60 relative z-50 flex h-16 items-center justify-between gap-3 border-b px-6 shadow-lg backdrop-blur-md">
       {/* Left side - Breadcrumbs and Sidebar Toggle */}
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-center gap-4">
         {/* Sidebar Toggle */}
         <button
           onClick={onToggleSidebar}
@@ -71,12 +71,12 @@ export function Header({
             <ChevronLeft className="h-4 w-4" />
           </button>
         )}
-        <h2 className="text-foreground text-xl font-semibold">
+        <h2 className="text-foreground truncate text-xl font-semibold">
           {heading || t('nav.dashboard')}
         </h2>
       </div>
       {/* Right side - Actions */}
-      <div className="flex items-center gap-3" data-tour="header-settings">
+      <div className="flex shrink-0 items-center gap-3" data-tour="header-settings">
         {!isPlatformOwner && subscriptionPlan && (
           <div
             className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
