@@ -14,12 +14,13 @@ Stand: 02.11.2026. Ein Blatt für die Entscheidung. Die Einzelheiten stehen im R
 | G6 | Zeitfenster auf Sokrates mit dem Projekt WAMO (etwa drei Stunden) | offen |
 | G7 | Sprachassistent je Organisation: Einwilligung der Azubis (auch Minderjährige) und Auftragsverarbeitung, falls Soniox genutzt wird | offen, in Production bleibt der Schalter aus |
 | G8 | WMCNL-2887 (Blocked) | offen |
+| G9 | HAI-Gedächtnis (Schalter `HAI_MEMORY`) in Production: Die Speicherung von Lernstand und Schwächen ist eine Auswertung personenbezogener Leistungsdaten. Vor dem Produktivgang Abstimmung mit Datenschutz und Betriebsrat zu Zweck, Rechtsgrundlage, Aufbewahrung, Einsicht durch den User und Löschung (Einzelheiten in `docs/hai-gedaechtnis.md`, Abschnitt 8) | offen, in Production bleibt der Schalter aus. Das ist kein No-Go für den Plattform-Rollout: Die Migration legt nur leere Tabellen an |
 
 ## 2. Technisch vorbereitet (Claude)
 
 | Punkt | Ergebnis |
 |---|---|
-| Migrationsreihe | 42 Dateien von `20261023100000` bis `20261103000200`, Freigabetor am Backfill (`20261025000000`) |
+| Migrationsreihe | 43 Dateien von `20261023100000` bis `20261103000300`, Freigabetor am Backfill (`20261025000000`) |
 | Generalprobe Migrationen | 31.10.2026 auf Wegwerf-Container, längste Datei 2,4 Sekunden, Nachchecks N01 bis N09 wie erwartet, Rückbau erprobt |
 | Generalprobe Schritt 8 | App gegen die Kopie, Smoke S1 bis S6, siehe `docs/probelauf-2026-11-02.md` |
 | Lesende Messung Production | 02.11.2026 wiederholt (V01 bis V14): 3 Azubis, alle freigeschaltet, 8 Konten in `auth.users`, Ledger bereinigt (1 Zeile), keine unerwartete Abweichung zum 31.10.2026 |

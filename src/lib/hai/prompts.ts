@@ -16,6 +16,10 @@ import { sanitizePromptData } from '../prompt-sanitize';
 import { isTrainerSolutionChunk } from './trainerSolutions';
 import { buildLearningTechniquePrompt } from './learningTechniques/promptSection';
 import {
+  buildMemoryPromptSection,
+  type PromptMemory,
+} from './memory/promptSection';
+import {
   ACCESS_REASONS,
   DENIAL_MEANING,
   isAccessReasonKey,
@@ -88,6 +92,15 @@ export interface PromptContext {
    * never answer "no data" in general. Without it the prompt is unchanged.
    */
   dayBriefing?: boolean;
+  /**
+   * The memory of this turn (src/lib/hai/memory): the confirmed entries of the
+   * user in the ONE occupation of the turn and the approved shared entries. Adds
+   * the section "Gedächtnis" as the LAST part, after the occupation gate and
+   * every protection rule, marked as data and limited to style and emphasis. It
+   * never softens a rule. Without it (switch HAI_MEMORY off, nothing stored) the
+   * prompt is unchanged, byte for byte.
+   */
+  memory?: PromptMemory;
 }
 
 // ============================================================================
@@ -508,6 +521,14 @@ Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, a
   // learning and memorizing, for both pipelines, only when it applies
   if (context.learningTechniques) {
     parts.push(buildLearningTechniquePrompt(persona));
+  }
+
+  // Memory section: AFTER the persona gate, the separation of occupations, the
+  // solution protection and the borderline rules (all of them are above), data
+  // only, style and emphasis only. Empty without entries: the prompt stays as is.
+  const memorySection = buildMemoryPromptSection(context.memory);
+  if (memorySection) {
+    parts.push(memorySection);
   }
 
   return parts.join('\n\n');

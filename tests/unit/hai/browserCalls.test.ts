@@ -68,6 +68,8 @@ describe('browser calls to /api/hai', () => {
         // the organization switch of the voice assistant, read by the voice session
         'src/components/hai/voice-mode/useVoiceEnabled.ts',
         'src/lib/hai/quizMode/client.ts',
+        // the memory of the HAI: the card in the chat and the profile section
+        'src/lib/hai/memory/client.ts',
         // the voice providers: config, Soniox key, Sokrates recognition and speech
         'src/lib/hai/voice/client/deps.ts',
       ])
