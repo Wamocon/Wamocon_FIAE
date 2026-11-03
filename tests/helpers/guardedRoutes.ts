@@ -1295,6 +1295,8 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     guard: 'user',
     params: [],
   },
+  // warms up the way to Sokrates before a question (no content, limit per person)
+  { route: 'hai/voice/warmup', method: 'POST', guard: 'user', params: [] },
   {
     route: 'hai/voice/haus/transcribe',
     method: 'POST',
