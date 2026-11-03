@@ -69,6 +69,16 @@ const DAY_QUESTIONS = [
   'Kannst du mir sagen, was für mich ansteht?',
   'Was liegt denn bei mir an, bitte?',
   '  WAS STEHT FÜR MICH AN???  ',
+  // the two questions of the screenshot of 03.11.2026 (they ran through the
+  // knowledge search and waited for Sokrates) and their obvious variants
+  'Zeig mir, was ich gerade zu tun habe.',
+  'Hi, was habe ich heute für Aufgaben?',
+  'Zeig mir mal, was ich heute zu tun habe',
+  'Zeige mir, was ich diese Woche zu erledigen habe',
+  'Sag mir, was ich heute zu erledigen habe',
+  'Nenn mir bitte, was ich zu tun habe',
+  'Was habe ich diese Woche für Aufgaben?',
+  'Was habe ich an Terminen?',
   // the old fixed phrases still work
   'Guten Morgen, was steht heute an?',
   'Was steht heute an',
@@ -101,6 +111,12 @@ const KNOWLEDGE_QUESTIONS = [
   'Erkläre mir den Unterschied zwischen INNER JOIN und LEFT JOIN',
   'Was ist ein Primärschlüssel?',
   'Wie funktioniert eine Schleife?',
+  // the new patterns need the whole sentence: more words after the cue is a
+  // knowledge question
+  'Was habe ich für Aufgaben in Enabler 3?',
+  'Was habe ich an Aufgaben im Scrum?',
+  'Zeig mir, was ein JOIN macht',
+  'Zeig mir, was ich bei einem Join zu tun habe, damit er schnell ist',
 ];
 
 describe('isDayQuestion', () => {
