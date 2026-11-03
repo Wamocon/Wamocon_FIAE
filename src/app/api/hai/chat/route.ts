@@ -1107,7 +1107,17 @@ export async function POST(req: NextRequest) {
             if (result.errorKey) {
               controller.enqueue(
                 encoder.encode(
-                  `data: ${JSON.stringify({ error: result.errorKey })}\n\n`
+                  `data: ${JSON.stringify({
+                    error: result.errorKey,
+                    // MODEL_BUSY: the model is slow or overloaded, a retry may
+                    // work (code and seconds only, nothing internal)
+                    ...(result.errorCode
+                      ? {
+                          code: result.errorCode,
+                          retryAfterSec: result.retryAfterSec,
+                        }
+                      : {}),
+                  })}\n\n`
                 )
               );
               controller.enqueue(
@@ -1276,6 +1286,26 @@ export async function POST(req: NextRequest) {
     // No chat provider could answer: a clear error, nothing stored as an answer
     if (result.errorKey) {
       const lang = req.headers.get('x-language') || 'de';
+      // The model is slow or overloaded (timeout, 429, 502, 503, 504, 524):
+      // say that, with the code the client tests and when to try again
+      if (result.errorCode) {
+        return NextResponse.json(
+          {
+            error:
+              lang === 'en'
+                ? 'HAI is very busy right now and answers more slowly than usual. Please try again in a minute.'
+                : 'Die HAI ist gerade stark ausgelastet und antwortet langsamer als sonst. Bitte versuche es in einer Minute noch einmal.',
+            errorKey: result.errorKey,
+            code: result.errorCode,
+            retryAfterSec: result.retryAfterSec,
+            sessionId,
+          },
+          {
+            status: 503,
+            headers: { 'Retry-After': String(result.retryAfterSec ?? 30) },
+          }
+        );
+      }
       return NextResponse.json(
         {
           error:

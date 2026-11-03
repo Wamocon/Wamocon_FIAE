@@ -90,6 +90,12 @@ export interface SearchContext {
   results: SearchResult[];
   query: string;
   totalResults: number;
+  /**
+   * The search could not run (embedding provider not ready, embedding or
+   * database failed, time limit). Not the same as "nothing found": the turn
+   * goes on without knowledge search and says so (ragPipeline.ts).
+   */
+  unavailable?: boolean;
 }
 
 // ============================================================================
@@ -376,7 +382,7 @@ export async function searchWithContext(
     const embeddingProvider = getEmbeddingProvider();
     if (!embeddingProvider.isInitialized()) {
       console.error('HAI.ai: Embedding provider not initialized for search');
-      return { results: [], query, totalResults: 0 };
+      return { results: [], query, totalResults: 0, unavailable: true };
     }
     const queryEmbedding = await embeddingProvider.generateEmbedding(query);
     const cachedEmbeddingVector = JSON.stringify(queryEmbedding.embedding);
@@ -477,6 +483,7 @@ export async function searchWithContext(
       results: [],
       query,
       totalResults: 0,
+      unavailable: true,
     };
   }
 }

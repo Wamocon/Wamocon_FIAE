@@ -334,6 +334,9 @@ export function chatFailureKey(status: number, code?: unknown): string {
     return 'hai.denial.awaitingActivation';
   }
   if (status === 403) return 'hai.denial.forbidden';
+  // the model is slow or overloaded (the route's MODEL_BUSY), not a failure of
+  // the person's network and not a missing right: a retry may work
+  if (status === 503 && code === 'MODEL_BUSY') return 'hai.error.modelBusy';
   if (status === 429) return 'hai.denial.rateLimited';
   if (status === 400) return 'hai.denial.inputInvalid';
   return 'hai.error.somethingWrong';

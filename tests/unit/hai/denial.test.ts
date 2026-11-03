@@ -342,6 +342,15 @@ describe('the keys of the interface texts', () => {
     expect(chatFailureKey(403)).toBe('hai.denial.forbidden');
     expect(chatFailureKey(429, 'RATE_LIMITED')).toBe('hai.denial.rateLimited');
     expect(chatFailureKey(400)).toBe('hai.denial.inputInvalid');
+    // the model is slow or overloaded: its own message, not a missing right
+    // and not the general error
+    expect(chatFailureKey(503, 'MODEL_BUSY')).toBe('hai.error.modelBusy');
+    expect(chatFailureKey(503, 'SOMETHING_ELSE')).toBe(
+      'hai.error.somethingWrong'
+    );
+    expect(chatFailureKey(500, 'MODEL_BUSY')).toBe('hai.error.somethingWrong');
+    expect(typeof tDe['hai.error.modelBusy']).toBe('string');
+    expect(typeof tEn['hai.error.modelBusy']).toBe('string');
     // a failure of the server is never shown as a missing right
     for (const status of [500, 502, 503]) {
       expect(chatFailureKey(status)).toBe('hai.error.somethingWrong');

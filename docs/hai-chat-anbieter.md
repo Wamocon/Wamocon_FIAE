@@ -31,6 +31,7 @@ Auslöser des Fallbacks: jeder Fehler des Primäranbieters, bevor Text ausgegebe
 | `HAI_CHAT_FALLBACK` | `sokrates` oder `none`. Jeder andere Wert (auch `any`) wird zu `sokrates` verworfen | `sokrates` |
 | `OPENAI_COMPATIBLE_API_KEY` | Schlüssel von Sokrates, Typ Sensitive. Ohne ihn gibt es keinen Fallback | nicht gesetzt |
 | `OPENAI_COMPATIBLE_MODEL` | Modell bei Sokrates, Empfehlung `sokrates-fast` | `gpt-4o-mini` (existiert bei Sokrates nicht, deshalb setzen) |
+| `HAI_CHAT_FIRST_BYTE_TIMEOUT_MS` | Wartezeit bis zum ersten Zeichen der Antwort von Sokrates in Millisekunden, 15000 bis 150000. Alles andere (Text, Dezimalzahl, zu klein, zu groß) wird verworfen. Begründung: `docs/hai-geschwindigkeit.md`, Abschnitt 10.3 | `90000` |
 | `OPENAI_COMPATIBLE_BASE_URL` | Adresse von Sokrates | Sokrates (nicht setzen) |
 | `CONTENT_UPLOAD_KI_ALLOWED_HOSTS` | Positivliste der Sokrates-Hosts, gilt auch für den Fallback | nur der Host von Sokrates |
 
