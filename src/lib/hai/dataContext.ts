@@ -1227,6 +1227,9 @@ export async function fetchTrainerTraineeOverview(trainerId: string): Promise<Tr
 
         const idList = sql.join(trainees.map(t => sql`${t.id}`), sql`, `);
         const now = new Date();
+        // a raw query cannot bind a Date (postgres.js needs a column type): an ISO
+        // string cast to the type of the columns (timestamp, written as UTC)
+        const nowIso = now.toISOString();
 
         // Everything else in one query per fact, for all trainees at once
         const [progressRows, enrollmentRows, catalogRows, blockRows, pendingRows] =
@@ -1253,8 +1256,8 @@ export async function fetchTrainerTraineeOverview(trainerId: string): Promise<Tr
                     FROM ausbildung_blocks b
                     WHERE b.trainee_id IN (${idList})
                       AND b.block_type IN (${sql.join(OVERVIEW_BLOCK_TYPES.map(t => sql`${t}`), sql`, `)})
-                      AND b.start_date <= ${now}
-                      AND b.end_date >= ${now}
+                      AND b.start_date <= ${nowIso}::timestamp
+                      AND b.end_date >= ${nowIso}::timestamp
                     ORDER BY b.trainee_id, b.training_catalog_id, b.start_date DESC
                 `),
                 db.execute(sql`

@@ -225,6 +225,7 @@ function installDb(config: {
 }) {
   const queue = [...config.selects];
   const executed: string[] = [];
+  const executedParams: unknown[][] = [];
   const chain = (rows: Row[]) => {
     const c: Record<string, unknown> = {};
     for (const m of ['from', 'where', 'orderBy', 'limit']) c[m] = () => c;
@@ -234,8 +235,10 @@ function installDb(config: {
   const mock = db as unknown as Record<string, unknown>;
   mock.select = jest.fn(() => chain(queue.shift() ?? []));
   mock.execute = jest.fn(async (query: unknown) => {
-    const text = dialect.sqlToQuery(query as never).sql;
+    const built = dialect.sqlToQuery(query as never);
+    const text = built.sql;
     executed.push(text);
+    executedParams.push(built.params);
     if (config.failExecute) throw new Error('db down');
     if (text.includes('FROM course_members cm')) return config.progress ?? [];
     if (text.includes('FROM trainee_enrollments')) return config.enrollments ?? [];
@@ -244,7 +247,7 @@ function installDb(config: {
     if (text.includes('enabler_submissions')) return config.pending ?? [];
     return [];
   });
-  return { executed };
+  return { executed, executedParams };
 }
 
 const CATALOGS: Row[] = [
@@ -335,6 +338,14 @@ describe('fetchTrainerTraineeOverview', () => {
     expect(all).not.toContain('grade');
     // private appointments of a trainee are no block of the overview
     expect(all).toContain('b.block_type in');
+  });
+
+  it('binds no Date object into a raw query (postgres.js cannot bind one without a column type: found on a real Postgres)', async () => {
+    const { executedParams } = installDb({ selects: [makeTrainees(2)] });
+    await fetchTrainerTraineeOverview('trainer-1');
+    const flat = executedParams.flat();
+    expect(flat.length).toBeGreaterThan(0);
+    expect(flat.some(value => value instanceof Date)).toBe(false);
   });
 
   it('only the own active trainees are asked for (assigned trainer, role, active)', async () => {
