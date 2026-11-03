@@ -869,6 +869,8 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     setPhase('listening');
     try {
       rec.start();
+      // a provider that does not report the microphone: open as soon as it runs
+      if (!env.micSignal) setMicOpen(true);
     } catch {
       fail('failed');
     }

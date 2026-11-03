@@ -1336,6 +1336,7 @@
   "hai.voice.fallback.reason.network": "The connection to the service broke.",
   "hai.voice.fallback.reason.unavailable": "The service is not reachable right now.",
   "hai.voice.consent.live": "When Soniox listens, the microphone stays open for the whole conversation while the voice mode runs, also while the HAI answers. This way you can interrupt the HAI just by speaking. Your audio is sent to Soniox continuously during that time, and the browser shows the recording. Saying \"Stop\", Esc, closing the voice mode or leaving the page ends the recording at once, after a longer silence the microphone switches off by itself.",
+  "hai.voice.liveHint": "The microphone stays open while the voice mode runs. You can interrupt the HAI by just speaking.",
   "admin.hai.menu": "HAI voice assistant",
   "admin.hai.title": "HAI voice assistant",
   "admin.hai.subtitle": "Which provider listens and speaks, and what happens when it fails.",

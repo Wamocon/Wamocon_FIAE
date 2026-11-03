@@ -481,6 +481,7 @@ export function createVoiceEnv(options: ChainOptions): VoiceEnv {
   return {
     ...base,
     live: listenChain.includes('soniox'),
+    micSignal: true,
     async createRecognition() {
       const nextListening = nextOf(listenChain, failedListening);
       const rec = new ChainedRecognition(

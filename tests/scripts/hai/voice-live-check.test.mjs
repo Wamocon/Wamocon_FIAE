@@ -146,7 +146,14 @@ function fakeSocketClass(options = {}) {
 
 async function run(
   env,
-  { argv = [], fetchOptions, socketOptions, encodeWebm, endWaitMs = 20 } = {}
+  {
+    argv = [],
+    fetchOptions,
+    socketOptions,
+    encodeWebm,
+    endWaitMs = 20,
+    realtime = false,
+  } = {}
 ) {
   const fetchDouble = fakeFetch(fetchOptions);
   const socketDouble = fakeSocketClass(socketOptions);
@@ -158,6 +165,7 @@ async function run(
     WebSocketImpl: socketDouble.Class,
     write: line => lines.push(line),
     endWaitMs,
+    realtime,
     ...(encodeWebm ? { encodeWebm } : {}),
   });
   return {
@@ -502,7 +510,7 @@ test('--webm sends the recording as the browser does: container in slices, the c
   );
   assert.match(
     out,
-    /Soniox Browserweg \(webm\/opus, Endpunkterkennung\)\s+bestanden\s+7 Stücke \(5 KB\), erstes Wort nach [\d,]+ s, Endpunkt [\d,]+ s nach dem letzten Stück, erkannt "Was ist ein Primärschlüssel\?"/
+    /Soniox Browserweg \(webm\/opus, Endpunkterkennung\)\s+bestanden\s+7 Stücke \(5 KB\), erstes Wort nach [\d,]+ s, Endpunkt [\d,]+ s nach dem Ende der Sprache, erkannt "Was ist ein Primärschlüssel\?"/
   );
   assert.match(
     out,
@@ -726,4 +734,22 @@ test('ffmpeg that is not installed gives null, one that fails gives an error', a
     throw new Error('spawn failed');
   };
   assert.equal(await encodeWebmWithFfmpeg(Buffer.alloc(1), throwing), null);
+});
+
+test('--webm in real time: the slices are paced over the length of the recording, like the browser', async () => {
+  const started = Date.now();
+  const { rows, out } = await run(SONIOX_ENV, {
+    argv: WEBM,
+    encodeWebm: fakeEncode,
+    socketOptions: WEBM_SOCKETS,
+    realtime: true,
+  });
+  const elapsed = Date.now() - started;
+  const probe = rows.find(r => r.check.includes('Browserweg'));
+  assert.equal(probe.outcome, 'ok', out);
+  // 1,5 s of speech and 1,5 s of silence, the endpoint comes after the third slice of seven,
+  // so about 1,3 s are spent pacing (and not poured in at once)
+  assert.ok(elapsed > 1_000, `elapsed ${elapsed} ms`);
+  // the endpoint came early: not all seven slices were needed
+  assert.match(probe.detail, /^[1-7] Stücke/);
 });

@@ -1342,6 +1342,7 @@
   "hai.voice.fallback.reason.network": "Die Verbindung zum Dienst ist abgebrochen.",
   "hai.voice.fallback.reason.unavailable": "Der Dienst ist gerade nicht erreichbar.",
   "hai.voice.consent.live": "Hört Soniox zu, bleibt das Mikrofon, solange der Sprachmodus läuft, für das ganze Gespräch geöffnet, auch während die HAI antwortet. So können Sie die HAI unterbrechen, indem Sie einfach sprechen. Ihr Ton wird in dieser Zeit laufend an Soniox gesendet, der Browser zeigt die Aufnahme an. Mit „Stopp“, Esc, dem Schließen des Sprachmodus oder dem Verlassen der Seite endet die Aufnahme sofort, nach längerer Stille schaltet sich das Mikrofon von selbst ab.",
+  "hai.voice.liveHint": "Das Mikrofon bleibt offen, solange der Sprachmodus läuft. Sie können die HAI unterbrechen, indem Sie einfach sprechen.",
   "admin.hai.menu": "HAI Sprachassistent",
   "admin.hai.title": "HAI Sprachassistent",
   "admin.hai.subtitle": "Welcher Anbieter zuhört und spricht, und was passiert, wenn er ausfällt.",

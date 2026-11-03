@@ -130,6 +130,8 @@ function makeEnv(
       prefetched.push(purpose);
     },
     ...(options.live === false ? {} : { live: true }),
+    // like the cloud providers: the microphone is reported by the recognition itself
+    micSignal: true,
   };
   return {
     env,

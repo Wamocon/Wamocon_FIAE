@@ -32,6 +32,7 @@ import { Hand, Info, Mic, MicOff, Subtitles, X } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { consentParagraphs } from '@/lib/hai/voice/consentText';
 import { HaiNavigationCard } from '../HaiNavigationCard';
+import { HaiVoiceFallbackNotice } from '../HaiVoiceFallbackNotice';
 import type { VoiceError, VoicePhase } from '../useHaiVoice';
 import { DIVE_MS, HaiCharacter, type CharacterState } from './HaiCharacter';
 import { providerStatement } from './providerStatement';
@@ -188,7 +189,16 @@ function LiveFigure() {
 
   const state = stateOf(voice.phase, voice.error, muted);
   const activity = useRecentChange(voice.interim, 800);
-  const status = muted ? t('hai.voiceMode.state.muted') : t(STATE_KEY[state]);
+  // listening is only announced when the microphone is really open
+  const preparing = !muted && state === 'listening' && !voice.micOpen;
+  const status = muted
+    ? t('hai.voiceMode.state.muted')
+    : preparing
+      ? t('hai.voice.phase.preparing')
+      : t(STATE_KEY[state]);
+  // live mode: the microphone stays open while the HAI thinks and speaks (interrupting by voice)
+  const micOpenWhileAnswering =
+    !muted && voice.micOpen && (state === 'thinking' || state === 'speaking');
 
   // what the person said stays above the answer until the next round
   const heard =
@@ -352,6 +362,7 @@ function LiveFigure() {
               className="pointer-events-auto space-y-1 rounded-xl bg-[#06183a]/95 p-3 text-xs leading-snug text-gray-200 shadow-lg"
             >
               <p>{t('hai.voiceMode.hint')}</p>
+              {voice.live && <p>{t('hai.voice.liveHint')}</p>}
               <p>{providerStatement(voice, t)}</p>
             </div>
           )}
@@ -365,6 +376,19 @@ function LiveFigure() {
             >
               {status}
             </p>
+            {micOpenWhileAnswering && (
+              <p
+                data-testid="hai-voice-mic-open"
+                className="rounded-full bg-[#06183a]/90 px-2.5 py-1 text-xs text-cyan-100 shadow"
+              >
+                {t('hai.voice.micOpen')}
+              </p>
+            )}
+            {/* a function that runs on another provider than planned, and why */}
+            <HaiVoiceFallbackNotice
+              fallback={voice.fallback}
+              className="pointer-events-auto max-w-full rounded-lg bg-[#06183a]/95 px-2.5 py-1.5 text-xs text-amber-300 shadow"
+            />
             {errorText && (
               <p
                 role="alert"
@@ -391,9 +415,10 @@ function LiveFigure() {
                 }
                 data-testid="hai-voice-mic"
                 data-muted={muted ? 'true' : 'false'}
+                data-mic-open={voice.micOpen && !muted ? 'true' : 'false'}
                 data-autofocus={needsConsent ? undefined : ''}
                 disabled={needsConsent}
-                className={`${BUTTON} ${muted ? BUTTON_OFF : BUTTON_ON} disabled:opacity-50`}
+                className={`${BUTTON} ${muted ? BUTTON_OFF : BUTTON_ON} ${voice.micOpen && !muted ? 'animate-pulse' : ''} disabled:opacity-50`}
               >
                 {muted ? (
                   <MicOff className="h-5 w-5" aria-hidden="true" />

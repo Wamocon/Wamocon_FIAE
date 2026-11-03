@@ -119,6 +119,12 @@ export interface VoiceEnv {
   prefetch?(purpose: 'stt' | 'stt-live' | 'tts' | 'server'): void;
   /** The recognition of this environment can stay open over several utterances (live mode). */
   live?: boolean;
+  /**
+   * The recognitions of this environment report `onaudiostart` when the microphone is
+   * really open (the cloud providers do). Without it the loop counts the microphone as
+   * open as soon as the recognition started.
+   */
+  micSignal?: boolean;
 }
 
 /** What GET /api/hai/voice/config answers. */

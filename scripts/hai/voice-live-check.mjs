@@ -650,6 +650,9 @@ export function encodeWebmWithFfmpeg(pcm, spawnImpl = spawn) {
   });
 }
 
+/** Length of 24 kHz mono 16 bit PCM in milliseconds. */
+const pcmMs = pcm => (pcm.length / 2 / TTS_SAMPLE_RATE) * 1000;
+
 /** The speech with a pause at the end, as 16 bit PCM. */
 function withSilence(pcm) {
   return Buffer.concat([
@@ -669,6 +672,7 @@ async function sonioxRecognizeWebm(deps, grant, webm, options = {}) {
   let firstMs = null;
   let endpointMs = null;
   let lastSentAt = started;
+  let sendStart = started;
   let slices = 0;
   let ended = false;
   await socketRound(
@@ -677,34 +681,56 @@ async function sonioxRecognizeWebm(deps, grant, webm, options = {}) {
     socket => {
       // exactly what the browser sends: the config of the app, no change
       socket.send(JSON.stringify(grant.config));
-      const limit = options.maxSlices ?? Infinity;
-      for (
-        let at = 0;
-        at < webm.length && slices < limit;
-        at += WEBM_SLICE_BYTES
-      ) {
-        socket.send(webm.subarray(at, at + WEBM_SLICE_BYTES));
-        slices += 1;
-      }
-      lastSentAt = deps.now();
-      if (options.endAfterSend) {
-        ended = true;
-        socket.send('');
-        return;
-      }
-      setTimeout(() => {
-        if (!ended) {
-          ended = true;
-          socket.send('');
+      sendStart = deps.now();
+      const total = Math.ceil(webm.length / WEBM_SLICE_BYTES);
+      const count = Math.min(total, options.maxSlices ?? total);
+      // the browser sends in real time: the endpoint detection works on the audio
+      // that arrives, a recording poured in at once would measure nothing
+      const gap =
+        deps.realtime && options.audioMs && !options.endAfterSend
+          ? options.audioMs / total
+          : 0;
+      const sendAll = async () => {
+        try {
+          for (let i = 0; i < count; i += 1) {
+            if (ended) return;
+            socket.send(
+              webm.subarray(i * WEBM_SLICE_BYTES, (i + 1) * WEBM_SLICE_BYTES)
+            );
+            slices += 1;
+            if (gap > 0) await new Promise(resolve => setTimeout(resolve, gap));
+          }
+          lastSentAt = deps.now();
+          if (options.endAfterSend) {
+            ended = true;
+            socket.send('');
+            return;
+          }
+          setTimeout(() => {
+            if (!ended) {
+              ended = true;
+              socket.send('');
+            }
+          }, deps.endWaitMs);
+        } catch {
+          // the connection ended while sending: socketRound reports it
         }
-      }, deps.endWaitMs);
+      };
+      void sendAll();
     },
     (message, done, socket) => {
       if (Array.isArray(message.tokens)) {
         for (const token of message.tokens) {
           if (typeof token?.text !== 'string') continue;
           if (token.text === '<end>') {
-            if (endpointMs === null) endpointMs = deps.now() - lastSentAt;
+            if (endpointMs === null) {
+              // from the end of the speech (the silence after it is what is detected)
+              const speechEnd =
+                deps.realtime && options.speechMs
+                  ? sendStart + options.speechMs
+                  : lastSentAt;
+              endpointMs = Math.max(0, deps.now() - speechEnd);
+            }
             if (!ended) {
               ended = true;
               socket.send('');
@@ -860,12 +886,15 @@ async function checkSonioxWebm(deps) {
     return rows;
   }
   try {
-    const heard = await sonioxRecognizeWebm(deps, grant, webm);
+    const heard = await sonioxRecognizeWebm(deps, grant, webm, {
+      audioMs: pcmMs(withSilence(probe.pcm)),
+      speechMs: pcmMs(probe.pcm),
+    });
     const outcome = recognitionRow(CHECK, heard.text, heard.ms);
     const endpoint =
       heard.endpointMs === null
         ? 'kein Endpunkt gemeldet'
-        : `Endpunkt ${seconds(heard.endpointMs)} nach dem letzten Stück`;
+        : `Endpunkt ${seconds(heard.endpointMs)} nach dem Ende der Sprache`;
     const first =
       heard.firstMs === null
         ? 'kein Wort'
@@ -970,6 +999,7 @@ export async function runVoiceCheck({
   now = () => performance.now(),
   encodeWebm = encodeWebmWithFfmpeg,
   endWaitMs = END_WAIT_MS,
+  realtime = true,
 } = {}) {
   const parsed = parseArgs(argv);
   if ('error' in parsed) {
@@ -993,6 +1023,7 @@ export async function runVoiceCheck({
     secrets,
     encodeWebm,
     endWaitMs,
+    realtime,
     probe: null,
   };
   const rows = [];
