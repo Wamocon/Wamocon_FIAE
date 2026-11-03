@@ -1394,6 +1394,7 @@
   "hai.button.close": "Close",
   "hai.button.open": "Open HAI",
   "hai.button.askHai": "Ask HAI",
+  "hai.panel.label": "HAI chat",
   "hai.loading.thinking": "HAI is thinking...",
   "hai.loading.thinking1": "Thinking",
   "hai.loading.thinking2": "Sorting knowledge",

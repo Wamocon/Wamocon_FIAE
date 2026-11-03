@@ -74,7 +74,7 @@ export function MainLayout({
     () => (
       <div className="from-background relative flex h-screen bg-gradient-to-br via-red-900/20 to-red-800/30">
         {/* Sidebar + hover edge wrapper */}
-        <div className="group relative z-40">
+        <div className="group relative z-[41]">
           {/* Hover edge to reveal sidebar when hidden (desktop only) */}
           <div
             className="absolute top-0 left-0 hidden h-full w-2 lg:block"

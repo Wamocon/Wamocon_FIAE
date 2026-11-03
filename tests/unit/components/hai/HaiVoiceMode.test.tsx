@@ -364,6 +364,26 @@ describe('the button "Gespräch"', () => {
 });
 
 describe('opening and ending the voice mode', () => {
+  it('starts from the chat panel at the left: the panel stays, the figure stands at the place of the symbol (right of the panel)', async () => {
+    routes();
+    await mount();
+    const panel = screen.getByTestId('hai-chat-panel');
+    expect(panel.getAttribute('data-side')).toBe('left');
+    await openVoiceMode();
+    // a wide screen: the panel stays open at its side
+    expect(screen.getByTestId('hai-chat-panel')).toBe(panel);
+    // the figure shares the anchor of the symbol: bottom left, moved by the panel
+    const root = figure()!;
+    expect(root.className).toContain('bottom-4');
+    expect(root.className).toContain('left-4');
+    expect(root.className).toContain('md:translate-x-[420px]');
+    expect(root.className).not.toMatch(/(^|\s)(sm:)?right-/);
+    // the pond is as wide as the grown symbol (the symbol scales by 2 and 2.8)
+    expect(screen.getByTestId('hai-voice-figure-body').className).toContain(
+      'sm:w-56'
+    );
+  });
+
   it('opens the HAI figure at the bottom left: no dialog, no full screen, the state as text', async () => {
     routes();
     const { browser } = await mount();

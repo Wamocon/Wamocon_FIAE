@@ -1,16 +1,22 @@
 'use client';
 
 /**
- * The HAI as a figure: a friendly cartoon shark with a head, arms, hands, a
- * body and legs, standing with its feet in a round basin of water (the round
- * water of the HAI logo). It rises out of the water when the voice mode starts,
- * speaks with a moving mouth, and dives back in when the mode ends.
+ * The HAI as a figure: the chubby shark of the HAI symbol (the pixel shark in
+ * public/images/shark-new.gif) with a head, arms, hands, a body and legs, its
+ * feet in the water of the symbol. It rises out of the water when the voice mode
+ * starts, speaks with a moving mouth, and dives back in when the mode ends.
  *
- * Everything is one SVG (viewBox 260 x 300) drawn in the colors of the logo
- * (dark blue and turquoise). The figure is drawn twice: once above the water
- * line and once below it, clipped to the water, so the feet stay visible under
- * the surface (tinted and gently wobbling) while the basin hides what is under
- * the rim. Only `transform` and `opacity` are animated (globals.css).
+ * The look is that of the symbol: the same eight colors (read from the GIF, see
+ * globals.css), a black outline, a gray-blue back with a white front (face and
+ * belly), dark block eyes, a dash for a closed mouth, a dark red mouth with two
+ * small teeth when it is open, a gray-blue dorsal fin and thin rings in the
+ * water. The pond itself is the round symbol (HaiButton), grown: this SVG draws
+ * only the water in it (rings, waves) and the figure.
+ *
+ * Everything is one SVG (viewBox 260 x 300). The figure is drawn twice: once
+ * above the water line and once below it, clipped to the water, so the feet stay
+ * visible under the surface (dark, gently wobbling). Only `transform` and
+ * `opacity` are animated (globals.css).
  *
  * The look of each state is carried by data attributes on the root, CSS does
  * the rest, so the tests (and the stylesheet) read the same names:
@@ -158,12 +164,12 @@ function Arm({ side }: { side: 'left' | 'right' }) {
 
 function Mouths() {
   return (
-    <g className="hf-mouths">
+    <g className="hf-mouths" transform="translate(4 0)">
       <path
         className="hf-mouth hf-mouth-closed"
-        d="M113 90 Q130 99 147 90"
+        d="M113 91 Q130 94.5 147 91"
         fill="none"
-        strokeWidth="3.2"
+        strokeWidth="3.4"
         strokeLinecap="round"
       />
       <g className="hf-mouth hf-mouth-half">
@@ -173,7 +179,7 @@ function Mouths() {
         />
         <path
           className="hf-teeth"
-          d="M118 90.2 Q130 93 142 90.2 L141.5 93 Q130 95.6 118.5 93 Z"
+          d="M118.5 90.2 h5.5 v3.4 h-5.5 Z M136 90.2 h5.5 v3.4 h-5.5 Z"
         />
       </g>
       <g className="hf-mouth hf-mouth-open">
@@ -183,9 +189,8 @@ function Mouths() {
         />
         <path
           className="hf-teeth"
-          d="M113 88.4 Q130 92.4 147 88.4 L146 93.6 Q130 97.6 114 93.6 Z"
+          d="M113.5 88.6 h7 v4.6 h-7 Z M139.5 88.6 h7 v4.6 h-7 Z"
         />
-        <ellipse className="hf-tongue" cx="130" cy="105" rx="11" ry="5" />
       </g>
       <g className="hf-mouth hf-mouth-round">
         <ellipse
@@ -195,7 +200,6 @@ function Mouths() {
           rx="8.5"
           ry="10"
         />
-        <ellipse className="hf-tongue" cx="130" cy="102" rx="5" ry="3.4" />
       </g>
     </g>
   );
@@ -204,15 +208,26 @@ function Mouths() {
 function Eye({ x }: { x: number }) {
   return (
     <g data-eye="">
-      <ellipse className="hf-eye-white" cx={x} cy="66" rx="12" ry="14" />
       <g className="hf-pupil">
-        <ellipse className="hf-pupil-shape" cx={x} cy="68" rx="6.4" ry="8" />
-        <circle className="hf-eye-shine" cx={x + 2.4} cy="64" r="2.4" />
+        <rect
+          className="hf-pupil-shape"
+          x={x - 3.8}
+          y="59"
+          width="7.6"
+          height="16"
+          rx="2"
+        />
       </g>
-      <ellipse className="hf-lid" cx={x} cy="66" rx="13" ry="15" />
     </g>
   );
 }
+
+// Head and body are one chubby dome like the pixel shark of the symbol: first
+// both outlines, then both fills, so there is no seam between head and body.
+const HEAD_D =
+  'M76 78 C76 46 100 32 130 32 C160 32 184 46 184 78 C184 102 162 114 130 114 C98 114 76 102 76 78 Z';
+const BODY_D =
+  'M80 100 C74 134 74 170 82 200 C96 214 164 214 178 200 C186 170 186 134 180 100 C160 112 100 112 80 100 Z';
 
 /** The whole figure. Drawn twice (above and below the water line). */
 function Figure() {
@@ -221,18 +236,18 @@ function Figure() {
       {/* tail fin behind the body */}
       <path
         className="hf-fin"
-        d="M168 178 C186 170 202 176 208 192 C194 190 184 196 174 206 Z"
+        d="M174 198 C192 190 206 196 212 210 C198 208 188 214 180 222 Z"
       />
-      {/* legs and feet */}
+      {/* legs and feet: short and stubby */}
       <g className="hf-legs" data-part="legs">
         <path
           className="hf-outline"
-          d="M112 184 C110 214 108 238 108 258"
+          d="M112 206 C110 228 108 242 108 258"
           strokeWidth="31"
         />
         <path
           className="hf-outline"
-          d="M148 184 C150 214 152 238 152 258"
+          d="M148 206 C150 228 152 242 152 258"
           strokeWidth="31"
         />
         <path
@@ -245,12 +260,12 @@ function Figure() {
         />
         <path
           className="hf-limb"
-          d="M112 184 C110 214 108 238 108 258"
+          d="M112 206 C110 228 108 242 108 258"
           strokeWidth="25"
         />
         <path
           className="hf-limb"
-          d="M148 184 C150 214 152 238 152 258"
+          d="M148 206 C150 228 152 242 152 258"
           strokeWidth="25"
         />
         <path
@@ -259,15 +274,17 @@ function Figure() {
           strokeWidth="1.6"
         />
       </g>
-      {/* body */}
-      <path
-        className="hf-body"
-        d="M90 108 C80 130 78 162 86 190 C98 202 162 202 174 190 C182 162 180 130 170 108 C156 116 104 116 90 108 Z"
-      />
-      <ellipse className="hf-belly" cx="130" cy="154" rx="29" ry="39" />
+      {/* outline of the whole dome (the head part turns with the head) */}
+      <path className="hf-sil" d={BODY_D} />
+      <g className="hf-head">
+        <path className="hf-sil" d={HEAD_D} />
+      </g>
+      {/* body: gray back and sides, white front */}
+      <path className="hf-body" d={BODY_D} />
+      <ellipse className="hf-belly" cx="134" cy="160" rx="38" ry="50" />
       <path
         className="hf-gills"
-        d="M92 132 l-6 7 M94 143 l-6 7 M96 154 l-6 7 M168 132 l6 7 M166 143 l6 7 M164 154 l6 7"
+        d="M84 134 l-6 7 M85 146 l-6 7 M86 158 l-6 7 M176 134 l6 7 M175 146 l6 7 M174 158 l6 7"
         strokeWidth="2.2"
       />
       {/* arms in front of the body */}
@@ -277,28 +294,25 @@ function Figure() {
       <g className="hf-head">
         <path
           className="hf-fin"
-          d="M114 40 C116 24 126 12 146 4 C140 18 142 30 146 42 Z"
+          d="M114 42 C116 26 126 12 146 4 C140 18 142 30 146 44 Z"
         />
+        <path className="hf-body" d={HEAD_D} />
         <path
-          className="hf-body"
-          d="M80 76 C80 46 102 34 130 34 C158 34 180 46 180 76 C180 100 160 112 130 112 C100 112 80 100 80 76 Z"
+          className="hf-face"
+          d="M92 80 C92 56 110 44 134 44 C160 44 178 56 178 80 C178 100 160 108 134 108 C108 108 92 100 92 80 Z"
         />
-        <circle className="hf-cheek" cx="96" cy="88" r="6.5" />
-        <circle className="hf-cheek" cx="164" cy="88" r="6.5" />
-        <Eye x={108} />
-        <Eye x={152} />
+        <Eye x={112} />
+        <Eye x={156} />
         <path
           className="hf-brow hf-brow-left"
-          d="M97 47 Q108 42 119 47"
+          d="M101 52 Q111 47 121 52"
           strokeWidth="3"
         />
         <path
           className="hf-brow hf-brow-right"
-          d="M141 47 Q152 42 163 47"
+          d="M147 52 Q157 47 167 52"
           strokeWidth="3"
         />
-        <circle className="hf-nostril" cx="124" cy="80" r="1.6" />
-        <circle className="hf-nostril" cx="136" cy="80" r="1.6" />
         <Mouths />
       </g>
     </g>
@@ -382,33 +396,11 @@ export function HaiCharacter({
           <clipPath id={under} clipPath={`url(#${surface})`}>
             <rect x="0" y="248" width="260" height="60" />
           </clipPath>
-          <linearGradient id={`${uid}-wall`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#0e7490" />
-            <stop offset="1" stopColor="#0a3a5c" />
-          </linearGradient>
-          <radialGradient id={`${uid}-water`} cx="0.5" cy="0.35" r="0.8">
-            <stop offset="0" stopColor="#67e8f9" />
-            <stop offset="0.6" stopColor="#22b5d6" />
-            <stop offset="1" stopColor="#1670b8" />
-          </radialGradient>
         </defs>
 
-        {/* the basin: floor shadow, glass wall, rim, water */}
-        <ellipse className="hf-shadow" cx="130" cy="292" rx="112" ry="9" />
-        <path
-          className="hf-wall"
-          fill={`url(#${uid}-wall)`}
-          d="M14 246 V262 A116 32 0 0 0 246 262 V246 Z"
-        />
-        <ellipse className="hf-rim" cx="130" cy="246" rx="116" ry="32" />
-        <ellipse
-          className="hf-water"
-          fill={`url(#${uid}-water)`}
-          cx="130"
-          cy="248"
-          rx="104"
-          ry="27"
-        />
+        {/* the water of the symbol: thin rings, like the pixel pond */}
+        <ellipse className="hf-rim" cx="130" cy="248" rx="108" ry="29" />
+        <ellipse className="hf-water" cx="130" cy="248" rx="104" ry="27" />
         <ellipse className="hf-warn" cx="130" cy="248" rx="104" ry="27" />
 
         {/* ripples that spread from the legs when the HAI listens or speaks */}
@@ -511,12 +503,6 @@ export function HaiCharacter({
             style={{ '--dx': '54px', '--dy': '-38px' } as React.CSSProperties}
           />
         </g>
-
-        {/* the front rim and edge of the glass, over everything */}
-        <path
-          className="hf-edge"
-          d="M14 246 A116 32 0 0 0 246 246 M14 246 V262 A116 32 0 0 0 246 262 V246"
-        />
       </svg>
     </div>
   );

@@ -3,13 +3,17 @@
 /**
  * HAI Chat Interface
  *
- * Master component that handles both Widget and Full-Screen modes.
- * Implements modern "Glass & Gradient" aesthetic.
+ * Master component that handles the side panel (slides in from the left, the
+ * HAI symbol is its handle) and the Full-Screen mode.
  */
 
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useHai } from './HaiProvider';
+import { HAI_HEADER_OFFSET_CLASS, HAI_PANEL_ID } from './haiLayout';
+import { useOptionalSidebar } from '@/contexts/SidebarContext';
+import { useOptionalHaiVoiceSession } from './voice-mode/voiceSessionContext';
+import { usePrefersReducedMotion } from './voice-mode/usePrefersReducedMotion';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { HaiMessage } from './HaiMessage';
 import { HaiSessionList } from './HaiSessionList';
@@ -37,17 +41,32 @@ export function HaiChat() {
 
   return (
     <AnimatePresence mode="wait">
-      {viewMode === 'widget' && <ChatWidget key="widget" />}
+      {viewMode === 'widget' && <ChatPanel key="panel" />}
       {viewMode === 'full' && <ChatFull key="full" />}
     </AnimatePresence>
   );
 }
 
 // ============================================================================
-// WIDGET VIEW (Floating Popover)
+// SIDE PANEL (slides in from the left, the HAI symbol is its handle)
 // ============================================================================
 
-function ChatWidget() {
+/** Moves the focus back to the HAI symbol (the handle of the panel). */
+function focusHandle() {
+  document
+    .querySelector<HTMLElement>('[data-hai-handle]')
+    ?.focus({ preventScroll: true });
+}
+
+/**
+ * The text chat as a panel at the left edge of the page, next to the main
+ * navigation (never over it). It is an overlay: the page behind does not move,
+ * is not darkened and stays usable, so there is no focus trap and no modal. The
+ * focus goes to the input when it opens and back to the HAI symbol when it
+ * closes (symbol, close button, Esc). Only `transform` is animated; with reduced
+ * motion the panel appears and disappears without moving.
+ */
+function ChatPanel() {
   const { t } = useLanguage();
   const {
     setViewMode,
@@ -56,12 +75,64 @@ function ChatWidget() {
     stopGeneration,
     isLoading,
     streamingMessageId,
-    context,
   } = useHai();
 
   const quizActive = useHaiQuizMode().active;
+  const reduced = usePrefersReducedMotion();
+  const sidebar = useOptionalSidebar();
+  const voiceSession = useOptionalHaiVoiceSession();
+  const voiceOpen = !!voiceSession && voiceSession.view !== 'closed';
+  const voiceOpenRef = useRef(false);
+  voiceOpenRef.current = voiceOpen;
+
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+
+  // the focus jumps into the input when the panel opens
+  useEffect(() => {
+    inputRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  // The pond of the voice mode sits right of the panel (the symbol rides on its
+  // edge). Below lg there is no room for the pond and its speech bubble next to
+  // the panel, so the panel gives way (the chat shows everything afterwards).
+  useEffect(() => {
+    if (!voiceOpen) return;
+    if (
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(max-width: 1023px)').matches
+    ) {
+      setViewMode('hidden');
+    }
+  }, [voiceOpen, setViewMode]);
+
+  const closePanel = () => {
+    setViewMode('hidden');
+    focusHandle();
+  };
+
+  // Esc closes the panel (not while the voice mode is open: Esc ends that first,
+  // and not when the focus is somewhere else on the page, e.g. in a dialog)
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (voiceOpenRef.current) return;
+      const active = document.activeElement;
+      const inside =
+        !active ||
+        active === document.body ||
+        !!panelRef.current?.contains(active) ||
+        active.hasAttribute('data-hai-handle');
+      if (!inside) return;
+      event.preventDefault();
+      setViewMode('hidden');
+      focusHandle();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [setViewMode]);
 
   // Only auto-scroll when new messages are added (not on edits in the middle)
   useEffect(() => {
@@ -83,15 +154,29 @@ function ChatWidget() {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 20, scale: 0.95 }}
-      transition={{ duration: 0.2 }}
-      className="fixed right-6 bottom-24 z-50 flex h-[600px] max-h-[80vh] w-[400px] max-w-[calc(100vw-48px)] flex-col rounded-2xl border border-cyan-500/30 bg-[#0f1117] text-gray-100 shadow-2xl shadow-cyan-950/50"
+    <motion.aside
+      ref={panelRef}
+      id={HAI_PANEL_ID}
+      aria-label={t('hai.panel.label')}
+      data-testid="hai-chat-panel"
+      data-side="left"
+      initial={{ x: '-100%' }}
+      animate={{ x: 0 }}
+      exit={{ x: '-100%' }}
+      transition={{
+        duration: reduced ? 0 : 0.28,
+        ease: [0.32, 0.72, 0, 1],
+      }}
+      // Left edge, under the page header (top-16) and next to the navigation
+      // (lg:left-72 when it is kept open, the navigation is z-41 and wins).
+      // Phone: full width as a sheet that leaves a strip below for the symbol.
+      // z-40 like the symbol, under viewers and dialogs (z-50). No backdrop.
+      className={`${HAI_HEADER_OFFSET_CLASS} fixed bottom-24 left-0 z-40 flex w-full flex-col rounded-b-2xl border-r border-cyan-500/30 bg-[#0f1117] text-gray-100 shadow-2xl shadow-cyan-950/50 md:bottom-0 md:w-[420px] md:rounded-none ${
+        sidebar?.isOpen ? 'lg:left-72' : ''
+      }`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between rounded-t-2xl border-b border-white/10 bg-[#161b22] px-4 py-3">
+      <div className="flex items-center justify-between border-b border-white/10 bg-[#161b22] px-4 py-3">
         <div className="flex items-center gap-3">
           <HaiLogoInline />
           <span className="rounded-full bg-cyan-500 px-2 py-0.5 text-[10px] font-bold text-black">
@@ -111,7 +196,7 @@ function ChatWidget() {
             <Maximize2 className="h-5 w-5" />
           </button>
           <button
-            onClick={() => setViewMode('hidden')}
+            onClick={closePanel}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
             aria-label={t('common.close')}
             title={t('common.close')}
@@ -123,7 +208,7 @@ function ChatWidget() {
 
       {/* Messages */}
       <div
-        className={`flex-1 space-y-4 bg-[#0f1117] p-4 ${messages.length === 0 && !quizActive ? 'overflow-visible' : 'overflow-y-auto'}`}
+        className={`min-h-0 flex-1 space-y-4 bg-[#0f1117] p-4 ${messages.length === 0 && !quizActive ? 'overflow-visible' : 'overflow-y-auto'}`}
       >
         {messages.length === 0 ? (
           <EmptyState />
@@ -145,10 +230,11 @@ function ChatWidget() {
       </div>
 
       {/* Input */}
-      <div className="rounded-b-2xl border-t border-white/10 bg-[#161b22] p-3">
+      <div className="rounded-b-2xl border-t border-white/10 bg-[#161b22] p-3 md:rounded-none">
         <HaiVoiceControl />
         <div className="relative">
           <textarea
+            ref={inputRef}
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={e => {
@@ -183,7 +269,7 @@ function ChatWidget() {
           )}
         </div>
       </div>
-    </motion.div>
+    </motion.aside>
   );
 }
 
