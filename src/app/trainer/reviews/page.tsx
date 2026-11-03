@@ -25,6 +25,8 @@ import {
 import { useSearchParams } from 'next/navigation';
 import { FlipbookViewer } from '@/components/ui/FlipbookViewer';
 import { SubmissionFileLink } from '@/components/trainer/SubmissionFileLink';
+import { ConfirmDialog } from '@/components/admin/content-upload/ConfirmDialog';
+import { countLabel } from '@/lib/i18n/count-label';
 import { isQuizPassed } from '@/lib/catalog/progression';
 import { viewerSubtitle } from '@/lib/documentTypeLabel';
 import {
@@ -38,6 +40,9 @@ import {
   clearReviewListState,
 } from '@/lib/trainer/review-list-state';
 import {
+  BULK_REVIEW_MAX,
+  COURSE_GLOBAL,
+  courseFilterValue,
   REVIEWS_MAX_PAGE_SIZE,
   REVIEWS_PAGE_SIZE,
   type ReviewStatusFilter,
@@ -90,7 +95,10 @@ type Filters = {
   status: ReviewStatusFilter;
   quizType: 'all' | 'LESSON' | 'GLOBAL';
   search: string;
+  /** 'all', 'global' or the id of a course (Fragenkomplex), WMCNL-3001 */
+  course: string;
 };
+type CourseOption = { id: string; title: string };
 
 const TABS: readonly Tab[] = ['enablers', 'usecases', 'quizzes'];
 const STATUS_FILTERS: readonly ReviewStatusFilter[] = [
@@ -115,6 +123,11 @@ function filterFromParams(
   if (onlyPending === 'true') return 'pending';
   if (onlyPending === 'false') return 'all';
   return null;
+}
+
+/** The course filter named in the address: 'global', a course id, else 'all'. */
+function courseFromParam(value: string | null): string {
+  return courseFilterValue(value) ?? 'all';
 }
 
 /** The element of the page that scrolls (the layout scrolls inside a box, not the window). */
@@ -149,6 +162,7 @@ export default function TrainerReviewsPage() {
   const viewParam = searchParams.get('view'); // 'enablers' | 'usecases' | 'quizzes'
   const statusParam = searchParams.get('status'); // pending | all | approved | rejected
   const onlyPendingParam = searchParams.get('onlyPending'); // 'true' | 'false' (links of the dashboard)
+  const courseParam = searchParams.get('course'); // 'global' | course id (quiz list)
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState(false);
@@ -190,6 +204,19 @@ export default function TrainerReviewsPage() {
   >('all');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  // The course (Fragenkomplex) of the quiz list, kept in the address
+  const [courseFilter, setCourseFilter] = useState<string>(
+    courseFromParam(courseParam)
+  );
+  const [courseOptions, setCourseOptions] = useState<CourseOption[]>([]);
+  // Collective action on the quiz list (WMCNL-3001)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState<{
+    ids: string[];
+    trainees: number;
+  } | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   // Double-click protection: track IDs currently being processed
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -237,6 +264,20 @@ export default function TrainerReviewsPage() {
     () => quizzes.filter(q => (quizPending ? !q.isReviewed : true)),
     [quizzes, quizPending]
   );
+  // Only an open quiz can be selected for the collective action (WMCNL-3001)
+  const selectableQuizzes = useMemo(
+    () => quizzesFiltered.filter(q => !q.isReviewed),
+    [quizzesFiltered]
+  );
+  const selectedQuizzes = useMemo(
+    () => selectableQuizzes.filter(q => selectedIds.has(q.id)),
+    [selectableQuizzes, selectedIds]
+  );
+  const allSelected =
+    selectableQuizzes.length > 0 &&
+    selectableQuizzes
+      .slice(0, BULK_REVIEW_MAX)
+      .every(q => selectedIds.has(q.id));
 
   // Fetch solution document (TRAINER_SOLUTION) for a use case
   // Use a ref to track which IDs are already fetched/loading to avoid re-triggering
@@ -295,7 +336,8 @@ export default function TrainerReviewsPage() {
     }
     const fromUrl = filterFromParams(statusParam, onlyPendingParam);
     if (fromUrl) setStatusFilter(fromUrl);
-  }, [viewParam, statusParam, onlyPendingParam]);
+    if (courseParam !== null) setCourseFilter(courseFromParam(courseParam));
+  }, [viewParam, statusParam, onlyPendingParam, courseParam]);
 
   // The tab and the filter stay in the address (WMCNL-3002): a reload, the way
   // back from "Details" and a link keep them. Everything else in the address
@@ -305,6 +347,12 @@ export default function TrainerReviewsPage() {
     params.set('view', activeTab);
     params.set('status', statusFilter);
     params.delete('onlyPending');
+    // the course of the quiz list is part of the address of that list only
+    if (activeTab === 'quizzes' && courseFilter !== 'all') {
+      params.set('course', courseFilter);
+    } else {
+      params.delete('course');
+    }
     const next = params.toString();
     if (next !== window.location.search.replace(/^\?/, '')) {
       window.history.replaceState(
@@ -313,7 +361,7 @@ export default function TrainerReviewsPage() {
         `${window.location.pathname}?${next}`
       );
     }
-  }, [activeTab, statusFilter]);
+  }, [activeTab, statusFilter, courseFilter]);
 
   // The search text is sent a moment after the last key
   useEffect(() => {
@@ -325,9 +373,58 @@ export default function TrainerReviewsPage() {
   }, [searchInput]);
 
   const filters: Filters = useMemo(
-    () => ({ status: statusFilter, quizType: quizTypeFilter, search }),
-    [statusFilter, quizTypeFilter, search]
+    () => ({
+      status: statusFilter,
+      quizType: quizTypeFilter,
+      search,
+      course: courseFilter,
+    }),
+    [statusFilter, quizTypeFilter, search, courseFilter]
   );
+
+  // The courses (Fragenkomplexe) of the chosen occupation for the course filter
+  // of the quiz list. The list works without them (all and global).
+  const coursesLoadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!profile?.id || activeTab !== 'quizzes') return;
+    const catalog = new URLSearchParams(window.location.search).get('catalog');
+    const key = catalog ?? '';
+    if (coursesLoadedFor.current === key) return;
+    coursesLoadedFor.current = key;
+    void (async () => {
+      try {
+        const res = await authFetch('/api/trainer/courses', {
+          cache: 'no-store',
+        });
+        if (!res.ok) {
+          coursesLoadedFor.current = null;
+          return;
+        }
+        const data = await res.json();
+        const options: CourseOption[] = (data.courses || []).map((c: any) => ({
+          id: String(c.id),
+          title: String(c.title),
+        }));
+        setCourseOptions(options);
+        // a course in the address that is none of this occupation
+        setCourseFilter(current =>
+          current === 'all' ||
+          current === COURSE_GLOBAL ||
+          options.some(o => o.id === current)
+            ? current
+            : 'all'
+        );
+      } catch {
+        coursesLoadedFor.current = null;
+      }
+    })();
+  }, [profile?.id, activeTab, searchParams]);
+
+  // Another list, another selection
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setBulkResult(null);
+  }, [activeTab, filters]);
 
   // One page of one list, with the total of the same filter
   const fetchPage = useCallback(
@@ -345,6 +442,7 @@ export default function TrainerReviewsPage() {
         });
         if (f.quizType !== 'all') q.set('quizType', f.quizType);
         if (f.search) q.set('q', f.search);
+        if (f.course !== 'all') q.set('course', f.course);
         const res = await authFetch(`/api/trainer/quiz-submissions?${q}`, {
           cache: 'no-store',
         });
@@ -412,6 +510,8 @@ export default function TrainerReviewsPage() {
       f.status,
       f.quizType,
       f.search,
+      // the key of a list without a course filter stays as it was
+      ...(f.course === 'all' ? [] : [f.course]),
       new URLSearchParams(
         typeof window === 'undefined' ? '' : window.location.search
       ).get('catalog') ?? '',
@@ -708,6 +808,90 @@ export default function TrainerReviewsPage() {
     }
   };
 
+  const limitReached = () =>
+    toast.error(
+      t('trainer.reviews.bulkLimit').replace('{max}', String(BULK_REVIEW_MAX))
+    );
+
+  const toggleSelected = (id: string) => {
+    if (!selectedIds.has(id) && selectedQuizzes.length >= BULK_REVIEW_MAX) {
+      limitReached();
+      return;
+    }
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // "Select all" takes the open quizzes of the list, up to what one request marks
+  const toggleSelectAll = () =>
+    setSelectedIds(
+      allSelected
+        ? new Set()
+        : new Set(selectableQuizzes.slice(0, BULK_REVIEW_MAX).map(q => q.id))
+    );
+
+  // The dialog first: it says how many quizzes of how many trainees
+  const askBulkConfirm = () => {
+    if (selectedQuizzes.length === 0) return;
+    setBulkConfirm({
+      ids: selectedQuizzes.map(q => q.id),
+      trainees: new Set(selectedQuizzes.map(q => q.traineeId)).size,
+    });
+  };
+
+  const runBulk = async () => {
+    if (!bulkConfirm || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      const r = await authFetch('/api/trainer/quiz-submissions/bulk-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: bulkConfirm.ids }),
+      });
+      if (!r.ok) {
+        toast.error(t('trainer.reviews.bulkError'));
+        return;
+      }
+      const data = await r.json();
+      const reviewed = new Set<string>(
+        Array.isArray(data.reviewedIds) ? data.reviewedIds.map(String) : []
+      );
+      // What is reviewed now leaves the list of the open ones (and the total),
+      // or shows as reviewed in the list of all. What the server skipped stays.
+      if (quizPending) {
+        setQuizzes(prev => prev.filter(q => !reviewed.has(q.id)));
+        setQuizTotal(n => Math.max(0, n - reviewed.size));
+      } else {
+        setQuizzes(prev =>
+          prev.map(q => (reviewed.has(q.id) ? { ...q, isReviewed: true } : q))
+        );
+      }
+      setSelectedIds(new Set());
+      const marked = Number(data.marked) || 0;
+      const already = Number(data.alreadyReviewed) || 0;
+      const skipped = Number(data.skipped) || 0;
+      const parts = [
+        marked > 0 && countLabel(t, 'trainer.reviews.bulkMarked', marked),
+        already > 0 && countLabel(t, 'trainer.reviews.bulkAlready', already),
+        skipped > 0 && countLabel(t, 'trainer.reviews.bulkSkipped', skipped),
+      ].filter(Boolean);
+      const summary = `${parts.join('. ')}.`;
+      setBulkResult(summary);
+      // what was not done is never reported as done
+      if (skipped > 0) toast.error(summary);
+      else toast.success(summary);
+    } catch {
+      toast.error(t('trainer.reviews.bulkError'));
+    } finally {
+      setBulkBusy(false);
+      setBulkConfirm(null);
+    }
+  };
+
   const titleKey = {
     pending: 'trainer.reviews.title',
     all: 'trainer.reviews.titleAll',
@@ -825,6 +1009,23 @@ export default function TrainerReviewsPage() {
                       <option value="GLOBAL">
                         {t('trainer.reviews.quizType.GLOBAL')}
                       </option>
+                    </select>
+                    <span>{t('trainer.reviews.course')}</span>
+                    <select
+                      value={courseFilter}
+                      onChange={e => setCourseFilter(e.target.value)}
+                      aria-label={t('trainer.reviews.course')}
+                      className="border-accent/30 bg-background/50 max-w-[16rem] rounded-xl border px-2 py-1"
+                    >
+                      <option value="all">{t('trainer.reviews.all')}</option>
+                      <option value={COURSE_GLOBAL}>
+                        {t('trainer.reviews.global')}
+                      </option>
+                      {courseOptions.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.title}
+                        </option>
+                      ))}
                     </select>
                     <input
                       type="search"
@@ -1317,6 +1518,74 @@ export default function TrainerReviewsPage() {
 
       {!loading && activeTab === 'quizzes' && (
         <div className="space-y-4">
+          {selectableQuizzes.length > 0 && (
+            <div
+              role="group"
+              aria-label={t('trainer.reviews.bulkBar')}
+              data-testid="bulk-bar"
+              className="border-accent/30 bg-card/95 sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border px-4 py-3 shadow-md backdrop-blur"
+            >
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={el => {
+                    if (el) {
+                      el.indeterminate =
+                        selectedQuizzes.length > 0 && !allSelected;
+                    }
+                  }}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4"
+                />
+                {t('trainer.reviews.bulkSelectAll')}
+              </label>
+              <span
+                aria-live="polite"
+                data-testid="bulk-count"
+                className="text-muted-foreground text-sm"
+              >
+                {t('trainer.reviews.bulkSelected').replace(
+                  '{count}',
+                  String(selectedQuizzes.length)
+                )}
+              </span>
+              <button
+                type="button"
+                disabled={selectedQuizzes.length === 0 || bulkBusy}
+                onClick={askBulkConfirm}
+                className="border-accent/30 hover:bg-accent/10 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {t('trainer.reviews.bulkMark')}
+              </button>
+              {selectedQuizzes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-muted-foreground hover:text-foreground px-2 py-2 text-sm"
+                >
+                  {t('trainer.reviews.bulkClear')}
+                </button>
+              )}
+              {selectableQuizzes.length > BULK_REVIEW_MAX && (
+                <span className="text-muted-foreground text-xs">
+                  {t('trainer.reviews.bulkLimitHint').replace(
+                    '{max}',
+                    String(BULK_REVIEW_MAX)
+                  )}
+                </span>
+              )}
+            </div>
+          )}
+          {bulkResult && (
+            <div
+              role="status"
+              data-testid="bulk-result"
+              className="rounded-2xl border border-green-600/40 bg-green-500/10 px-4 py-3 text-sm"
+            >
+              {bulkResult}
+            </div>
+          )}
           {quizzesFiltered.length === 0 && (
             <div className="text-muted-foreground text-sm">
               {t('trainer.reviews.noQuizSubmissions')}
@@ -1329,6 +1598,17 @@ export default function TrainerReviewsPage() {
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
+                  {!s.isReviewed && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(s.id)}
+                      onChange={() => toggleSelected(s.id)}
+                      aria-label={t('trainer.reviews.bulkSelectRow')
+                        .replace('{title}', s.quizTitle)
+                        .replace('{name}', s.traineeName)}
+                      className="h-4 w-4 shrink-0"
+                    />
+                  )}
                   <div className="from-accent to-primary text-foreground flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br">
                     <HelpCircle className="h-4 w-4" />
                   </div>
@@ -1512,6 +1792,41 @@ export default function TrainerReviewsPage() {
           ))}
           {listFooter(quizzesFiltered.length, quizTotal)}
         </div>
+      )}
+
+      {/* Collective action: asks first and names the number of quizzes and
+          trainees (WMCNL-3001). Escape and the focus trap come from the dialog. */}
+      {bulkConfirm && (
+        <ConfirmDialog
+          title={t('trainer.reviews.bulkConfirmTitle')}
+          confirmLabel={t('trainer.reviews.markAsReviewed')}
+          busy={bulkBusy}
+          onConfirm={runBulk}
+          onCancel={() => {
+            if (!bulkBusy) setBulkConfirm(null);
+          }}
+        >
+          <p>
+            {t('trainer.reviews.bulkConfirmText')
+              .replace(
+                '{quizzes}',
+                countLabel(
+                  t,
+                  'trainer.reviews.bulkQuizCount',
+                  bulkConfirm.ids.length
+                )
+              )
+              .replace(
+                '{trainees}',
+                countLabel(
+                  t,
+                  'trainer.reviews.bulkTraineeCount',
+                  bulkConfirm.trainees
+                )
+              )}
+          </p>
+          <p className="mt-2">{t('trainer.reviews.bulkConfirmNote')}</p>
+        </ConfirmDialog>
       )}
 
       {/* Solution PDF Flipbook Viewer. Only the model solution of a use case is

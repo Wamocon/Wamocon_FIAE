@@ -18,11 +18,12 @@
  *  - Status: PENDING for enablers and use cases, not reviewed for quizzes.
  */
 
-import { and, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
+import { and, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
 import db from '@/db';
 import {
   courses,
   profiles,
+  enablerQuizLinks,
   enablers,
   enablerSubmissions,
   quizSubmissions,
@@ -32,7 +33,10 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { traineeIdInScope } from '@/lib/auth/trainee-scope-conditions';
 import { catalogCondition, type CatalogScope } from '@/lib/catalog/scope';
-import type { ReviewStatusFilter } from '@/lib/trainer/review-paging';
+import {
+  COURSE_GLOBAL,
+  type ReviewStatusFilter,
+} from '@/lib/trainer/review-paging';
 
 /**
  * The courses whose submissions a trainer may review: every course inside the
@@ -104,13 +108,16 @@ export function likePattern(text: string): string {
  * narrows the list to a trainee or a quiz whose name contains the text; the
  * dashboard counts without it. `quizType` limits the list to one kind of quiz
  * (the type filter of the page, so the total stays the total of the filter).
+ * `course` limits it to the quizzes of one course (Fragenkomplex) or, with
+ * `global`, to the global quizzes (WMCNL-3001).
  */
 export function quizSubmissionsWhere(
   scope: CatalogScope,
   traineeCondition: SQL,
   onlyPending: boolean,
   search?: string | null,
-  quizType?: 'LESSON' | 'GLOBAL' | null
+  quizType?: 'LESSON' | 'GLOBAL' | null,
+  course?: string | null
 ): SQL | undefined {
   const pattern = search ? likePattern(search) : null;
   return and(
@@ -120,8 +127,23 @@ export function quizSubmissionsWhere(
     quizType ? eq(quizzes.quizType, quizType) : undefined,
     pattern
       ? or(ilike(profiles.fullName, pattern), ilike(quizzes.title, pattern))
-      : undefined
+      : undefined,
+    courseCondition(scope, course)
   );
+}
+
+/**
+ * A quiz of a lesson hangs on its course through the lesson (enabler) it is
+ * linked to; the course has to lie inside the catalog scope, so a course of
+ * another occupation never matches. A global quiz has no course.
+ */
+function courseCondition(
+  scope: CatalogScope,
+  course?: string | null
+): SQL | undefined {
+  if (!course) return undefined;
+  if (course === COURSE_GLOBAL) return eq(quizzes.quizType, 'GLOBAL');
+  return sql`${quizSubmissions.quizId} in (select ${enablerQuizLinks.quizId} from ${enablerQuizLinks} inner join ${enablers} on ${enablers.id} = ${enablerQuizLinks.enablerId} where ${enablers.courseId} = ${course} and ${catalogCondition(enablers.trainingCatalogId, scope)})`;
 }
 
 /**

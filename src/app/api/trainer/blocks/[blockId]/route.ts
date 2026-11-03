@@ -13,6 +13,10 @@ import { eq, and } from 'drizzle-orm';
 import { ausbildungBlocks, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { notFoundUnlessUuid } from '@/lib/uuid';
+import { ensureSchoolRowInChosenCatalog } from '@/lib/school/catalog-access';
+
+// A block of another chosen occupation is answered like a missing one
+const blockNotFound = () => NextResponse.json({ error: 'Block not found' }, { status: 404 });
 
 // Helper to get ISO week number
 function getISOWeek(date: Date): number {
@@ -52,6 +56,8 @@ export async function DELETE(
 
         const access = await requireTraineeAccess(session, String(block.traineeId), req, 'Block not found');
         if (isErrorResponse(access)) return access;
+        const outsideCatalog = await ensureSchoolRowInChosenCatalog(session, req, block, blockNotFound);
+        if (outsideCatalog) return outsideCatalog;
 
         // Only allow deletion of trainer-created blocks
         if (block.blockType !== 'TRAINER_BLOCKER') {
@@ -121,6 +127,8 @@ export async function PATCH(
 
         const access = await requireTraineeAccess(session, String(existingBlock.traineeId), req, 'Block not found');
         if (isErrorResponse(access)) return access;
+        const outsideCatalog = await ensureSchoolRowInChosenCatalog(session, req, existingBlock, blockNotFound);
+        if (outsideCatalog) return outsideCatalog;
 
         // Only allow editing of trainer-created blocks
         if (existingBlock.blockType !== 'TRAINER_BLOCKER') {

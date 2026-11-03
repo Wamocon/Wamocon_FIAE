@@ -8,6 +8,7 @@ import {
     traineeIdInScope,
 } from '@/lib/auth/trainee-scope-conditions';
 import { requireReportCatalogFilter } from '@/lib/auth/activity-report-access';
+import { requireSchoolCatalogFilter } from '@/lib/school/catalog-access';
 
 // GET /api/trainer/school/stats?trainerId=...
 export async function GET(req: NextRequest) {
@@ -44,11 +45,15 @@ export async function GET(req: NextRequest) {
         // Count upcoming exams (next 30 days, trainee-scoped)
         const now = new Date();
         const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        // (the exams of the chosen occupation, by the occupation of the exam)
+        const schoolCatalog = await requireSchoolCatalogFilter(session, req);
+        if (isErrorResponse(schoolCatalog)) return schoolCatalog;
         const examConditions: any[] = [
             gte(schoolExams.examDate, now),
             lte(schoolExams.examDate, thirtyDaysLater),
             traineeIdInScope(schoolExams.traineeId, traineeScope.condition),
         ];
+        if (schoolCatalog.examCondition) examConditions.push(schoolCatalog.examCondition);
         const upcomingExamsResult = await db
             .select({ count: sql<number>`count(*)::int` })
             .from(schoolExams)

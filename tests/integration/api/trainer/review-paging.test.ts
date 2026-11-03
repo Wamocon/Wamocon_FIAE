@@ -239,4 +239,43 @@ describe('GET /quiz-submissions: one page and the total', () => {
       .map(w => renderCondition(w).sql);
     expect(sql[0]).not.toContain('ilike');
   });
+
+  // WMCNL-3001: filter by the course (Fragenkomplex) of the quiz
+  const COURSE = '77777777-7777-4777-8777-777777777777';
+  const conditions = (mock: any) =>
+    selectsFrom(mock, 'quiz_submissions')
+      .flatMap(c => c.where ?? [])
+      .map(w => renderCondition(w));
+
+  it('narrows the list to the quizzes of one course, inside the catalog scope', async () => {
+    const { mock } = await quizzes(`course=${COURSE}`);
+    const [counted, listed] = conditions(mock);
+    expect(counted.sql).toContain('"enabler_quiz_links"."quiz_id"');
+    expect(counted.sql).toContain('"enablers"."course_id" = $');
+    expect(counted.params).toContain(COURSE);
+    // the course has to lie in the occupation of the caller (x-catalog KFBM)
+    expect(counted.sql).toContain('"enablers"."training_catalog_id" = $');
+    // the total and the page use one condition
+    expect(listed).toEqual(counted);
+  });
+
+  it('narrows the list to the global quizzes, which have no course', async () => {
+    const { mock } = await quizzes('course=global');
+    const [counted] = conditions(mock);
+    expect(counted.sql).toContain('"quizzes"."quiz_type" = $');
+    expect(counted.params).toContain('GLOBAL');
+    expect(counted.sql).not.toContain('enabler_quiz_links');
+  });
+
+  it('ignores a course that is no id', async () => {
+    const { mock } = await quizzes('course=nope');
+    const [counted] = conditions(mock);
+    expect(counted.sql).not.toContain('enabler_quiz_links');
+    expect(counted.sql).not.toContain('course_id');
+  });
+
+  it('does not filter by course without the parameter', async () => {
+    const { mock } = await quizzes('onlyPending=true');
+    expect(conditions(mock)[0].sql).not.toContain('enabler_quiz_links');
+  });
 });

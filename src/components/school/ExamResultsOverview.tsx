@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCatalog } from '@/contexts/CatalogContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { authFetch } from '@/lib/authFetch';
 import {
@@ -33,6 +34,9 @@ interface ExamResult {
 export function ExamResultsOverview() {
   const { profile } = useAuth();
   const { t } = useLanguage();
+  // The results belong to the exams of one occupation: a switch of the
+  // occupation tab loads them again
+  const { activeCode: catalog } = useCatalog();
   const [results, setResults] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +77,7 @@ export function ExamResultsOverview() {
     };
 
     loadResults();
-  }, [profile?.id]);
+  }, [profile?.id, catalog]);
 
   const stats = useMemo(() => {
     if (results.length === 0) {

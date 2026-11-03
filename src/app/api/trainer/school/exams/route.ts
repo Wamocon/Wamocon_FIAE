@@ -12,6 +12,10 @@ import {
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { deriveMaxPoints } from '@/lib/school/exam-points';
+import {
+    requireSchoolCatalogFilter,
+    resolveSchoolWriteCatalog,
+} from '@/lib/school/catalog-access';
 
 // GET /api/trainer/school/exams?trainerId=...&traineeId=...
 export async function GET(req: NextRequest) {
@@ -34,6 +38,12 @@ export async function GET(req: NextRequest) {
             if (isErrorResponse(traineeScope)) return traineeScope;
             conditions.push(traineeIdInScope(schoolExams.traineeId, traineeScope.condition));
         }
+
+        // Only the exams of the chosen occupation (a trainee in two trainings
+        // has exams per occupation), without a choice all of them
+        const schoolCatalog = await requireSchoolCatalogFilter(session, req);
+        if (isErrorResponse(schoolCatalog)) return schoolCatalog;
+        if (schoolCatalog.examCondition) conditions.push(schoolCatalog.examCondition);
 
         const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -117,6 +127,11 @@ export async function POST(req: NextRequest) {
         const access = await requireTraineeAccess(session, String(traineeId), req);
         if (isErrorResponse(access)) return access;
 
+        // The exam belongs to the chosen occupation (the trainee belongs to it,
+        // checked above), without a choice to the default occupation of the trainee
+        const catalogId = await resolveSchoolWriteCatalog(session, req, String(traineeId));
+        if (isErrorResponse(catalogId)) return catalogId;
+
         const trainerOrganizationId = await getUserOrgId(trainerId);
 
         const [trainee] = await db
@@ -152,6 +167,7 @@ export async function POST(req: NextRequest) {
             .insert(schoolExams)
             .values({
                 traineeId: access.traineeId as any,
+                trainingCatalogId: catalogId,
                 examDate: new Date(examDate),
                 subject,
                 examTypeValue: examTypeValue || 'KLAUSUR',

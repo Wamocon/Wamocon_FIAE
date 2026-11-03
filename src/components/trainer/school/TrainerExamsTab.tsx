@@ -4,6 +4,7 @@ import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCatalog } from '@/contexts/CatalogContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { checkExamPoints, isAboveMax } from '@/lib/school/exam-points';
 import {
@@ -72,6 +73,9 @@ function getTraineeDisplayName(trainee: Trainee, traineeLabel: string): string {
 export function TrainerExamsTab() {
   const { profile, isPlatformOwner } = useAuth();
   const { t } = useLanguage();
+  // An exam belongs to one occupation: a switch of the occupation tab loads the
+  // list again (the server answers for the chosen occupation)
+  const { activeCode: catalog } = useCatalog();
 
   // Get exam type label helper
   const getExamTypeLabel = (type: string) => {
@@ -125,7 +129,7 @@ export function TrainerExamsTab() {
       }
     }
     loadData();
-  }, [profile?.id, traineeFilter, t]);
+  }, [profile?.id, traineeFilter, t, catalog]);
 
   const handleAddExam = async (examData: any) => {
     if (!profile?.id) return;

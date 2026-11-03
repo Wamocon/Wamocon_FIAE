@@ -539,6 +539,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   {
+    route: 'trainer/quiz-submissions/bulk-review',
+    method: 'POST',
+    guard: 'trainer',
+    params: [],
+  },
+  {
     route: 'trainer/quizzes/[quizId]',
     method: 'GET',
     guard: 'trainer',
@@ -795,6 +801,8 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   { route: 'me/catalogs', method: 'GET', guard: 'user', params: [] },
+  // soft skill criteria: any signed-in account (WMCNL, was open without a session)
+  { route: 'softskill-criteria', method: 'GET', guard: 'user', params: [] },
   {
     route: 'notifications',
     method: 'GET',

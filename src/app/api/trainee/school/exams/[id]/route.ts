@@ -13,12 +13,14 @@ import { schoolExams, schoolExamResults, ausbildungBlocks, profiles } from '@/db
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { ensureSchoolRowInChosenCatalog } from '@/lib/school/catalog-access';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
 }
 
-// An exam of someone else is answered like a missing one
+// An exam of someone else, or of the other occupation of the trainee, is
+// answered like a missing one
 const notFound = () =>
     NextResponse.json({ error: 'Exam not found' }, { status: 404 });
 
@@ -42,6 +44,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         if (rows.length === 0 || String(rows[0].exam.traineeId) !== session.id) {
             return notFound();
         }
+        const outsideCatalog = await ensureSchoolRowInChosenCatalog(session, req, rows[0].exam, notFound);
+        if (outsideCatalog) return outsideCatalog;
 
         const { exam, result } = rows[0];
         const now = new Date();
@@ -81,6 +85,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         if (!existing || String(existing.traineeId) !== session.id) {
             return notFound();
         }
+        const outsideCatalog = await ensureSchoolRowInChosenCatalog(session, req, existing, notFound);
+        if (outsideCatalog) return outsideCatalog;
 
         // Build update object
         const updateData: Record<string, any> = {};
@@ -154,13 +160,15 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
 
         // Try school_exams first
         const [existingExam] = await db
-            .select({ id: schoolExams.id, traineeId: schoolExams.traineeId })
+            .select({ id: schoolExams.id, traineeId: schoolExams.traineeId, trainingCatalogId: schoolExams.trainingCatalogId })
             .from(schoolExams)
             .where(eq(schoolExams.id, id as any));
 
         if (existingExam) {
             // An exam of someone else is answered like a missing one
             if (String(existingExam.traineeId) !== session.id) return notFound();
+            const outsideCatalog = await ensureSchoolRowInChosenCatalog(session, req, existingExam, notFound);
+            if (outsideCatalog) return outsideCatalog;
             // Delete from school_exams (cascades to results)
             await db
                 .delete(schoolExams)
@@ -170,11 +178,13 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
 
         // Fallback: try ausbildung_blocks (calendar-sourced EXAM entries)
         const [existingBlock] = await db
-            .select({ id: ausbildungBlocks.id, blockType: ausbildungBlocks.blockType, traineeId: ausbildungBlocks.traineeId })
+            .select({ id: ausbildungBlocks.id, blockType: ausbildungBlocks.blockType, traineeId: ausbildungBlocks.traineeId, trainingCatalogId: ausbildungBlocks.trainingCatalogId })
             .from(ausbildungBlocks)
             .where(and(eq(ausbildungBlocks.id, id as any), eq(ausbildungBlocks.blockType, 'EXAM')));
 
         if (existingBlock && String(existingBlock.traineeId) === session.id) {
+            const outsideCatalog = await ensureSchoolRowInChosenCatalog(session, req, existingBlock, notFound);
+            if (outsideCatalog) return outsideCatalog;
             await db
                 .delete(ausbildungBlocks)
                 .where(and(eq(ausbildungBlocks.id, id as any), eq(ausbildungBlocks.traineeId, session.id as any)));

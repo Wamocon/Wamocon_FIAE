@@ -1277,6 +1277,13 @@ export const ausbildungBlocks = pgTable('ausbildung_blocks', {
   organizationId: uuid('organization_id')
     .notNull()
     .references(() => organizations.id, { onDelete: 'cascade' }),
+  // Occupation (training catalog) of the entry. A trainee in several trainings
+  // sees the entries of the chosen occupation only. The default keeps writers
+  // that do not know the column on FIAE.
+  trainingCatalogId: uuid('training_catalog_id')
+    .notNull()
+    .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+    .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
 
   schuljahr: text('schuljahr').notNull(),
   ausbildungsjahr: integer('ausbildungsjahr').notNull(), // 1, 2, or 3
@@ -1321,7 +1328,12 @@ export const ausbildungBlocks = pgTable('ausbildung_blocks', {
   updatedAt: timestamp('updated_at')
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}, table => ({
+  traineeCatalogIdx: index('ausbildung_blocks_trainee_catalog_idx').on(
+    table.traineeId,
+    table.trainingCatalogId
+  ),
+}));
 
 // === SCHOOL EXAMS ===
 // Tracks exam dates with subject/Lernfeld mapping
@@ -1333,6 +1345,13 @@ export const schoolExams = pgTable('school_exams', {
   organizationId: uuid('organization_id')
     .notNull()
     .references(() => organizations.id, { onDelete: 'cascade' }),
+  // Occupation (training catalog) of the exam. A trainee in several trainings
+  // sees the exams of the chosen occupation only. The default keeps writers
+  // that do not know the column on FIAE.
+  trainingCatalogId: uuid('training_catalog_id')
+    .notNull()
+    .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+    .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
 
   schuljahr: text('schuljahr').notNull(),
   ausbildungsjahr: integer('ausbildungsjahr').notNull(),
@@ -1355,7 +1374,12 @@ export const schoolExams = pgTable('school_exams', {
   updatedAt: timestamp('updated_at')
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}, table => ({
+  traineeCatalogIdx: index('school_exams_trainee_catalog_idx').on(
+    table.traineeId,
+    table.trainingCatalogId
+  ),
+}));
 
 // === SCHOOL EXAM RESULTS ===
 // Records exam outcomes with German grading

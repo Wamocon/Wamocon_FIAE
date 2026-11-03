@@ -226,7 +226,7 @@ function isTraineeEditableBlock(
 
 export function BlockCalendar({ onChanged }: { onChanged?: () => void } = {}) {
   const { profile } = useAuth();
-  const { phaseOneMonthsFor } = useRequestCatalog(profile?.id);
+  const { catalog, phaseOneMonthsFor } = useRequestCatalog(profile?.id);
   const { t } = useLanguage();
 
   // Helper to get translated month names
@@ -333,7 +333,9 @@ export function BlockCalendar({ onChanged }: { onChanged?: () => void } = {}) {
     };
 
     loadBlocks();
-  }, [profile?.id, selectedYear]);
+    // A block and an exam belong to one occupation: a switch of the occupation
+    // tab loads the calendar again (the server answers for the chosen occupation)
+  }, [profile?.id, selectedYear, catalog]);
 
   // Generate calendar days for MONTH view
   const calendarDays = useMemo(() => {

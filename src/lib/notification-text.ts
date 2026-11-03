@@ -128,6 +128,19 @@ const PATTERNS: Pattern[] = [
     key: 'notifications.message.QUIZ_REVIEWED',
   },
   {
+    // several quizzes reviewed in one step (WMCNL-3001), with the titles
+    type: 'QUIZ_REVIEWED',
+    match: /^Deine (\d+) Quizze wurden bewertet: (.+)$/,
+    names: ['count', 'titles'],
+    key: 'notifications.message.QUIZZES_REVIEWED_TITLES',
+  },
+  {
+    type: 'QUIZ_REVIEWED',
+    match: /^Deine (\d+) Quizze wurden bewertet\.$/,
+    names: ['count'],
+    key: 'notifications.message.QUIZZES_REVIEWED',
+  },
+  {
     type: 'QUIZ_DELETED',
     match: /^Das Quiz "(.+)" wurde entfernt\.$/,
     names: ['title'],

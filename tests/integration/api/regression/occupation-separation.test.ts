@@ -647,6 +647,19 @@ const COVERED_ELSEWHERE: Record<string, string> = {
     'tests/integration/api/regression/report-catalog-routes.test.ts',
   'trainer/trainees/with-stats':
     'tests/integration/api/regression/report-catalog-routes.test.ts',
+  // School exams and school blocks belong to one occupation (migration
+  // 20261103000100): the routes use the helpers of src/lib/school/catalog-access.ts,
+  // the behaviour with two occupations is tested in school/occupation.test.ts
+  'trainee/school/exams': 'tests/integration/api/school/occupation.test.ts',
+  'trainee/school/exams/[id]':
+    'tests/integration/api/school/occupation.test.ts',
+  'trainee/school/exams/[id]/result':
+    'tests/integration/api/school/occupation.test.ts',
+  'trainee/school/blocks': 'tests/integration/api/school/occupation.test.ts',
+  'trainee/school/blocks/[id]':
+    'tests/integration/api/school/occupation.test.ts',
+  'trainer/blocks': 'tests/integration/api/school/occupation.test.ts',
+  'trainer/school/exams': 'tests/integration/api/school/occupation.test.ts',
   // The progress of a trainee counts the courses of the chosen occupation (one
   // figure on every trainer page), tested with the lists in this file
   'trainer/trainees/[traineeId]/overview':
@@ -677,7 +690,7 @@ const SHARES_PARENT_SCOPE: Record<string, string[]> = {
 };
 
 const CATALOG_MARKERS =
-  /requireCatalogScope|requireCatalogScopeForUser|requireContentScope|requireContentScopeForUser|catalogCondition|getCatalogScope|requireReportCatalogFilter|resolveCatalogChoice|requestedCatalogCode/;
+  /requireCatalogScope|requireCatalogScopeForUser|requireContentScope|requireContentScopeForUser|catalogCondition|getCatalogScope|requireReportCatalogFilter|requireSchoolCatalogFilter|ensureSchoolRowInChosenCatalog|resolveCatalogChoice|requestedCatalogCode/;
 
 function routeFiles(dir: string): string[] {
   return readdirSync(dir).flatMap(name => {

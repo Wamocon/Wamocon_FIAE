@@ -15,6 +15,10 @@ import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { isoWeekOf } from '@/lib/school/day';
 import { refreshTraineeDashboard } from '@/lib/school/dashboard-cache';
+import {
+  requireSchoolCatalogFilter,
+  resolveSchoolWriteCatalog,
+} from '@/lib/school/catalog-access';
 
 // Helper to calculate the module phase for a block date.
 function calculateAusbildungsjahr(
@@ -63,8 +67,16 @@ export async function GET(req: NextRequest) {
     const year = searchParams.get('year');
     const ausbildungsjahr = searchParams.get('ausbildungsjahr');
 
+    // The calendar of the occupation the trainee works in (a trainee in two
+    // trainings never sees the entries of the other one)
+    const schoolCatalog = await requireSchoolCatalogFilter(session, req);
+    if (isErrorResponse(schoolCatalog)) return schoolCatalog;
+
     // Build query conditions
     const conditions = [eq(ausbildungBlocks.traineeId, session.id as any)];
+    if (schoolCatalog.blockCondition) {
+      conditions.push(schoolCatalog.blockCondition);
+    }
 
     if (schuljahr) {
       conditions.push(eq(ausbildungBlocks.schuljahr, schuljahr));
@@ -189,6 +201,10 @@ export async function POST(req: NextRequest) {
 
     const organizationId = await getUserOrgId(traineeId);
 
+    // The entry belongs to the occupation the trainee works in (the tab)
+    const catalogId = await resolveSchoolWriteCatalog(session, req, traineeId);
+    if (isErrorResponse(catalogId)) return catalogId;
+
     // Get trainee profile to calculate the phase from the block date.
     let calculatedAusbildungsjahr = ausbildungsjahr;
     let calculatedSchuljahr = schuljahr;
@@ -226,6 +242,7 @@ export async function POST(req: NextRequest) {
       .values({
         traineeId: traineeId as any,
         organizationId,
+        trainingCatalogId: catalogId,
         schuljahr: calculatedSchuljahr,
         ausbildungsjahr: calculatedAusbildungsjahr,
         calendarWeek: week,

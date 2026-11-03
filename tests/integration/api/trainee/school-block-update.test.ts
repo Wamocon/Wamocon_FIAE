@@ -8,6 +8,7 @@ import {
   makeRequest,
   mockSession,
 } from '../../../helpers/mockNext';
+import { SINGLE_FIAE_TABLES } from '../../../helpers/schoolCatalogTables';
 
 // WMCNL-2957: an entry of the block calendar can be changed (date, time, type,
 // description, exam type, invitations), not only deleted. An entry a trainer
@@ -39,6 +40,7 @@ async function loadPut(block: Record<string, unknown> = ownBlock) {
   jest.resetModules();
   mockSession(me);
   const mock = createTableDb({
+    ...SINGLE_FIAE_TABLES,
     ausbildungBlocks: [block],
     profiles: [],
   });
