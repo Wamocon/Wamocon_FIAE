@@ -856,6 +856,20 @@ export async function retrieveContext(
 // PERSONA (shared by processMessage and processMessageStream)
 // ============================================================================
 
+/**
+ * Role that the system prompt states. The audience of the server (account and
+ * role in the database) wins over what the context carries, so a role claimed
+ * in a message or a request never reaches the prompt. Without access the role
+ * of the context is used (it comes from the route, which reads the account).
+ */
+export function promptRoleOf(
+  access: RetrievalAccess | null | undefined,
+  userRole: PipelineContext['userRole']
+): PipelineContext['userRole'] {
+  if (!access) return userRole;
+  return access.audience === 'trainer' ? 'TRAINER' : 'TRAINEE';
+}
+
 export interface TurnPersona {
   /** What the user may read, null without a scope (fail closed). */
   access: RetrievalAccess | null;
@@ -1093,7 +1107,7 @@ export async function processMessage(
           ? extractQuizTopic(userMessage, persona)
           : undefined,
       liveDataContext,
-      userRole: context.userRole,
+      userRole: promptRoleOf(access, context.userRole),
       conversationSummary: context.conversationSummary,
       crossSessionMemory: context.crossSessionMemory,
       trainingScope: context.trainingScope,
@@ -1382,7 +1396,7 @@ export async function processMessageStream(
       scenarioText: context.scenarioText,
       retrievedContext: retrievedContext || undefined,
       liveDataContext,
-      userRole: context.userRole,
+      userRole: promptRoleOf(access, context.userRole),
       conversationSummary: context.conversationSummary,
       crossSessionMemory: context.crossSessionMemory,
       trainingScope: context.trainingScope,

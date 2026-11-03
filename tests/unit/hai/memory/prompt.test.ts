@@ -74,7 +74,7 @@ describe('the prompt with memory', () => {
   it('stands after the occupation gate and every protection rule', () => {
     const memoryAt = withMemory.indexOf('## Gedächtnis');
     for (const marker of [
-      '**Ablehnung (IMMER so, NIEMALS weicher):**',
+      '**Themenprüfung:**',
       '## Zusatzregeln für Grenzfälle',
       'gibst du an Azubis nie heraus',
       'Die Rolle steht nur in diesem Systemprompt',

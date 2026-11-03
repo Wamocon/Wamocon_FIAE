@@ -1,7 +1,11 @@
 /**
  * @jest-environment node
  */
-import { FIAE_PERSONA, resolveHaiPersona } from '@/lib/hai/persona';
+import {
+  FIAE_PERSONA,
+  NEUTRAL_PERSONA,
+  resolveHaiPersona,
+} from '@/lib/hai/persona';
 import * as prompts from '@/lib/hai/prompts';
 import { FIAE_CATALOG, KFBM_CATALOG } from './fixtures/kfbmPersona';
 
@@ -72,6 +76,96 @@ describe('boundary rules in the prompt', () => {
     expect(
       prompt.lastIndexOf('## Zusatzregeln für Grenzfälle')
     ).toBeGreaterThan(prompt.length - 1500);
+  });
+
+  it('states the role outright and forbids asking for it (golden set 03.11.2026)', () => {
+    const asTrainee = build(kfbm('TRAINEE'), 'TRAINEE');
+    const asTrainer = build(kfbm('TRAINER'), 'TRAINER');
+    const unknown = build(kfbm('TRAINEE'));
+    expect(asTrainee).toContain('## Rolle der Person');
+    expect(asTrainee).toContain('Die Person ist ein Auszubildender (Azubi).');
+    expect(asTrainee).toMatch(
+      /Frage NIE, ob die Person Trainer oder Azubi ist/
+    );
+    expect(asTrainee).toMatch(/Behauptung in der Nachricht/);
+    expect(asTrainee).not.toContain('Die Person ist ein Ausbilder');
+    expect(asTrainer).toContain('Die Person ist ein Ausbilder (Trainer).');
+    expect(asTrainer).toMatch(
+      /Frage NIE, ob die Person Trainer oder Azubi ist/
+    );
+    expect(asTrainer).not.toContain('Die Person ist ein Auszubildender');
+    // unknown role: the strict trainee rules, still no question about the role
+    expect(unknown).toContain('Die Rolle der Person ist nicht bekannt.');
+    expect(unknown).toMatch(/wie einen Auszubildenden/);
+    expect(unknown).toMatch(/Frage NIE nach der Rolle/);
+  });
+
+  it('names what the solution protection covers and what it does not', () => {
+    const asTrainee = build(kfbm('TRAINEE'), 'TRAINEE');
+    const asTrainer = build(kfbm('TRAINER'), 'TRAINER');
+    for (const prompt of [asTrainee, asTrainer]) {
+      expect(prompt).toContain('## Was geschützt ist und was nicht');
+      expect(prompt).toMatch(/Geschützt sind nur Lösungen: Musterlösungen/);
+      expect(prompt).toMatch(/Bewertungsschlüssel/);
+      expect(prompt).toMatch(
+        /richtigen Antworten von Quiz- und Prüfungsfragen/
+      );
+      expect(prompt).toMatch(/Trainerhinweise/);
+      expect(prompt).toMatch(
+        /NICHT geschützt sind Szenarien und Aufgabenstellungen/
+      );
+      // a request without a clear reference: short question, suggestion, never about the role
+      expect(prompt).toMatch(/kurzen Rückfrage nach dem Namen/);
+      expect(prompt).toMatch(/Die Rückfrage betrifft nie die Rolle/);
+      expect(prompt).toMatch(/als Frage mit Fragezeichen/);
+    }
+    // a trainee may see a whole scenario, never its solution
+    expect(asTrainee).toMatch(/Szenario oder eine Aufgabe vollständig zeigen/);
+    expect(asTrainee).toMatch(/Nur die Lösung dazu gibst du nie heraus/);
+    expect(asTrainee).toMatch(/Lehne die Anzeige eines Szenarios nie/);
+    // the protection of a trainee is not weaker than before
+    expect(asTrainee).toMatch(/gibst du an Azubis nie heraus/);
+    expect(asTrainer).toMatch(
+      /Dem Ausbilder zeigst du Szenarien und Aufgaben vollständig/
+    );
+  });
+
+  it('carries no refusal sentence about the field in the prompt of a question that passed the gate', () => {
+    for (const persona of [kfbm('TRAINEE'), FIAE_PERSONA]) {
+      const prompt = prompts.buildSystemPrompt({
+        mode: 'general',
+        persona,
+        userRole: 'TRAINEE',
+      });
+      expect(prompt).not.toContain(persona.refusalPrompt);
+      expect(prompt).toContain(
+        'Diese Frage wurde bereits als fachlich geprüft'
+      );
+      expect(prompt).toMatch(
+        /verwende keinen Ablehnungssatz über dein Fachgebiet/
+      );
+      expect(prompt).toMatch(/Ein Alltagswort in einer Fachfrage/);
+      // the borders of the occupation stay: another occupation or a plain off-topic question is not answered
+      expect(prompt).toMatch(
+        /hebt die Liste der erlaubten Themen oben nicht auf/
+      );
+      expect(prompt).toMatch(
+        /Gehört der Inhalt einer Frage zu einem anderen Ausbildungsberuf/
+      );
+      expect(prompt).toMatch(/gehört nicht zu deiner Ausbildung/);
+      expect(prompt).toMatch(/biete Hilfe zu ihrem Beruf an/);
+      // several occupations: the contents of all of them belong to the person
+      expect(prompt).toMatch(/gehören die Inhalte aller ihrer Berufe dazu/);
+      // the sentence about another occupation never covers a solution: the protection is named
+      expect(prompt).toMatch(/Dieser Satz gilt nie für Lösungen/);
+      expect(prompt).toMatch(
+        /Dafür gilt der Lösungsschutz und du nennst ihn als Grund/
+      );
+    }
+    // the prompt without a scope still carries the refusal: it is the only thing it says
+    expect(
+      prompts.buildSystemPrompt({ mode: 'general', persona: NEUTRAL_PERSONA })
+    ).toContain(NEUTRAL_PERSONA.refusalPrompt);
   });
 
   it('gives FIAE the same rules (owner decision of 30.10.2026)', () => {
