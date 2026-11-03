@@ -708,6 +708,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['catalogId'],
   },
   {
+    route: 'admin/catalogs/[catalogId]/content-check',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
     route: 'admin/catalogs/[catalogId]/content-targets',
     method: 'PUT',
     guard: 'curriculum',
