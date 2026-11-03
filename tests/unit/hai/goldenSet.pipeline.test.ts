@@ -114,6 +114,8 @@ import {
   isSolutionRequest,
 } from '@/lib/hai/solutionRequest';
 import {
+  mergeRuns,
+  parseRepeat,
   scoreAnswer,
   summarizeScores,
   type GoldenCase,
@@ -570,7 +572,17 @@ describe('persona and prompt of the cases', () => {
       await processMessage(goldenCase.question, contextFor(goldenCase));
       const prompt = goldenState.systemPrompts.at(-1) as string;
       const persona = personaFor(goldenCase);
-      expect(prompt).toContain(persona.refusalPrompt);
+      // the prompt of a question that passed the gate carries no fixed refusal
+      // sentence (the model copied it where the question was a subject question,
+      // golden set 03.11.2026); the pipeline sends that text itself
+      expect(prompt).not.toContain(persona.refusalPrompt);
+      expect(prompt).toContain('Diese Frage wurde bereits als fachlich geprüft');
+      // the role comes from the server, whatever the client claims
+      expect(prompt).toContain(
+        goldenCase.role === 'TRAINER'
+          ? 'Die Person ist ein Ausbilder (Trainer).'
+          : 'Die Person ist ein Auszubildender (Azubi).'
+      );
       // a trainee prompt of another occupation than FIAE has no trainer topics,
       // whatever the client claims (the FIAE prompt keeps today's text byte for
       // byte, trainer topics included: tests/unit/hai/persona.fiae-baseline.test.ts)
@@ -657,35 +669,67 @@ const RUN_MODEL = process.env.HAI_GOLDEN_MODEL_RUN === 'yes';
           .map(id => id.trim())
           .filter(Boolean);
         const dump: Record<string, unknown> = {};
+        // HAI_GOLDEN_REPEAT=<n> (default 1) runs every case n times. A case
+        // passes only if ALL runs pass (a model that is right two times in three
+        // is not reliable); the output names the passed runs per case.
+        const repeat = parseRepeat(process.env.HAI_GOLDEN_REPEAT);
+        const passedRuns: Record<string, number> = {};
+        const startedAt = Date.now();
+        let modelRuns = 0;
         for (const goldenCase of set.cases) {
           if (only.length > 0 && !only.includes(goldenCase.id)) continue;
-          goldenState.reset();
-          goldenState.access = accessFor(goldenCase);
-          goldenState.model = async systemPrompt => {
-            const reply = await providers.chatWithFallback(
-              systemPrompt,
-              [],
+          const runs: Array<{
+            score: CaseScore;
+            answer: string;
+          }> = [];
+          for (let run = 0; run < repeat; run += 1) {
+            goldenState.reset();
+            goldenState.access = accessFor(goldenCase);
+            goldenState.model = async systemPrompt => {
+              modelRuns += 1;
+              const reply = await providers.chatWithFallback(
+                systemPrompt,
+                [],
+                goldenCase.question,
+                undefined,
+                { maxOutputTokens: 1024, temperature: 0 }
+              );
+              return reply.text;
+            };
+            const result = await processMessage(
               goldenCase.question,
-              undefined,
-              { maxOutputTokens: 1024, temperature: 0 }
+              // HAI_GOLDEN_VOICE=yes measures the spoken way (voice assistant)
+              contextFor(goldenCase, process.env.HAI_GOLDEN_VOICE === 'yes')
             );
-            return reply.text;
-          };
-          const result = await processMessage(
-            goldenCase.question,
-            // HAI_GOLDEN_VOICE=yes measures the spoken way (voice assistant)
-            contextFor(goldenCase, process.env.HAI_GOLDEN_VOICE === 'yes')
-          );
-          const score = scoreAnswer(goldenCase, result.response, canaries);
+            runs.push({
+              score: scoreAnswer(goldenCase, result.response, canaries),
+              answer: result.response,
+            });
+          }
+          const score = mergeRuns(runs.map(r => r.score));
           scores.push(score);
+          passedRuns[goldenCase.id] = score.passedRuns;
+          // the answer of the first failing run, else of the first run
+          const shown = runs.find(r => !r.score.pass) ?? runs[0];
           dump[goldenCase.id] = {
             question: goldenCase.question,
             expected: goldenCase.expected.behavior,
             pass: score.pass,
             issues: score.issues,
-            answer: result.response,
+            answer: shown.answer,
+            ...(repeat > 1
+              ? {
+                  passedRuns: score.passedRuns,
+                  runs: runs.map(r => ({
+                    pass: r.score.pass,
+                    issues: r.score.issues,
+                    answer: r.answer,
+                  })),
+                }
+              : {}),
           };
         }
+        const seconds = Math.round((Date.now() - startedAt) / 1000);
         if (process.env.HAI_GOLDEN_DUMP) {
           writeFileSync(
             process.env.HAI_GOLDEN_DUMP,
@@ -696,6 +740,24 @@ const RUN_MODEL = process.env.HAI_GOLDEN_MODEL_RUN === 'yes';
         const summary = summarizeScores(scores);
         // numbers and case ids only, never an answer text
         process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+        process.stdout.write(
+          `${JSON.stringify(
+            {
+              repeat,
+              // cases that did not pass in every run: the runs that passed
+              passedRunsOfCasesNotAlwaysPassing: Object.fromEntries(
+                Object.entries(passedRuns).filter(([, n]) => n < repeat)
+              ),
+              passedRuns,
+              modelCalls: modelRuns,
+              seconds,
+              secondsPerModelCall:
+                modelRuns > 0 ? Math.round((seconds / modelRuns) * 10) / 10 : 0,
+            },
+            null,
+            2
+          )}\n`
+        );
         // a run of selected cases is a diagnosis, the thresholds are for the full set
         if (only.length === 0) expect(summary.violations).toEqual([]);
       },
