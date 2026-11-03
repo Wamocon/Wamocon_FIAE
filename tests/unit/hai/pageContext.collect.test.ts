@@ -194,6 +194,22 @@ describe('collectPageContext', () => {
     );
   });
 
+  it('takes the heading of the main area, not the brand heading of the sidebar that comes first in the DOM', () => {
+    const doc = page(
+      `<aside><h1>LFA</h1></aside><main><h1>Enabler Normalisierung</h1></main>`
+    );
+    expect(
+      collectPageContext(`/trainee/enablers/${ENABLER}`, doc, '').title
+    ).toBe('Enabler Normalisierung');
+  });
+
+  it('takes a heading outside main only when main has none', () => {
+    const doc = page(`<div><h1>Seite ohne main</h1></div>`);
+    expect(collectPageContext('/trainer/dashboard', doc, '').title).toBe(
+      'Seite ohne main'
+    );
+  });
+
   it('sends only uuids as ids, never other query values', () => {
     const doc = page('<main><h1>Seite</h1></main>');
     const result = collectPageContext(
