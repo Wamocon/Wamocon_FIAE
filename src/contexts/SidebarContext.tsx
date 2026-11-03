@@ -30,3 +30,12 @@ export function useSidebar() {
   if (!ctx) throw new Error('useSidebar must be used within SidebarProvider');
   return ctx;
 }
+
+/**
+ * Like useSidebar, but null outside of the provider. For floating parts that sit
+ * next to the navigation (the HAI handle and chat panel) and must also render
+ * where there is no navigation (tests, pages without the layout).
+ */
+export function useOptionalSidebar(): SidebarContextType | null {
+  return useContext(SidebarContext) ?? null;
+}

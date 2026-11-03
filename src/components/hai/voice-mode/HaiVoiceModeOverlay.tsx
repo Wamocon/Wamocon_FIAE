@@ -3,11 +3,13 @@
 /**
  * Voice mode of the HAI: a conversation with the HAI figure.
  *
- * No full screen and no dark layer: the HAI is a figure that rises out of a
- * round basin of water at the bottom left of the page, stands in it with its
- * legs while the voice mode runs, speaks with a moving mouth and dives back in
- * when the mode ends (HaiCharacter.tsx). The page behind stays usable: only the
- * figure and its controls take clicks, there is no focus trap and no modal.
+ * No full screen and no dark layer: the HAI is a figure that rises out of the
+ * HAI symbol at the bottom left of the page. The symbol (HaiButton) IS the pond:
+ * the same round fish pond, grown. The figure stands in its water with its legs
+ * while the voice mode runs, speaks with a moving mouth and dives back in when
+ * the mode ends, then the symbol is the button again (HaiCharacter.tsx). The
+ * page behind stays usable: only the figure and its controls take clicks, there
+ * is no focus trap and no modal.
  *
  * Next to the figure: a speech bubble with the subtitles (what the person said,
  * what the HAI says, sentence by sentence as it is read aloud, switchable), a
@@ -34,9 +36,10 @@ import { consentParagraphs } from '@/lib/hai/voice/consentText';
 import { HaiNavigationCard } from '../HaiNavigationCard';
 import { HaiVoiceFallbackNotice } from '../HaiVoiceFallbackNotice';
 import type { VoiceError, VoicePhase } from '../useHaiVoice';
-import { DIVE_MS, HaiCharacter, type CharacterState } from './HaiCharacter';
+import { useHaiAnchor } from '../haiLayout';
+import { HaiCharacter, type CharacterState } from './HaiCharacter';
 import { providerStatement } from './providerStatement';
-import { usePrefersReducedMotion } from './usePrefersReducedMotion';
+import { usePondState } from './usePondState';
 import { useHaiVoiceSession } from './voiceSessionContext';
 
 function stateOf(
@@ -83,12 +86,17 @@ function useRecentChange(value: string, ms: number): boolean {
   return recent;
 }
 
-// bottom left (fixed bottom-4 left-4), plus the safe area of a phone (notch, home bar)
-const PLACE =
-  'fixed bottom-4 left-4 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]';
+// The place is the anchor of the HAI symbol (haiLayout.ts): bottom left, the
+// same spot as the button, so the pond and the symbol are one and the same.
 
-// size of the figure: about 160 px high on a phone, 280 px from sm up
-const FIGURE_SIZE = 'h-40 sm:h-[17.5rem]';
+// The pond spot is as wide as the grown symbol (HaiButton scales the round symbol
+// 2x, from sm up 2.8x: 8rem and 14rem). The figure stands with its water line
+// in the center of the pond: about 160 px high on a phone, 280 px from sm up.
+// The top margin keeps room for the part of the figure above the pond.
+const SPOT =
+  'relative mt-[4.3rem] h-32 w-32 shrink-0 sm:mt-[7.5rem] sm:h-56 sm:w-56';
+const FIGURE_BOX =
+  'absolute bottom-[2.27rem] -left-[0.33rem] h-40 aspect-[26/30] sm:bottom-[3.97rem] sm:-left-[0.58rem] sm:h-[17.5rem]';
 
 const BUTTON =
   'pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-cyan-400/50 text-cyan-100 shadow-md transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#06183a] focus-visible:outline-none';
@@ -97,25 +105,8 @@ const BUTTON_ON = 'bg-cyan-400 text-[#06183a] hover:bg-cyan-300';
 
 export function HaiVoiceModeOverlay() {
   const { view } = useHaiVoiceSession();
-  const reduced = usePrefersReducedMotion();
-  const open = view !== 'closed';
-
   // after the end the figure dives into the water before it is gone
-  const [diving, setDiving] = useState(false);
-  const wasOpen = useRef(false);
-  useEffect(() => {
-    if (open) {
-      wasOpen.current = true;
-      setDiving(false);
-      return;
-    }
-    if (!wasOpen.current) return;
-    wasOpen.current = false;
-    if (reduced) return;
-    setDiving(true);
-    const timer = setTimeout(() => setDiving(false), DIVE_MS + 150);
-    return () => clearTimeout(timer);
-  }, [open, reduced]);
+  const { open, diving } = usePondState(view);
 
   if (open) return <LiveFigure />;
   if (diving) return <DivingFigure />;
@@ -124,17 +115,16 @@ export function HaiVoiceModeOverlay() {
 
 /** Only the figure, on its way into the water. No controls, no text. */
 function DivingFigure() {
+  const anchor = useHaiAnchor();
   return createPortal(
     <div
       data-testid="hai-voice-figure"
       data-phase="diving"
-      className={`pointer-events-none z-40 ${PLACE}`}
+      className={`pointer-events-none ${anchor.className}`}
     >
-      <HaiCharacter
-        state="waiting"
-        leaving
-        className={`${FIGURE_SIZE} aspect-[26/30]`}
-      />
+      <div className={SPOT}>
+        <HaiCharacter state="waiting" leaving className={FIGURE_BOX} />
+      </div>
     </div>,
     document.body
   );
@@ -142,6 +132,7 @@ function DivingFigure() {
 
 function LiveFigure() {
   const { t } = useLanguage();
+  const anchor = useHaiAnchor();
   const {
     voice,
     captions,
@@ -237,7 +228,7 @@ function LiveFigure() {
       data-testid="hai-voice-figure"
       data-state={state}
       data-phase="live"
-      className={`pointer-events-none z-40 flex flex-col items-start gap-2 ${PLACE}`}
+      className={`pointer-events-none flex flex-col items-start gap-2 ${anchor.className}`}
     >
       {needsConsent && (
         <div
@@ -280,21 +271,21 @@ function LiveFigure() {
       )}
 
       <div className="flex items-end gap-2">
-        {/* the figure in its basin: the person can tap it to interrupt */}
+        {/* the figure in its pond (the grown HAI symbol): the person can tap it to interrupt */}
         <div
           data-testid="hai-voice-figure-body"
           onClick={onFigure}
-          className={`${FIGURE_SIZE} pointer-events-none aspect-[26/30] shrink-0`}
+          className={`${SPOT} pointer-events-none`}
         >
           <HaiCharacter
             state={state}
             activity={activity}
             level={voice.level}
-            className="h-full w-full"
+            className={FIGURE_BOX}
           />
         </div>
 
-        <div className="flex max-w-[calc(100vw-11.5rem)] min-w-0 flex-col gap-2 self-stretch sm:max-w-[18rem]">
+        <div className="flex max-w-[calc(100vw-10.5rem)] min-w-0 flex-col gap-2 self-stretch sm:max-w-[18rem]">
           {/* speech bubble with the subtitles */}
           {bubble && (
             <div className="pointer-events-auto relative">

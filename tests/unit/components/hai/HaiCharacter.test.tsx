@@ -1,4 +1,6 @@
 import React from 'react';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { act, render, screen } from '@testing-library/react';
 import { describe, it, expect, afterEach, jest } from '@jest/globals';
 import {
@@ -9,8 +11,10 @@ import {
 } from '@/components/hai/voice-mode/HaiCharacter';
 import type { MouthSources } from '@/components/hai/voice-mode/useMouthShape';
 
-// The HAI figure: a cartoon shark with head, arms, hands, body and legs, in a
-// round basin of water. The look of each state is carried by data attributes.
+// The HAI figure: the shark of the HAI symbol (pixel shark, shark-new.gif) with
+// head, arms, hands, body and legs, standing in the water of the symbol (the
+// round symbol itself is the pond, see HaiPanel.test.tsx). The look of each
+// state is carried by data attributes.
 // The figure is decoration (aria-hidden), the voice mode writes the state as text.
 
 const originalMatchMedia = window.matchMedia;
@@ -71,7 +75,7 @@ describe('the parts of the figure', () => {
     expect(legs.querySelector('.hf-foot-right')).not.toBeNull();
   });
 
-  it('stands in a round basin: water, waves, ripples, and a copy of the figure under the water line', () => {
+  it('stands in the water of the symbol: rings, waves, ripples, and a copy of the figure under the water line', () => {
     render(<HaiCharacter state="waiting" />);
     const root = figure();
     expect(root.querySelector('.hf-rim')).not.toBeNull();
@@ -352,5 +356,91 @@ describe('reduced motion', () => {
     render(<HaiCharacter state="speaking" />);
     expect(figure().getAttribute('data-motion')).toBe('full');
     expect(figure().getAttribute('data-phase')).toBe('rising');
+  });
+});
+
+describe('the look of the original (the HAI symbol, shark-new.gif)', () => {
+  // The eight colors of public/images/shark-new.gif, read from the file.
+  const GIF_COLORS = {
+    '--hf-night': '#242845',
+    '--hf-deep': '#23273f',
+    '--hf-shade': '#363b4e',
+    '--hf-mid': '#636979',
+    '--hf-back': '#aabbc0',
+    '--hf-face': '#eaeeef',
+    '--hf-ink': '#000000',
+    '--hf-mouth': '#56203e',
+  };
+  const css = readFileSync(join(process.cwd(), 'src/app/globals.css'), 'utf8');
+  const figureCss = css.slice(
+    css.indexOf('/* HAI figure of the voice mode'),
+    css.indexOf('/* ---- motion ---- */')
+  );
+  // the same without line breaks and indentation, for readable checks
+  const flat = figureCss.split(/\s+/).join(' ');
+
+  it('uses exactly the colors of the symbol, with the variable of each role', () => {
+    for (const [name, hex] of Object.entries(GIF_COLORS)) {
+      expect(figureCss).toContain(`${name}: ${hex};`);
+    }
+  });
+
+  it('has no color of the first figure left (the blues and the turquoise of the old basin)', () => {
+    for (const old of ['#2f74dd', '#5aa0f2', '#06183a', '#2dd4bf', '#e6fbff']) {
+      expect(figureCss.toLowerCase()).not.toContain(old);
+    }
+  });
+
+  it('has the white front and the gray back of the symbol: a face on the head and a belly, fins, arms and legs in the back color', () => {
+    render(<HaiCharacter state="waiting" />);
+    const above = figure().querySelector('[data-copy="above"]')!;
+    expect(above.querySelector('.hf-face')).not.toBeNull();
+    expect(above.querySelector('.hf-belly')).not.toBeNull();
+    expect(flat).toContain(
+      '.hai-figure .hf-belly, .hai-figure .hf-face { fill: var(--hf-face);'
+    );
+    expect(flat).toContain(
+      '.hai-figure .hf-limb { fill: none; stroke: var(--hf-back);'
+    );
+    expect(flat).toContain(
+      '.hai-figure .hf-fin, .hai-figure .hf-foot { fill: var(--hf-back);'
+    );
+  });
+
+  it('has dark block eyes (a blink squeezes them to the dash of the symbol), no cheeks, no tongue', () => {
+    render(<HaiCharacter state="waiting" />);
+    const above = figure().querySelector('[data-copy="above"]')!;
+    expect(above.querySelectorAll('[data-eye] .hf-pupil rect')).toHaveLength(2);
+    expect(above.querySelector('.hf-lid')).toBeNull();
+    expect(above.querySelector('.hf-cheek')).toBeNull();
+    expect(above.querySelector('.hf-tongue')).toBeNull();
+    expect(css).toContain('@keyframes hf-blink');
+  });
+
+  it('draws the open mouth dark red with two small teeth, like the symbol', () => {
+    render(<HaiCharacter state="waiting" />);
+    const open = figure().querySelector('[data-copy="above"] .hf-mouth-open')!;
+    expect(open.querySelector('.hf-mouth-inside')).not.toBeNull();
+    const teeth = open.querySelector('.hf-teeth')!;
+    // two blocks (two sub-paths)
+    expect((teeth.getAttribute('d') ?? '').match(/M/g)).toHaveLength(2);
+    expect(flat).toContain(
+      '.hai-figure .hf-mouth-inside { fill: var(--hf-mouth);'
+    );
+  });
+
+  it('draws head and body as one dome: outlines first, fills without a line on top', () => {
+    render(<HaiCharacter state="waiting" />);
+    const above = figure().querySelector('[data-copy="above"]')!;
+    expect(above.querySelectorAll('.hf-sil')).toHaveLength(2);
+    expect(flat).toContain(
+      '.hai-figure .hf-body { fill: var(--hf-back); stroke: none;'
+    );
+  });
+
+  it('draws no pond of its own: the round HAI symbol is the pond (no glass wall, no rim fill)', () => {
+    render(<HaiCharacter state="waiting" />);
+    expect(figure().querySelector('.hf-wall, .hf-shadow, .hf-edge')).toBeNull();
+    expect(figure().querySelector('linearGradient, radialGradient')).toBeNull();
   });
 });
