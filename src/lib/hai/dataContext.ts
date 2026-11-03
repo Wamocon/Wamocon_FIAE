@@ -40,6 +40,7 @@ import { toHaiRole } from '@/lib/auth-helpers';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { buildHaiTrainingScope } from './trainingScope';
 import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
+import { loadTraineeProgress } from '@/lib/trainer/trainee-progress';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 import { traineeSearchNotFoundLine } from './denial';
 import { formatDayProgress, loadDayProgress } from './dayProgress';
@@ -938,18 +939,13 @@ export async function fetchTrainerTraineeOverview(trainerId: string): Promise<Tr
         const nowIso = now.toISOString();
 
         // Everything else in one query per fact, for all trainees at once
-        const [progressRows, enrollmentRows, catalogRows, blockRows, pendingRows] =
+        // The progress is the ONE figure of the platform (an enabler counts when
+        // its required quizzes are passed). The rows of enabler_completions are
+        // not it: the quiz based completion does not write them, so counting them
+        // showed 0 % for every trainee (found on the real Preview).
+        const [progressLoaded, enrollmentRows, catalogRows, blockRows, pendingRows] =
             (await Promise.all([
-                db.execute(sql`
-                    SELECT cm.user_id AS trainee_id,
-                           COUNT(DISTINCT ec.enabler_id) AS completed,
-                           COUNT(DISTINCT e.id) AS total
-                    FROM course_members cm
-                    JOIN enablers e ON e.course_id = cm.course_id AND e.is_active = true
-                    LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = cm.user_id
-                    WHERE cm.user_id IN (${idList})
-                    GROUP BY cm.user_id
-                `),
+                loadTraineeProgress(trainees.map(t => String(t.id)), null),
                 db.execute(sql`
                     SELECT te.trainee_id, te.training_catalog_id, te.start_date, te.duration_years
                     FROM trainee_enrollments te
@@ -977,15 +973,8 @@ export async function fetchTrainerTraineeOverview(trainerId: string): Promise<Tr
                     FROM profiles p
                     WHERE p.id IN (${idList})
                 `),
-            ])) as any[][];
+            ])) as [Awaited<ReturnType<typeof loadTraineeProgress>>, any[], any[], any[], any[]];
 
-        const progressById = new Map<string, { completed: number; total: number }>();
-        for (const r of progressRows ?? []) {
-            progressById.set(String(r.trainee_id), {
-                completed: Number(r.completed) || 0,
-                total: Number(r.total) || 0,
-            });
-        }
         const pendingById = new Map<string, number>();
         for (const r of pendingRows ?? []) {
             pendingById.set(String(r.trainee_id), Number(r.pending) || 0);
@@ -1010,9 +999,7 @@ export async function fetchTrainerTraineeOverview(trainerId: string): Promise<Tr
 
         return trainees.map(trainee => {
             const id = String(trainee.id);
-            const progress = progressById.get(id) ?? { completed: 0, total: 0 };
-            const progressPercent =
-                progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+            const progressPercent = progressLoaded.byTrainee.get(id)?.pct ?? 0;
 
             // No enrollment at all: the standard occupation (FIAE), like the catalog scope
             const enrollments = enrollmentsById.get(id) ?? [
@@ -1114,25 +1101,29 @@ async function fetchTraineeDetailForTrainer(
     const parts: string[] = [`**Azubi-Detail: ${trainee.fullName}**`];
 
     try {
-        // 1. Overall progress
-        const progressResult = await db.execute(sql`
-            SELECT
-                c.title as course_title,
-                COUNT(DISTINCT e.id) AS total,
-                COUNT(DISTINCT ec.enabler_id) AS completed
-            FROM course_members cm
-            JOIN courses c ON c.id = cm.course_id
-            JOIN enablers e ON e.course_id = cm.course_id AND e.is_active = true
-            LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = ${trainee.id}
-            WHERE cm.user_id = ${trainee.id}
-            GROUP BY c.id, c.title
-        `);
+        // 1. Overall progress per course: the figure of the platform (required
+        // quizzes passed), not the rows of enabler_completions (always empty for
+        // the quiz based completion)
+        const loadedProgress = await loadTraineeProgress([String(trainee.id)], null);
+        const ownProgress = loadedProgress.byTrainee.get(String(trainee.id));
+        const courseProgress = [...(ownProgress?.courses ?? new Map())]
+            .map(([courseId, figure]) => ({
+                course: loadedProgress.courses.get(courseId),
+                completed: figure.completed,
+                total: figure.total,
+            }))
+            .filter(row => row.course && row.total > 0)
+            .sort(
+                (a, b) =>
+                    (a.course!.chapter ?? 0) - (b.course!.chapter ?? 0) ||
+                    a.course!.title.localeCompare(b.course!.title, 'de')
+            );
 
-        if ((progressResult as any[]).length > 0) {
+        if (courseProgress.length > 0) {
             parts.push('**Kursfortschritt:**');
-            for (const row of progressResult as any[]) {
-                const pct = Number(row.total) > 0 ? Math.round((Number(row.completed) / Number(row.total)) * 100) : 0;
-                parts.push(`- ${row.course_title}: ${row.completed}/${row.total} Enabler (${pct}%)`);
+            for (const row of courseProgress) {
+                const pct = Math.round((row.completed / row.total) * 100);
+                parts.push(`- ${row.course!.title}: ${row.completed}/${row.total} Enabler (${pct}%)`);
             }
         }
 

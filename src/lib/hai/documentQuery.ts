@@ -373,10 +373,17 @@ function oneLine(text: string, max = 120): string {
 }
 
 /** The list for the prompt: title, file name, type, the enabler or use case, at most 20 lines. */
-export function formatDocumentList(rows: DocumentRow[], total: number): string {
+export function formatDocumentList(
+  rows: DocumentRow[],
+  total: number,
+  capped = false
+): string {
   const shown = rows.slice(0, DOCUMENT_LIST_MAX);
-  const head =
-    total > shown.length
+  // The read stops at DOCUMENT_ROWS_MAX rows: then the number is a lower bound
+  // and the answer must not present it as the count of all files
+  const head = capped
+    ? `${DOCUMENT_LIST_MARKER} Mindestens ${total} Dateien gefunden (gelesen werden höchstens ${DOCUMENT_ROWS_MAX}), die ersten ${shown.length} stehen hier. Nenne keine genaue Gesamtzahl. Frage nach einem Enabler, Use Case oder Kurs, um die Liste einzugrenzen.`
+    : total > shown.length
       ? `${DOCUMENT_LIST_MARKER} ${total} Dateien gefunden, die ersten ${shown.length} stehen hier. Frage nach einem Enabler, Use Case oder Kurs, um die Liste einzugrenzen.`
       : `${DOCUMENT_LIST_MARKER} ${total} ${total === 1 ? 'Datei' : 'Dateien'} gefunden.`;
   const lines = [
@@ -533,16 +540,28 @@ export async function queryDocumentsByScope(
   return (result as any[]).map(toRow);
 }
 
-/** Files whose name or title contains one of the keys (keys come from normalizeFileKey). */
+/**
+ * Files whose name or title matches one of the keys (keys come from
+ * normalizeFileKey). A plain string and a key with `partial: true` may be part
+ * of a name (LIKE), a key with `partial: false` must be the whole name (the same
+ * rule the code applies behind the query). Without that, a short piece of a name
+ * ("szenario") matches hundreds of files, fills the 200 rows of the limit and
+ * pushes the one file that was named out of the result.
+ */
 export async function queryDocumentsByName(
   access: DocumentAccess,
-  keys: string[]
+  keys: Array<string | FileNameKey>
 ): Promise<DocumentRow[]> {
   const catalogIds = [...new Set((access.catalogIds ?? []).filter(isUuid))];
   if (catalogIds.length === 0 || keys.length === 0) return [];
   const fileName = normalizedColumn('cd.file_name');
   const title = normalizedColumn("coalesce(cd.title, '')");
-  const likes = keys.slice(0, 12).flatMap(key => {
+  const likes = keys.slice(0, 12).flatMap(entry => {
+    const { key, partial } =
+      typeof entry === 'string' ? { key: entry, partial: true } : entry;
+    if (!partial) {
+      return [sql`${fileName} = ${key}`, sql`${title} = ${key}`];
+    }
     const pattern = `%${escapeLike(key)}%`;
     return [sql`${fileName} LIKE ${pattern}`, sql`${title} LIKE ${pattern}`];
   });
@@ -653,15 +672,14 @@ export async function answerDocumentQuestion(
   const keys = extractFileNameKeys(message);
   let rows: DocumentRow[] = [];
   let named = false;
+  /** The read of a list stopped at its row limit: the count is a lower bound. */
+  let capped = false;
 
   // 1. A file name in the message: exact or partial match against what the
   // person may see; only the rows of the longest matching key count
   if (keys.length > 0) {
     const candidates = filterDocumentRows(
-      await queryDocumentsByName(
-        access,
-        keys.map(k => k.key)
-      ),
+      await queryDocumentsByName(access, keys),
       access
     );
     for (const { key, partial } of keys) {
@@ -714,12 +732,11 @@ export async function answerDocumentQuestion(
         scope.useCaseIds.length +
         scope.courseIds.length >
       0;
-    rows = filterDocumentRows(
-      hasScope
-        ? await queryDocumentsByScope(access, scope)
-        : await queryAllDocuments(access),
-      access
-    );
+    const read = hasScope
+      ? await queryDocumentsByScope(access, scope)
+      : await queryAllDocuments(access);
+    capped = read.length >= DOCUMENT_ROWS_MAX;
+    rows = filterDocumentRows(read, access);
   }
 
   if (rows.length === 0) {
@@ -742,7 +759,7 @@ export async function answerDocumentQuestion(
       : [];
 
   return {
-    text: formatDocumentList(rows, rows.length),
+    text: formatDocumentList(rows, rows.length, capped),
     documentIds,
     total: rows.length,
   };

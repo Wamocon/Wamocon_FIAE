@@ -14,10 +14,14 @@ jest.mock('@/lib/catalog/scope', () => ({
   getCatalogScopeForUserId: jest.fn(),
 }));
 jest.mock('@/lib/catalog/phase-plan-db', () => ({ loadPhasePlan: jest.fn() }));
+jest.mock('@/lib/trainer/trainee-progress', () => ({
+  loadTraineeProgress: jest.fn(),
+}));
 
 import db from '@/db';
 import { toHaiRole } from '@/lib/auth-helpers';
 import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
+import { loadTraineeProgress } from '@/lib/trainer/trainee-progress';
 import {
   classifyDataIntent,
   extractTraineeNameCandidate,
@@ -216,7 +220,10 @@ function makeTrainees(count: number) {
  */
 function installDb(config: {
   selects: Row[][];
+  /** The progress of the platform per trainee (loadTraineeProgress), as completed and total. */
   progress?: Row[];
+  /** Courses of one trainee for the detail query: [title, completed, total]. */
+  courseProgress?: Array<[string, number, number]>;
   enrollments?: Row[];
   catalogs?: Row[];
   blocks?: Row[];
@@ -233,6 +240,40 @@ function installDb(config: {
     return c;
   };
   const mock = db as unknown as Record<string, unknown>;
+  (loadTraineeProgress as jest.Mock).mockImplementation(async (ids: string[]) => {
+    if (config.failExecute) throw new Error('db down');
+    const byTrainee = new Map<string, unknown>();
+    const courses = new Map<string, unknown>();
+    for (const r of config.progress ?? []) {
+      const completed = Number(r.completed);
+      const total = Number(r.total);
+      byTrainee.set(String(r.trainee_id), {
+        completed,
+        total,
+        pct: total > 0 ? Math.round((completed / total) * 100) : 0,
+        courses: new Map(),
+        completionDates: [],
+        undated: 0,
+      });
+    }
+    if (config.courseProgress && ids.length === 1) {
+      const perCourse = new Map<string, { completed: number; total: number }>();
+      config.courseProgress.forEach(([title, completed, total], i) => {
+        const id = `course-${i}`;
+        courses.set(id, { id, title, chapter: i + 1, code: null });
+        perCourse.set(id, { completed, total });
+      });
+      byTrainee.set(ids[0], {
+        completed: 0,
+        total: 0,
+        pct: 0,
+        courses: perCourse,
+        completionDates: [],
+        undated: 0,
+      });
+    }
+    return { byTrainee, courses };
+  });
   mock.select = jest.fn(() => chain(queue.shift() ?? []));
   mock.execute = jest.fn(async (query: unknown) => {
     const built = dialect.sqlToQuery(query as never);
@@ -240,7 +281,6 @@ function installDb(config: {
     executed.push(text);
     executedParams.push(built.params);
     if (config.failExecute) throw new Error('db down');
-    if (text.includes('FROM course_members cm')) return config.progress ?? [];
     if (text.includes('FROM trainee_enrollments')) return config.enrollments ?? [];
     if (text.includes('FROM training_catalogs')) return config.catalogs ?? [];
     if (text.includes('FROM ausbildung_blocks')) return config.blocks ?? [];
@@ -293,8 +333,10 @@ describe('fetchTrainerTraineeOverview', () => {
 
     const result = await fetchTrainerTraineeOverview('trainer-1');
 
-    // two trainees, five queries: not one query per trainee
-    expect(executed).toHaveLength(5);
+    // two trainees, four queries and the progress of the platform: not one query per trainee
+    expect(executed).toHaveLength(4);
+    expect(loadTraineeProgress).toHaveBeenCalledTimes(1);
+    expect(loadTraineeProgress).toHaveBeenCalledWith([anna.id, ben.id], null);
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({
       fullName: 'Azubi Nummer1',
@@ -338,6 +380,17 @@ describe('fetchTrainerTraineeOverview', () => {
     expect(all).not.toContain('grade');
     // private appointments of a trainee are no block of the overview
     expect(all).toContain('b.block_type in');
+  });
+
+  it('takes the progress from the figure of the platform, not from the rows of enabler_completions (0 % for everybody on the real Preview)', async () => {
+    const [anna] = makeTrainees(1);
+    const { executed } = installDb({
+      selects: [[anna]],
+      progress: [{ trainee_id: anna.id, completed: 361, total: 414 }],
+    });
+    const result = await fetchTrainerTraineeOverview('trainer-1');
+    expect(result[0].progressPercent).toBe(87);
+    expect(executed.join('\n')).not.toContain('enabler_completions');
   });
 
   it('binds no Date object into a raw query (postgres.js cannot bind one without a column type: found on a real Postgres)', async () => {
@@ -516,6 +569,26 @@ describe('fetchDataContext for a trainer', () => {
     expect(context?.dataIntent).toBe('trainee_detail_query');
     expect(context?.summary).toContain('Azubi-Detail: Anna Muster');
     expect(executed.length).toBeGreaterThan(0);
+  });
+
+  it('the course progress of the detail query is the figure of the platform, one line per course with an enabler', async () => {
+    const [anna] = makeTrainees(1);
+    const { executed } = installDb({
+      selects: [...snapshotSelects, [{ id: anna.id, fullName: 'Anna Muster', firstName: 'Anna', lastName: 'Muster' }]],
+      courseProgress: [
+        ['Datenbanken', 3, 4],
+        ['Netzwerke', 0, 5],
+        ['Leerer Kurs', 0, 0],
+      ],
+    });
+    const context = await fetchDataContext('trainer-1', 'TRAINER', 'Wie steht Anna Muster?');
+    expect(loadTraineeProgress).toHaveBeenCalledWith([anna.id], null);
+    expect(context?.summary).toContain('**Kursfortschritt:**');
+    expect(context?.summary).toContain('- Datenbanken: 3/4 Enabler (75%)');
+    expect(context?.summary).toContain('- Netzwerke: 0/5 Enabler (0%)');
+    expect(context?.summary).not.toContain('Leerer Kurs');
+    // the rows of enabler_completions are no source of the progress
+    expect(executed.join('\n')).not.toContain('enabler_completions');
   });
 
   it('the submissions of the detail query use submitted_at (the tables have no created_at: found on a real Postgres)', async () => {
