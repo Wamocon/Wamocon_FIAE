@@ -34,6 +34,7 @@ import {
     activityReports,
     notifications,
     trainingCatalogs,
+    TRAINING_CATALOG_IDS,
 } from '@/db/migrations/schemas/schema';
 import { toHaiRole } from '@/lib/auth-helpers';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
@@ -46,6 +47,12 @@ import { foldUmlauts, isDayBriefingMessage } from './dayQuestion';
 import { formatDayProgress, loadDayProgress } from './dayProgress';
 import type { DayProgress } from './dayProgress';
 import type { HaiTrainingScope } from './trainingScope';
+import {
+    answerDocumentQuestion,
+    isDocumentQuestion,
+    type DocumentAccess,
+    type DocumentScope,
+} from './documentQuery';
 
 // ============================================================================
 // TYPES
@@ -67,6 +74,7 @@ export type DataIntent =
     | 'trainee_detail_query' // Trainer: "Wie steht [Name]?" / "Noten von [Name]"
     | 'learning_query'      // Trainee: tips on learning (quiz scores, next exams)
     | 'day_briefing'        // "Was steht heute an?" / "Guten Morgen" (day companion)
+    | 'document_query'      // "Welche Dateien hat dieser Enabler?" / "Wie heisst die Datei?"
     | 'none';               // No data intent detected
 
 export interface LiveDataContext {
@@ -76,6 +84,8 @@ export interface LiveDataContext {
     tokenEstimate: number;
     /** Which data intent was detected */
     dataIntent: DataIntent;
+    /** document_query: files whose pages the PageIndex loads (a named file) */
+    documentIds?: string[];
 }
 
 /** What the pipeline knows about the turn, only used for the day companion. */
@@ -84,6 +94,14 @@ export interface DataContextOptions {
     preferredCatalogCode?: string | null;
     /** Training scope of the trainee (phase plan), for the next step. */
     trainingScope?: Pick<HaiTrainingScope, 'currentPhase' | 'allowedComponentPhases'>;
+    /**
+     * What the person may read (from the database, never from the request): the
+     * occupations, the audience and the organization. Without it a question about
+     * files gets the neutral answer (fail closed).
+     */
+    documentAccess?: DocumentAccess | null;
+    /** Records of the page the person is on (ids already checked by the page context). */
+    page?: DocumentScope | null;
 }
 
 export interface UserSnapshot {
@@ -182,9 +200,27 @@ export interface TrainerPendingReviews {
     pendingTraineeNames: string[];
 }
 
+/** One occupation of an assigned trainee (a trainee can be in several). */
+export interface TrainerTraineeOccupation {
+    title: string;
+    /** Short code of the occupation (FIAE, KFBM), used in the compact list. */
+    code: string | null;
+    /** Year of training (1 to 3), from the block calendar or the start date. */
+    trainingYear: number | null;
+    /** Block type of today in the block calendar of this occupation. */
+    currentBlockType: string | null;
+}
+
+/**
+ * One assigned, active trainee in the overview of a trainer. Metadata only:
+ * no e-mail address, no date of birth, no grades.
+ */
 export interface TrainerTraineeInfo {
     fullName: string;
     progressPercent: number;
+    occupations: TrainerTraineeOccupation[];
+    /** Open items waiting for the trainer to review (submissions, reports). */
+    pendingSubmissions: number;
 }
 
 // ============================================================================
@@ -215,44 +251,197 @@ const KW_OVERVIEW =['ueberblick', 'meine azubis', 'wie stehen', 'fortschritt mei
 // NAME EXTRACTION (for trainer → trainee queries)
 // ============================================================================
 
-/** Common German words that look like names but aren't */
+/**
+ * Words that are no names (folded: lower case, ae oe ue ss): question and
+ * command words, pronouns, small words and the generic nouns of a trainer's
+ * question ("Azubis", "Dateien", "Woche"). Matched as a whole word.
+ */
 const NOT_NAMES = new Set([
-    'wie', 'was', 'wer', 'hat', 'von', 'der', 'die', 'das', 'ist', 'bei',
-    'mit', 'nach', 'stand', 'note', 'noten', 'use', 'case', 'progress',
-    'enabler', 'quiz', 'klausur', 'schulblock', 'block', 'alle', 'meine',
-    'sich', 'und', 'oder', 'nicht', 'auch', 'noch', 'schon', 'mal',
-    'den', 'dem', 'des', 'ein', 'eine', 'einem', 'einen', 'einer',
-    'kann', 'hat', 'habe', 'haben', 'wird', 'sind', 'sein', 'seine',
-    'fortschritt', 'abgaben', 'berichte', 'noten', 'ergebnis',
+    // question and command words, greetings
+    'wie', 'was', 'wer', 'wem', 'wen', 'wessen', 'wo', 'wann', 'warum', 'wieso',
+    'weshalb', 'wohin', 'welche', 'welcher', 'welchen', 'welchem', 'welches',
+    'zeig', 'zeige', 'zeigst', 'liste', 'gib', 'gibt', 'gebe', 'nenne', 'nenn',
+    'sag', 'sage', 'sagst', 'kannst', 'koennte', 'koenntest', 'kann', 'bitte',
+    'hallo', 'hi', 'hey', 'danke', 'guten', 'morgen', 'tag', 'abend', 'moin',
+    'ok', 'okay', 'dann', 'also', 'und', 'oder', 'aber', 'nicht', 'auch', 'noch',
+    'schon', 'mal', 'nur', 'ja', 'nein', 'wenn', 'dass', 'weil', 'ob',
+    // small words, pronouns, verbs
+    'hat', 'von', 'der', 'die', 'das', 'ist', 'bei', 'mit', 'nach', 'sich',
+    'den', 'dem', 'des', 'ein', 'eine', 'einem', 'einen', 'einer', 'eines',
+    'habe', 'haben', 'hast', 'wird', 'sind', 'sein', 'seine', 'war', 'waren',
+    'ich', 'mir', 'mich', 'mein', 'meine', 'meinen', 'meinem', 'meiner', 'meines',
+    'du', 'dir', 'dich', 'wir', 'uns', 'sie', 'ihr', 'ihm', 'ihn', 'es', 'man',
+    'alle', 'allen', 'aller', 'alles', 'jede', 'jeder', 'jeden', 'viele', 'wieviele',
+    'stand', 'status', 'liste', 'listen', 'uebersicht', 'ueberblick', 'name',
+    'namen', 'person', 'personen', 'leute', 'frage', 'fragen', 'trainer',
+    'admin', 'chef', 'herr', 'frau',
+    // nouns of the platform and of the training
+    'note', 'noten', 'use', 'case', 'cases', 'progress', 'enabler', 'enablern',
+    'quiz', 'quizze', 'klausur', 'klausuren', 'schulblock', 'block', 'bloecke',
+    'blocks', 'woche', 'wochen', 'jahr', 'jahre', 'jahren', 'monat', 'monate',
+    'phase', 'phasen', 'kurs', 'kurse', 'kursen', 'schule', 'betrieb', 'datei',
+    'dateien', 'pdf', 'pdfs', 'anhang', 'anhaenge', 'unterlage', 'unterlagen',
+    'fortschritt', 'abgaben', 'abgabe', 'berichte', 'bericht', 'ergebnis',
+    'ergebnisse', 'pruefung', 'pruefungen', 'kalender', 'termin',
+    'termine', 'beruf', 'berufe', 'fiae', 'kfbm', 'fachinformatiker',
 ]);
 
 /**
- * Extract a potential trainee name from a trainer's message.
- * Matches patterns like "von Max", "fuer Max Mustermann", "Wie steht Max?"
+ * Stems of generic nouns, also as the start of a compound ("Azubiliste",
+ * "Berufsschulblock"): a capitalized word that starts with one is no name. No
+ * short stems here, a surname like "Block" stays possible.
  */
-function extractPotentialTraineeName(message: string): string | null {
+const NOT_NAME_STEMS = [
+    'azubi', 'auszubildend', 'trainee', 'lehrling', 'ausbildung', 'dokument',
+    'abgabe', 'bericht', 'pruefung', 'beruf', 'enabler', 'fortschritt',
+    'datei', 'unterlage', 'kalender', 'nachweis', 'taetigkeit', 'ergebnis',
+    'uebersicht', 'ueberblick', 'berufsschul', 'anwendungsentwicklung',
+];
+
+const NAME_WORD = "[A-ZÄÖÜ][a-zäöüß]{2,}(?:-[A-ZÄÖÜ][a-zäöüß]{2,})?";
+const NAME_WORD_RE = new RegExp(`^${NAME_WORD}$`);
+const PREP_NAME_RE = new RegExp(
+    `\\b(?:von|fuer|für|zu|ueber|über)\\s+(${NAME_WORD}(?:\\s+${NAME_WORD})?)`
+);
+
+/** True for a word that is a generic noun, a question word or a small word. */
+function isNotAName(word: string): boolean {
+    const folded = foldUmlauts(word.replace(/[?!.,;:]+$/, ''));
+    if (folded.length === 0) return true;
+    // "Azubi-Liste" and the like: one generic part is enough
+    const parts = folded.split('-');
+    return parts.some(
+        part =>
+            NOT_NAMES.has(part) ||
+            NOT_NAME_STEMS.some(stem => part.startsWith(stem))
+    );
+}
+
+export interface TraineeNameCandidate {
+    name: string;
+    /**
+     * True when the message names a person clearly: first and last name. A
+     * single capitalized word, in the middle of a sentence or after "von",
+     * "für", "zu", "über", is a weak signal only (every German noun is
+     * capitalized, "für Datenbanken" is a topic): it counts as a person only
+     * together with a cue like "wie steht" or "Fortschritt" (hasPersonQueryCue).
+     */
+    strong: boolean;
+}
+
+/**
+ * Extract a potential trainee name from a trainer's message.
+ * Matches patterns like "von Max", "fuer Max Mustermann", "Wie steht Max?".
+ * Generic nouns ("Azubis", "Dateien"), question words and the start of a
+ * sentence are no names. The result is a candidate only: whether the person
+ * exists is decided against the list of the own trainees (findTraineeByName).
+ */
+export function extractTraineeNameCandidate(
+    message: string
+): TraineeNameCandidate | null {
     // Pattern 1: "von [Name]" / "fuer [Name]" / "zu [Name]" / "ueber [Name]"
-    const prepMatch = message.match(/\b(?:von|fuer|für|zu|ueber|über)\s+([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)?)/);
+    const prepMatch = message.match(PREP_NAME_RE);
     if (prepMatch) {
-        const candidate = prepMatch[1].trim();
-        if (!NOT_NAMES.has(candidate.toLowerCase())) return candidate;
+        const parts = prepMatch[1].trim().split(/\s+/);
+        if (!isNotAName(parts[0])) {
+            const second = parts[1];
+            if (second && !isNotAName(second)) {
+                return { name: `${parts[0]} ${second}`, strong: true };
+            }
+            // "für Datenbanken" is as likely a topic as a person
+            return { name: parts[0], strong: false };
+        }
     }
 
-    // Pattern 2: Capitalized words that aren't at sentence start and aren't keywords
-    const words = message.split(/\s+/);
+    // Pattern 2: capitalized words that are neither at the start of a sentence
+    // nor generic words
+    const words = message.split(/\s+/).filter(Boolean);
     for (let i = 1; i < words.length; i++) {
-        const w = words[i].replace(/[?!.,;:]$/, '');
-        if (/^[A-ZÄÖÜ][a-zäöüß]{2,}$/.test(w) && !NOT_NAMES.has(w.toLowerCase())) {
+        // the first word after . ! ? is a sentence start, too
+        if (/[.!?]$/.test(words[i - 1])) continue;
+        const w = words[i].replace(/[?!.,;:]+$/, '');
+        if (NAME_WORD_RE.test(w) && !isNotAName(w)) {
             // Check if next word is also capitalized (full name)
-            const next = words[i + 1]?.replace(/[?!.,;:]$/, '');
-            if (next && /^[A-ZÄÖÜ][a-zäöüß]{2,}$/.test(next) && !NOT_NAMES.has(next.toLowerCase())) {
-                return `${w} ${next}`;
+            const next = words[i + 1]?.replace(/[?!.,;:]+$/, '');
+            if (
+                next &&
+                !/[.!?,;:]$/.test(words[i]) &&
+                NAME_WORD_RE.test(next) &&
+                !isNotAName(next)
+            ) {
+                return { name: `${w} ${next}`, strong: true };
             }
-            return w;
+            return { name: w, strong: false };
         }
     }
 
     return null;
+}
+
+/** Kept for the callers that only need the name. */
+function extractPotentialTraineeName(message: string): string | null {
+    return extractTraineeNameCandidate(message)?.name ?? null;
+}
+
+// ----------------------------------------------------------------------------
+// "Which trainees do I have": generic question about the own trainees
+// ----------------------------------------------------------------------------
+
+/** Nouns for trainees (folded). "Trainer" is no trainee. */
+const TRAINEE_NOUN_RE =
+    /\b(azubis?|auszubildende[rnms]?|azubiliste|trainees?|lehrlinge?|schuetzlinge?)\b/;
+/** Phrases that ask for the own trainees (folded). */
+const TRAINEE_LIST_PHRASES = [
+    'zugeordnet',
+    'zugewiesen',
+    'betreue ich',
+    'betreuen ich',
+    'wen betreue',
+    'wer sind meine',
+    'wer ist mir',
+    'wie viele azubis',
+    'wie viele auszubildende',
+    'ausbildungsjahr',
+    'welchen beruf',
+    'welche berufe',
+];
+
+/**
+ * Cues that a question is about how a person is doing (folded). A single
+ * capitalized word is taken for a name only together with such a cue, so that
+ * a technical question of a trainer ("Was ist ein Primärschlüssel?") is no
+ * search for a person called "Primärschlüssel".
+ */
+const PERSON_QUERY_CUES = [
+    'wie steht', 'wie stehen', 'wie laeuft', 'wie lief', 'wie macht', 'wie geht',
+    'wie schlaegt', 'wie weit', 'wie gut', 'wer ist', 'was macht',
+    'fortschritt', 'stand', 'status', 'note', 'noten', 'ergebnis', 'abgabe',
+    'abgaben', 'bericht', 'berichte', 'leistung', 'zeugnis', 'bewertung',
+    'fehlzeiten', 'urlaub', 'krank', 'anwesenheit', 'info', 'infos',
+    'informationen', 'details', 'daten von',
+];
+
+/** True when the message reads like a question about a person's progress. */
+export function hasPersonQueryCue(message: string): boolean {
+    const folded = foldUmlauts(message);
+    return PERSON_QUERY_CUES.some(cue =>
+        new RegExp(`(^|[^a-z])${cue}([^a-z]|$)`).test(folded)
+    );
+}
+
+/**
+ * A question about the own trainees as a group ("Welche Azubis sind mir
+ * zugeordnet?", "Wer sind meine Azubis?", "Wie viele Azubis habe ich?"). Reads
+ * the folded text, so spoken text without capitals, umlauts or punctuation
+ * counts as well.
+ */
+export function isTraineeListQuestion(message: string): boolean {
+    const folded = foldUmlauts(message);
+    if (TRAINEE_NOUN_RE.test(folded)) return true;
+    if (TRAINEE_LIST_PHRASES.some(p => folded.includes(p))) return true;
+    // the old keyword list, read as before (no folding of umlauts)
+    const lower = message.toLowerCase();
+    return KW_OVERVIEW.some(k => lower.includes(k));
 }
 
 /**
@@ -272,16 +461,37 @@ export function classifyDataIntent(message: string, userRole: UserRole): DataInt
     // learning one.
     if (isDayBriefingMessage(message)) return 'day_briefing';
 
+    // A question about files (names, lists, PDF, extensions): answered from the
+    // database with the access rules of the PageIndex (documentQuery.ts). Before
+    // the name search of a trainer: "Dateien" is no person.
+    if (isDocumentQuestion(message)) return 'document_query';
+
     // Trainer-only intents first (more specific)
     if (userRole === 'TRAINER') {
         if (KW_REVIEW.some(k => lower.includes(k))) return 'review_query';
 
-        // Trainee detail query: trainer mentions a specific trainee name
-        const nameCandidate = extractPotentialTraineeName(message);
-        if (nameCandidate) return 'trainee_detail_query';
+        // Two steps. First the generic words are taken out of the candidates
+        // ("Azubis", "Dateien", "Welche" are no names). A clear name ("von
+        // Anna", "Max Mustermann") is a detail query even when the message
+        // also says "Azubi". A single capitalized noun next to a trainee word
+        // ("Welche Azubis sind in Datenbanken fit?") is a group question.
+        // Whether a person of that name exists is decided against the own
+        // trainees in fetchDataContext, a name that is not found there falls
+        // back to the overview when the message asks for the group.
+        const candidate = extractTraineeNameCandidate(message);
+        const listQuestion = isTraineeListQuestion(message);
+        // A single capitalized word needs a cue that the question is about how
+        // a person is doing, otherwise every capitalized noun would be a search
+        // for a person.
+        if (
+            candidate &&
+            (candidate.strong || (!listQuestion && hasPersonQueryCue(message)))
+        ) {
+            return 'trainee_detail_query';
+        }
 
-        // "azubi" without a specific name → overview
-        if (KW_OVERVIEW.some(k => lower.includes(k)) || lower.includes('azubi') || lower.includes('trainee')) {
+        // Group question about the own trainees → overview
+        if (listQuestion || lower.includes('azubi') || lower.includes('trainee')) {
             return 'trainee_overview';
         }
     }
@@ -962,17 +1172,48 @@ export async function fetchTrainerPendingReviews(trainerId: string): Promise<Tra
 }
 
 /**
- * Fetch overview of all trainees assigned to a trainer.
+ * Year of training (1 to the duration) from a start date, null when the start
+ * is unknown, invalid or still in the future.
+ */
+export function trainingYearFrom(
+    start: Date | string | null | undefined,
+    now: Date,
+    durationYears: number | null | undefined
+): number | null {
+    if (!start) return null;
+    const startDate = start instanceof Date ? start : new Date(start);
+    if (Number.isNaN(startDate.getTime()) || startDate.getTime() > now.getTime()) {
+        return null;
+    }
+    const months =
+        (now.getFullYear() - startDate.getFullYear()) * 12 +
+        (now.getMonth() - startDate.getMonth());
+    const maxYears = durationYears && durationYears > 0 ? durationYears : 3;
+    return Math.min(Math.max(Math.floor(months / 12) + 1, 1), maxYears);
+}
+
+/** Block types that say where the trainee is today (no private appointments). */
+const OVERVIEW_BLOCK_TYPES = ['SCHOOL', 'COMPANY', 'HOLIDAY', 'EXAM'] as const;
+
+/**
+ * Fetch the overview of the active trainees assigned to a trainer
+ * (profiles.assigned_trainer_id): name, occupation per enrollment, year of
+ * training, block of today, progress in percent and the number of open items
+ * waiting for the review. Metadata only: no e-mail address, no date of birth,
+ * no grades. One query per fact for all trainees together (no query per
+ * trainee).
  */
 export async function fetchTrainerTraineeOverview(trainerId: string): Promise<TrainerTraineeInfo[]> {
     try {
-        // Get all trainees assigned to this trainer
+        // Get all active trainees assigned to this trainer
         const trainees = await db
             .select({
                 id: profiles.id,
                 fullName: profiles.fullName,
                 firstName: profiles.firstName,
                 lastName: profiles.lastName,
+                startOfTrainingDate: profiles.startOfTrainingDate,
+                durationYears: profiles.ausbildungDurationYears,
             })
             .from(profiles)
             .where(and(
@@ -984,35 +1225,117 @@ export async function fetchTrainerTraineeOverview(trainerId: string): Promise<Tr
 
         if (trainees.length === 0) return [];
 
-        const results: TrainerTraineeInfo[] = [];
+        const idList = sql.join(trainees.map(t => sql`${t.id}`), sql`, `);
+        const now = new Date();
 
-        for (const trainee of trainees) {
-            // Calculate overall progress for each trainee
-            const progressResult = await db.execute(sql`
-                SELECT
-                    COUNT(DISTINCT ec.enabler_id) AS completed,
-                    COUNT(DISTINCT e.id) AS total
-                FROM course_members cm
-                JOIN enablers e ON e.course_id = cm.course_id AND e.is_active = true
-                LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = ${trainee.id}
-                WHERE cm.user_id = ${trainee.id}
-            `);
+        // Everything else in one query per fact, for all trainees at once
+        const [progressRows, enrollmentRows, catalogRows, blockRows, pendingRows] =
+            (await Promise.all([
+                db.execute(sql`
+                    SELECT cm.user_id AS trainee_id,
+                           COUNT(DISTINCT ec.enabler_id) AS completed,
+                           COUNT(DISTINCT e.id) AS total
+                    FROM course_members cm
+                    JOIN enablers e ON e.course_id = cm.course_id AND e.is_active = true
+                    LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = cm.user_id
+                    WHERE cm.user_id IN (${idList})
+                    GROUP BY cm.user_id
+                `),
+                db.execute(sql`
+                    SELECT te.trainee_id, te.training_catalog_id, te.start_date, te.duration_years
+                    FROM trainee_enrollments te
+                    WHERE te.trainee_id IN (${idList})
+                `),
+                db.execute(sql`SELECT id, code, title FROM training_catalogs`),
+                db.execute(sql`
+                    SELECT DISTINCT ON (b.trainee_id, b.training_catalog_id)
+                           b.trainee_id, b.training_catalog_id, b.block_type, b.ausbildungsjahr
+                    FROM ausbildung_blocks b
+                    WHERE b.trainee_id IN (${idList})
+                      AND b.block_type IN (${sql.join(OVERVIEW_BLOCK_TYPES.map(t => sql`${t}`), sql`, `)})
+                      AND b.start_date <= ${now}
+                      AND b.end_date >= ${now}
+                    ORDER BY b.trainee_id, b.training_catalog_id, b.start_date DESC
+                `),
+                db.execute(sql`
+                    SELECT p.id AS trainee_id,
+                           (
+                             (SELECT COUNT(*) FROM enabler_submissions es WHERE es.trainee_id = p.id AND es.status = 'PENDING')
+                             + (SELECT COUNT(*) FROM use_case_submissions ucs WHERE ucs.trainee_id = p.id AND ucs.status = 'PENDING')
+                             + (SELECT COUNT(*) FROM quiz_submissions qs WHERE qs.trainee_id = p.id AND qs.is_reviewed = false)
+                             + (SELECT COUNT(*) FROM activity_reports ar WHERE ar.trainee_id = p.id AND ar.status = 'SUBMITTED')
+                           ) AS pending
+                    FROM profiles p
+                    WHERE p.id IN (${idList})
+                `),
+            ])) as any[][];
 
-            const row = (progressResult as any[])[0] || { completed: 0, total: 0 };
-            const completed = Number(row.completed) || 0;
-            const total = Number(row.total) || 0;
-            const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-            results.push({
-                fullName: trainee.fullName || `${trainee.firstName || ''} ${trainee.lastName || ''}`.trim() || 'Unbekannt',
-                progressPercent,
+        const progressById = new Map<string, { completed: number; total: number }>();
+        for (const r of progressRows ?? []) {
+            progressById.set(String(r.trainee_id), {
+                completed: Number(r.completed) || 0,
+                total: Number(r.total) || 0,
+            });
+        }
+        const pendingById = new Map<string, number>();
+        for (const r of pendingRows ?? []) {
+            pendingById.set(String(r.trainee_id), Number(r.pending) || 0);
+        }
+        const catalogById = new Map<string, { code: string | null; title: string }>();
+        for (const r of catalogRows ?? []) {
+            catalogById.set(String(r.id), { code: r.code ?? null, title: r.title ?? 'Beruf unbekannt' });
+        }
+        const enrollmentsById = new Map<string, any[]>();
+        for (const r of enrollmentRows ?? []) {
+            const list = enrollmentsById.get(String(r.trainee_id)) ?? [];
+            list.push(r);
+            enrollmentsById.set(String(r.trainee_id), list);
+        }
+        const blockByKey = new Map<string, { blockType: string | null; year: number | null }>();
+        for (const r of blockRows ?? []) {
+            blockByKey.set(`${r.trainee_id}:${r.training_catalog_id}`, {
+                blockType: r.block_type ?? null,
+                year: r.ausbildungsjahr != null ? Number(r.ausbildungsjahr) : null,
             });
         }
 
-        return results;
+        return trainees.map(trainee => {
+            const id = String(trainee.id);
+            const progress = progressById.get(id) ?? { completed: 0, total: 0 };
+            const progressPercent =
+                progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+
+            // No enrollment at all: the standard occupation (FIAE), like the catalog scope
+            const enrollments = enrollmentsById.get(id) ?? [
+                { training_catalog_id: TRAINING_CATALOG_IDS.FIAE, start_date: null, duration_years: trainee.durationYears },
+            ];
+            const occupations: TrainerTraineeOccupation[] = enrollments.map(en => {
+                const catalogId = String(en.training_catalog_id);
+                const catalog = catalogById.get(catalogId);
+                const block = blockByKey.get(`${id}:${catalogId}`);
+                const duration = Number(en.duration_years) || trainee.durationYears || 3;
+                return {
+                    title: catalog?.title ?? 'Beruf unbekannt',
+                    code: catalog?.code ?? null,
+                    trainingYear:
+                        block?.year ??
+                        trainingYearFrom(en.start_date ?? trainee.startOfTrainingDate, now, duration),
+                    currentBlockType: block?.blockType ?? null,
+                };
+            });
+
+            return {
+                fullName: trainee.fullName || `${trainee.firstName || ''} ${trainee.lastName || ''}`.trim() || 'Unbekannt',
+                progressPercent,
+                occupations,
+                pendingSubmissions: pendingById.get(id) ?? 0,
+            };
+        });
     } catch (error) {
+        // Not an empty list: "no trainees" would be a false statement. The
+        // caller treats a failed fetch as non-fatal (snapshot only).
         console.error('HAI.ai DataContext: Error fetching trainee overview:', error);
-        return [];
+        throw error;
     }
 }
 
@@ -1069,9 +1392,10 @@ async function findTraineeByName(
  */
 async function fetchTraineeDetailForTrainer(
     trainerId: string,
-    nameQuery: string
+    nameQuery: string,
+    found?: { id: string; fullName: string } | null
 ): Promise<string> {
-    const trainee = await findTraineeByName(trainerId, nameQuery);
+    const trainee = found ?? (await findTraineeByName(trainerId, nameQuery));
     if (!trainee) {
         // ZUSTAENDIGKEIT: only the own trainees count, a person of another
         // trainer answers like a person that does not exist (denial.ts)
@@ -1486,18 +1810,65 @@ function formatTrainerReviews(reviews: TrainerPendingReviews): string {
     return lines.join('\n');
 }
 
-function formatTraineeOverview(trainees: TrainerTraineeInfo[]): string {
+/** From this number on the list is written compactly (short codes, one line each). */
+export const TRAINEE_OVERVIEW_COMPACT_FROM = 31;
+/** More trainees than this are counted but not listed one by one. */
+export const TRAINEE_OVERVIEW_MAX_LINES = 100;
+
+export function formatTraineeOverview(trainees: TrainerTraineeInfo[]): string {
     if (trainees.length === 0) {
-        return '**Azubi-Uebersicht:** Keine Azubis zugewiesen.';
+        return '**Azubi-Übersicht:** Dir sind keine aktiven Azubis zugeordnet.';
     }
 
+    const compact = trainees.length >= TRAINEE_OVERVIEW_COMPACT_FROM;
     const lines: string[] = [
-        `**Azubi-Uebersicht (${trainees.length} Azubis):**`,
+        `**Azubi-Übersicht (${trainees.length} aktive Azubis, die dir zugeordnet sind):**`,
+        'Nur Metadaten: keine Noten, keine Kontaktdaten. Details zu einer Person nur auf Nachfrage mit Namen.',
     ];
 
-    for (const t of trainees) {
-        const bar = t.progressPercent >= 75 ? '+++' : t.progressPercent >= 50 ? '++' : t.progressPercent >= 25 ? '+' : '-';
-        lines.push(`- ${t.fullName}: ${t.progressPercent}% ${bar}`);
+    const listed = trainees.slice(0, TRAINEE_OVERVIEW_MAX_LINES);
+    for (const t of listed) {
+        const occupations = t.occupations.length > 0 ? t.occupations : [];
+        if (compact) {
+            const occ = occupations
+                .map(o => {
+                    const bits = [
+                        o.code || o.title,
+                        o.trainingYear ? `J${o.trainingYear}` : null,
+                        o.currentBlockType ? formatBlockType(o.currentBlockType) : null,
+                    ].filter(Boolean);
+                    return bits.join(' ');
+                })
+                .join(' / ');
+            lines.push(
+                `- ${t.fullName} (${[occ, `${t.progressPercent} %`, `${t.pendingSubmissions} offen`]
+                    .filter(Boolean)
+                    .join(', ')})`
+            );
+            continue;
+        }
+        const occText = occupations
+            .map(o => {
+                const bits = [
+                    o.trainingYear ? `Ausbildungsjahr ${o.trainingYear}` : null,
+                    o.currentBlockType ? `aktuell ${formatBlockType(o.currentBlockType)}` : null,
+                ].filter(Boolean);
+                return bits.length > 0 ? `${o.title} (${bits.join(', ')})` : o.title;
+            })
+            .join(' und ');
+        const open =
+            t.pendingSubmissions === 0
+                ? 'keine offenen Abgaben zur Prüfung'
+                : `${t.pendingSubmissions} offene Abgabe${t.pendingSubmissions === 1 ? '' : 'n'} zur Prüfung`;
+        lines.push(
+            `- ${t.fullName} | Beruf: ${occText || 'unbekannt'} | Fortschritt ${t.progressPercent} % | ${open}`
+        );
+    }
+
+    if (trainees.length > listed.length) {
+        lines.push(
+            `... und ${trainees.length - listed.length} weitere Azubis (Liste gekürzt). Frage nach einem Namen für Details.`
+        );
     }
 
     return lines.join('\n');
@@ -1542,6 +1913,7 @@ export async function fetchDataContext(
         // Step 3: Build summary parts
         const parts: string[] = [formatSnapshot(snapshot)];
         let intentTokenEstimate = 0;
+        let documentIds: string[] | undefined;
 
         // Step 4: Fetch intent-specific data
         if (dataIntent !== 'none') {
@@ -1650,6 +2022,18 @@ export async function fetchDataContext(
                         }
                         break;
                     }
+                    case 'document_query': {
+                        // From the database, limited to the files the person may see
+                        const answer = await answerDocumentQuestion({
+                            message,
+                            access: options.documentAccess,
+                            page: options.page,
+                        });
+                        parts.push(answer.text);
+                        if (answer.documentIds.length > 0) documentIds = answer.documentIds;
+                        intentTokenEstimate = 150 + Math.min(answer.total, 20) * 40;
+                        break;
+                    }
                     case 'review_query': {
                         if (userRole === 'TRAINER') {
                             const reviews = await fetchTrainerPendingReviews(userId);
@@ -1662,7 +2046,7 @@ export async function fetchDataContext(
                         if (userRole === 'TRAINER') {
                             const overview = await fetchTrainerTraineeOverview(userId);
                             parts.push(formatTraineeOverview(overview));
-                            intentTokenEstimate = 200 + overview.length * 20;
+                            intentTokenEstimate = 200 + Math.min(overview.length, TRAINEE_OVERVIEW_MAX_LINES) * (overview.length >= TRAINEE_OVERVIEW_COMPACT_FROM ? 25 : 45);
                         }
                         break;
                     }
@@ -1670,9 +2054,29 @@ export async function fetchDataContext(
                         if (userRole === 'TRAINER') {
                             const nameCandidate = extractPotentialTraineeName(message);
                             if (nameCandidate) {
-                                const detail = await fetchTraineeDetailForTrainer(userId, nameCandidate);
-                                parts.push(detail);
-                                intentTokenEstimate = 400;
+                                const trainee = await findTraineeByName(userId, nameCandidate);
+                                if (trainee) {
+                                    const detail = await fetchTraineeDetailForTrainer(userId, nameCandidate, trainee);
+                                    parts.push(detail);
+                                    intentTokenEstimate = 400;
+                                } else if (
+                                    isTraineeListQuestion(message) &&
+                                    !nameCandidate.includes(' ')
+                                ) {
+                                    // No such person among the own trainees, but the
+                                    // message asks for the group ("Welche Azubis ...")
+                                    // and holds one word only: that word was no name,
+                                    // answer with the overview. A first and last name
+                                    // that is not found stays a neutral "not found".
+                                    const overview = await fetchTrainerTraineeOverview(userId);
+                                    parts.push(formatTraineeOverview(overview));
+                                    intentTokenEstimate = 200 + overview.length * 30;
+                                } else {
+                                    // ZUSTAENDIGKEIT: neutral answer, a person of another
+                                    // trainer answers like a person that does not exist
+                                    parts.push(traineeSearchNotFoundLine(nameCandidate));
+                                    intentTokenEstimate = 100;
+                                }
                             }
                         }
                         break;
@@ -1694,6 +2098,7 @@ export async function fetchDataContext(
             summary,
             tokenEstimate,
             dataIntent,
+            ...(documentIds ? { documentIds } : {}),
         };
     } catch (error) {
         console.error('HAI.ai DataContext: Fatal error:', error);

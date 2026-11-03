@@ -73,6 +73,12 @@ import {
   getOffTopicResponse,
 } from './prompts';
 import { fetchDataContext } from './dataContext';
+import { documentOptionsFor, isDocumentQuestion } from './documentQuery';
+import { buildPageContextSection } from './pageContext/prompt';
+import {
+  isPageContextEnabled,
+  type ResolvedPageContext,
+} from './pageContext/server';
 import { isDayQuestion } from './dayQuestion';
 import type { UserRole } from './dataContext';
 import { handleActionMessage } from './actionFlow';
@@ -84,6 +90,12 @@ import {
   isLearningTechniqueQuestion,
   usesLearningTechniques,
 } from './learningTechniques/detect';
+import {
+  loadMemoryForPrompt,
+  memoryScopeFor,
+  proposeMemoryForTurn,
+  type MemoryProposalPayload,
+} from './memory/turn';
 
 // ============================================================================
 // TYPES
@@ -159,6 +171,13 @@ export interface PipelineContext {
    * reason hint to the model (UMFANG), never an access right.
    */
   contextDropped?: boolean;
+  /**
+   * The page the person is on (page context): cleaned, its ids checked against
+   * the access rules. Set by the chat route, only data for "this page" and "this
+   * file", never a right. Only used in the chat and voice path, and only while
+   * the switch HAI_PAGE_CONTEXT is on.
+   */
+  page?: ResolvedPageContext;
 }
 
 /**
@@ -195,6 +214,12 @@ export interface PipelineResult {
   pendingAction?: PendingAction;
   /** A page the interface can offer with a card "Öffnen", never a write */
   navigationOffer?: NavigationOffer;
+  /**
+   * A question of the memory (yes, no, change): the browser shows the card. The
+   * entry is stored as `proposed` and has no effect before the person says yes
+   * (src/lib/hai/memory/turn.ts). Only with the switch HAI_MEMORY on.
+   */
+  memoryProposal?: MemoryProposalPayload;
   /** The person asked to be quizzed: the browser opens the quiz card */
   quizMode?: QuizModeStartSignal;
   error?: string;
@@ -559,6 +584,17 @@ async function timed<T>(
   }
 }
 
+/** What the live data of a turn hands to the retrieval (a file the question named). */
+interface DocumentTurn {
+  documentIds?: string[];
+}
+
+/** The prompt section for the page of the user, or undefined (switch off, no page). */
+function pageSectionFor(context: PipelineContext): string | undefined {
+  if (!context.page || !isPageContextEnabled()) return undefined;
+  return buildPageContextSection(context.page) || undefined;
+}
+
 /**
  * The live data of the person for the system prompt (non-fatal): undefined
  * without a role or when the data could not be read. Never rejects, so it can
@@ -566,7 +602,9 @@ async function timed<T>(
  */
 async function loadLiveDataContext(
   userMessage: string,
-  context: PipelineContext
+  context: PipelineContext,
+  access?: RetrievalAccess | null,
+  turn?: DocumentTurn
 ): Promise<string | undefined> {
   if (!context.userRole) return undefined;
   try {
@@ -577,8 +615,21 @@ async function loadLiveDataContext(
       {
         preferredCatalogCode: context.preferredCatalogCode,
         trainingScope: context.trainingScope,
+        // a question about files: what the person may read and the records of
+        // the page (the database decides, not the page). Other turns get the
+        // options as before.
+        ...(isDocumentQuestion(userMessage)
+          ? documentOptionsFor(
+              access,
+              context.trainingScope,
+              context.page && isPageContextEnabled()
+                ? context.page.entities
+                : []
+            )
+          : {}),
       }
     );
+    if (turn && dataCtx?.documentIds) turn.documentIds = dataCtx.documentIds;
     return dataCtx ? dataCtx.summary : undefined;
   } catch (dataError) {
     console.warn('HAI.ai: DataContext fetch failed (non-fatal):', dataError);
@@ -651,7 +702,8 @@ const TRAINER_SOLUTION_NOTE =
 export async function retrieveContext(
   userMessage: string,
   context: PipelineContext,
-  resolvedAccess?: RetrievalAccess | null
+  resolvedAccess?: RetrievalAccess | null,
+  retrieval: { documentIds?: string[] } = {}
 ): Promise<RetrievedContext> {
   // The pipelines resolve the access once per turn and pass it on
   const access =
@@ -761,6 +813,7 @@ export async function retrieveContext(
         catalogIds: access.catalogIds,
         audience: access.audience,
         organizationId: access.organizationId,
+        documentIds: retrieval.documentIds,
       }
     );
     if (pageIndexResult.pdfContext) {
@@ -999,13 +1052,26 @@ export async function processMessage(
 
     // Step 3b: live data context (non-fatal). It runs next to the retrieval,
     // the two do not depend on each other.
-    const liveDataPromise = loadLiveDataContext(userMessage, context);
+    const documentTurn: DocumentTurn = {};
+    const liveDataPromise = loadLiveDataContext(
+      userMessage,
+      context,
+      access,
+      documentTurn
+    );
+    // Step 3b2: the memory of the person in the occupation of this turn (never
+    // rejects, empty without the switch HAI_MEMORY), runs next to the retrieval
+    const memoryScope = memoryScopeFor(access, persona);
+    const memoryPromise = loadMemoryForPrompt(memoryScope);
 
     if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
+      // A question about files: the file it names comes from the database (the
+      // live data), so the retrieval waits for it and loads its pages
+      if (isDocumentQuestion(userMessage)) await liveDataPromise;
       // Vector search and PageIndex, limited to the occupation, audience and
       // organization of the user (one function for both pipelines)
       ({ searchResults, retrievedContext, usedTrainerSolutions } =
-        await retrieveContext(userMessage, context, access));
+        await retrieveContext(userMessage, context, access, documentTurn));
     }
 
     // If web search is enabled, switch to general mode to allow external knowledge
@@ -1014,6 +1080,7 @@ export async function processMessage(
     }
 
     const liveDataContext = await liveDataPromise;
+    const memory = await memoryPromise;
 
     // Step 3c: what the pipeline knows about a limit of access (denial.ts)
     const accessReasons = detectAccessReasons({
@@ -1050,6 +1117,8 @@ export async function processMessage(
       navigation: true,
       accessReasons,
       dayBriefing,
+      pageContext: pageSectionFor(context),
+      ...(memory ? { memory } : {}),
     });
 
     // Step 5: Convert previous messages to provider format
@@ -1134,12 +1203,23 @@ export async function processMessage(
       };
     }
 
+    // A question of the memory (yes, no, change), at most one per conversation,
+    // never in a quiz round (null without the switch HAI_MEMORY)
+    const memoryProposal = await proposeMemoryForTurn({
+      scope: memoryScope,
+      message: userMessage,
+      sessionId: context.sessionId,
+      voice: context.voice === true,
+      quizActive: isQuizRound(intent, context.quizState),
+    });
+
     return {
       response: responseData.text,
       intent,
       citations,
       quizState: newQuizState,
       ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
+      ...(memoryProposal ? { memoryProposal } : {}),
     };
   } catch (error) {
     if (isChatUnavailableError(error)) return chatUnavailableResult(error);
@@ -1260,15 +1340,23 @@ export async function processMessageStream(
     let usedTrainerSolutions: boolean | undefined;
 
     const searchStartedAt = Date.now();
+    const documentTurn: DocumentTurn = {};
     const liveDataPromise = timed(context, 'data', () =>
-      loadLiveDataContext(userMessage, context)
+      loadLiveDataContext(userMessage, context, access, documentTurn)
     );
+    // the memory of the person in the occupation of this turn (never rejects,
+    // empty without the switch HAI_MEMORY)
+    const memoryScope = memoryScopeFor(access, persona);
+    const memoryPromise = loadMemoryForPrompt(memoryScope);
     if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
       // Same retrieval as processMessage: scoped to the user
       onStage?.('search');
       const retrievalStartedAt = Date.now();
+      // A question about files: the file it names comes from the database (the
+      // live data), so the retrieval waits for it and loads its pages
+      if (isDocumentQuestion(userMessage)) await liveDataPromise;
       ({ searchResults, retrievedContext, usedTrainerSolutions } =
-        await retrieveContext(userMessage, context, access));
+        await retrieveContext(userMessage, context, access, documentTurn));
       if (context.timings) {
         context.timings.retrieval = Date.now() - retrievalStartedAt;
       }
@@ -1281,6 +1369,7 @@ export async function processMessageStream(
 
     // Live data context (non-fatal, never rejects)
     const liveDataContext = await liveDataPromise;
+    const memory = await memoryPromise;
 
     // retrieval and live data are done: the model call is what is left to wait for
     if (context.timings) context.timings.search = Date.now() - searchStartedAt;
@@ -1317,6 +1406,8 @@ export async function processMessageStream(
       navigation: true,
       accessReasons,
       dayBriefing,
+      pageContext: pageSectionFor(context),
+      ...(memory ? { memory } : {}),
     });
 
     // Convert messages to provider format
@@ -1383,11 +1474,22 @@ export async function processMessageStream(
       }
     }
 
+    // A question of the memory, like in processMessage (the card comes with the
+    // end event, after the text)
+    const memoryProposal = await proposeMemoryForTurn({
+      scope: memoryScope,
+      message: userMessage,
+      sessionId: context.sessionId,
+      voice: context.voice === true,
+      quizActive: isQuizRound(intent, context.quizState),
+    });
+
     return {
       response: response.text,
       intent,
       citations,
       ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
+      ...(memoryProposal ? { memoryProposal } : {}),
     };
   } catch (error) {
     if (isChatUnavailableError(error)) return chatUnavailableResult(error);
@@ -1407,6 +1509,18 @@ export async function processMessageStream(
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+/**
+ * A quiz round of the chat is running or starts with this message: the memory
+ * never asks a question in the middle of it.
+ */
+function isQuizRound(intent: IntentType, quizState?: QuizState): boolean {
+  return (
+    quizState?.active === true ||
+    intent === 'quiz_request' ||
+    intent === 'quiz_answer'
+  );
+}
 
 /**
  * Extract quiz topic from user message

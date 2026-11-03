@@ -77,6 +77,21 @@ export interface GoldenChunk {
   text: string;
 }
 
+/**
+ * What the memory of the HAI holds in a case (src/lib/hai/memory), as texts. Only
+ * the deterministic side is checked (gate, prompt), never a model:
+ * tests/unit/hai/goldenMemory.pipeline.test.ts seeds the entries as confirmed
+ * (user) or approved (global) and runs the case with the switch HAI_MEMORY on.
+ */
+export interface GoldenMemory {
+  /** Confirmed entries of the person in the occupation of the case. */
+  user?: string[];
+  /** Approved shared entries for the occupation of the case. */
+  global?: string[];
+  /** Confirmed entries of the SAME person in the other occupation (never loaded). */
+  otherOccupation?: string[];
+}
+
 export interface GoldenCase {
   id: string;
   category: GoldenCategory;
@@ -106,6 +121,8 @@ export interface GoldenCase {
   };
   /** Ids of index chunks that the context must hold (answers only). */
   requiredSources?: string[];
+  /** Entries of the memory of the person (optional, see GoldenMemory). */
+  memory?: GoldenMemory;
   note?: string;
 }
 
@@ -276,6 +293,25 @@ export function goldenSetProblems(raw: unknown): string[] {
         problems.push(
           `${label}: a refusal needs at least one forbidden source`
         );
+      }
+    }
+
+    if (c.memory !== undefined) {
+      const memory = c.memory;
+      const lists = ['user', 'global', 'otherOccupation'];
+      if (
+        !isRecord(memory) ||
+        Object.keys(memory).some(key => !lists.includes(key)) ||
+        lists.some(key => {
+          const list = (memory as Record<string, unknown>)[key];
+          return (
+            list !== undefined &&
+            (!Array.isArray(list) ||
+              list.some(t => typeof t !== 'string' || t.trim() === ''))
+          );
+        })
+      ) {
+        problems.push(`${label}: memory`);
       }
     }
 

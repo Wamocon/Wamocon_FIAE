@@ -155,9 +155,10 @@ describe('content documents sha256 migration: the rollout documents', () => {
     const runbook = read('docs/kfbm-production-rollout.md');
     const go = read('docs/go-checkliste.md');
     expect(runbook).toContain('20261103000200_content_documents_sha256.sql');
+    // the HAI memory migration (20261103000300) came after this one: 43 files now
     expect(runbook).toMatch(
-      /42 Dateien von `20261023100000` bis `20261103000200`/
+      /43 Dateien von `20261023100000` bis `20261103000300`/
     );
-    expect(go).toMatch(/42 Dateien von `20261023100000` bis `20261103000200`/);
+    expect(go).toMatch(/43 Dateien von `20261023100000` bis `20261103000300`/);
   });
 });

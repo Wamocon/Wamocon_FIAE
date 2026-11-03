@@ -177,6 +177,7 @@ function ChatPanel() {
       id={HAI_PANEL_ID}
       aria-label={t('hai.panel.label')}
       data-testid="hai-chat-panel"
+      data-hai-ignore=""
       data-side="right"
       data-docked={slot ? 'true' : 'false'}
       // Docked: the column moves, the panel only fades (the edge of the page
@@ -351,6 +352,7 @@ function ChatFull() {
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.2 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6"
+      data-hai-ignore=""
     >
       {/* Backdrop */}
       <div

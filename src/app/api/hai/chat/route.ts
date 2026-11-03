@@ -14,6 +14,9 @@
  *     enablerId?: string;      // Current enabler context
  *     courseId?: string;       // Current course context
  *     scenarioText?: string;   // Ignored: never copied into the prompt
+ *     page?: {                 // The page of the user (docs/hai-ui-kontext.md):
+ *       path, kind, title, ids, visibleLabels  // data only, validated strictly
+ *     };
  *   };
  *   stream?: boolean;          // Enable streaming response
  * }
@@ -58,6 +61,7 @@ import {
   sessionVisibilityCondition,
 } from '@/lib/hai/chatHistoryAccess';
 import { hasTrainerKnowledge } from '@/lib/hai/trainerSolutions';
+import { resolvePageContext } from '@/lib/hai/pageContext/server';
 
 // ============================================================================
 // TYPES
@@ -71,6 +75,8 @@ interface ChatRequestBody {
     enablerId?: string;
     courseId?: string;
     scenarioText?: string;
+    /** Untrusted: validated by resolvePageContext, dropped when it does not pass. */
+    page?: unknown;
   };
   stream?: boolean;
   /**
@@ -993,6 +999,16 @@ export async function POST(req: NextRequest) {
       catalogChoice?.catalogIds
     );
 
+    // The page of the user (page context): shape, kind, labels and ids are
+    // checked here, ids against the same catalogs as enablerId and courseId.
+    // A page that does not pass is dropped without an error. Nothing of it is a
+    // right, it only resolves "this page" and "this file" (docs/hai-ui-kontext.md).
+    const page = await resolvePageContext(context?.page, {
+      userId,
+      role: user[0].role,
+      catalogIds: catalogChoice?.catalogIds,
+    });
+
     // Build pipeline context (Phase 1: pass userRole for live data context)
     // The stages are always measured (numbers only, for the log line), the
     // voice assistant gets them in the end event as well
@@ -1010,6 +1026,7 @@ export async function POST(req: NextRequest) {
       // an open enabler or course outside the occupations of the person was
       // dropped: only a hint of the reason (UMFANG) for the model
       contextDropped: !inScope && !!(context?.enablerId || context?.courseId),
+      ...(page ? { page } : {}),
       enablerTitle,
       courseTitle,
       // scenarioText of the request is not used: it would reach the system
@@ -1142,6 +1159,10 @@ export async function POST(req: NextRequest) {
               ...(result.usedTrainerSolutions
                 ? { trainerKnowledge: true }
                 : {}),
+              // the id only (no text): so a conversation asks at most once
+              ...(result.memoryProposal
+                ? { memoryProposalId: result.memoryProposal.id }
+                : {}),
             };
             if (result.usedTrainerSolutions) {
               await markSessionTrainerKnowledge(sessionId);
@@ -1229,6 +1250,8 @@ export async function POST(req: NextRequest) {
                   pendingAction: result.pendingAction,
                   navigationOffer: result.navigationOffer,
                   quizMode: result.quizMode,
+                  // the question of the memory (card with yes, no, change)
+                  memoryProposal: result.memoryProposal,
                   // the stages of the voice assistant, in milliseconds (no content)
                   ...(wantsVoice
                     ? {
@@ -1324,6 +1347,10 @@ export async function POST(req: NextRequest) {
     const answerMeta = {
       intent: result.intent,
       ...(result.usedTrainerSolutions ? { trainerKnowledge: true } : {}),
+      // the id only (no text): so a conversation asks at most once
+      ...(result.memoryProposal
+        ? { memoryProposalId: result.memoryProposal.id }
+        : {}),
     };
     if (result.usedTrainerSolutions) {
       await markSessionTrainerKnowledge(sessionId);
@@ -1405,6 +1432,7 @@ export async function POST(req: NextRequest) {
       pendingAction: result.pendingAction,
       navigationOffer: result.navigationOffer,
       quizMode: result.quizMode,
+      memoryProposal: result.memoryProposal,
     });
   } catch (error) {
     console.error('HAI.ai chat error:', error);
