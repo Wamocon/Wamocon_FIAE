@@ -15,7 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import postgres from 'postgres';
 import {
-  CONTENT_BUCKET,
+  BUCKET,
   checkTarget,
   hostOf,
   parseArgs,
@@ -43,9 +43,7 @@ function storageAccess(): StorageAccess | null {
     reading: client as unknown as ContentReadingClient,
     async exists(path: string) {
       try {
-        const { data, error } = await client.storage
-          .from(CONTENT_BUCKET)
-          .exists(path);
+        const { data, error } = await client.storage.from(BUCKET).exists(path);
         if (error) return 'unknown';
         return data === true;
       } catch {
