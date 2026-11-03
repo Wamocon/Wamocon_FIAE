@@ -6,6 +6,7 @@ import {
   ArrowUpCircle,
   BarChart3,
   CheckCircle2,
+  Info,
   MinusCircle,
   Pencil,
   RefreshCw,
@@ -15,12 +16,14 @@ import { authFetch } from '@/lib/authFetch';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ContentTargetsForm } from '@/components/admin/ContentTargetsForm';
+import { ContentPlanPanel } from '@/components/admin/ContentPlanPanel';
 import { SequenceRulePanel } from '@/components/admin/SequenceRulePanel';
 import type {
   CatalogContentStats,
   ContentMetric,
   ContentStatsResponse,
   MetricStatus,
+  MetricTargetSource,
 } from '@/lib/catalog/content-targets';
 
 /**
@@ -63,9 +66,11 @@ function formatDifference(difference: number): string {
 function MetricItem({
   metric,
   targetsVisible,
+  source,
 }: {
   metric: ContentMetric;
   targetsVisible: boolean;
+  source?: MetricTargetSource;
 }) {
   const { t, language } = useLanguage();
   const number = (n: number) => n.toLocaleString(language);
@@ -124,6 +129,18 @@ function MetricItem({
                   ? t('contentStats.noTarget')
                   : number(metric.target)}
               </dd>
+              {source && (
+                <dd className="bg-accent/10 text-foreground self-center rounded-full px-2 py-0.5 text-xs font-medium">
+                  <span className="sr-only">
+                    {t('contentStats.originLabel', {
+                      origin: t(`contentStats.origin.${source.origin}`),
+                    })}
+                  </span>
+                  <span aria-hidden="true">
+                    {t(`contentStats.origin.${source.origin}`)}
+                  </span>
+                </dd>
+              )}
             </div>
             {metric.difference !== null && (
               <div className="flex gap-1.5">
@@ -136,6 +153,20 @@ function MetricItem({
           </>
         )}
       </dl>
+
+      {targetsVisible &&
+        source &&
+        source.manual !== null &&
+        source.plan !== null &&
+        source.manual !== source.plan && (
+          <p className="text-muted mt-1 flex items-start gap-1 text-xs">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {t('contentStats.originDiffers', {
+              manual: number(source.manual),
+              plan: number(source.plan),
+            })}
+          </p>
+        )}
 
       {metric.active !== null && (
         <p className="text-muted mt-1 text-xs tabular-nums">
@@ -238,6 +269,9 @@ function CatalogCard({
       {canEditTargets && sequenceOpen && (
         <SequenceRulePanel catalogId={catalog.catalogId} />
       )}
+      {canEditTargets && (
+        <ContentPlanPanel catalogId={catalog.catalogId} onChanged={onSaved} />
+      )}
 
       <ul
         role="list"
@@ -249,6 +283,7 @@ function CatalogCard({
             key={metric.id}
             metric={metric}
             targetsVisible={targetsVisible}
+            source={catalog.targetSources?.[metric.id]}
           />
         ))}
       </ul>
