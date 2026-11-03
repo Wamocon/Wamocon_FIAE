@@ -72,6 +72,13 @@ export interface KiClientOptions {
   maxTokens: number;
   /** Sent as `reasoning_effort`. Default none: the answer is not preceded by thinking. */
   reasoningEffort?: ReasoningEffort;
+  /**
+   * Largest request body in characters (default MAX_REQUEST_CHARS, the size of
+   * an excerpt). Only a caller with a larger, checked text raises it.
+   */
+  maxRequestChars?: number;
+  /** Longest text of an answer that is handed on (default MAX_TEXT_CHARS). */
+  maxTextChars?: number;
   /** Replaced in the tests. */
   fetchImpl?: typeof fetch;
   /** Replaced in the tests. */
@@ -188,7 +195,8 @@ export interface KiAnswerText {
  * parsed, passed on, logged or shown, and it is never a substitute for the content.
  */
 export function readAnswer(
-  body: string
+  body: string,
+  maxTextChars: number = MAX_TEXT_CHARS
 ): KiAnswerText | { empty: true } | null {
   let data: unknown;
   try {
@@ -212,7 +220,7 @@ export function readAnswer(
       ? (record.usage as Record<string, unknown>)
       : {};
   return {
-    text: content.slice(0, MAX_TEXT_CHARS),
+    text: content.slice(0, maxTextChars),
     promptTokens: count(usage.prompt_tokens),
     completionTokens: count(usage.completion_tokens),
   };
@@ -268,7 +276,7 @@ export function createKiClient(options: KiClientOptions): KiClient {
         top_p: 1,
         stream: false,
       });
-      if (body.length > MAX_REQUEST_CHARS) {
+      if (body.length > (options.maxRequestChars ?? MAX_REQUEST_CHARS)) {
         // A request this large is a bug of the caller, and it is never sent
         throw new KiPolicyError('PROTOCOL');
       }
@@ -311,7 +319,7 @@ export function createKiClient(options: KiClientOptions): KiClient {
           return failure(controller.signal.aborted ? 'timeout' : 'network');
         }
         if (text === null) return failure('too_large', response.status);
-        const answer = readAnswer(text);
+        const answer = readAnswer(text, options.maxTextChars);
         if (!answer) return failure('bad_response', response.status);
         // An empty content is an error, not an answer: a later try may get one
         if ('empty' in answer) return failure('empty', response.status, true);
