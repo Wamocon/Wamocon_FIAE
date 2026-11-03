@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   Download,
   FileJson,
+  FileSearch,
   FileSpreadsheet,
   Info,
   ListChecks,
@@ -32,6 +33,7 @@ import {
   reportToJson,
   type CsvLabels,
 } from '@/lib/catalog/content-check/export';
+import type { DocumentFileCheckResult } from '@/lib/catalog/content-check/file-check';
 import type {
   ContentCheckReport,
   Finding,
@@ -104,6 +106,12 @@ const errorKeyOf = (status: number): ErrorKey =>
         : status === 404
           ? 'notFound'
           : 'generic';
+
+/** The file check answers 409 while another one of the catalog runs. */
+const filesErrorKey = (status: number): string =>
+  status === 409
+    ? 'contentCheck.files.error.running'
+    : `contentCheck.error.${errorKeyOf(status)}`;
 
 const BUTTON =
   'text-foreground hover:bg-accent/10 border-border focus-visible:ring-accent flex min-h-[44px] items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50';
@@ -335,6 +343,12 @@ export function ContentCheckPanel({
   const [report, setReport] = useState<ContentCheckReport | null>(null);
   const [errorKey, setErrorKey] = useState<ErrorKey>('generic');
   const [source, setSource] = useState<FindingSource | 'all'>('all');
+  const [filesStatus, setFilesStatus] = useState<
+    'idle' | 'loading' | 'done' | 'error'
+  >('idle');
+  const [filesResult, setFilesResult] =
+    useState<DocumentFileCheckResult | null>(null);
+  const [filesError, setFilesError] = useState('contentCheck.error.generic');
   // Only the newest request may change the screen, nothing is set after unmount
   const latest = useRef(0);
   useEffect(
@@ -385,6 +399,36 @@ export function ContentCheckPanel({
     },
     [catalogId]
   );
+
+  const runFiles = useCallback(async () => {
+    const mine = ++latest.current;
+    setFilesStatus('loading');
+    try {
+      const res = await authFetch(
+        `/api/admin/catalogs/${catalogId}/content-check/files`,
+        { method: 'POST', cache: 'no-store' }
+      );
+      if (!res.ok) {
+        if (mine === latest.current) {
+          setFilesResult(null);
+          setFilesError(filesErrorKey(res.status));
+          setFilesStatus('error');
+        }
+        return;
+      }
+      const body = (await res.json()) as DocumentFileCheckResult;
+      if (mine === latest.current) {
+        setFilesResult(body);
+        setFilesStatus('done');
+      }
+    } catch {
+      if (mine === latest.current) {
+        setFilesResult(null);
+        setFilesError('contentCheck.error.generic');
+        setFilesStatus('error');
+      }
+    }
+  }, [catalogId]);
 
   const categoryName = useCallback(
     (category: string) =>
@@ -446,7 +490,8 @@ export function ContentCheckPanel({
     );
   };
 
-  const loading = status === 'loading';
+  const filesLoading = filesStatus === 'loading';
+  const loading = status === 'loading' || filesLoading;
   const titleId = `content-check-${catalogId}`;
   const ranText = (key: 'script' | 'ki' | 'plan') => {
     if (!report) return '';
@@ -496,27 +541,98 @@ export function ContentCheckPanel({
             <Sparkles className="h-4 w-4" aria-hidden="true" />
             {t('contentCheck.runKi')}
           </button>
+          <button
+            type="button"
+            onClick={runFiles}
+            disabled={loading}
+            aria-describedby={`${titleId}-files`}
+            className={BUTTON}
+          >
+            <FileSearch className="h-4 w-4" aria-hidden="true" />
+            {t('contentCheck.files.run')}
+          </button>
         </div>
       </div>
       <p id={`${titleId}-ki`} className="text-muted mt-2 text-xs">
         {t('contentCheck.kiHint')}
+      </p>
+      <p id={`${titleId}-files`} className="text-muted mt-1 text-xs">
+        {t('contentCheck.files.hint')}
       </p>
 
       <p
         role="status"
         className={loading ? 'text-muted mt-4 text-sm' : 'sr-only'}
       >
-        {loading
-          ? t(loadingKi ? 'contentCheck.runningKi' : 'contentCheck.running')
-          : status === 'done'
-            ? t('contentCheck.done')
-            : ''}
+        {filesLoading
+          ? t('contentCheck.files.running')
+          : loading
+            ? t(loadingKi ? 'contentCheck.runningKi' : 'contentCheck.running')
+            : status === 'done'
+              ? t('contentCheck.done')
+              : filesStatus === 'done'
+                ? t('contentCheck.files.done')
+                : ''}
       </p>
 
       {status === 'error' && (
         <p role="alert" className="mt-4 text-sm text-red-700 dark:text-red-400">
           {t(`contentCheck.error.${errorKey}`)}
         </p>
+      )}
+
+      {filesStatus === 'error' && (
+        <p role="alert" className="mt-4 text-sm text-red-700 dark:text-red-400">
+          {t(filesError)}
+        </p>
+      )}
+
+      {filesStatus === 'done' && filesResult && (
+        <div className="border-border mt-4 border-t pt-3">
+          <h4 className="text-foreground text-sm font-semibold">
+            {t('contentCheck.files.title')}
+          </h4>
+          <p className="text-muted mt-1 text-sm tabular-nums">
+            {t('contentCheck.files.result', {
+              checked: filesResult.checked.toLocaleString(language),
+              sample: filesResult.sampleSize.toLocaleString(language),
+              total: filesResult.totalWithFile.toLocaleString(language),
+              seconds: (filesResult.durationMs / 1000).toLocaleString(
+                language,
+                { minimumFractionDigits: 1, maximumFractionDigits: 1 }
+              ),
+            })}
+          </p>
+          {filesResult.sampleSize === 0 ? (
+            <p className="text-muted mt-2 text-sm">
+              {t('contentCheck.files.empty')}
+            </p>
+          ) : filesResult.findings.length === 0 &&
+            filesResult.unknown === 0 &&
+            filesResult.notChecked === 0 ? (
+            <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400">
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {t('contentCheck.files.allPresent')}
+            </p>
+          ) : null}
+          {filesResult.findings.length > 0 && (
+            <ul role="list" className="mt-2">
+              {filesResult.findings.map((f, i) => (
+                <FindingItem key={`${f.rule}-${i}`} finding={f} />
+              ))}
+            </ul>
+          )}
+          {filesResult.notes.length > 0 && (
+            <ul
+              role="list"
+              className="text-muted mt-2 list-disc space-y-0.5 pl-5 text-xs"
+            >
+              {filesResult.notes.map((note, i) => (
+                <li key={i}>{note}</li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {status === 'idle' && (

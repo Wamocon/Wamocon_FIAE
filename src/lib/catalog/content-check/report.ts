@@ -42,7 +42,7 @@ const SEVERITY_ORDER: Record<FindingSeverity, number> = {
 
 /** What the script checks do not cover, said in every report. */
 export const NOT_CHECKED_NOTE =
-  'Nicht geprüft: ob die Dateien im Speicher vorhanden sind und ob Dokumente byte-gleich sind (es gibt keine Prüfsumme). Kopien erkennt nur der Hinweis auf gleiche Größe und Seitenzahl.';
+  'Nicht geprüft: ob die Dateien im Speicher vorhanden sind (das prüft der Knopf "Dateien prüfen" an einer Stichprobe). Byte-gleiche Kopien meldet die Prüfsumme nur bei Dokumenten, für die sie schon gesetzt ist, sonst gilt der Hinweis auf gleiche Größe und Seitenzahl.';
 
 export const PLAN_FAILED_NOTE =
   'Der Vergleich mit dem Plan-Dokument ist fehlgeschlagen und fehlt im Bericht.';

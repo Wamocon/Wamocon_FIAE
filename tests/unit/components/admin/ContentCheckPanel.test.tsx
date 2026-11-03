@@ -393,6 +393,147 @@ describe('ContentCheckPanel: errors', () => {
   });
 });
 
+describe('ContentCheckPanel: the file check', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const filesButton = () =>
+    screen.getByRole('button', { name: 'Dateien prüfen' });
+
+  const result = (over: Record<string, unknown> = {}) => ({
+    catalogId: CATALOG,
+    catalogCode: 'KFBM',
+    generatedAt: '2026-11-03T10:15:00.000Z',
+    totalWithFile: 1958,
+    sampleSize: 50,
+    checked: 50,
+    missing: 0,
+    unknown: 0,
+    external: 0,
+    notChecked: 0,
+    durationMs: 3200,
+    findings: [],
+    notes: [],
+    ...over,
+  });
+
+  it('is offered next to the other two buttons and loads nothing by itself', () => {
+    renderPanel();
+    expect(filesButton()).toBeEnabled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/Stichprobe von höchstens 50 Dokumenten/)
+    ).toBeInTheDocument();
+  });
+
+  it('posts to the file route, names the duration and says that all files are there', async () => {
+    let resolve: (value: Response) => void = () => {};
+    fetchMock.mockReturnValueOnce(
+      new Promise<Response>(r => {
+        resolve = r;
+      })
+    );
+    renderPanel();
+    fireEvent.click(filesButton());
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/admin/catalogs/${CATALOG}/content-check/files`,
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Die Dateien werden geprüft'
+    );
+    expect(filesButton()).toBeDisabled();
+    expect(runButton()).toBeDisabled();
+
+    resolve(answer(result()));
+    expect(
+      await screen.findByText('Alle geprüften Dateien liegen im Speicher.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/50 von 50 Dokumenten der Stichprobe geprüft/)
+    ).toHaveTextContent('Dauer 3,2 Sekunden');
+    expect(filesButton()).toBeEnabled();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Die Dateiprüfung ist fertig.'
+    );
+  });
+
+  it('shows the documents without a file as an error that opens to the titles', async () => {
+    fetchMock.mockResolvedValueOnce(
+      answer(
+        result({
+          missing: 2,
+          findings: [
+            finding({
+              rule: 'document.storage.missing',
+              category: 'document',
+              summary: '2 Dokumente haben keine Datei im Speicher.',
+              refs: [
+                { type: 'document', id: 'd1', label: 'Theorie Grundlagen' },
+                { type: 'document', id: 'd2', label: 'Szenario 1' },
+              ],
+            }),
+          ],
+        })
+      )
+    );
+    renderPanel();
+    fireEvent.click(filesButton());
+    const summary = await screen.findByText(
+      '2 Dokumente haben keine Datei im Speicher.'
+    );
+    expect(
+      screen.queryByText('Alle geprüften Dateien liegen im Speicher.')
+    ).toBeNull();
+    fireEvent.click(summary);
+    expect(screen.getByText('Theorie Grundlagen')).toBeVisible();
+  });
+
+  it('says it when there was nothing to check, and shows the notes of the run', async () => {
+    fetchMock.mockResolvedValueOnce(
+      answer(result({ sampleSize: 0, checked: 0, totalWithFile: 0 }))
+    );
+    renderPanel();
+    fireEvent.click(filesButton());
+    expect(
+      await screen.findByText(/keine Dokumente mit Datei/)
+    ).toBeInTheDocument();
+
+    fetchMock.mockResolvedValueOnce(
+      answer(result({ unknown: 3, notes: ['Bei 3 Dokumenten keine Antwort.'] }))
+    );
+    fireEvent.click(filesButton());
+    expect(
+      await screen.findByText('Bei 3 Dokumenten keine Antwort.')
+    ).toBeInTheDocument();
+    // with documents the storage could not answer for it is not "all present"
+    expect(
+      screen.queryByText('Alle geprüften Dateien liegen im Speicher.')
+    ).toBeNull();
+  });
+
+  it.each([
+    [409, 'Für diese Ausbildung läuft schon eine Dateiprüfung.'],
+    [429, 'Zu viele Prüfungen in kurzer Zeit.'],
+    [403, 'Die Inhaltsprüfung dürfen nur Plattform-Administratoren starten.'],
+    [500, 'Die Prüfung konnte nicht ausgeführt werden.'],
+  ])('status %s gives a specific message', async (status, text) => {
+    fetchMock.mockResolvedValueOnce(answer({ error: 'x' }, status));
+    renderPanel();
+    fireEvent.click(filesButton());
+    expect(await screen.findByRole('alert')).toHaveTextContent(text);
+    expect(filesButton()).toBeEnabled();
+  });
+
+  it('a network failure is reported', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+    renderPanel();
+    fireEvent.click(filesButton());
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'konnte nicht ausgeführt werden'
+    );
+  });
+});
+
 describe('ContentCheckPanel: download', () => {
   const blobs: Blob[] = [];
   const names: string[] = [];
