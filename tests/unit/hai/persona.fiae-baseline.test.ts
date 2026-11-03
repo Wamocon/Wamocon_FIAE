@@ -14,12 +14,14 @@ import { createHash } from 'crypto';
 // changed for FIAE trainees too, solution protection stays STRICT). What
 // changed in the prompt, and why (golden set measurement with sokrates-fast,
 // docs/hai-golden-set.md section 5):
-//  - The fixed refusal sentence ("Ablehnung (IMMER so, NIEMALS weicher)") is out
-//    of the prompt of a question that passed the gate. The model copied it
-//    where the question was a subject question (Netflix server, hotel for the
-//    business trip, a comparison of two model solutions). The pipeline sends the
-//    refusal text itself. In its place: "Diese Frage wurde bereits als fachlich
-//    geprueft", an everyday word does not make a subject question off topic.
+//  - The fixed refusal sentence about the field ("Ablehnung (IMMER so, NIEMALS
+//    weicher)") is out of the prompt of a question that passed the gate. The model
+//    copied it where the question was a subject question (Netflix server, hotel
+//    for the business trip, a comparison of two model solutions). The pipeline
+//    sends that refusal text itself. In its place: "Diese Frage wurde bereits als
+//    fachlich geprueft", an everyday word does not make a subject question off
+//    topic. The borders of the occupation stay (a question of another occupation
+//    gets "gehoert nicht zu deiner Ausbildung"), the golden set checks that.
 //  - New section "Rolle der Person" right after the core: the role comes from
 //    the server and is never asked for (the model asked "Trainer oder Azubi?").
 //  - New section "Was geschuetzt ist und was nicht": solutions are protected,

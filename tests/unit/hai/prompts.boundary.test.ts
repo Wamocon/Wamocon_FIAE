@@ -130,7 +130,7 @@ describe('boundary rules in the prompt', () => {
     );
   });
 
-  it('carries no fixed refusal sentence in the prompt of a question that passed the gate', () => {
+  it('carries no refusal sentence about the field in the prompt of a question that passed the gate', () => {
     for (const persona of [kfbm('TRAINEE'), FIAE_PERSONA]) {
       const prompt = prompts.buildSystemPrompt({
         mode: 'general',
@@ -141,8 +141,13 @@ describe('boundary rules in the prompt', () => {
       expect(prompt).toContain(
         'Diese Frage wurde bereits als fachlich geprüft'
       );
-      expect(prompt).toMatch(/verwende keinen festen Ablehnungssatz/);
+      expect(prompt).toMatch(/verwende keinen Ablehnungssatz über dein Fachgebiet/);
       expect(prompt).toMatch(/Ein Alltagswort in einer Fachfrage/);
+      // the borders of the occupation stay: another occupation or a plain off-topic question is not answered
+      expect(prompt).toMatch(/hebt die Liste der erlaubten Themen oben nicht auf/);
+      expect(prompt).toMatch(/Gehört der Inhalt einer Frage zu einem anderen Ausbildungsberuf/);
+      expect(prompt).toMatch(/gehört nicht zu deiner Ausbildung/);
+      expect(prompt).toMatch(/biete Hilfe zu ihrem Beruf an/);
     }
     // the prompt without a scope still carries the refusal: it is the only thing it says
     expect(

@@ -591,6 +591,14 @@ describe('"not possible" through the solution protection (measured 03.11.2026, D
     'Eine Herausgabe der Musterlösung ist nicht zulässig.',
     'Wegen des **Lösungsschutzes** ist das leider nicht möglich.',
     'Den Bewertungsschlüssel zu zeigen ist nicht freigegeben.',
+    // measured 03.11.2026 (SP-48): the state of the protection without 'ich'
+    'Die Trainerhinweise und Musterlösungen zu den Szenarien sind geschützt. Daher kann ich dir den spezifischen Notizinhalt des Trainers nicht nennen.',
+    'Der Bewertungsschlüssel ist Trainern vorbehalten.',
+    'Die Musterlösung gibt es nur für Trainer.',
+    // measured 03.11.2026 (DR-04, text): long sentence, no 'möglich'
+    'Ich kann dir die richtige Antwort auf eine Quizfrage leider nicht direkt nennen. Aufgrund des Lösungsschutzes sind korrekte Quizantworten erst später verfügbar.',
+    'Aufgrund des Lösungsschutzes sind richtige Quizantworten erst nach dem Quiz sichtbar.',
+    'Die Musterlösung kann man hier nicht zeigen.',
   ])('recognizes %p as a refusal', answer => {
     expect(looksLikeRefusal(answer)).toBe(true);
   });
@@ -601,6 +609,10 @@ describe('"not possible" through the solution protection (measured 03.11.2026, D
     'Ein Primärschlüssel darf nicht NULL sein.',
     'Eine Division durch null ist nicht möglich.',
     'Das Löschen ist nicht erlaubt, solange abhängige Datensätze existieren.',
+    'Ein Primärschlüssel ist geschützt vor Duplikaten, weil er eindeutig sein muss.',
+    'Das Passwort ist geschützt gespeichert, nur der Hash liegt in der Tabelle.',
+    'Man darf den Wert nicht direkt nennen, wenn die Spalte leer ist.',
+    'Wegen des Index ist die Abfrage schnell, der Lösungsansatz ist einfach.',
     // the two parts are in different sentences: no refusal of a solution
     'Die Musterlösung gibt es für Trainer. Ein zweiter Eintrag ist nicht möglich, solange der erste existiert.',
   ])('does not take %p for a refusal', answer => {

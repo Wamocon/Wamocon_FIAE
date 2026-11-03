@@ -352,15 +352,30 @@ const REFUSAL_PATTERNS: readonly RegExp[] = [
  * explanation) has no solution word and is no refusal.
  */
 const SOLUTION_WORD =
-  /l(?:ö|oe)sungsschutz|musterl(?:ö|oe)sung|l(?:ö|oe)sungsweg|bewertungsschl(?:ü|ue)ssel|richtige[n]? (?:antwort|quizantwort)|quizantwort/i;
+  /l(?:ö|oe)sungsschutz|trainerhinweis|hinweise? des trainers|musterl(?:ö|oe)sung|l(?:ö|oe)sungsweg|bewertungsschl(?:ü|ue)ssel|richtige[n]? (?:antwort|quizantwort)|quizantwort/i;
 const NOT_POSSIBLE =
   /nicht\s+(?:möglich|moeglich|erlaubt|zulässig|zulaessig|freigegeben)|unzulässig|unzulaessig/i;
+
+/** "Die Trainerhinweise sind geschützt": the state of the protection, said without "ich". */
+const PROTECTED_STATE = /geschützt|vorbehalten|nur für (?:trainer|ausbilder)/i;
+
+/** "nicht direkt nennen": a refusal to hand out, said without "möglich". */
+const WITHHOLDS =
+  /nicht\s+(?:direkt\s+|einfach\s+)?(?:nennen|geben|herausgeben|zeigen|verraten|mitteilen|preisgeben)/i;
+/** "aufgrund des Lösungsschutzes": the reason of a refusal in one phrase. */
+const PROTECTION_REASON =
+  /(?:aufgrund|wegen)\s+(?:de[sr]\s+)?l(?:ö|oe)sungsschutz/i;
 
 function refusesByProtection(plain: string): boolean {
   return plain
     .split(/[.!?\n]+/)
     .some(
-      sentence => SOLUTION_WORD.test(sentence) && NOT_POSSIBLE.test(sentence)
+      sentence =>
+        (SOLUTION_WORD.test(sentence) &&
+          (NOT_POSSIBLE.test(sentence) ||
+            PROTECTED_STATE.test(sentence) ||
+            WITHHOLDS.test(sentence))) ||
+        PROTECTION_REASON.test(sentence)
     );
 }
 
