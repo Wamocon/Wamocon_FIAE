@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { authFetch } from '@/lib/authFetch';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { countLabel } from '@/lib/i18n/count-label';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 
 // The detail of a quiz with the marker of the correct option. The data comes
 // from /api/trainer/quizzes/[quizId], which answers a trainer only. This page
@@ -33,6 +34,15 @@ type LoadState =
 
 export default function TrainerQuizDetailPage() {
   const { t } = useLanguage();
+  // the platform admin manages the quizzes, everybody else has an overview
+  // (WMCNL-3026)
+  const canManage = useIsSuperAdmin();
+  const listTitle = t(
+    canManage ? 'quiz.managementTitle' : 'quiz.overviewTitle'
+  );
+  const backLabel = t(
+    canManage ? 'trainer.quizDetail.back' : 'trainer.quizDetail.backOverview'
+  );
   const params = useParams();
   const quizId = params?.quizId as string | undefined;
   const [state, setState] = useState<LoadState>({ status: 'loading' });
@@ -92,7 +102,7 @@ export default function TrainerQuizDetailPage() {
             href="/trainer/quiz-management"
             className="text-primary underline"
           >
-            {t('trainer.quizDetail.back')}
+            {backLabel}
           </Link>
         </div>
       </div>
@@ -105,7 +115,7 @@ export default function TrainerQuizDetailPage() {
       <div className="border-accent/30 rounded-3xl border bg-black/30 p-6">
         <div className="text-muted-foreground mb-2 text-xs">
           <Link href="/trainer/quiz-management" className="underline">
-            {t('quiz.managementTitle')}
+            {listTitle}
           </Link>
           <span> / </span>
           <span>{t('trainer.quizDetail.title')}</span>

@@ -3,6 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useBreadcrumbs } from '@/contexts/BreadcrumbContext';
+import { isSuperAdmin } from '@/lib/auth/roles';
 import { Menu, ChevronLeft, Crown, Sparkles } from 'lucide-react';
 import NotificationsBell from '@/components/ui/NotificationsBell';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
@@ -39,6 +40,14 @@ export function Header({
     return null;
   }
 
+  // The page of the quizzes manages them for the platform admin only, for
+  // everybody else it is an overview (WMCNL-3026)
+  const heading =
+    currentBreadcrumb?.href === '/trainer/quiz-management' &&
+    !isSuperAdmin({ role: profile.role, isPlatformOwner })
+      ? t('breadcrumb.quizOverview')
+      : currentBreadcrumb?.label;
+
   return (
     <>
     <header className="bg-card/80 border-border/60 relative z-50 flex h-16 items-center justify-between border-b px-6 shadow-lg backdrop-blur-md">
@@ -63,7 +72,7 @@ export function Header({
           </button>
         )}
         <h2 className="text-foreground text-xl font-semibold">
-          {currentBreadcrumb?.label || t('nav.dashboard')}
+          {heading || t('nav.dashboard')}
         </h2>
       </div>
       {/* Right side - Actions */}

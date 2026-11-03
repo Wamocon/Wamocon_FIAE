@@ -10,6 +10,10 @@ import { authFetch } from '@/lib/authFetch';
 // could have asked for them.
 
 jest.mock('@/lib/authFetch');
+jest.mock('@/contexts/AuthContext', () => ({
+  __esModule: true,
+  useAuth: () => mockAuth,
+}));
 jest.mock('next/navigation', () => ({
   __esModule: true,
   useParams: () => mockParams,
@@ -19,6 +23,10 @@ jest.mock('next/navigation', () => ({
 }));
 
 let mockParams: Record<string, string> = {};
+let mockAuth: Record<string, unknown> = {
+  profile: { id: 'u1', role: 'trainer' },
+  isPlatformOwner: false,
+};
 const authFetchMock = authFetch as jest.MockedFunction<typeof authFetch>;
 
 function json(body: unknown, ok = true, status = 200) {
@@ -29,6 +37,10 @@ describe('trainer quiz detail page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockParams = { quizId: 'q1' };
+    mockAuth = {
+      profile: { id: 'u1', role: 'trainer' },
+      isPlatformOwner: false,
+    };
   });
 
   it('asks the trainer route with the session and marks the correct option', async () => {
@@ -74,6 +86,27 @@ describe('trainer quiz detail page', () => {
     expect(screen.getByText(/Typ:\s*Global/)).toBeInTheDocument();
     expect(screen.getByText(/1 Azubi(?!s)/)).toBeInTheDocument();
     expect(screen.queryByText(/Quiz Details|Type: GLOBAL/)).toBeNull();
+  });
+
+  it('names the list "Quiz-Übersicht" for a trainer and "Quiz-Verwaltung" for the platform admin (WMCNL-3026)', async () => {
+    authFetchMock.mockResolvedValue(
+      json({ id: 'q1', title: 'K1', quiz_type: 'big', questions: [] })
+    );
+    const first = renderWithProviders(<TrainerQuizDetailPage />);
+    expect(
+      await screen.findByRole('link', { name: 'Quiz-Übersicht' })
+    ).toHaveAttribute('href', '/trainer/quiz-management');
+    expect(screen.queryByText('Quiz-Verwaltung')).toBeNull();
+    first.unmount();
+
+    mockAuth = {
+      profile: { id: 'a1', role: 'super_admin' },
+      isPlatformOwner: true,
+    };
+    renderWithProviders(<TrainerQuizDetailPage />);
+    expect(
+      await screen.findByRole('link', { name: 'Quiz-Verwaltung' })
+    ).toBeInTheDocument();
   });
 
   it('says that nobody is assigned when no trainee is', async () => {

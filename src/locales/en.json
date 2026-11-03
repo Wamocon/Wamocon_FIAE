@@ -3404,5 +3404,10 @@
   "notifications.level.HIGH": "hard",
   "notifications.status.PENDING": "Pending",
   "notifications.status.APPROVED": "Approved",
-  "notifications.status.REJECTED": "Rejected"
+  "notifications.status.REJECTED": "Rejected",
+  "nav.quizOverview": "Quiz overview",
+  "nav.quizManagement": "Quiz management",
+  "breadcrumb.quizOverview": "Quiz overview",
+  "quiz.overviewTitle": "Quiz overview",
+  "trainer.quizDetail.backOverview": "Back to quiz overview"
 }

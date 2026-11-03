@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { normalizeRole } from '@/lib/auth/roles';
+import { isSuperAdmin, normalizeRole } from '@/lib/auth/roles';
 import {
   adminMenuItems,
   contentStatsMenuItems,
@@ -179,7 +179,11 @@ export function Sidebar({
             },
             {
               id: 'quizManagement',
-              label: t('nav.quizzes'),
+              // Only the platform admin manages quizzes, everybody else sees
+              // the overview (WMCNL-3026)
+              label: isSuperAdmin({ role: profile?.role, isPlatformOwner })
+                ? t('nav.quizManagement')
+                : t('nav.quizOverview'),
               icon: HelpCircle,
               href: '/trainer/quiz-management',
             },

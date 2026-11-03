@@ -566,7 +566,9 @@ export function QuizManagement() {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="flex items-center justify-between">
           <h2 className="text-foreground text-2xl font-bold">
-            {t('quiz.managementTitle')}
+            {t(
+              canEditCurriculum ? 'quiz.managementTitle' : 'quiz.overviewTitle'
+            )}
           </h2>
           {canEditCurriculum && (
             <Button

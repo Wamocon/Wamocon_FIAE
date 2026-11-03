@@ -3406,5 +3406,10 @@
   "notifications.level.HIGH": "schwer",
   "notifications.status.PENDING": "Ausstehend",
   "notifications.status.APPROVED": "Genehmigt",
-  "notifications.status.REJECTED": "Abgelehnt"
+  "notifications.status.REJECTED": "Abgelehnt",
+  "nav.quizOverview": "Quiz-Übersicht",
+  "nav.quizManagement": "Quiz-Verwaltung",
+  "breadcrumb.quizOverview": "Quiz-Übersicht",
+  "quiz.overviewTitle": "Quiz-Übersicht",
+  "trainer.quizDetail.backOverview": "Zurück zur Quiz-Übersicht"
 }
