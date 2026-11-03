@@ -27,6 +27,8 @@ export type StaticTargetId =
   | 'calendar'
   | 'profile'
   | 'quizzes'
+  | 'courses'
+  | 'trainer_feedback'
   | 'trainees'
   | 'reviews'
   | 'content_management'
@@ -121,6 +123,28 @@ export const STATIC_TARGETS: Readonly<
       path: '/trainer/quiz-management',
       label: 'Quizze',
       reason: 'Dort verwaltest du die Quizze.',
+    },
+  },
+  // The menu entry "Lernen" of a trainee. A trainer has no such page, the
+  // courses of the trainer level are managed in the content management.
+  courses: {
+    TRAINEE: {
+      path: '/trainee/courses',
+      label: 'Lernen',
+      reason: 'Dort findest du deine Kurse mit Enablern und Use Cases.',
+    },
+    TRAINER: {
+      path: '/trainer/content-management',
+      label: 'Inhaltsverwaltung',
+      reason: 'Dort verwaltest du Kurse, Enabler und Use Cases.',
+    },
+  },
+  trainer_feedback: {
+    TRAINEE: {
+      path: '/trainee/trainer-feedback',
+      label: 'Ausbilder-Feedback',
+      reason:
+        'Dort siehst du die Rückmeldungen deines Ausbilders zu deinen Abgaben.',
     },
   },
   trainees: {
