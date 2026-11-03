@@ -30,8 +30,16 @@ import type {
 } from './providers';
 import {
   CHAT_UNAVAILABLE_I18N_KEY,
+  MODEL_BUSY_I18N_KEY,
   isChatUnavailableError,
+  modelBusyPayload,
+  type ChatUnavailableError,
 } from './providers/errors';
+import {
+  SEARCH_UNAVAILABLE_NOTE,
+  searchDeadlineMs,
+  withDeadline,
+} from './searchDeadline';
 import { searchWithContext, SearchResult } from './vectorSearch';
 import { fetchPageIndexContext } from './pageIndexService';
 import { resolveRetrievalAccess } from './retrievalAccess';
@@ -203,14 +211,39 @@ export interface PipelineResult {
    * message and does not store it as an answer of the assistant.
    */
   errorKey?: string;
+  /**
+   * Stable code next to the key: `MODEL_BUSY` when the model did not answer in
+   * time or is overloaded (a retry may work). Absent for every other failure.
+   */
+  errorCode?: string;
+  /** With MODEL_BUSY: when to try again, in seconds (a hint). */
+  retryAfterSec?: number;
 }
 
 /**
  * No chat provider could answer: the primary failed and there is no Sokrates
  * fallback (or it failed too). The user gets a clear message, never a text that
- * looks like an answer, and nothing was sent to any other provider.
+ * looks like an answer, and nothing was sent to any other provider. When the
+ * failure was a time limit or an overloaded model (timeout, 429, 502, 503, 504,
+ * 524) the message says that (MODEL_BUSY) instead of "not reachable".
  */
-function chatUnavailableResult(): PipelineResult {
+function chatUnavailableResult(error?: unknown): PipelineResult {
+  const busy =
+    typeof error === 'object' &&
+    error !== null &&
+    (error as Partial<ChatUnavailableError>).modelBusy === true;
+  if (busy) {
+    const { code, retryAfterSec } = modelBusyPayload();
+    return {
+      response: '',
+      intent: 'question',
+      citations: [],
+      error: 'model_busy',
+      errorKey: MODEL_BUSY_I18N_KEY,
+      errorCode: code,
+      retryAfterSec,
+    };
+  }
   return {
     response: '',
     intent: 'question',
@@ -635,39 +668,56 @@ export async function retrieveContext(
     return { searchResults: [], retrievedContext: '' };
   }
 
-  // Step 3: Vector search — may return empty if embedding provider differs from indexing provider
+  // Step 3: Vector search — may return empty if embedding provider differs from indexing provider.
+  // A search that could not run (embedding at Sokrates timed out, database
+  // failed, time limit of a question about the own data) is not "nothing found":
+  // the turn goes on without it and the prompt says so.
   let searchResults: SearchResult[] = [];
+  let searchUnavailable = false;
   try {
-    const searchContext = await searchWithContext(
-      userMessage,
-      {
-        currentEnablerId: context.currentEnablerId,
-        currentCourseId: context.currentCourseId,
-        // A question about learning reserves places for learning cards
-        ...(isLearningTechniqueQuestion(userMessage)
-          ? { includeLearningTechniques: true }
-          : {}),
-      },
-      {
-        topK: 5,
-        minSimilarity: 0.45,
-        catalogIds: access.catalogIds,
-        audience: access.audience,
-        organizationId: access.organizationId,
-        userId: access.userId,
-        trainingScope: context.trainingScope,
-        // model solutions of the private bucket: only with this permission,
-        // which comes from the role in the database and the server switch
-        includeTrainerSolutions: access.includeTrainerSolutions,
-      }
+    const outcome = await withDeadline(
+      searchWithContext(
+        userMessage,
+        {
+          currentEnablerId: context.currentEnablerId,
+          currentCourseId: context.currentCourseId,
+          // A question about learning reserves places for learning cards
+          ...(isLearningTechniqueQuestion(userMessage)
+            ? { includeLearningTechniques: true }
+            : {}),
+        },
+        {
+          topK: 5,
+          minSimilarity: 0.45,
+          catalogIds: access.catalogIds,
+          audience: access.audience,
+          organizationId: access.organizationId,
+          userId: access.userId,
+          trainingScope: context.trainingScope,
+          // model solutions of the private bucket: only with this permission,
+          // which comes from the role in the database and the server switch
+          includeTrainerSolutions: access.includeTrainerSolutions,
+        }
+      ),
+      // a question about the own data does not wait long for the search
+      context.userRole ? searchDeadlineMs(userMessage) : null
     );
-    searchResults = searchContext.results;
+    if (outcome.timedOut) {
+      console.warn(
+        'HAI.ai: knowledge search took too long for a question about the own data, going on without it'
+      );
+      searchUnavailable = true;
+    } else {
+      searchResults = outcome.value.results;
+      if (outcome.value.unavailable) searchUnavailable = true;
+    }
   } catch (vectorError) {
     console.warn(
       'HAI.ai: Vector search failed (non-fatal, falling back to PageIndex):',
       vectorError
     );
     searchResults = [];
+    searchUnavailable = true;
   }
 
   // Second guard behind the SQL filter: a chunk of a model solution of the
@@ -693,6 +743,10 @@ export async function retrieveContext(
   );
   if (usedTrainerSolutions) {
     retrievedContext = `${TRAINER_SOLUTION_NOTE}\n\n${retrievedContext}`;
+  }
+  // no search, no text: the model is told why instead of "nothing was found"
+  if (searchUnavailable && !retrievedContext) {
+    retrievedContext = SEARCH_UNAVAILABLE_NOTE;
   }
 
   // PageIndex — fetch relevant PDF pages at query time (non-fatal)
@@ -836,7 +890,9 @@ export async function processMessage(
       throw new Error('Chat provider not initialized');
     }
   } catch (gateError) {
-    if (isChatUnavailableError(gateError)) return chatUnavailableResult();
+    if (isChatUnavailableError(gateError)) {
+      return chatUnavailableResult(gateError);
+    }
     return {
       response:
         'HAI.ai ist momentan nicht verfügbar. Bitte kontaktiere deinen Trainer.',
@@ -1072,7 +1128,7 @@ export async function processMessage(
       ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
     };
   } catch (error) {
-    if (isChatUnavailableError(error)) return chatUnavailableResult();
+    if (isChatUnavailableError(error)) return chatUnavailableResult(error);
     console.error('HAI.ai Pipeline Error:', error);
     return {
       response:
@@ -1320,7 +1376,7 @@ export async function processMessageStream(
       ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
     };
   } catch (error) {
-    if (isChatUnavailableError(error)) return chatUnavailableResult();
+    if (isChatUnavailableError(error)) return chatUnavailableResult(error);
     console.error('HAI.ai Stream Error:', error);
     const errorMsg =
       'Ups, da ist etwas schiefgelaufen! 🦈💫 Bitte versuche es noch einmal.';

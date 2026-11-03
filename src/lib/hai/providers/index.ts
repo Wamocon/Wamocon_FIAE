@@ -37,6 +37,7 @@ import { ClaudeChatProvider } from './claude';
 import {
   ChatUnavailableError,
   describeChatFailure,
+  isModelBusyError,
   type FallbackState,
 } from './errors';
 import { CachedEmbeddingProvider } from './embeddingCache';
@@ -69,7 +70,12 @@ export {
   ChatUnavailableError,
   CHAT_UNAVAILABLE_CODE,
   CHAT_UNAVAILABLE_I18N_KEY,
+  MODEL_BUSY_CODE,
+  MODEL_BUSY_I18N_KEY,
+  MODEL_BUSY_RETRY_AFTER_SEC,
   isChatUnavailableError,
+  isModelBusyError,
+  modelBusyPayload,
   type FallbackState,
 } from './errors';
 
@@ -344,6 +350,8 @@ export async function runChatChain(
   }
 
   const failures: string[] = [];
+  // the last failure was a time limit or an overloaded model (not a wrong setup)
+  let lastFailureBusy = false;
 
   for (let index = 0; index < attempts.length; index += 1) {
     const provider = attempts[index];
@@ -374,6 +382,7 @@ export async function runChatChain(
     } catch (error) {
       const reason = describeChatFailure(error);
       failures.push(`${provider.name}: ${reason}`);
+      lastFailureBusy = isModelBusyError(error);
 
       if (emitted) {
         console.warn(
@@ -400,7 +409,8 @@ export async function runChatChain(
       ? 'fallback_failed'
       : 'no_fallback',
     chain.fallbackState,
-    failures.join(' | ')
+    failures.join(' | '),
+    lastFailureBusy
   );
 }
 

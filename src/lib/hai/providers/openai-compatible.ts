@@ -40,8 +40,34 @@ import type {
 
 /** A blocking call, the whole call. */
 export const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
-/** A stream, until the first byte (the model may have to be loaded first). */
-export const DEFAULT_FIRST_BYTE_TIMEOUT_MS = 45_000;
+/**
+ * A stream, until the first byte. The model may have to be loaded first, and
+ * Sokrates is a shared machine: under load a one-liner needed 50 to 77 seconds
+ * until the first character (docs/hai-geschwindigkeit.md). 45 seconds cut
+ * answers that would have come after 65 seconds, so the default is 90 seconds.
+ * `HAI_CHAT_FIRST_BYTE_TIMEOUT_MS` sets it (15 to 150 seconds, anything else
+ * is ignored and the default stays).
+ */
+export const DEFAULT_FIRST_BYTE_TIMEOUT_MS = 90_000;
+export const MIN_FIRST_BYTE_TIMEOUT_MS = 15_000;
+export const MAX_FIRST_BYTE_TIMEOUT_MS = 150_000;
+
+/**
+ * The first byte limit from the environment: a whole number of milliseconds
+ * between the minimum and the maximum, otherwise the default (an invalid value
+ * never switches the limit off or makes it absurd).
+ */
+export function resolveFirstByteTimeoutMs(
+  raw: string | undefined = process.env.HAI_CHAT_FIRST_BYTE_TIMEOUT_MS
+): number {
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (!/^\d{1,9}$/.test(text)) return DEFAULT_FIRST_BYTE_TIMEOUT_MS;
+  const value = Number(text);
+  if (value < MIN_FIRST_BYTE_TIMEOUT_MS || value > MAX_FIRST_BYTE_TIMEOUT_MS) {
+    return DEFAULT_FIRST_BYTE_TIMEOUT_MS;
+  }
+  return value;
+}
 /** A stream, the pause between two chunks. */
 export const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
 
@@ -125,7 +151,7 @@ export class OpenAICompatibleChatProvider implements ChatProvider {
     this.timeouts = {
       requestTimeoutMs: timeouts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
       firstByteTimeoutMs:
-        timeouts.firstByteTimeoutMs ?? DEFAULT_FIRST_BYTE_TIMEOUT_MS,
+        timeouts.firstByteTimeoutMs ?? resolveFirstByteTimeoutMs(),
       idleTimeoutMs: timeouts.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
     };
 

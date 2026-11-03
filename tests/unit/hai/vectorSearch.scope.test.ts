@@ -517,7 +517,13 @@ describe('searchWithContext', () => {
   it('returns an empty result when embedding fails', async () => {
     mockGenerateEmbedding.mockRejectedValue(new Error('quota'));
     const result = await searchWithContext('frage', context, trainee());
-    expect(result).toEqual({ results: [], query: 'frage', totalResults: 0 });
+    // a search that could not run says so (it is not the same as nothing found)
+    expect(result).toEqual({
+      results: [],
+      query: 'frage',
+      totalResults: 0,
+      unavailable: true,
+    });
   });
 });
 

@@ -625,13 +625,15 @@ describe('both pipelines share one retrieval (structure)', () => {
     .replace(/\r\n/g, '\n');
 
   it('searches and reads PDFs in exactly one place, inside retrieveContext', () => {
-    expect(source.match(/await searchWithContext\(/g)).toHaveLength(1);
+    // the call sits inside withDeadline(...), the time limit of a question
+    // about the own data
+    expect(source.match(/[^a-zA-Z]searchWithContext\(/g)).toHaveLength(1);
     expect(source.match(/await fetchPageIndexContext\(/g)).toHaveLength(1);
     const body = source.slice(
       source.indexOf('export async function retrieveContext'),
       source.indexOf('// MAIN PIPELINE')
     );
-    expect(body).toContain('await searchWithContext(');
+    expect(body).toContain('searchWithContext(');
     expect(body).toContain('await fetchPageIndexContext(');
   });
 
