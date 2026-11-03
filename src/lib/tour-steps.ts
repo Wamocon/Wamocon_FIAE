@@ -106,14 +106,14 @@ export const TRAINEE_HAI_STEPS: TourStep[] = [
     targetSelector: '[data-tour="hai-button"]',
     titleKey: 'onboarding.hai.intro.title',
     descriptionKey: 'onboarding.trainee.hai.intro.desc',
-    placement: 'right',
+    placement: 'left',
   },
   {
     id: 'hai-features',
     targetSelector: '[data-tour="hai-button"]',
     titleKey: 'onboarding.hai.features.title',
     descriptionKey: 'onboarding.trainee.hai.features.desc',
-    placement: 'right',
+    placement: 'left',
   },
 ];
 
@@ -209,13 +209,13 @@ export const TRAINER_HAI_STEPS: TourStep[] = [
     targetSelector: '[data-tour="hai-button"]',
     titleKey: 'onboarding.hai.intro.title',
     descriptionKey: 'onboarding.trainer.hai.intro.desc',
-    placement: 'right',
+    placement: 'left',
   },
   {
     id: 'hai-features',
     targetSelector: '[data-tour="hai-button"]',
     titleKey: 'onboarding.hai.features.title',
     descriptionKey: 'onboarding.trainer.hai.features.desc',
-    placement: 'right',
+    placement: 'left',
   },
 ];

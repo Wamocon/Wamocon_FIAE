@@ -10,7 +10,7 @@
  *    read in the chat afterwards. There is no second path to the server.
  *  - the voice mode survives a change of page: when the HAI opens a page
  *    (the question "Soll ich sie öffnen?" and the answer "ja"), the loop keeps
- *    listening and the figure keeps standing at the bottom left of the new page.
+ *    listening and the figure keeps standing at the bottom right of the new page.
  *
  * The voice mode does not change what the voice assistant is: the organization
  * switch, the consent with the named provider and the order of the loop stay
@@ -226,7 +226,7 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
   }, [quizActive, view, viewMode, setViewMode]);
 
   // The HAI opened a page while the voice mode was up: the figure keeps
-  // standing and listening at the bottom left of the new page. The chat panel
+  // standing and listening at the bottom right of the new page. The chat panel
   // goes away so it does not cover the page.
   const openedCount = messages.filter(
     m => m.navigationOffer?.status === 'opened'

@@ -3,10 +3,10 @@
 /**
  * HAI symbol: the round fish pond with the pixel shark (shark-new.gif).
  *
- * It sits at the bottom left of the page and is the handle of the chat panel:
- * a click slides the panel in from the left, another click slides it back. While
- * the panel is open the symbol rides on its right edge (haiLayout.ts), stays
- * visible and clickable and shows a small arrow.
+ * It sits at the bottom right of the page and is the handle of the chat panel:
+ * a click slides the panel in from the right, another click slides it back.
+ * While the panel is open the symbol rides on its left edge (haiLayout.ts),
+ * stays visible and clickable and shows a small arrow.
  *
  * In the voice mode the symbol itself becomes the pond of the HAI figure: the
  * same round pond, grown (scale only, so the border and the glow grow with it),
@@ -19,7 +19,7 @@ import React from 'react';
 import Image from 'next/image';
 import { useHai } from './HaiProvider';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { HAI_PANEL_ID, useHaiAnchor } from './haiLayout';
 import { useOptionalHaiVoiceSession } from './voice-mode/voiceSessionContext';
@@ -40,9 +40,9 @@ export function HaiButton() {
   return (
     // z-40, one level under the viewers and dialogs (z-50): the button is
     // part of the page, an open viewer or dialog lies over it (WMCNL-2969).
-    // Bottom left: the HAI lives at the left (haiLayout.ts).
+    // Bottom right: the HAI lives in the corner, as it always did (haiLayout.ts).
     <div
-      className={`${anchor.className} flex flex-col items-start gap-2`}
+      className={`${anchor.className} flex flex-col items-end gap-2`}
       data-tour="hai-button"
       data-hai-anchor=""
       data-panel={isActive ? 'open' : 'closed'}
@@ -71,7 +71,7 @@ export function HaiButton() {
       {/* The pond: scaled up as a whole in the voice mode */}
       <div
         data-pond={pond ? 'true' : 'false'}
-        className={`group relative origin-bottom-left transition-transform duration-500 ease-out motion-reduce:transition-none ${
+        className={`group relative origin-bottom-right transition-transform duration-500 ease-out motion-reduce:transition-none ${
           pond ? 'scale-[2] sm:scale-[2.8]' : ''
         }`}
       >
@@ -131,15 +131,15 @@ export function HaiButton() {
               data-testid="hai-handle-arrow"
               className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-cyan-400 text-[#06183a] shadow"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
+              <ChevronRight className="h-3.5 w-3.5" />
             </span>
           )}
         </motion.button>
 
-        {/* Hover Tooltip: right of the symbol (the page is to its right), outside
+        {/* Hover Tooltip: left of the symbol (the page is to its left), outside
             of the round button so it is not clipped */}
         {!isActive && !pond && (
-          <span className="bg-popover text-popover-foreground border-border/50 pointer-events-none absolute top-1/2 left-full ml-4 hidden -translate-x-2 -translate-y-1/2 rounded-lg border px-3 py-1.5 text-sm font-medium whitespace-nowrap opacity-0 shadow-md transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 sm:block">
+          <span className="bg-popover text-popover-foreground border-border/50 pointer-events-none absolute top-1/2 right-full mr-4 hidden translate-x-2 -translate-y-1/2 rounded-lg border px-3 py-1.5 text-sm font-medium whitespace-nowrap opacity-0 shadow-md transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 sm:block">
             {t('hai.button.askHai')}
           </span>
         )}

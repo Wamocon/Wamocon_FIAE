@@ -4,7 +4,7 @@
  * Voice mode of the HAI: a conversation with the HAI figure.
  *
  * No full screen and no dark layer: the HAI is a figure that rises out of the
- * HAI symbol at the bottom left of the page. The symbol (HaiButton) IS the pond:
+ * HAI symbol at the bottom right of the page. The symbol (HaiButton) IS the pond:
  * the same round fish pond, grown. The figure stands in its water with its legs
  * while the voice mode runs, speaks with a moving mouth and dives back in when
  * the mode ends, then the symbol is the button again (HaiCharacter.tsx). The
@@ -86,8 +86,10 @@ function useRecentChange(value: string, ms: number): boolean {
   return recent;
 }
 
-// The place is the anchor of the HAI symbol (haiLayout.ts): bottom left, the
+// The place is the anchor of the HAI symbol (haiLayout.ts): bottom right, the
 // same spot as the button, so the pond and the symbol are one and the same.
+// The pond grows from the bottom right corner (HaiButton: origin-bottom-right),
+// so the figure, its speech bubble and the controls extend to the left of it.
 
 // The pond spot is as wide as the grown symbol (HaiButton scales the round symbol
 // 2x, from sm up 2.8x: 8rem and 14rem). The figure stands with its water line
@@ -96,7 +98,7 @@ function useRecentChange(value: string, ms: number): boolean {
 const SPOT =
   'relative mt-[4.3rem] h-32 w-32 shrink-0 sm:mt-[7.5rem] sm:h-56 sm:w-56';
 const FIGURE_BOX =
-  'absolute bottom-[2.27rem] -left-[0.33rem] h-40 aspect-[26/30] sm:bottom-[3.97rem] sm:-left-[0.58rem] sm:h-[17.5rem]';
+  'absolute bottom-[2.27rem] -right-[0.33rem] h-40 aspect-[26/30] sm:bottom-[3.97rem] sm:-right-[0.58rem] sm:h-[17.5rem]';
 
 const BUTTON =
   'pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-cyan-400/50 text-cyan-100 shadow-md transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#06183a] focus-visible:outline-none';
@@ -228,7 +230,7 @@ function LiveFigure() {
       data-testid="hai-voice-figure"
       data-state={state}
       data-phase="live"
-      className={`pointer-events-none flex flex-col items-start gap-2 ${anchor.className}`}
+      className={`pointer-events-none flex flex-col items-end gap-2 ${anchor.className}`}
     >
       {needsConsent && (
         <div
@@ -270,7 +272,9 @@ function LiveFigure() {
         </div>
       )}
 
-      <div className="flex items-end gap-2">
+      {/* row-reverse: the figure stands at the right (in the corner), the bubble
+          and the controls are to its left */}
+      <div className="flex flex-row-reverse items-end gap-2">
         {/* the figure in its pond (the grown HAI symbol): the person can tap it to interrupt */}
         <div
           data-testid="hai-voice-figure-body"
@@ -292,7 +296,7 @@ function LiveFigure() {
               {/* the tail of the bubble points at the head */}
               <span
                 aria-hidden="true"
-                className="absolute top-8 -left-[7px] h-3.5 w-3.5 rotate-45 border-b-2 border-l-2 border-[#06183a] bg-white"
+                className="absolute top-8 -right-[7px] h-3.5 w-3.5 rotate-45 border-t-2 border-r-2 border-[#06183a] bg-white"
               />
               <div
                 ref={bubbleRef}
@@ -358,7 +362,7 @@ function LiveFigure() {
             </div>
           )}
 
-          <div className="mt-auto flex flex-col items-start gap-1.5">
+          <div className="mt-auto flex flex-col items-end gap-1.5">
             <p
               role="status"
               aria-live="polite"
@@ -390,7 +394,7 @@ function LiveFigure() {
             )}
 
             {/* controls */}
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap justify-end gap-1.5">
               <button
                 type="button"
                 onClick={toggleMic}

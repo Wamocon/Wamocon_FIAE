@@ -3,7 +3,7 @@
 /**
  * HAI Chat Interface
  *
- * Master component that handles the side panel (slides in from the left, the
+ * Master component that handles the side panel (slides in from the right, the
  * HAI symbol is its handle) and the Full-Screen mode.
  */
 
@@ -11,7 +11,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useHai } from './HaiProvider';
 import { HAI_HEADER_OFFSET_CLASS, HAI_PANEL_ID } from './haiLayout';
-import { useOptionalSidebar } from '@/contexts/SidebarContext';
 import { useOptionalHaiVoiceSession } from './voice-mode/voiceSessionContext';
 import { usePrefersReducedMotion } from './voice-mode/usePrefersReducedMotion';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -48,7 +47,7 @@ export function HaiChat() {
 }
 
 // ============================================================================
-// SIDE PANEL (slides in from the left, the HAI symbol is its handle)
+// SIDE PANEL (slides in from the right, the HAI symbol is its handle)
 // ============================================================================
 
 /** Moves the focus back to the HAI symbol (the handle of the panel). */
@@ -59,8 +58,8 @@ function focusHandle() {
 }
 
 /**
- * The text chat as a panel at the left edge of the page, next to the main
- * navigation (never over it). It is an overlay: the page behind does not move,
+ * The text chat as a panel at the right edge of the page (the main navigation
+ * is at the left, so they never meet). It is an overlay: the page behind does not move,
  * is not darkened and stays usable, so there is no focus trap and no modal. The
  * focus goes to the input when it opens and back to the HAI symbol when it
  * closes (symbol, close button, Esc). Only `transform` is animated; with reduced
@@ -79,7 +78,6 @@ function ChatPanel() {
 
   const quizActive = useHaiQuizMode().active;
   const reduced = usePrefersReducedMotion();
-  const sidebar = useOptionalSidebar();
   const voiceSession = useOptionalHaiVoiceSession();
   const voiceOpen = !!voiceSession && voiceSession.view !== 'closed';
   const voiceOpenRef = useRef(false);
@@ -95,7 +93,7 @@ function ChatPanel() {
     inputRef.current?.focus({ preventScroll: true });
   }, []);
 
-  // The pond of the voice mode sits right of the panel (the symbol rides on its
+  // The pond of the voice mode sits left of the panel (the symbol rides on its
   // edge). Below lg there is no room for the pond and its speech bubble next to
   // the panel, so the panel gives way (the chat shows everything afterwards).
   useEffect(() => {
@@ -159,21 +157,18 @@ function ChatPanel() {
       id={HAI_PANEL_ID}
       aria-label={t('hai.panel.label')}
       data-testid="hai-chat-panel"
-      data-side="left"
-      initial={{ x: '-100%' }}
+      data-side="right"
+      initial={{ x: '100%' }}
       animate={{ x: 0 }}
-      exit={{ x: '-100%' }}
+      exit={{ x: '100%' }}
       transition={{
         duration: reduced ? 0 : 0.28,
         ease: [0.32, 0.72, 0, 1],
       }}
-      // Left edge, under the page header (top-16) and next to the navigation
-      // (lg:left-72 when it is kept open, the navigation is z-41 and wins).
-      // Phone: full width as a sheet that leaves a strip below for the symbol.
-      // z-40 like the symbol, under viewers and dialogs (z-50). No backdrop.
-      className={`${HAI_HEADER_OFFSET_CLASS} fixed bottom-24 left-0 z-40 flex w-full flex-col rounded-b-2xl border-r border-cyan-500/30 bg-[#0f1117] text-gray-100 shadow-2xl shadow-cyan-950/50 md:bottom-0 md:w-[420px] md:rounded-none ${
-        sidebar?.isOpen ? 'lg:left-72' : ''
-      }`}
+      // Right edge, under the page header (top-16); the navigation is at the
+      // left. Phone: full width as a sheet that leaves a strip below for the
+      // symbol. z-40 like the symbol, under viewers and dialogs (z-50). No backdrop.
+      className={`${HAI_HEADER_OFFSET_CLASS} fixed right-0 bottom-24 z-40 flex w-full flex-col rounded-b-2xl border-l border-cyan-500/30 bg-[#0f1117] text-gray-100 shadow-2xl shadow-cyan-950/50 md:bottom-0 md:w-[420px] md:rounded-none`}
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-white/10 bg-[#161b22] px-4 py-3">
