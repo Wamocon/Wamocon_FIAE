@@ -81,7 +81,10 @@ describe('NotificationsBell: the number of unread notifications', () => {
         'Dein Quiz „Test 0“ wurde bewertet (Ergebnis: 80 %).'
       )
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Quiz bewertet 0'));
+    // the title comes from the type now (translated), the row is found by its message
+    fireEvent.click(
+      screen.getByText('Dein Quiz „Test 0“ wurde bewertet (Ergebnis: 80 %).')
+    );
     await waitFor(() => expect(badge(container)).toBe('40'));
   });
 

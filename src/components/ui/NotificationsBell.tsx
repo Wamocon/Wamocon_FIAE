@@ -9,7 +9,10 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { DB_SCHEMA } from '@/lib/db-schema';
 import { authFetch } from '@/lib/authFetch';
-import { formatNotification, sortNewestFirst } from '@/lib/notifications/format';
+import {
+  formatNotification,
+  sortNewestFirst,
+} from '@/lib/notifications/format';
 
 export type UINotification = {
   id: string;
@@ -280,30 +283,21 @@ export default function NotificationsBell() {
               return visible.map(n => {
                 const text = formatNotification(n, t);
                 return (
-                <button
-                  key={n.id}
-                  onClick={() => onItemClick(n)}
-                  className={`border-border/30 hover:bg-muted w-full border-b px-4 py-3 text-left text-sm transition-colors ${n.isRead ? 'opacity-60' : 'bg-accent/10 font-medium'}`}
-                >
-                  <div className="flex items-start gap-2">
-                    {!n.isRead && (
-                      <span className="bg-accent mt-1.5 h-2 w-2 shrink-0 rounded-full" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="text-foreground line-clamp-1">
-                        {text.title}
-                      </div>
-                      {text.message && (
-                        <div className="text-muted-foreground line-clamp-3 text-xs font-normal">
-                          {text.message}
-                        </div>
+                  <button
+                    key={n.id}
+                    onClick={() => onItemClick(n)}
+                    className={`border-border/30 hover:bg-muted w-full border-b px-4 py-3 text-left text-sm transition-colors ${n.isRead ? 'opacity-60' : 'bg-accent/10 font-medium'}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {!n.isRead && (
+                        <span className="bg-accent mt-1.5 h-2 w-2 shrink-0 rounded-full" />
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="text-foreground line-clamp-1">
                           {text.title}
                         </div>
                         {text.message && (
-                          <div className="text-muted-foreground line-clamp-2 text-xs font-normal">
+                          <div className="text-muted-foreground line-clamp-3 text-xs font-normal">
                             {text.message}
                           </div>
                         )}
@@ -312,8 +306,7 @@ export default function NotificationsBell() {
                         </div>
                       </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
                 );
               });
             })()}

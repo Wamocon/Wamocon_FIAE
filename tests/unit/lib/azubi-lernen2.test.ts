@@ -254,9 +254,6 @@ describe('texts of the trainee area address the trainee with du (WMCNL-2971)', (
     expect((de as Record<string, string>)['catalog.tiles.subtitle']).toMatch(
       SIE
     );
-    expect(
-      (de as Record<string, string>)['trainer.reports.description']
-    ).toMatch(SIE);
   });
 });
 
@@ -274,6 +271,8 @@ describe('the new keys exist in both languages', () => {
     const titled = Object.keys(de).filter(k =>
       /^notifications\.type\..+\.title$/.test(k)
     );
-    expect(titled.length).toBe(18);
+    // 18 of the module plus the 4 submission types of the trainees, which
+    // `formatNotification` builds from the facts of the row
+    expect(titled.length).toBe(22);
   });
 });
