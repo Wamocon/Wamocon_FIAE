@@ -251,7 +251,7 @@ describe('CatalogTiles', () => {
       const kfbm = await tile(KFBM_TITLE);
       expect(
         within(kfbm).getByText(
-          'Für Ihren Betrieb nicht freigeschaltet. Bitte wenden Sie sich an Ihren Ausbilder.'
+          'Für deinen Betrieb nicht freigeschaltet. Bitte wende dich an deinen Ausbilder.'
         )
       ).toBeInTheDocument();
       expect(within(kfbm).queryByRole('button')).toBeNull();

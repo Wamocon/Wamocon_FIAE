@@ -298,8 +298,18 @@ export default function NotificationsBell() {
                           {text.message}
                         </div>
                       )}
-                      <div className="text-muted-foreground mt-1 text-[10px] font-normal">
-                        {new Date(n.createdAt).toLocaleString()}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-foreground line-clamp-1">
+                          {text.title}
+                        </div>
+                        {text.message && (
+                          <div className="text-muted-foreground line-clamp-2 text-xs font-normal">
+                            {text.message}
+                          </div>
+                        )}
+                        <div className="text-muted-foreground mt-1 text-[10px] font-normal">
+                          {new Date(n.createdAt).toLocaleString()}
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -1052,7 +1052,7 @@ function CreateReportModal({
       if (entries.length === 0) {
         setError(
           t('reports.error.noEntries') ||
-            'Bitte fügen Sie mindestens eine Tätigkeit hinzu.'
+            'Bitte füge mindestens eine Tätigkeit hinzu.'
         );
         setSaving(false);
         return;
@@ -1064,7 +1064,7 @@ function CreateReportModal({
       if (missingHours.length > 0) {
         setError(
           t('reports.error.missingHours') ||
-            'Bitte tragen Sie für alle Tätigkeiten die IST-Stunden ein (> 0).'
+            'Bitte trage für alle Tätigkeiten die IST-Stunden ein (> 0).'
         );
         setSaving(false);
         return;
@@ -1076,7 +1076,7 @@ function CreateReportModal({
       if (submit && missingNotes.length > 0) {
         setError(
           t('reports.error.missingNotes') ||
-            'Bitte beschreiben Sie für alle Tätigkeiten, was Sie gelernt haben.'
+            'Bitte beschreibe für alle Tätigkeiten, was du gelernt hast.'
         );
         setSaving(false);
         return;

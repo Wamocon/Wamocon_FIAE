@@ -17,6 +17,24 @@ export function capitalizeFirst(text: string | null | undefined): string {
 }
 
 /**
+ * true when two texts say the same for a reader: they differ only in white
+ * space, capitals or a closing full stop. The page uses it to not show a
+ * description that only repeats the title.
+ */
+export function sameText(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  const norm = (text: string | null | undefined) =>
+    (text ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/[.\s]+$/, '')
+      .toLocaleLowerCase('de');
+  return norm(a) !== '' && norm(a) === norm(b);
+}
+
+/**
  * The description of an imported enabler starts with a generated sentence,
  * for example: In diesem Modul "Titel" werden folgende Inhalte behandelt:
  * For the trainee the unit is a Themenkreis, so the display says so. Any other

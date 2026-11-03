@@ -610,3 +610,62 @@ describe('enabler page: the way back (KFB-1158)', () => {
     expect(back).not.toHaveTextContent('meinen Modulen');
   });
 });
+
+describe('lesson quiz: no click without an answer (WMCNL-2939)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockQueries([
+      {
+        difficulty: 'LOW',
+        quizId: 'q1',
+        title: 'Lesson quiz',
+        unlocked: true,
+        isActive: true,
+        completed: false,
+      },
+    ]);
+  });
+
+  async function startTwoQuestionQuiz() {
+    authFetchMock.mockImplementation(async (input: any) => {
+      if (String(input).includes('/quizzes/LOW')) {
+        const q = questionResponse();
+        return json({
+          quiz: {
+            ...q.quiz,
+            questions: [
+              q.quiz.questions[0],
+              { ...q.quiz.questions[0], id: 'q-2', questionText: 'Second?' },
+            ],
+          },
+        });
+      }
+      return json({});
+    });
+    renderWithProviders(<TraineeEnablerPage />);
+    fireEvent.click(tile());
+    await waitFor(() => expect(screen.getAllByRole('radio')).toHaveLength(2));
+  }
+
+  it('says that an answer is needed while the next button is disabled', async () => {
+    await startTwoQuestionQuiz();
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeDisabled();
+    expect(screen.getByTestId('quiz-answer-hint')).toHaveTextContent(
+      'Bitte wähle eine Antwort.'
+    );
+  });
+
+  it('takes the hint away once an answer is chosen, and shows it again on the next question', async () => {
+    await startTwoQuestionQuiz();
+    fireEvent.click(screen.getAllByRole('radio')[0]);
+    expect(screen.queryByTestId('quiz-answer-hint')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Weiter' }));
+    // the second question is on screen (its radios carry its id)
+    expect(screen.getAllByRole('radio')[0]).toHaveAttribute(
+      'name',
+      'q-q-2'
+    );
+    expect(screen.getByTestId('quiz-answer-hint')).toBeInTheDocument();
+  });
+});

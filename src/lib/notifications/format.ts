@@ -1,4 +1,5 @@
 import { isSubmissionNoticeType } from '@/lib/notifications/submissionNotice';
+import { notificationText } from '@/lib/notification-text';
 
 type Translate = (
   key: string,
@@ -28,14 +29,16 @@ const asText = (value: unknown): string =>
  * Title and message of a notification in the language of the reader.
  * The submissions of a trainee are built from the type and the facts of the
  * row (name, subject, level), so an older row with an English or nameless
- * text reads like a new one. Every other type keeps the stored text.
+ * text reads like a new one. Every other type is translated by `notificationText`
+ * (unknown sentences stay as stored).
  */
 export function formatNotification(
   n: NotificationLike,
   t: Translate
 ): { title: string; message: string | null } {
   if (!isSubmissionNoticeType(n.type)) {
-    return { title: n.title, message: n.message };
+    // every other type: title from the type, message by the pattern of the stored sentence
+    return notificationText(t, n);
   }
   const ctx = n.context ?? {};
   const name =

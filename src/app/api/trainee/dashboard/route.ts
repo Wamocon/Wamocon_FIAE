@@ -355,9 +355,13 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
     });
 
     // ── Achievements from Phase 1 results (no DB) ──
+    // text is the German sentence (kept for old clients); code and params let
+    // the page write the sentence in the language of the trainee
     const achievements: Array<{
       kind: 'quiz' | 'module' | 'streak';
       text: string;
+      code: 'quizPassed' | 'enablerDone' | 'streak';
+      params: Record<string, string | number>;
       at?: string | null;
     }> = [];
 
@@ -367,6 +371,11 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         kind: 'quiz',
         // Only a passed quiz is an achievement (the query asks for it)
         text: `${Math.round(sub.score ?? 0)}% im Quiz "${sub.quizTitle || 'Quiz'}"`,
+        code: 'quizPassed',
+        params: {
+          score: Math.round(sub.score ?? 0),
+          title: sub.quizTitle || 'Quiz',
+        },
         at: sub.submittedAt?.toISOString?.() || null,
       });
     }
@@ -376,6 +385,8 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       achievements.push({
         kind: 'module',
         text: `Enabler "${en.enablerTitle || 'Modul'}" abgeschlossen`,
+        code: 'enablerDone',
+        params: { title: en.enablerTitle || 'Modul' },
         at: (en.completedAt as any)?.toISOString?.() || null,
       });
     }
@@ -402,6 +413,8 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       achievements.push({
         kind: 'streak',
         text: `${streak} Tage in Folge gelernt`,
+        code: 'streak',
+        params: { days: streak },
         at: new Date().toISOString(),
       });
     }
@@ -476,6 +489,19 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
           );
           deadlines.push({
             label: getPhaseLabel(year as ContentStage),
+            // The page writes the label in the language of the trainee
+            labelCode: year === 3 ? 'phaseIntegrative' : 'phase',
+            labelParams:
+              year === 3
+                ? { months: durationYears * 12 }
+                : {
+                    stage: year,
+                    ...getPhaseMonthRange(
+                      durationYears,
+                      year as TrainingPhase,
+                      phaseOneMonths
+                    ),
+                  },
             dueDate: dueDate.toISOString(),
             year,
           });

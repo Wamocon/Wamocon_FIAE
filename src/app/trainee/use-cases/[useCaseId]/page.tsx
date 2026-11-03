@@ -14,12 +14,19 @@ import {
   Clock,
   AlertCircle,
   Lock,
+  X,
 } from 'lucide-react';
 import { PageLoader } from '@/components/ui/PageLoader';
 import { authFetch } from '@/lib/authFetch';
 import { SubmissionFileField } from '@/components/trainee/SubmissionFileField';
 import { lockText } from '@/components/trainee/EnablerStateBadge';
-import { handInOfUseCaseHasContent } from '@/lib/submission-input';
+import {
+  firstInvalidLinkIndex,
+  handInOfUseCaseHasContent,
+  hasText,
+  isValidLinkUrl,
+} from '@/lib/submission-input';
+import { sameText } from '@/lib/display-text';
 import { traineeDocumentPath } from '@/lib/documentContentPath';
 import { viewerSubtitle } from '@/lib/documentTypeLabel';
 
@@ -51,6 +58,7 @@ export default function TraineeUseCaseDetailPage() {
       durationValue?: number | null;
       durationUnit?: 'DAYS' | 'WEEKS' | null;
       activatedAt?: string | null;
+      code?: string | null;
       courseId?: string;
       courseTitle?: string;
     } | null;
@@ -107,6 +115,9 @@ export default function TraineeUseCaseDetailPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Set once the trainee tried to add or hand in links: rows with an address
+  // that is no http or https link are then marked
+  const [showLinkErrors, setShowLinkErrors] = useState(false);
   // The open document: its id decides the highlight and the route that delivers it
   const [selectedPdf, setSelectedPdf] = useState<{
     id: string;
@@ -133,6 +144,13 @@ export default function TraineeUseCaseDetailPage() {
 
   const submit = async () => {
     if (!profile?.id) return setError(t('useCase.profileMissing'));
+    // Every link must be an http or https address (the server answers the same)
+    if (firstInvalidLinkIndex(links) !== -1) {
+      setShowLinkErrors(true);
+      setSuccess(null);
+      setError(t('useCase.linkInvalid'));
+      return;
+    }
     // A hand-in needs a solution text, a link or a file: only white space
     // counts as empty (the server answers the same)
     if (!handInOfUseCaseHasContent({ submissionText, links, hasFile })) {
@@ -163,6 +181,10 @@ export default function TraineeUseCaseDetailPage() {
         }
         if (answer?.code === 'EMPTY_SUBMISSION') {
           throw new Error(t('useCase.emptySubmission'));
+        }
+        if (answer?.code === 'INVALID_LINK') {
+          setShowLinkErrors(true);
+          throw new Error(t('useCase.linkInvalid'));
         }
         throw new Error(t('useCase.submitFailed'));
       }
@@ -201,10 +223,19 @@ export default function TraineeUseCaseDetailPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <div className="border-accent/30 bg-card rounded-3xl border p-5">
+        {useCase.code && (
+          <p className="text-accent mb-1 text-sm font-semibold">
+            {t('useCase.label').replace('{code}', useCase.code)}
+          </p>
+        )}
         <h1 className="text-foreground text-2xl font-bold">{useCase.title}</h1>
-        <p className="text-muted-foreground mt-2 whitespace-pre-line">
-          {useCase.descriptionText}
-        </p>
+        {/* A description that only repeats the title is not shown twice */}
+        {hasText(useCase.descriptionText) &&
+          !sameText(useCase.descriptionText, useCase.title) && (
+            <p className="text-muted-foreground mt-2 whitespace-pre-line">
+              {useCase.descriptionText}
+            </p>
+          )}
 
         {/* PDF Documents List */}
         {documents.length > 0 && (
@@ -384,54 +415,85 @@ export default function TraineeUseCaseDetailPage() {
         </div>
         <div className="space-y-2">
           <div className="text-sm font-medium">{t('useCase.links')}</div>
-          {links.map((l, i) => (
-            <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <input
-                className={`border-accent/30 bg-muted text-foreground rounded-xl border px-3 py-2 md:col-span-2 ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
-                placeholder={t('useCase.linkPlaceholder')}
-                value={l.url}
-                onChange={e =>
-                  setLinks(prev =>
-                    prev.map((x, idx) =>
-                      idx === i ? { ...x, url: e.target.value } : x
-                    )
-                  )
-                }
-                disabled={!canEdit}
-              />
-              <input
-                className={`border-accent/30 bg-muted text-foreground rounded-xl border px-3 py-2 ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
-                placeholder={t('useCase.descriptionPlaceholder')}
-                value={l.description || ''}
-                onChange={e =>
-                  setLinks(prev =>
-                    prev.map((x, idx) =>
-                      idx === i ? { ...x, description: e.target.value } : x
-                    )
-                  )
-                }
-                disabled={!canEdit}
-              />
-            </div>
-          ))}
+          {links.map((l, i) => {
+            const badLink =
+              showLinkErrors && hasText(l.url) && !isValidLinkUrl(l.url);
+            return (
+              <div key={i} className="space-y-1">
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+                  <input
+                    className={`bg-muted text-foreground rounded-xl border px-3 py-2 md:col-span-2 ${badLink ? 'border-red-500' : 'border-accent/30'} ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
+                    placeholder={t('useCase.linkPlaceholder')}
+                    aria-label={t('useCase.url')}
+                    aria-invalid={badLink}
+                    value={l.url}
+                    onChange={e =>
+                      setLinks(prev =>
+                        prev.map((x, idx) =>
+                          idx === i ? { ...x, url: e.target.value } : x
+                        )
+                      )
+                    }
+                    disabled={!canEdit}
+                  />
+                  <input
+                    className={`border-accent/30 bg-muted text-foreground rounded-xl border px-3 py-2 ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
+                    placeholder={t('useCase.descriptionPlaceholder')}
+                    value={l.description || ''}
+                    onChange={e =>
+                      setLinks(prev =>
+                        prev.map((x, idx) =>
+                          idx === i ? { ...x, description: e.target.value } : x
+                        )
+                      )
+                    }
+                    disabled={!canEdit}
+                  />
+                  {canEdit && (
+                    <button
+                      type="button"
+                      className="border-accent/30 hover:bg-background/60 inline-flex items-center justify-center gap-1 rounded-md border px-3 py-2 text-sm"
+                      onClick={() =>
+                        // The last row stays (emptied), so there is always a field
+                        setLinks(prev =>
+                          prev.length > 1
+                            ? prev.filter((_, idx) => idx !== i)
+                            : [{ url: '', description: '' }]
+                        )
+                      }
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                      {t('useCase.removeLink').replace(
+                        '{number}',
+                        String(i + 1)
+                      )}
+                    </button>
+                  )}
+                </div>
+                {badLink && (
+                  <p role="alert" className="text-sm text-red-500">
+                    {t('useCase.linkInvalid')}
+                  </p>
+                )}
+              </div>
+            );
+          })}
           {canEdit && (
             <div className="flex gap-2">
               <button
                 className="border-accent/30 hover:bg-background/60 rounded-md border px-3 py-2 text-sm"
-                onClick={() =>
-                  setLinks(prev => [...prev, { url: '', description: '' }])
-                }
+                onClick={() => {
+                  // Only a valid link makes room for the next one
+                  if (firstInvalidLinkIndex(links) !== -1) {
+                    setShowLinkErrors(true);
+                    return;
+                  }
+                  setShowLinkErrors(false);
+                  setLinks(prev => [...prev, { url: '', description: '' }]);
+                }}
               >
                 + {t('useCase.addLink')}
               </button>
-              {links.length > 1 && (
-                <button
-                  className="border-accent/30 hover:bg-background/60 rounded-md border px-3 py-2 text-sm"
-                  onClick={() => setLinks(prev => prev.slice(0, -1))}
-                >
-                  {t('useCase.removeLastLink')}
-                </button>
-              )}
             </div>
           )}
         </div>

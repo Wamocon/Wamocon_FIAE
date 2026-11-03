@@ -59,7 +59,7 @@ export default function TraineeProfilePage() {
               </h3>
               <p className="text-destructive/90 text-sm">
                 {t('profile.birthDateRequiredText') ||
-                  'Bitte aktualisieren Sie Ihr Profil mit Ihrem Geburtsdatum, um auf das Dashboard zuzugreifen.'}
+                  'Bitte aktualisiere dein Profil mit deinem Geburtsdatum, um auf das Dashboard zuzugreifen.'}
               </p>
             </div>
           </div>

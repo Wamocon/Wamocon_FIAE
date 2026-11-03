@@ -95,6 +95,9 @@ describe('dashboard achievements and weekly progress per occupation', () => {
     expect(body.achievements[0]).toMatchObject({
       kind: 'quiz',
       text: '68% im Quiz "Quiz mittel"',
+      // the page writes the sentence in the language of the trainee (WMCNL-2970)
+      code: 'quizPassed',
+      params: { score: 68, title: 'Quiz mittel' },
     });
   });
 

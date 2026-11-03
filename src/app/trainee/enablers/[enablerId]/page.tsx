@@ -208,6 +208,12 @@ export default function TraineeEnablerPage() {
     () => (quizContent ? quizContent.questions[currentIndex] : null),
     [quizContent, currentIndex]
   );
+  // The next button stays disabled until the question is answered: the hint
+  // under the answers says why (a disabled button gives no click to answer)
+  const isUnanswered = (q: QuizQuestion) =>
+    q.questionType === 'TEXT'
+      ? !String(answers[q.id] || '').trim()
+      : !answers[q.id];
 
   // Sync form state (submission + solutions) from server data
   useEffect(() => {
@@ -1132,6 +1138,17 @@ export default function TraineeEnablerPage() {
                       )}
                     </div>
 
+                    {isUnanswered(currentQuestion) && (
+                      <p
+                        role="status"
+                        data-testid="quiz-answer-hint"
+                        className="text-muted-foreground text-sm"
+                      >
+                        {currentQuestion.questionType === 'TEXT'
+                          ? t('enablerPage.answerRequiredText')
+                          : t('enablerPage.answerRequired')}
+                      </p>
+                    )}
                     <div className="mt-4 flex items-center justify-between">
                       <button
                         className="border-accent/30 hover:bg-background/60 rounded-md border px-3 py-1.5 disabled:opacity-60"

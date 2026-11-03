@@ -188,6 +188,43 @@ describe('API: POST /api/trainee/use-cases/[useCaseId]/submit', () => {
       expect(res.status).toBe(200);
       expect(writes('insert', 'useCaseSubmissions')).toHaveLength(1);
     });
+
+    // WMCNL-2928: a link must be an http or https address
+    it.each([
+      ['text without a scheme', 'kein-link'],
+      ['a scheme that is no web address', 'javascript:alert(1)'],
+      ['an ftp address', 'ftp://example.org/a'],
+      ['an address with white space inside', 'https://exa mple.org'],
+      ['an address that is far too long', `https://a.org/${'x'.repeat(2100)}`],
+    ])('400 INVALID_LINK for %s and nothing is stored', async (_n, url) => {
+      // a text is given too: the bad link is refused, not silently dropped
+      const { res, writes } = await run(
+        {
+          submissionText: 'Lösung',
+          links: [{ url: 'https://ok.org' }, { url }],
+        },
+        false
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: 'Invalid link',
+        code: 'INVALID_LINK',
+      });
+      expect(writes('insert', 'useCaseSubmissions')).toHaveLength(0);
+      expect(writes('insert', 'useCaseSubmissionLinks')).toHaveLength(0);
+    });
+
+    it('takes http and https links', async () => {
+      const { res, writes } = await run(
+        { links: [{ url: ' http://a.org/x?y=1 ' }, { url: 'https://b.org' }] },
+        false
+      );
+      expect(res.status).toBe(200);
+      expect(writes('insert', 'useCaseSubmissionLinks')[0]).toEqual([
+        { submissionId: 's1', url: 'http://a.org/x?y=1', description: null },
+        { submissionId: 's1', url: 'https://b.org', description: null },
+      ]);
+    });
   });
 
   it('403 if not member', async () => {

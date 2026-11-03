@@ -10,6 +10,8 @@ import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import {
   EMPTY_SUBMISSION_CODE,
+  INVALID_LINK_CODE,
+  firstInvalidLinkIndex,
   handInOfUseCaseHasContent,
 } from '@/lib/submission-input';
 import { isSubmissionFileEnabled } from '@/lib/submission-file/availability';
@@ -58,6 +60,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
         });
         if (locked) return locked;
       }
+    }
+
+    // A link must be an http or https address of sensible length (a row
+    // without an address is no link and is skipped below)
+    if (firstInvalidLinkIndex(links) !== -1) {
+      return NextResponse.json(
+        { error: 'Invalid link', code: INVALID_LINK_CODE },
+        { status: 400 }
+      );
     }
 
     // A hand-in needs a text, a link with an address or a file. Only white

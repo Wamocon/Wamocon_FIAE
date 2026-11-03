@@ -50,6 +50,47 @@ export function handInOfUseCaseHasContent(input: {
   );
 }
 
+/** Longest address of a link of a hand-in (browsers cope with about 2000). */
+export const MAX_LINK_URL_LENGTH = 2000;
+
+/** Code of the 400 answer of a route for a link that is no http or https address. */
+export const INVALID_LINK_CODE = 'INVALID_LINK';
+
+/**
+ * true when the value is a usable link of a hand-in: an http or https address
+ * with a host, no white space inside and not longer than MAX_LINK_URL_LENGTH.
+ * Leading and trailing white space is ignored (the route stores the trimmed
+ * value). An empty value is not a link, the caller skips empty rows.
+ */
+export function isValidLinkUrl(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const url = value.trim();
+  if (url === '' || url.length > MAX_LINK_URL_LENGTH) return false;
+  if (/\s/.test(url)) return false;
+  try {
+    const parsed = new URL(url);
+    return (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      parsed.hostname !== ''
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Index of the first link row with an address that is no valid link, or -1.
+ * Rows without an address are skipped (an empty row is no link).
+ */
+export function firstInvalidLinkIndex(links: unknown): number {
+  if (!Array.isArray(links)) return -1;
+  return links.findIndex(l => {
+    if (typeof l !== 'object' || l === null) return false;
+    const url = (l as { url?: unknown }).url;
+    return hasText(url) && !isValidLinkUrl(url);
+  });
+}
+
 /** Code of the 400 answer of a route for a hand-in without content. */
 export const EMPTY_SUBMISSION_CODE = 'EMPTY_SUBMISSION';
 

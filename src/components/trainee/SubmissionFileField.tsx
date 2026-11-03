@@ -246,18 +246,31 @@ export function SubmissionFileField({
       )}
       {canEdit && (
         <div>
+          {/* The native file input is hidden: its own text ("Keine ausgewählt")
+              would repeat the status above and does not fit the design */}
           <input
             ref={input}
             type="file"
             accept={ACCEPT}
             disabled={busy}
-            aria-label={t('submissionFile.choose')}
-            className="text-sm"
+            tabIndex={-1}
+            aria-hidden="true"
+            data-testid="submission-file-input"
+            className="sr-only"
             onChange={event => {
               const picked = event.target.files?.[0];
               if (picked) void upload(picked);
             }}
           />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => input.current?.click()}
+            className="border-accent/30 bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium disabled:opacity-60"
+          >
+            <Paperclip className="h-4 w-4" aria-hidden="true" />
+            {t('submissionFile.choose')}
+          </button>
         </div>
       )}
       {file && previewKind && (
