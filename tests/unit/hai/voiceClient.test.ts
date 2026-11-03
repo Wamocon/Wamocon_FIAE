@@ -104,7 +104,7 @@ describe('Soniox protocol', () => {
       readTtsMessage(
         JSON.stringify({ stream_id: 's1', error_code: 400, error_message: 'x' })
       )
-    ).toEqual({ kind: 'error', stream: 's1', code: 400 });
+    ).toEqual({ kind: 'error', stream: 's1', code: 400, type: '' });
     expect(readTtsMessage('{"x":1}')).toEqual({ kind: 'unknown' });
     expect(readTtsMessage('garbage')).toEqual({ kind: 'unknown' });
   });
@@ -674,6 +674,7 @@ describe('the chain of providers', () => {
     const b = baseEnv();
     const active: string[] = [];
     const env = createVoiceEnv({
+      retryDelayMs: null,
       base: b.env,
       chain,
       deps: t.deps,
@@ -764,6 +765,7 @@ describe('the chain of providers', () => {
     const b = baseEnv();
     b.env.createRecognition = async () => null;
     const env = createVoiceEnv({
+      retryDelayMs: null,
       base: b.env,
       chain: ['soniox', 'browser'],
       deps: t.deps,
@@ -809,7 +811,12 @@ describe('the chain of providers', () => {
   ) {
     const t = makeDeps(options);
     const b = baseEnv();
-    const env = createVoiceEnv({ base: b.env, chain, deps: t.deps });
+    const env = createVoiceEnv({
+      base: b.env,
+      chain,
+      deps: t.deps,
+      retryDelayMs: null,
+    });
     let done = 0;
     const speaker = env.createSpeaker!({
       onDone: () => {
@@ -920,6 +927,7 @@ describe('the chain of providers', () => {
     const b = baseEnv();
     b.env.synth = null;
     const env = createVoiceEnv({
+      retryDelayMs: null,
       base: b.env,
       chain: ['soniox'],
       deps: t.deps,
@@ -939,6 +947,7 @@ describe('the chain of providers', () => {
   it('unlocking the audio resumes the shared audio context', () => {
     const t = makeDeps();
     const env = createVoiceEnv({
+      retryDelayMs: null,
       base: baseEnv().env,
       chain: ['soniox', 'browser'],
       deps: t.deps,
@@ -964,6 +973,7 @@ describe('one chain per function', () => {
     const b = baseEnv();
     const active: string[] = [];
     const env = createVoiceEnv({
+      retryDelayMs: null,
       base: b.env,
       chain: ['soniox', 'haus', 'browser'],
       chains,
@@ -1059,6 +1069,7 @@ describe('one chain per function', () => {
     const t = makeDeps();
     const b = baseEnv();
     const env = createVoiceEnv({
+      retryDelayMs: null,
       base: b.env,
       chain: ['haus', 'browser'],
       deps: t.deps,

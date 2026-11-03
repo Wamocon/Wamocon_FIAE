@@ -55,10 +55,15 @@ export async function POST(req: NextRequest) {
   const config = loadSonioxConfig(process.env);
   if (!config.ok) return unavailableResponse('NOT_CONFIGURED', config.reason);
 
+  // live: the recognition stays open over the whole conversation (longer session)
+  const live =
+    purpose === 'stt' && (body as { live?: unknown } | null)?.live === true;
   const result = await createSonioxToken(
     config.config,
     purpose,
-    `hai-voice:${me.id}`
+    `hai-voice:${me.id}`,
+    fetch,
+    { live }
   );
   if (!result.ok) {
     // the failure counts for the function that was asked for: a refused key for

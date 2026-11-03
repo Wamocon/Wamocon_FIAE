@@ -33,9 +33,12 @@ import {
   OrderedPlayback,
   base64ToBytes,
   pcm16ToFloat32,
+  rmsOf,
   type AudioContextLike,
 } from './audio';
 import type { PieceEngine } from './browserSpeech';
+import { reasonCode } from './fallback';
+import { mark } from './trace';
 import {
   ProviderUnavailableError,
   type RecognitionEventLike,
@@ -66,8 +69,16 @@ export interface TokenGrant {
   config: Record<string, unknown>;
 }
 
+export interface MediaTrackLike {
+  stop(): void;
+  /** What the browser really delivers (it may differ from what was asked for). */
+  getSettings?(): object;
+  readonly muted?: boolean;
+  readonly readyState?: string;
+}
+
 export interface MediaStreamLike {
-  getTracks(): Array<{ stop(): void }>;
+  getTracks(): MediaTrackLike[];
 }
 
 export interface RecorderLike {
@@ -79,11 +90,28 @@ export interface RecorderLike {
   readonly state?: string;
 }
 
+/**
+ * The treatment of the microphone signal: `raw` (nothing, like the official
+ * web SDK), `live` (echo cancellation only, for the open microphone while the
+ * assistant speaks), `processed` (echo cancellation and noise suppression).
+ */
+export type MicProfile = 'raw' | 'live' | 'processed';
+
 export interface SonioxDeps {
   /** A short lived key for one websocket. Throws ProviderUnavailableError. */
-  fetchToken(purpose: 'stt' | 'tts'): Promise<TokenGrant>;
+  fetchToken(purpose: 'stt' | 'stt-live' | 'tts'): Promise<TokenGrant>;
+  /** Fetches a key in advance, so the next fetchToken needs no way over the server. */
+  prefetchToken?(purpose: 'stt' | 'stt-live' | 'tts'): void;
+  /** Warms up the way from the server to Sokrates (a ping, no content). Never throws. */
+  warmServer?(): void;
   createSocket(url: string, protocols: string[]): WebSocketLike;
-  getUserMedia(): Promise<MediaStreamLike>;
+  /**
+   * The microphone. `raw` (the default of the recognition on Soniox) asks for
+   * the recording the model was trained on, without echo cancellation and noise
+   * suppression, like the official web SDK of Soniox. `processed` keeps the
+   * browser's own processing (Sokrates).
+   */
+  getUserMedia(profile?: MicProfile): Promise<MediaStreamLike>;
   createRecorder(stream: MediaStreamLike): RecorderLike;
   audioContext(): AudioContextLike;
 }
@@ -155,7 +183,7 @@ export function readTranscriptMessage(raw: unknown): TranscriptUpdate {
 export type TtsEvent =
   | { kind: 'audio'; stream: string; audio: string; end: boolean }
   | { kind: 'terminated'; stream: string }
-  | { kind: 'error'; stream: string | null; code: number }
+  | { kind: 'error'; stream: string | null; code: number; type: string }
   | { kind: 'unknown' };
 
 /** Reads one answer of the speech output websocket. */
@@ -176,6 +204,7 @@ export function readTtsMessage(raw: unknown): TtsEvent {
       kind: 'error',
       stream,
       code: typeof message.error_code === 'number' ? message.error_code : 0,
+      type: typeof message.error_type === 'string' ? message.error_type : '',
     };
   }
   if (stream === null) return { kind: 'unknown' };
@@ -224,11 +253,64 @@ export const IDLE_AFTER_SPEECH_MS = 4_000;
 export const MAX_ROUND_MS = 60_000;
 /** After the end of the stream was sent, wait this long for the closing answer. */
 const CLOSE_WAIT_MS = 3_000;
-const CONNECT_MS = 8_000;
+/** The key and the websocket each get this long, then the provider counts as unreachable. */
+export const CONNECT_MS = 8_000;
+/** A live session that broke after it was open is restarted this often in a row. */
+const MAX_LIVE_RESTARTS = 3;
+/** A slice of the recording (the official web SDK uses 60 ms, damicon 100 ms). */
+export const RECORDER_SLICE_MS = 100;
+const LEVEL_MS = 100;
+/** Speech has an RMS of about 0.02 to 0.2, the mascot wants 0 to 1. */
+const LEVEL_GAIN = 5;
 
 function isPermissionError(error: unknown): boolean {
   const name = (error as { name?: string } | null)?.name;
   return name === 'NotAllowedError' || name === 'SecurityError';
+}
+
+/** The stable reason code of an error (ProviderUnavailableError carries one). */
+function reasonOf(error: unknown, fallback: string): string {
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === 'string' && message.length > 0
+    ? reasonCode(message)
+    : fallback;
+}
+
+/** Settles like the promise, or rejects with the reason after `ms`. */
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  reason: string
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new ProviderUnavailableError(reason)),
+      ms
+    );
+    promise.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+/** Container and codec of a recording as short tokens, for the measuring points. */
+export function mimeInfo(mime: string | undefined): Record<string, string> {
+  if (!mime) return { container: 'none' };
+  const [type, ...params] = mime.toLowerCase().split(';');
+  const info: Record<string, string> = {
+    container: type.replace(/^audio\//, '').replace(/[^a-z0-9]/g, '') || 'none',
+  };
+  const codecs = params.find(part => part.includes('codecs'));
+  if (codecs)
+    info.codec = codecs.split('=')[1]?.replace(/[^a-z0-9]/g, '') ?? '';
+  return info;
 }
 
 /**
@@ -236,7 +318,15 @@ function isPermissionError(error: unknown): boolean {
  * `start()` is one round: the microphone and the websocket open, the words come
  * in as results, the end of the utterance (endpoint detection) ends the round with
  * `onend`. A refused microphone is `not-allowed`, everything else that goes wrong
- * is `provider-unavailable`.
+ * is `provider-unavailable` (with a reason code for the fallback notice).
+ *
+ * Live mode (`continuous = true`): the microphone and the websocket stay open
+ * over the whole conversation. The end of an utterance (endpoint detection) is
+ * reported with `onutterance(text)` and the recording goes on, so the person
+ * can speak while the assistant answers (interrupting by voice). A session
+ * that Soniox ends (limit of the key, a break) is opened anew with the same
+ * microphone, a few times in a row. Silence never ends a live session: the
+ * loop counts the silent time itself.
  */
 export class SonioxRecognition implements RecognitionLike {
   lang = 'de-DE';
@@ -246,8 +336,19 @@ export class SonioxRecognition implements RecognitionLike {
   onresult: RecognitionLike['onresult'] = null;
   onerror: RecognitionLike['onerror'] = null;
   onend: RecognitionLike['onend'] = null;
+  onaudiostart: RecognitionLike['onaudiostart'] = null;
+  onlevel: RecognitionLike['onlevel'] = null;
+  onutterance: RecognitionLike['onutterance'] = null;
+
+  /** Live mode: the recognition stays open over several utterances. */
+  get live(): boolean {
+    return this.continuous;
+  }
 
   private closed = false;
+  private utterance = '';
+  private opened = false;
+  private restarts = 0;
   private finishing = false;
   private socket: WebSocketLike | null = null;
   private stream: MediaStreamLike | null = null;
@@ -258,6 +359,14 @@ export class SonioxRecognition implements RecognitionLike {
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private keepalive: ReturnType<typeof setInterval> | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private levelTimer: ReturnType<typeof setInterval> | null = null;
+  private levelSource: { disconnect?(): void } | null = null;
+  private peak = 0;
+  // what went to Soniox: the proof that the browser sends audio at all
+  private sentChunks = 0;
+  private sentBytes = 0;
+  private seenInterim = false;
+  private seenMessage = false;
 
   constructor(private readonly deps: SonioxDeps) {}
 
@@ -267,7 +376,7 @@ export class SonioxRecognition implements RecognitionLike {
 
   /** Ends the round the orderly way: the rest is transcribed, then onend. */
   stop(): void {
-    this.finishRound();
+    this.finishRound('stop');
   }
 
   /** Closes everything at once, no handler is called. */
@@ -284,46 +393,151 @@ export class SonioxRecognition implements RecognitionLike {
   }
 
   private fail(
-    error: 'not-allowed' | 'provider-unavailable' | 'audio-capture'
+    error: 'not-allowed' | 'provider-unavailable' | 'audio-capture',
+    reason?: string
   ) {
     if (this.closed) return;
+    mark('stt.fail', { error, reason: reasonCode(reason) });
+    const established = this.opened && this.continuous;
     this.cleanup();
-    this.onerror?.({ error });
+    this.onerror?.({
+      error,
+      ...(reason ? { reason } : {}),
+      ...(established ? { established } : {}),
+    });
   }
 
   private async run(): Promise<void> {
     // the key is asked for while the microphone opens, so no speech is lost
-    const tokenPromise = this.deps.fetchToken('stt');
-    tokenPromise.catch(() => undefined);
+    const tokenPromise = this.requestToken();
     try {
-      this.stream = await this.deps.getUserMedia();
+      this.stream = await this.deps.getUserMedia(
+        this.continuous ? 'live' : 'raw'
+      );
     } catch (error) {
-      this.fail(isPermissionError(error) ? 'not-allowed' : 'audio-capture');
+      const name = (error as { name?: string } | null)?.name ?? 'unknown';
+      mark('stt.mic.error', { name: reasonCode(name) });
+      this.fail(
+        isPermissionError(error) ? 'not-allowed' : 'audio-capture',
+        reasonCode(name)
+      );
       return;
     }
     if (this.closed) {
       this.releaseStream();
       return;
     }
-    // the recorder runs from now on, its chunks wait until the socket is open
+    if (!this.startRecorder()) return;
+    this.startLevel(this.stream);
+    mark('stt.mic.ready', this.micInfo(this.stream));
+    this.onaudiostart?.();
+    await this.connectSession(tokenPromise);
+  }
+
+  private requestToken(): Promise<TokenGrant> {
+    mark('stt.token.start');
+    const tokenPromise = this.deps.fetchToken(
+      this.continuous ? 'stt-live' : 'stt'
+    );
+    tokenPromise.then(
+      () => mark('stt.token.end', { ok: true }),
+      error => mark('stt.token.end', { ok: false, reason: reasonOf(error, '') })
+    );
+    return tokenPromise;
+  }
+
+  /** The recorder runs from now on, its chunks wait until the socket is open. */
+  private startRecorder(): boolean {
+    if (!this.stream) return false;
     try {
       const recorder = this.deps.createRecorder(this.stream);
       recorder.ondataavailable = event => this.onAudio(event.data);
-      recorder.start(250);
+      recorder.start(RECORDER_SLICE_MS);
       this.recorder = recorder;
+      mark('stt.recorder.start', mimeInfo(recorder.mimeType));
+      return true;
     } catch {
-      this.fail('audio-capture');
-      return;
+      this.fail('audio-capture', 'recorder');
+      return false;
     }
+  }
+
+  private async connectSession(
+    tokenPromise: Promise<TokenGrant>
+  ): Promise<void> {
     let grant: TokenGrant;
     try {
-      grant = await tokenPromise;
-    } catch {
-      this.fail('provider-unavailable');
+      grant = await withTimeout(tokenPromise, CONNECT_MS, 'token-timeout');
+    } catch (error) {
+      this.fail('provider-unavailable', reasonOf(error, 'token-error'));
       return;
     }
     if (this.closed) return;
     this.openSocket(grant);
+  }
+
+  /** What the browser really delivers (it may differ from the wish) and the state of the audio. */
+  private micInfo(stream: MediaStreamLike): Record<string, unknown> {
+    const track = stream.getTracks()[0];
+    let settings: Record<string, unknown> = {};
+    try {
+      settings = (track?.getSettings?.() ?? {}) as Record<string, unknown>;
+    } catch {
+      settings = {};
+    }
+    let ctxState = 'none';
+    try {
+      const ctx = this.deps.audioContext();
+      // a context that is still suspended would measure silence: wake it up
+      void Promise.resolve(ctx.resume()).catch(() => undefined);
+      ctxState = ctx.state ?? 'unknown';
+    } catch {
+      ctxState = 'error';
+    }
+    return {
+      sampleRate: settings.sampleRate,
+      channelCount: settings.channelCount,
+      echoCancellation: settings.echoCancellation,
+      noiseSuppression: settings.noiseSuppression,
+      autoGainControl: settings.autoGainControl,
+      muted: track?.muted,
+      readyState: track?.readyState,
+      ctx: ctxState,
+    };
+  }
+
+  /** Measures the loudness of the recording and reports it, about ten times a second. */
+  private startLevel(stream: MediaStreamLike): void {
+    try {
+      const ctx = this.deps.audioContext();
+      if (!ctx.createMediaStreamSource || !ctx.createAnalyser) return;
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      const source = ctx.createMediaStreamSource(stream);
+      // only into the analyser, never to the speakers (that would be an echo)
+      source.connect(analyser);
+      this.levelSource = source;
+      const block = new Float32Array(analyser.fftSize);
+      this.levelTimer = setInterval(() => {
+        analyser.getFloatTimeDomainData(block);
+        const rms = rmsOf(block);
+        this.peak = Math.max(this.peak, rms);
+        this.onlevel?.(Math.min(1, rms * LEVEL_GAIN));
+      }, LEVEL_MS);
+    } catch {
+      // no level, the recognition itself does not depend on it
+    }
+  }
+
+  private stopLevel(): void {
+    if (this.levelTimer) clearInterval(this.levelTimer);
+    this.levelTimer = null;
+    try {
+      this.levelSource?.disconnect?.();
+    } catch {
+      // already disconnected
+    }
+    this.levelSource = null;
   }
 
   private openSocket(grant: TokenGrant): void {
@@ -334,21 +548,24 @@ export class SonioxRecognition implements RecognitionLike {
         handshakeProtocols(grant.apiKey)
       );
     } catch {
-      this.fail('provider-unavailable');
+      this.fail('provider-unavailable', 'stt-socket-create');
       return;
     }
     this.socket = socket;
     this.after(CONNECT_MS, () => {
-      if (!this.socketReady) this.fail('provider-unavailable');
+      if (!this.socketReady) {
+        this.fail('provider-unavailable', 'stt-connect-timeout');
+      }
     });
     socket.onopen = () => {
       if (this.closed) return;
       this.socketReady = true;
+      mark('stt.ws.open', { pendingChunks: this.pending.length });
       try {
         socket.send(JSON.stringify(grant.config));
-        for (const chunk of this.pending) socket.send(chunk);
+        for (const chunk of this.pending) this.sendAudio(socket, chunk);
       } catch {
-        this.fail('provider-unavailable');
+        this.fail('provider-unavailable', 'stt-send');
         return;
       }
       this.pending = [];
@@ -357,33 +574,49 @@ export class SonioxRecognition implements RecognitionLike {
           socket.send(JSON.stringify({ type: 'keepalive' }));
         }
       }, KEEPALIVE_MS);
-      this.after(NO_SPEECH_MS, () => {
-        if (!this.heard) this.finishRound();
-      });
-      this.after(MAX_ROUND_MS, () => this.finishRound());
+      this.opened = true;
+      // a live session never ends by itself: the loop counts the silent time
+      if (!this.continuous) {
+        this.after(NO_SPEECH_MS, () => {
+          if (!this.heard) this.finishRound('no-speech');
+        });
+        this.after(MAX_ROUND_MS, () => this.finishRound('max'));
+      }
     };
     socket.onmessage = event => this.onMessage(event.data);
     socket.onerror = () => {
-      if (!this.finishing) this.fail('provider-unavailable');
+      if (this.finishing) return;
+      if (this.restartSession('socket-error')) return;
+      this.fail('provider-unavailable', 'stt-socket-error');
     };
     socket.onclose = () => {
       if (this.closed) return;
+      if (this.restartSession('socket-closed')) return;
       if (this.finishing || this.heard) {
         // an orderly end, or the connection ended after words came: keep them
         this.endRound();
         return;
       }
-      this.fail('provider-unavailable');
+      this.fail('provider-unavailable', 'stt-socket-closed');
     };
+  }
+
+  private sendAudio(socket: WebSocketLike, blob: Blob): void {
+    socket.send(blob);
+    if (this.sentChunks === 0) {
+      mark('stt.audio.first', { bytes: blob.size, ...mimeInfo(blob.type) });
+    }
+    this.sentChunks += 1;
+    this.sentBytes += blob.size;
   }
 
   private onAudio(blob: Blob): void {
     if (this.closed || this.finishing || blob.size === 0) return;
     if (this.socketReady && this.socket?.readyState === SOCKET_OPEN) {
       try {
-        this.socket.send(blob);
+        this.sendAudio(this.socket, blob);
       } catch {
-        this.fail('provider-unavailable');
+        this.fail('provider-unavailable', 'stt-send');
       }
     } else {
       this.pending.push(blob);
@@ -392,21 +625,45 @@ export class SonioxRecognition implements RecognitionLike {
 
   private onMessage(data: unknown): void {
     if (this.closed) return;
+    if (!this.seenMessage) {
+      this.seenMessage = true;
+      mark('stt.msg.first');
+    }
     const update = readTranscriptMessage(data);
     if (update.error) {
+      const type = reasonCode(update.error.type);
+      mark('stt.error', { code: update.error.code, type });
+      // the limit of the session or a break: a live session goes on with a new one
+      if (this.restartSession(`error-${update.error.code}`)) return;
       // words that came before the error are kept, otherwise the provider failed
       if (this.heard) this.endRound();
-      else this.fail('provider-unavailable');
+      else {
+        this.fail(
+          'provider-unavailable',
+          `stt-error-${update.error.code}-${type}`
+        );
+      }
       return;
     }
     if (update.finalText || update.liveText) {
       this.heard = true;
+      this.restarts = 0;
+      this.utterance += update.finalText;
+      if (!this.seenInterim) {
+        this.seenInterim = true;
+        mark('stt.interim.first');
+      }
       this.armIdle();
       const event = recognitionEvent(update.finalText, update.liveText);
       if (event) this.onresult?.(event);
     }
     if (update.endpoint) {
-      this.finishRound();
+      mark('stt.endpoint');
+      if (this.continuous) {
+        this.deliverUtterance();
+        return;
+      }
+      this.finishRound('endpoint');
       return;
     }
     if (update.finished) this.endRound();
@@ -414,14 +671,89 @@ export class SonioxRecognition implements RecognitionLike {
 
   /** No new word for a while although the speaker did not stop: end the round. */
   private armIdle(): void {
+    if (this.continuous) return;
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => this.finishRound(), IDLE_AFTER_SPEECH_MS);
+    this.idleTimer = setTimeout(
+      () => this.finishRound('idle'),
+      IDLE_AFTER_SPEECH_MS
+    );
+  }
+
+  /** Live mode: the speaker finished an utterance, the recording goes on. */
+  private deliverUtterance(): void {
+    const text = this.utterance.trim();
+    this.utterance = '';
+    this.heard = false;
+    this.seenInterim = false;
+    mark('stt.utterance', { words: text ? text.split(/\s+/).length : 0 });
+    if (text) this.onutterance?.(text);
+  }
+
+  /**
+   * A live session that broke after it was open: close it and open a new one with
+   * the same microphone. False when this is not a live session, when it never
+   * opened (a refused key is no break) or when it broke too often in a row.
+   */
+  private restartSession(reason: string): boolean {
+    if (!this.continuous || this.closed || this.finishing || !this.opened) {
+      return false;
+    }
+    if (this.restarts >= MAX_LIVE_RESTARTS) return false;
+    this.restarts += 1;
+    mark('stt.restart', { reason: reasonCode(reason), n: this.restarts });
+    this.closeSession();
+    void this.restartRun();
+    return true;
+  }
+
+  private async restartRun(): Promise<void> {
+    if (!this.startRecorder()) return;
+    await this.connectSession(this.requestToken());
+  }
+
+  /** Closes the recorder and the websocket of the session (the microphone stays). */
+  private closeSession(): void {
+    if (this.keepalive) clearInterval(this.keepalive);
+    this.keepalive = null;
+    if (this.recorder) {
+      this.recorder.ondataavailable = null;
+      try {
+        this.recorder.stop();
+      } catch {
+        // already stopped
+      }
+      this.recorder = null;
+    }
+    const socket = this.socket;
+    this.socket = null;
+    if (socket) {
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      try {
+        socket.close();
+      } catch {
+        // already closed
+      }
+    }
+    this.socketReady = false;
+    this.pending = [];
+    this.utterance = '';
   }
 
   /** Tell Soniox that the audio ends (an empty text frame), then wait for its last answer. */
-  private finishRound(): void {
+  private finishRound(why: string): void {
     if (this.closed || this.finishing) return;
     this.finishing = true;
+    mark('stt.end', {
+      why,
+      heard: this.heard,
+      sentChunks: this.sentChunks,
+      sentBytes: this.sentBytes,
+      pendingChunks: this.pending.length,
+      peak: this.peak,
+    });
     this.stopCapture();
     const socket = this.socket;
     if (socket && socket.readyState === SOCKET_OPEN) {
@@ -444,6 +776,7 @@ export class SonioxRecognition implements RecognitionLike {
   }
 
   private stopCapture(): void {
+    this.stopLevel();
     try {
       this.recorder?.stop();
     } catch {
@@ -497,8 +830,16 @@ export class SonioxRecognition implements RecognitionLike {
 // SPEECH OUTPUT
 // ============================================================================
 
-/** Streams that Soniox may generate at the same time (the limit of Soniox is 5). */
-const MAX_ACTIVE_STREAMS = 3;
+/**
+ * Streams that Soniox may generate at the same time. The limit of the account is
+ * 3 and counts over ALL connections (other applications on the same account use
+ * it too), a connection allows 5. One stream stays in reserve.
+ */
+const MAX_ACTIVE_STREAMS = 2;
+/** A connection that was warmed up but got no piece closes after this long. */
+export const WARM_IDLE_MS = 20_000;
+/** A stream that the limit of the account refused is tried once more after this long. */
+export const LIMIT_RETRY_MS = 400;
 
 interface TtsPiece {
   streamId: string;
@@ -506,6 +847,7 @@ interface TtsPiece {
   slot: ReturnType<OrderedPlayback['open']>;
   carry: Uint8Array | null;
   finished: boolean;
+  retried: boolean;
 }
 
 interface TtsConnection {
@@ -514,11 +856,18 @@ interface TtsConnection {
   sampleRate: number;
 }
 
+/** Soniox says "too many streams" with the code 429 or a type that names the limit. */
+function isLimitError(code: number, type: string): boolean {
+  return code === 429 || /concurrent|limit/i.test(type);
+}
+
 /**
  * Speech output with Soniox. One websocket per answer, one stream per piece
- * (a sentence): the pieces are generated at the same time (up to three) and
- * played in order, so there is no gap between two sentences. A failed piece
- * rejects its promise, the chain then speaks the rest with the next provider.
+ * (a sentence): the pieces are generated at the same time (up to two) and
+ * played in order, so there is no gap between two sentences. `warm()` opens the
+ * connection before the first piece is there, so the voice does not start cold.
+ * A failed piece rejects its promise, the chain then speaks the rest with the
+ * next provider.
  */
 export class SonioxSpeaker implements PieceEngine {
   readonly id = 'soniox' as const;
@@ -529,16 +878,34 @@ export class SonioxSpeaker implements PieceEngine {
   private active = 0;
   private counter = 0;
   private keepalive: ReturnType<typeof setInterval> | null = null;
+  private warmTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryTimers = new Set<ReturnType<typeof setTimeout>>();
   private dead = false;
+  private seenAudio = false;
 
   constructor(private readonly deps: SonioxDeps) {
     this.playback = new OrderedPlayback(deps.audioContext());
+  }
+
+  /**
+   * Opens the connection (key and websocket) ahead of the first piece. No
+   * stream is opened: Soniox ends a stream without text after a few seconds.
+   * Unused for WARM_IDLE_MS the connection closes again (the next piece opens it
+   * anew, this is no failure).
+   */
+  warm(): void {
+    if (this.dead || this.connection || this.pieces.size > 0) return;
+    mark('tts.warm');
+    void this.connect().catch(() => undefined);
+    this.clearWarmTimer();
+    this.warmTimer = setTimeout(() => this.idleClose(), WARM_IDLE_MS);
   }
 
   speak(text: string): Promise<void> {
     if (this.dead) {
       return Promise.reject(new ProviderUnavailableError('speaker-closed'));
     }
+    this.clearWarmTimer();
     this.counter += 1;
     const piece: TtsPiece = {
       streamId: `hai-${this.counter}`,
@@ -546,6 +913,7 @@ export class SonioxSpeaker implements PieceEngine {
       slot: this.playback.open(),
       carry: null,
       finished: false,
+      retried: false,
     };
     this.pieces.set(piece.streamId, piece);
     this.waiting.push(piece);
@@ -555,6 +923,8 @@ export class SonioxSpeaker implements PieceEngine {
 
   cancel(): void {
     this.dead = true;
+    this.clearWarmTimer();
+    this.clearRetryTimers();
     this.playback.cancel();
     const connection = this.connection;
     this.connection = null;
@@ -576,6 +946,8 @@ export class SonioxSpeaker implements PieceEngine {
 
   close(): void {
     this.dead = true;
+    this.clearWarmTimer();
+    this.clearRetryTimers();
     const connection = this.connection;
     this.connection = null;
     this.stopKeepalive();
@@ -584,6 +956,31 @@ export class SonioxSpeaker implements PieceEngine {
         .then(({ socket }) => this.closeSocket(socket))
         .catch(() => undefined);
     }
+  }
+
+  /** The warmed connection got no piece: release it, the speaker stays usable. */
+  private idleClose(): void {
+    this.warmTimer = null;
+    if (this.dead || this.pieces.size > 0) return;
+    mark('tts.warm.idle-close');
+    const connection = this.connection;
+    this.connection = null;
+    this.stopKeepalive();
+    if (connection) {
+      void connection
+        .then(({ socket }) => this.closeSocket(socket))
+        .catch(() => undefined);
+    }
+  }
+
+  private clearWarmTimer(): void {
+    if (this.warmTimer) clearTimeout(this.warmTimer);
+    this.warmTimer = null;
+  }
+
+  private clearRetryTimers(): void {
+    for (const timer of this.retryTimers) clearTimeout(timer);
+    this.retryTimers.clear();
   }
 
   private drain(): void {
@@ -598,6 +995,7 @@ export class SonioxSpeaker implements PieceEngine {
     try {
       const connection = await this.connect();
       if (this.dead || piece.finished) return;
+      mark('tts.stream.start', { retried: piece.retried });
       this.send(connection.socket, {
         stream_id: piece.streamId,
         ...connection.config,
@@ -607,8 +1005,10 @@ export class SonioxSpeaker implements PieceEngine {
         text_end: true,
         stream_id: piece.streamId,
       });
-    } catch {
-      this.failAll(new ProviderUnavailableError('tts-connection'));
+    } catch (error) {
+      this.failAll(
+        new ProviderUnavailableError(reasonOf(error, 'tts-connection'))
+      );
     }
   }
 
@@ -623,58 +1023,79 @@ export class SonioxSpeaker implements PieceEngine {
   }
 
   private async open(): Promise<TtsConnection> {
-    const grant = await this.deps.fetchToken('tts');
-    const socket = this.deps.createSocket(
-      grant.wsUrl,
-      handshakeProtocols(grant.apiKey)
-    );
-    const sampleRate =
-      typeof grant.config.sample_rate === 'number'
-        ? grant.config.sample_rate
-        : 24_000;
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new ProviderUnavailableError('tts-connect-timeout')),
-        CONNECT_MS
+    try {
+      mark('tts.token.start');
+      const grant = await withTimeout(
+        this.deps.fetchToken('tts'),
+        CONNECT_MS,
+        'token-timeout'
       );
-      socket.onopen = () => {
-        clearTimeout(timer);
-        resolve();
-      };
-      socket.onerror = () => {
-        clearTimeout(timer);
-        reject(new ProviderUnavailableError('tts-socket-error'));
-      };
-      socket.onclose = () => {
-        clearTimeout(timer);
-        reject(new ProviderUnavailableError('tts-socket-closed'));
-      };
-    });
-    socket.onerror = () =>
-      this.failAll(new ProviderUnavailableError('tts-error'));
-    socket.onclose = () =>
-      this.failAll(new ProviderUnavailableError('tts-closed'));
-    socket.onmessage = event => this.onMessage(event.data, sampleRate);
-    this.keepalive = setInterval(() => {
-      if (socket.readyState === SOCKET_OPEN) {
-        this.send(socket, { keep_alive: true });
-      }
-    }, KEEPALIVE_MS);
-    return { socket, config: grant.config, sampleRate };
+      mark('tts.token.end', { ok: true });
+      mark('tts.ws.start');
+      const socket = this.deps.createSocket(
+        grant.wsUrl,
+        handshakeProtocols(grant.apiKey)
+      );
+      const sampleRate =
+        typeof grant.config.sample_rate === 'number'
+          ? grant.config.sample_rate
+          : 24_000;
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new ProviderUnavailableError('tts-connect-timeout')),
+          CONNECT_MS
+        );
+        socket.onopen = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        socket.onerror = () => {
+          clearTimeout(timer);
+          reject(new ProviderUnavailableError('tts-socket-error'));
+        };
+        socket.onclose = () => {
+          clearTimeout(timer);
+          reject(new ProviderUnavailableError('tts-socket-closed'));
+        };
+      });
+      mark('tts.ws.open');
+      socket.onerror = () =>
+        this.failAll(new ProviderUnavailableError('tts-error'));
+      socket.onclose = () =>
+        this.failAll(new ProviderUnavailableError('tts-closed'));
+      socket.onmessage = event => this.onMessage(event.data, sampleRate);
+      this.keepalive = setInterval(() => {
+        if (socket.readyState === SOCKET_OPEN) {
+          this.send(socket, { keep_alive: true });
+        }
+      }, KEEPALIVE_MS);
+      return { socket, config: grant.config, sampleRate };
+    } catch (error) {
+      mark('tts.connect.fail', { reason: reasonOf(error, 'tts-connection') });
+      throw error;
+    }
   }
 
   private onMessage(data: unknown, sampleRate: number): void {
     const event = readTtsMessage(data);
     if (event.kind === 'unknown') return;
     if (event.kind === 'error') {
+      mark('tts.error', { code: event.code, type: reasonCode(event.type) });
       const piece = event.stream ? this.pieces.get(event.stream) : undefined;
+      const reason = `tts-error-${event.code}`;
       if (piece) {
+        if (
+          !piece.retried &&
+          !piece.finished &&
+          isLimitError(event.code, event.type)
+        ) {
+          this.requeue(piece);
+          return;
+        }
         this.release(piece);
-        piece.slot.fail(
-          new ProviderUnavailableError(`tts-error-${event.code}`)
-        );
+        piece.slot.fail(new ProviderUnavailableError(reason));
       } else {
-        this.failAll(new ProviderUnavailableError(`tts-error-${event.code}`));
+        this.failAll(new ProviderUnavailableError(reason));
       }
       return;
     }
@@ -682,6 +1103,10 @@ export class SonioxSpeaker implements PieceEngine {
     if (!piece || piece.finished) return;
     if (event.kind === 'audio') {
       if (event.audio) {
+        if (!this.seenAudio) {
+          this.seenAudio = true;
+          mark('tts.audio.first');
+        }
         const { samples, rest } = pcm16ToFloat32(
           base64ToBytes(event.audio),
           piece.carry
@@ -705,6 +1130,29 @@ export class SonioxSpeaker implements PieceEngine {
     piece.slot.finish();
   }
 
+  /**
+   * The account has too many streams open (other applications use it as well):
+   * the sentence goes to the front of the line once more, under a new stream id,
+   * before the chain gives up on Soniox.
+   */
+  private requeue(piece: TtsPiece): void {
+    piece.retried = true;
+    this.pieces.delete(piece.streamId);
+    this.counter += 1;
+    piece.streamId = `hai-${this.counter}`;
+    this.pieces.set(piece.streamId, piece);
+    this.active = Math.max(0, this.active - 1);
+    const timer = setTimeout(() => {
+      this.retryTimers.delete(timer);
+      if (this.dead || piece.finished) return;
+      this.waiting.unshift(piece);
+      this.drain();
+    }, LIMIT_RETRY_MS);
+    this.retryTimers.add(timer);
+    // other sentences may use the freed place meanwhile
+    this.drain();
+  }
+
   /** The stream of a piece no longer counts as active. */
   private release(piece: TtsPiece): void {
     if (piece.finished) return;
@@ -714,6 +1162,7 @@ export class SonioxSpeaker implements PieceEngine {
   }
 
   private failAll(error: Error): void {
+    this.clearRetryTimers();
     for (const piece of this.pieces.values()) {
       if (piece.finished) continue;
       piece.finished = true;

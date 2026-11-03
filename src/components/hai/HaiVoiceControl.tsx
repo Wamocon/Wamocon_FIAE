@@ -18,6 +18,7 @@
 import { useState } from 'react';
 import { Loader2, Mic, Square, Volume2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { HaiVoiceFallbackNotice } from './HaiVoiceFallbackNotice';
 import { type VoiceError } from './useHaiVoice';
 import { consentParagraphs } from '@/lib/hai/voice/consentText';
 import { HaiVoiceModeButton } from './voice-mode/HaiVoiceModeButton';
@@ -62,9 +63,12 @@ export function HaiVoiceControl() {
     setAskConsent(false);
   };
 
+  // listening is only announced when the microphone is really open
   const statusKey =
     voice.phase === 'listening'
-      ? 'hai.voice.phase.listening'
+      ? voice.micOpen
+        ? 'hai.voice.phase.listening'
+        : 'hai.voice.phase.preparing'
       : voice.phase === 'thinking'
         ? 'hai.voice.phase.thinking'
         : voice.phase === 'speaking'
@@ -116,6 +120,7 @@ export function HaiVoiceControl() {
               {t(ERROR_KEY[voice.error])}
             </p>
           )}
+          <HaiVoiceFallbackNotice fallback={voice.fallback} />
         </div>
         <HaiVoiceModeButton className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20" />
         {active && (

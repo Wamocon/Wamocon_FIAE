@@ -143,7 +143,8 @@ describe('useHaiVoice with providers', () => {
     await flush();
     act(() => hook.result.current.giveConsent());
     expect(hook.result.current.consented).toBe(true);
-    expect(window.localStorage.getItem(CONSENT_V2)).toBe('soniox,browser');
+    // Soniox keeps the microphone open (live mode): that is part of the consent
+    expect(window.localStorage.getItem(CONSENT_V2)).toBe('soniox,browser,live');
     expect(window.localStorage.getItem(CONSENT_V1)).toBe('yes');
 
     // the admin switches to Sokrates: a new recipient of the audio, new consent
@@ -152,7 +153,9 @@ describe('useHaiVoice with providers', () => {
     expect(hook.result.current.consented).toBe(false);
     act(() => hook.result.current.giveConsent());
     expect(hook.result.current.consented).toBe(true);
-    expect(window.localStorage.getItem(CONSENT_V2)).toBe('soniox,browser,haus');
+    expect(window.localStorage.getItem(CONSENT_V2)).toBe(
+      'soniox,browser,haus,live'
+    );
 
     // back to Soniox: the earlier consent still counts
     update({ voiceConfig: config(['soniox', 'browser']) });
@@ -166,6 +169,38 @@ describe('useHaiVoice with providers', () => {
     await flush();
     act(() => hook.result.current.giveConsent());
     expect(window.localStorage.getItem(CONSENT_V1)).toBe('yes');
+    expect(hook.result.current.consented).toBe(true);
+  });
+
+  it('the open microphone of the live mode has its own consent: an old consent for Soniox asks again', async () => {
+    stubBrowser({ cloud: true, own: true });
+    window.localStorage.setItem(CONSENT_V1, 'yes');
+    window.localStorage.setItem(CONSENT_V2, 'soniox,browser');
+    const { hook } = setup(config(['soniox', 'browser']));
+    await flush();
+    // given before the open microphone existed: the text names it now, the person is asked again
+    expect(hook.result.current.consented).toBe(false);
+    act(() => hook.result.current.giveConsent());
+    expect(window.localStorage.getItem(CONSENT_V2)).toBe('soniox,browser,live');
+    expect(hook.result.current.consented).toBe(true);
+  });
+
+  it('without the live mode (switched off) the old consent still holds', async () => {
+    stubBrowser({ cloud: true, own: true });
+    window.localStorage.setItem(CONSENT_V1, 'yes');
+    window.localStorage.setItem(CONSENT_V2, 'soniox,browser');
+    window.localStorage.setItem('hai-voice-live', 'off');
+    const { hook } = setup(config(['soniox', 'browser']));
+    await flush();
+    expect(hook.result.current.consented).toBe(true);
+  });
+
+  it('a chain without Soniox never asks for the open microphone', async () => {
+    stubBrowser({ cloud: true, own: true });
+    window.localStorage.setItem(CONSENT_V1, 'yes');
+    window.localStorage.setItem(CONSENT_V2, 'haus,browser');
+    const { hook } = setup(config(['haus', 'browser']));
+    await flush();
     expect(hook.result.current.consented).toBe(true);
   });
 
@@ -342,7 +377,11 @@ describe('useHaiVoice with the speaker of a provider', () => {
       streamingMessageId: null,
     });
     await flush();
-    expect(t.log).toEqual([]);
+    // the speaker exists from the request on (warmed up), nothing is said: it is told the
+    // end and reports done at once (a real speaker with no piece does)
+    expect(t.log).toEqual(['end']);
+    act(() => t.finish());
+    await flush();
     expect(t.recognitions).toHaveLength(2);
   });
 
