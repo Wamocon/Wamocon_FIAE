@@ -7,6 +7,7 @@ import { requireCatalogScope } from '@/lib/catalog/scope';
 import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
 import { quizSubmissionsWhere } from '@/lib/trainer/pending-reviews';
 import {
+  parseCourse,
   parsePaging,
   parseQuizType,
   parseSearch,
@@ -17,7 +18,8 @@ import {
 // filter (WMCNL-2999): the list used to end at 200 rows without a hint while
 // the dashboard counted every open one. `q` narrows the list to a trainee or a
 // quiz whose name contains the text (WMCNL-3001), `quizType=LESSON|GLOBAL` to one
-// kind of quiz.
+// kind of quiz, `course=<id>|global` to the quizzes of one course (Fragenkomplex)
+// or to the global ones.
 export async function GET(req: NextRequest) {
   try {
     const session = await requireTrainer(req);
@@ -28,6 +30,7 @@ export async function GET(req: NextRequest) {
     const { limit, offset } = parsePaging(searchParams);
     const search = parseSearch(searchParams);
     const quizType = parseQuizType(searchParams);
+    const course = parseCourse(searchParams);
 
     const catalogScope = await requireCatalogScope(session, req);
     if (isErrorResponse(catalogScope)) return catalogScope;
@@ -46,7 +49,8 @@ export async function GET(req: NextRequest) {
       traineeScope.condition,
       onlyPending,
       search,
-      quizType
+      quizType,
+      course
     );
     const [counted] = await db
       .select({ c: countDistinct(quizSubmissions.id) })

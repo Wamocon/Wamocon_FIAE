@@ -96,6 +96,25 @@ describe('quiz list (WMCNL-3026)', () => {
     ).toBeInTheDocument();
   });
 
+  it('calls the page "Quiz-Übersicht" for a trainer, who cannot manage', async () => {
+    signIn('trainer', true);
+    renderWithProviders(<QuizManagement />);
+    expect(await screen.findByText('Datenbanken')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Quiz-Übersicht' })
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Quiz-Verwaltung')).toBeNull();
+  });
+
+  it('keeps "Quiz-Verwaltung" for the platform admin', async () => {
+    signIn('super_admin', false);
+    renderWithProviders(<QuizManagement />);
+    expect(await screen.findByText('Datenbanken')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Quiz-Verwaltung' })
+    ).toBeInTheDocument();
+  });
+
   it('shows no such hint to the platform admin, who can manage them', async () => {
     signIn('super_admin', false);
     renderWithProviders(<QuizManagement />);

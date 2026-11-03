@@ -13,6 +13,9 @@ export const REVIEWS_PAGE_SIZE = 50;
 /** The most rows one request may ask for. */
 export const REVIEWS_MAX_PAGE_SIZE = 100;
 
+/** The most quiz submissions one bulk request may mark as reviewed (WMCNL-3001). */
+export const BULK_REVIEW_MAX = 100;
+
 export type ReviewPaging = { limit: number; offset: number };
 
 function positiveInt(value: string | null): number | null {
@@ -64,6 +67,30 @@ export function parseQuizType(
 ): 'LESSON' | 'GLOBAL' | null {
   const type = params.get('quizType');
   return type === 'LESSON' || type === 'GLOBAL' ? type : null;
+}
+
+/** The value of the course filter for the quizzes that have no course. */
+export const COURSE_GLOBAL = 'global';
+
+// no import of src/lib/uuid.ts: this file is used by the page in the browser too
+const COURSE_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A course filter value: the id of a course or `global`; anything else is null. */
+export function courseFilterValue(
+  value: string | null | undefined
+): string | null {
+  const course = value?.trim() ?? '';
+  return course === COURSE_GLOBAL || COURSE_ID.test(course) ? course : null;
+}
+
+/**
+ * The course (Fragenkomplex) a quiz list is limited to (WMCNL-3001): the id of
+ * a course, or `global` for the global quizzes, which belong to no course. Null
+ * for every quiz. Anything else is ignored, like an unknown quiz type.
+ */
+export function parseCourse(params: URLSearchParams): string | null {
+  return courseFilterValue(params.get('course'));
 }
 
 /** Longest search text the quiz list takes. */
