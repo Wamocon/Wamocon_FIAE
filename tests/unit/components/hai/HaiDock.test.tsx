@@ -632,8 +632,12 @@ describe('pulling the width with the pointer (mouse and touch)', () => {
     fireEvent.click(handle());
     await waitFor(() => expect(panel()).toBeNull());
     expect(screen.queryByTestId('hai-dock-guard')).toBeNull();
-    expect(variable('--hai-dock-ms')).toBe('280ms');
-    expect(variable('--hai-panel-width')).toBe('420px');
+    // the variables are given back in an effect after the close: wait for it
+    // (under load the check came before the effect, CI run of 03.11.2026)
+    await waitFor(() => {
+      expect(variable('--hai-dock-ms')).toBe('280ms');
+      expect(variable('--hai-panel-width')).toBe('420px');
+    });
   });
 
   it('does not pull in the full screen chat or when closed (the handle is not there)', () => {
