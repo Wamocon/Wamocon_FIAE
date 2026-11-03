@@ -78,6 +78,73 @@ export interface HaiMessage {
   pendingAction?: HaiPendingAction;
   /** A page HAI offers, shown as a card with the button "Open" (never a write) */
   navigationOffer?: HaiNavigationOffer;
+  /**
+   * What HAI does right now while no text has come yet (stage events of the
+   * server, opt-in). Shown as a small line below "thinking", gone with the
+   * first piece of text.
+   */
+  stage?: HaiStage;
+  /**
+   * The turn failed in a way a second try may fix: the model is busy, the
+   * network is gone, or something else went wrong once. The message shows the
+   * button "Try again".
+   */
+  failure?: HaiFailure;
+}
+
+/** The stages the server reports while it works (SSE `{"stage": ...}`). */
+export type HaiStage = 'search' | 'answer' | 'busy';
+
+/** Why a turn failed, for the text and the button "Try again". */
+export type HaiFailure = 'busy' | 'network' | 'generic';
+
+/** The client waits this long for the first byte of the answer (the server's limit is up to 150 s). */
+const CHAT_RESPONSE_TIMEOUT_MS = 180_000;
+
+/** The stage of a server event, or undefined for anything else. */
+function toStage(raw: unknown): HaiStage | undefined {
+  return raw === 'search' || raw === 'answer' || raw === 'busy'
+    ? raw
+    : undefined;
+}
+
+/** "busy" stays: a later "answer" must not hide that the model is slow. */
+function nextStage(current: HaiStage | undefined, incoming: HaiStage) {
+  return current === 'busy' ? 'busy' : incoming;
+}
+
+/** The text of a failed turn, on the message and on its active version. */
+function withFailure(
+  message: HaiMessage,
+  text: string,
+  failure?: HaiFailure
+): HaiMessage {
+  return {
+    ...message,
+    content: text,
+    stage: undefined,
+    failure,
+    versions: message.versions
+      ? message.versions.map((v, idx) =>
+          idx === (message.activeVersionIndex ?? 0)
+            ? { ...v, content: text }
+            : v
+        )
+      : message.versions,
+  };
+}
+
+/**
+ * Only a failed fetch without any answer is a problem of the person's network
+ * ("Failed to fetch", "Load failed", "NetworkError ..."). Everything else, also
+ * a broken stream after the answer began (the server may have been cut off),
+ * is not blamed on the connection.
+ */
+function isNetworkFailure(error: unknown, gotResponse: boolean): boolean {
+  if (gotResponse || !(error instanceof TypeError)) return false;
+  return /failed to fetch|load failed|network ?error|network request failed|fetch failed/i.test(
+    error.message
+  );
 }
 
 /**
@@ -160,7 +227,7 @@ export function actionErrorKey(
 async function chatFailureText(
   response: Response,
   t: (key: string) => string
-): Promise<string> {
+): Promise<{ text: string; failure?: HaiFailure }> {
   let code: unknown;
   try {
     // a copy, so a caller that reads the body too is not affected
@@ -173,7 +240,13 @@ async function chatFailureText(
   } catch {
     code = undefined;
   }
-  return t(chatFailureKey(response.status, code));
+  // a busy model may answer on the second try: the message gets the button
+  return {
+    text: t(chatFailureKey(response.status, code)),
+    ...(response.status === 503 && code === 'MODEL_BUSY'
+      ? { failure: 'busy' as const }
+      : {}),
+  };
 }
 
 export interface HaiContext {
@@ -212,6 +285,11 @@ interface HaiProviderState {
     options?: { voice?: boolean }
   ) => Promise<void>;
   stopGeneration: () => void;
+  /**
+   * Ask the same question again after a failed turn (button "Try again" of the
+   * error message). Only the last message can be retried.
+   */
+  retryMessage: (assistantMessageId: string) => Promise<void>;
   updateMessage: (messageId: string, newContent: string) => Promise<void>;
   regenerateFromEdit: (messageId: string, newContent: string) => Promise<void>;
   confirmPendingAction: (messageId: string) => Promise<void>;
@@ -967,10 +1045,13 @@ export function HaiProvider({
 
       setStreamingMessageId(assistantId);
 
-      // Add a timeout to the fetch request (60 seconds)
+      // Time limit until the answer starts (see sendMessage)
+      let timedOut = false;
+      let gotResponse = false;
       const timeoutId = setTimeout(() => {
+        timedOut = true;
         abortController.abort('TIMEOUT');
-      }, 60000);
+      }, CHAT_RESPONSE_TIMEOUT_MS);
 
       try {
         const response = await authFetch('/api/hai/chat', {
@@ -994,6 +1075,7 @@ export function HaiProvider({
         });
 
         // Clear timeout once response headers arrive
+        gotResponse = true;
         clearTimeout(timeoutId);
 
         if (response.ok && response.body) {
@@ -1035,20 +1117,8 @@ export function HaiProvider({
               break;
             }
 
-            if (!hasReceivedFirstChunk) {
-              hasReceivedFirstChunk = true;
-              clearTimeout(thinkingTimeoutId);
-              // Clear 'Thinking...' text if present before first chunk
-              setMessages(prev =>
-                prev.map(m =>
-                  m.id === assistantId &&
-                  m.content === (t('hai.loading.thinking') || 'Thinking...')
-                    ? { ...m, content: '' }
-                    : m
-                )
-              );
-            }
-
+            // A stage event is no text: the first byte does not end "thinking",
+            // only the first piece of text does (handled with the event below)
             buffer += decoder.decode(value, { stream: true });
 
             const lines = buffer.split('\n');
@@ -1062,7 +1132,23 @@ export function HaiProvider({
               try {
                 const event = JSON.parse(jsonStr);
 
+                // What HAI does while no text has come (search, answer, busy)
+                const stage = toStage(event.stage);
+                if (stage && !hasReceivedFirstChunk) {
+                  setMessages(prev =>
+                    prev.map(m =>
+                      m.id === assistantId
+                        ? { ...m, stage: nextStage(m.stage, stage) }
+                        : m
+                    )
+                  );
+                }
+
                 if (event.chunk) {
+                  if (!hasReceivedFirstChunk) {
+                    hasReceivedFirstChunk = true;
+                    clearTimeout(thinkingTimeoutId);
+                  }
                   fullText += event.chunk;
                   setMessages(prev =>
                     prev.map(m =>
@@ -1070,6 +1156,7 @@ export function HaiProvider({
                         ? {
                             ...m,
                             content: fullText,
+                            stage: undefined,
                             versions: m.versions
                               ? m.versions.map((v, idx) =>
                                   idx === (m.activeVersionIndex ?? 0)
@@ -1117,10 +1204,20 @@ export function HaiProvider({
                 }
 
                 if (event.error) {
-                  const errorMsg = t(event.error) || event.error;
+                  // MODEL_BUSY: the model is slow or overloaded, a second try
+                  // may work (the message gets the button "Try again")
+                  const busy = event.code === 'MODEL_BUSY';
+                  const errorMsg = busy
+                    ? t('hai.error.modelBusy')
+                    : t(event.error) || event.error;
+                  clearTimeout(thinkingTimeoutId);
                   setMessages(prev =>
                     prev.map(m =>
-                      m.id === assistantId ? { ...m, content: errorMsg } : m
+                      m.id === assistantId
+                        ? busy
+                          ? withFailure(m, errorMsg, 'busy')
+                          : { ...m, content: errorMsg, stage: undefined }
+                        : m
                     )
                   );
                   setStreamingMessageId(null);
@@ -1169,68 +1266,53 @@ export function HaiProvider({
           await refreshSessions();
         } else {
           // the reason in plain words (plan, release, switch), not "error"
-          const failureText = await chatFailureText(response, t);
+          const { text: failureText, failure } = await chatFailureText(
+            response,
+            t
+          );
           setMessages(prev =>
             prev.map(m =>
-              m.id === assistantId
-                ? {
-                    ...m,
-                    content: failureText,
-                    versions: m.versions
-                      ? m.versions.map((v, idx) =>
-                          idx === (m.activeVersionIndex ?? 0)
-                            ? { ...v, content: failureText }
-                            : v
-                        )
-                      : m.versions,
-                  }
-                : m
+              m.id === assistantId ? withFailure(m, failureText, failure) : m
             )
           );
           setStreamingMessageId(null);
         }
       } catch (error: any) {
-        if (error.name === 'AbortError' || error.message === 'TIMEOUT') {
+        // A timeout aborts with the reason 'TIMEOUT', a plain string: the flag
+        // tells it, `error.name` and `error.message` are empty then (that is
+        // how it used to end up as "connection error").
+        if (timedOut || error?.name === 'AbortError') {
           console.log('HAI.ai: Stream aborted or timed out');
-          // If it was a timeout, show the timeout error message
           if (
-            error.message === 'TIMEOUT' ||
+            timedOut ||
             (abortController.signal.aborted && !activeStreamSessionRef.current)
           ) {
             setMessages(prev =>
               prev.map(m =>
                 m.id === assistantId
-                  ? {
-                      ...m,
-                      content: t('hai.error.timeout'),
-                      versions: m.versions?.map((v, idx) =>
-                        idx === (m.activeVersionIndex ?? 0)
-                          ? { ...v, content: t('hai.error.timeout') }
-                          : v
-                      ),
-                    }
+                  ? withFailure(m, t('hai.error.timeout'), 'generic')
                   : m
               )
             );
+            setStreamingMessageId(null);
           }
           return;
         }
 
         console.error('Failed to regenerate message:', error);
+        // Only a fetch that got no answer at all is the person's network. Every
+        // other failure is not blamed on the connection.
+        const network = isNetworkFailure(error, gotResponse);
         setMessages(prev =>
           prev.map(m =>
             m.id === assistantId
-              ? {
-                  ...m,
-                  content: t('hai.error.connectionError'),
-                  versions: m.versions
-                    ? m.versions.map((v, idx) =>
-                        idx === (m.activeVersionIndex ?? 0)
-                          ? { ...v, content: t('hai.error.connectionError') }
-                          : v
-                      )
-                    : m.versions,
-                }
+              ? withFailure(
+                  m,
+                  t(
+                    network ? 'hai.error.connectionError' : 'hai.error.generic'
+                  ),
+                  network ? 'network' : 'generic'
+                )
               : m
           )
         );
@@ -1306,10 +1388,16 @@ export function HaiProvider({
       setMessages(prev => [...prev, assistantMessage]);
       setStreamingMessageId(assistantId);
 
-      // Add a timeout to the fetch request (60 seconds)
+      // Time limit until the answer starts. The model server can need more than
+      // a minute under load and the server waits up to 90 seconds (150 at most)
+      // for the first character, so the client must not give up before it.
+      let timedOut = false;
+      // no answer at all (fetch failed) is the only case of a network failure
+      let gotResponse = false;
       const timeoutId = setTimeout(() => {
+        timedOut = true;
         abortController.abort('TIMEOUT');
-      }, 60000);
+      }, CHAT_RESPONSE_TIMEOUT_MS);
 
       try {
         const response = await authFetch('/api/hai/chat', {
@@ -1328,10 +1416,19 @@ export function HaiProvider({
             },
             stream: true,
             // only the voice assistant sends it; the server checks the organization
-            ...(options?.voice === true ? { voice: true } : {}),
+            ...(options?.voice === true
+              ? { voice: true }
+              : // the text chat shows what HAI does while it waits (search,
+                // answer, busy); the voice assistant never gets these events
+                { stageEvents: true }),
           }),
           signal: abortController.signal,
         });
+        gotResponse = true;
+        // The answer has started. The limit above only guards the wait for it:
+        // it used to run on and cut every answer that took longer than a minute
+        // in total (shown as a connection error).
+        clearTimeout(timeoutId);
         // measuring point of the voice assistant (numbers only, off by default)
         if (options?.voice === true) {
           markServerTiming(response.headers?.get?.('server-timing'));
@@ -1377,20 +1474,8 @@ export function HaiProvider({
               break;
             }
 
-            if (!hasReceivedFirstChunk) {
-              hasReceivedFirstChunk = true;
-              clearTimeout(thinkingTimeoutId);
-              // Clear 'Thinking...' text if present before first chunk
-              setMessages(prev =>
-                prev.map(m =>
-                  m.id === assistantId &&
-                  m.content === (t('hai.loading.thinking') || 'Thinking...')
-                    ? { ...m, content: '' }
-                    : m
-                )
-              );
-            }
-
+            // A stage event is no text: the first byte does not end "thinking",
+            // only the first piece of text does (handled with the event below)
             buffer += decoder.decode(value, { stream: true });
 
             // Process SSE lines
@@ -1405,7 +1490,23 @@ export function HaiProvider({
               try {
                 const event = JSON.parse(jsonStr);
 
+                // What HAI does while no text has come (search, answer, busy)
+                const stage = toStage(event.stage);
+                if (stage && !hasReceivedFirstChunk) {
+                  setMessages(prev =>
+                    prev.map(m =>
+                      m.id === assistantId
+                        ? { ...m, stage: nextStage(m.stage, stage) }
+                        : m
+                    )
+                  );
+                }
+
                 if (event.chunk) {
+                  if (!hasReceivedFirstChunk) {
+                    hasReceivedFirstChunk = true;
+                    clearTimeout(thinkingTimeoutId);
+                  }
                   fullText += event.chunk;
                   // Update message content incrementally
                   setMessages(prev =>
@@ -1414,6 +1515,7 @@ export function HaiProvider({
                         ? {
                             ...m,
                             content: fullText,
+                            stage: undefined,
                             versions: m.versions
                               ? m.versions.map((v, idx) =>
                                   idx === (m.activeVersionIndex ?? 0)
@@ -1463,10 +1565,20 @@ export function HaiProvider({
                 }
 
                 if (event.error) {
-                  const errorMsg = t(event.error) || event.error;
+                  // MODEL_BUSY: the model is slow or overloaded, a second try
+                  // may work (the message gets the button "Try again")
+                  const busy = event.code === 'MODEL_BUSY';
+                  const errorMsg = busy
+                    ? t('hai.error.modelBusy')
+                    : t(event.error) || event.error;
+                  clearTimeout(thinkingTimeoutId);
                   setMessages(prev =>
                     prev.map(m =>
-                      m.id === assistantId ? { ...m, content: errorMsg } : m
+                      m.id === assistantId
+                        ? busy
+                          ? withFailure(m, errorMsg, 'busy')
+                          : { ...m, content: errorMsg, stage: undefined }
+                        : m
                     )
                   );
                   setStreamingMessageId(null);
@@ -1522,68 +1634,54 @@ export function HaiProvider({
           await refreshSessions();
         } else {
           // Error response: the reason in plain words (plan, release, switch)
-          const failureText = await chatFailureText(response, t);
+          const { text: failureText, failure } = await chatFailureText(
+            response,
+            t
+          );
           setMessages(prev =>
             prev.map(m =>
-              m.id === assistantId
-                ? {
-                    ...m,
-                    content: failureText,
-                    versions: m.versions
-                      ? m.versions.map((v, idx) =>
-                          idx === (m.activeVersionIndex ?? 0)
-                            ? { ...v, content: failureText }
-                            : v
-                        )
-                      : m.versions,
-                  }
-                : m
+              m.id === assistantId ? withFailure(m, failureText, failure) : m
             )
           );
           setStreamingMessageId(null);
         }
       } catch (error: any) {
         // Handle stop/abort or timeout
-        if (error.name === 'AbortError' || error.message === 'TIMEOUT') {
+        // A timeout aborts with the reason 'TIMEOUT', a plain string: the flag
+        // tells it, `error.name` and `error.message` are empty then (that is
+        // how it used to end up as "connection error").
+        if (timedOut || error?.name === 'AbortError') {
           console.log('HAI.ai: Stream aborted or timed out');
           if (
-            error.message === 'TIMEOUT' ||
+            timedOut ||
             (abortController.signal.aborted && !activeStreamSessionRef.current)
           ) {
             setMessages(prev =>
               prev.map(m =>
                 m.id === assistantId
-                  ? {
-                      ...m,
-                      content: t('hai.error.timeout'),
-                      versions: m.versions?.map((v, idx) =>
-                        idx === (m.activeVersionIndex ?? 0)
-                          ? { ...v, content: t('hai.error.timeout') }
-                          : v
-                      ),
-                    }
+                  ? withFailure(m, t('hai.error.timeout'), 'generic')
                   : m
               )
             );
+            setStreamingMessageId(null);
           }
           return;
         }
 
         console.error('Failed to send message:', error);
+        // Only a fetch that got no answer at all is the person's network. Every
+        // other failure is not blamed on the connection.
+        const network = isNetworkFailure(error, gotResponse);
         setMessages(prev =>
           prev.map(m =>
             m.id === assistantId
-              ? {
-                  ...m,
-                  content: t('hai.error.connectionError'),
-                  versions: m.versions
-                    ? m.versions.map((v, idx) =>
-                        idx === (m.activeVersionIndex ?? 0)
-                          ? { ...v, content: t('hai.error.connectionError') }
-                          : v
-                      )
-                    : m.versions,
-                }
+              ? withFailure(
+                  m,
+                  t(
+                    network ? 'hai.error.connectionError' : 'hai.error.generic'
+                  ),
+                  network ? 'network' : 'generic'
+                )
               : m
           )
         );
@@ -1611,6 +1709,35 @@ export function HaiProvider({
       answerSpokenNavigation,
       startQuizFromSignal,
     ]
+  );
+
+  /**
+   * Ask the same question again after a failed turn (button "Try again" of the
+   * error message): the failed answer and its question leave the list and the
+   * question is sent as a new one. regenerateFromEdit is for edits and needs the
+   * stored id of the question (a fresh question only has a temporary one), so
+   * the retry goes the normal way. Only the last message of the chat can be
+   * retried, and only while nothing else is running.
+   */
+  const retryMessage = useCallback(
+    async (assistantMessageId: string) => {
+      const list = messagesRef.current;
+      const index = list.findIndex(
+        m => m.id === assistantMessageId && m.role === 'assistant'
+      );
+      if (index < 0 || index !== list.length - 1) return;
+      if (!list[index].failure || abortControllerRef.current) return;
+      const question = [...list.slice(0, index)]
+        .reverse()
+        .find(m => m.role === 'user');
+      if (!question?.content.trim()) return;
+
+      setMessages(prev =>
+        prev.filter(m => m.id !== assistantMessageId && m.id !== question.id)
+      );
+      await sendMessage(question.content);
+    },
+    [sendMessage]
   );
 
   // ========================================================================
@@ -1652,6 +1779,7 @@ export function HaiProvider({
     clearContext,
     sendMessage,
     stopGeneration,
+    retryMessage,
     updateMessage,
     regenerateFromEdit,
     confirmPendingAction,

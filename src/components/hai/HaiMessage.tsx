@@ -24,6 +24,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  RotateCcw,
 } from 'lucide-react';
 
 interface HaiMessageProps {
@@ -40,10 +41,19 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
     confirmPendingAction,
     cancelPendingAction,
     openNavigation,
+    retryMessage,
+    messages,
   } = useHai();
   const isUser = message.role === 'user';
   const hasCitations = message.citations && message.citations.length > 0;
   const isThinking = isStreaming && !message.content;
+  // no text yet: only "thinking" is shown (an empty message or its placeholder)
+  const waitingForText =
+    isStreaming &&
+    (!message.content ||
+      message.content === (t('hai.loading.thinking') || 'Thinking...'));
+  // only the last message of the chat can be asked again
+  const isLastMessage = messages?.[messages.length - 1]?.id === message.id;
   const hasVersions = !!message.versions && message.versions.length > 1;
   const activeIndex = message.activeVersionIndex ?? 0;
 
@@ -147,6 +157,31 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
             </>
           )}
         </div>
+
+        {/* What HAI does while no text has come (search, answer, busy). The
+            region stays in the page while the message waits, so a screen reader
+            announces each change politely. */}
+        {!isUser && waitingForText && (
+          <p
+            aria-live="polite"
+            data-testid="hai-stage"
+            className="pl-0 text-xs text-gray-400"
+          >
+            {message.stage ? t(`hai.loading.stage.${message.stage}`) : ''}
+          </p>
+        )}
+
+        {/* A failed turn (busy model, network, something else): ask again */}
+        {!isUser && !isStreaming && message.failure && isLastMessage && (
+          <button
+            type="button"
+            onClick={() => void retryMessage(message.id)}
+            className="inline-flex items-center gap-1 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-300 transition-colors hover:bg-cyan-500/20"
+          >
+            <RotateCcw className="h-3 w-3" />
+            {t('hai.error.retry')}
+          </button>
+        )}
 
         {/* Proposed write: nothing happens before the person confirms */}
         {!isUser && !isStreaming && message.pendingAction && (
