@@ -600,11 +600,14 @@ async function getContextTitles(
 // ============================================================================
 
 export async function POST(req: NextRequest) {
+  // timing of the stages for the voice assistant (numbers only, Server-Timing)
+  const startedAt = Date.now();
   try {
     // The person is the session, a userId in the query is ignored
     const me = await requireUser(req);
     if (isErrorResponse(me)) return me;
     const userId = me.id;
+    const authMs = Date.now() - startedAt;
 
     if (!(await requireProPlan(userId))) {
       return NextResponse.json(
@@ -957,9 +960,11 @@ export async function POST(req: NextRequest) {
       userRole === 'TRAINEE' && user[0].startOfTrainingDate
         ? await loadPhasePlanForUser(userId, user[0].ausbildungDurationYears)
         : null;
+    const timings: Record<string, number> = {};
     const pipelineContext: PipelineContext = {
       userId,
       sessionId,
+      ...(wantsVoice ? { timings } : {}),
       // the occupation chosen in the app comes first in the persona
       preferredCatalogCode: requestedCatalogCode(req),
       currentEnablerId: inScope ? context?.enablerId : undefined,
@@ -1001,6 +1006,9 @@ export async function POST(req: NextRequest) {
     // Handle streaming response
     if (stream) {
       const encoder = new TextEncoder();
+      // what happened before the stream starts (the header can only say this much)
+      const prepMs = Date.now() - startedAt - authMs;
+      let firstChunkMs: number | null = null;
       const readableStream = new ReadableStream({
         async start(controller) {
           try {
@@ -1008,6 +1016,8 @@ export async function POST(req: NextRequest) {
               message.trim(),
               pipelineContext,
               chunk => {
+                if (firstChunkMs === null)
+                  firstChunkMs = Date.now() - startedAt;
                 controller.enqueue(
                   encoder.encode(`data: ${JSON.stringify({ chunk })}\n\n`)
                 );
@@ -1124,6 +1134,20 @@ export async function POST(req: NextRequest) {
                   pendingAction: result.pendingAction,
                   navigationOffer: result.navigationOffer,
                   quizMode: result.quizMode,
+                  // the stages of the voice assistant, in milliseconds (no content)
+                  ...(wantsVoice
+                    ? {
+                        timing: {
+                          auth: authMs,
+                          prep: prepMs,
+                          ...timings,
+                          ...(firstChunkMs !== null
+                            ? { first: firstChunkMs }
+                            : {}),
+                          total: Date.now() - startedAt,
+                        },
+                      }
+                    : {}),
                 })}\n\n`
               )
             );
@@ -1149,6 +1173,11 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           Connection: 'keep-alive',
+          // voice only: the time before the stream starts (the later stages
+          // search and first token come with the done event, a header is sent first)
+          ...(wantsVoice
+            ? { 'Server-Timing': `auth;dur=${authMs}, prep;dur=${prepMs}` }
+            : {}),
         },
       });
     }
