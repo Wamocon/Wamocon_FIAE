@@ -360,6 +360,17 @@ Anlass: Meldungen des Testteams (Trainerfrage "Welche Azubis sind mir zugeordnet
 
 Pflichtfälle der Gruppe M: M1, M2, M7, M10, M14, M15, M16, M20, M21, M22, M23, M24. Die Fälle M14 bis M16, M23 und M24 dürfen in keinem Konto durchfallen (Schutz vor gefälschtem Seitentext, Berufstrennung, Lösungsschutz).
 
+## N. Ergänzungen aus dem Browsertest auf einer lokalen Datenbank (03.11.2026)
+
+Anlass: Beim ersten Lauf gegen ein echtes Postgres (nicht gegen nachgebildete Abfragen) fielen die Übersicht und das Detail der Trainerfragen aus und die Überschrift des Seitenkontexts war der Markenname der Seitenleiste. Die Fälle sichern genau diese Stellen. Konten wie oben.
+
+| Nr | Als | Schritt | Erwartung | P |
+|---|---|---|---|---|
+| N1 | Trainer | "Wie steht [Name eines eigenen Azubis]?", bei einem Azubi mit offener Abgabe, einem Klausurergebnis und einem Tätigkeitsnachweis | Das Detail enthält Kursfortschritt, Letzte Abgaben, Klausurergebnisse und Nachweise. Die Zeile "(Einige Daten konnten nicht geladen werden.)" steht nicht darunter | P |
+| N2 | Trainer | "Wer sind meine Azubis?" bei einem Azubi, dessen Block heute läuft (Berufsschule, Betrieb, Urlaub oder Prüfung) | Die Zeile des Azubis nennt den aktuellen Block. Es gibt eine Übersicht und nicht die Antwort ohne Daten | P |
+| N3 | Azubi | Auf dem Dashboard und in einem Enabler im Chat "Was steht hier?" fragen, in den Entwicklerwerkzeugen `context.page.title` ansehen | Die Überschrift ist die Überschrift der Seite beziehungsweise der Titel des Dokuments, nicht der Markenname "LFA" der Seitenleiste | |
+| N4 | Azubi | "Was steht in sql grundlagen?" (Dateiname ohne Endung und ohne das Wort Datei, PDF oder Dokument) und danach "Was steht im PDF sql grundlagen?" | Die erste Frage ist eine normale Inhaltsfrage ohne Dateiliste (Absicht, sonst wäre jede Frage mit einem Titel eine Dateifrage). Mit dem Wort PDF, Datei oder Dokument findet die HAI dieselbe Datei wie mit Endung und Unterstrich | |
+
 ## Bekannte Grenzen (kein Testfehler)
 
 - Zwei Fragen des Prüfsatzes lehnt das Modell zu Unrecht ab: "Welcher Server hostet eine Netflix Plattform?" und "Welches Hotel darf ich für die Dienstreise buchen?". Wer ähnliche Fälle findet, bitte als Fehler zur späteren Behebung melden.
