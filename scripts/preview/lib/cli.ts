@@ -88,13 +88,22 @@ export async function main(command: Options['command'], argv: string[]) {
           console.log(
             `  score reproduced exactly: ${r.exact}, stored score not possible: ${r.deviations.length}`
           );
-          // group the deviations, so the log stays short
+          // the log stays short: the size of the deviations and the most frequent ones
+          const gaps = r.deviations.map(d =>
+            Math.abs((d.given ?? 0) - (d.stored ?? 0))
+          );
+          if (gaps.length) {
+            console.log(
+              `    largest difference ${Math.max(...gaps)} points, more than 5 points: ${gaps.filter(g => g > 5).length}`
+            );
+          }
           const groups = new Map<string, number>();
           for (const d of r.deviations) {
             const key = `stored ${d.stored ?? 'none'} -> answers give ${d.given ?? 'none'} (${d.questions} graded questions)`;
             groups.set(key, (groups.get(key) ?? 0) + 1);
           }
-          for (const [key, n] of groups) console.log(`    ${n} x ${key}`);
+          const top = [...groups].sort((x, y) => y[1] - x[1]).slice(0, 5);
+          for (const [key, n] of top) console.log(`    ${n} x ${key}`);
           console.log(
             options.fixScores
               ? `  scores changed to the answers: ${r.fixed}`

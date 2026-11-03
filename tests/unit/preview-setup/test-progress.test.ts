@@ -368,7 +368,7 @@ describe('the seed', () => {
     // up to a passed score when needed), score = platform formula
     expect(subs.map(c => c.params![2])).toEqual([80, 100]);
     expect(answers[0].params![1]).toHaveLength(5);
-    expect(answers[0].params![0]).toBe('s1');
+    expect(answers[0].params![0]).toEqual(Array(5).fill('s1'));
   });
 
   it('creates a report only for a week that has none', async () => {

@@ -225,27 +225,31 @@ export async function loadQuizQuestions(
   });
 }
 
-/** Writes the answers of a plan for one submission. Returns the number of rows. */
+/** Answers per statement: the many submissions of a backfill go in a few round trips. */
+const CHUNK = 1000;
+
+/** Writes answers (of one or of many submissions). Returns the number of rows. */
 export async function insertAnswers(
   db: Db,
-  submissionId: string,
-  answers: readonly PlannedAnswer[]
+  rows: readonly (PlannedAnswer & { submissionId: string })[]
 ): Promise<number> {
-  if (answers.length === 0) return 0;
-  await db.unsafe(
-    `insert into ${SCHEMA}.quiz_submission_answers
-       (submission_id, question_id, selected_option_id, text_answer)
-     select $1::uuid, x.question_id, x.selected_option_id, x.text_answer
-       from unnest($2::uuid[], $3::uuid[], $4::text[])
-            as x(question_id, selected_option_id, text_answer)`,
-    [
-      submissionId,
-      answers.map(a => a.questionId),
-      answers.map(a => a.selectedOptionId),
-      answers.map(a => a.textAnswer),
-    ]
-  );
-  return answers.length;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const part = rows.slice(i, i + CHUNK);
+    await db.unsafe(
+      `insert into ${SCHEMA}.quiz_submission_answers
+         (submission_id, question_id, selected_option_id, text_answer)
+       select x.submission_id, x.question_id, x.selected_option_id, x.text_answer
+         from unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::text[])
+              as x(submission_id, question_id, selected_option_id, text_answer)`,
+      [
+        part.map(r => r.submissionId),
+        part.map(r => r.questionId),
+        part.map(r => r.selectedOptionId),
+        part.map(r => r.textAnswer),
+      ]
+    );
+  }
+  return rows.length;
 }
 
 export interface BackfillSummary {
@@ -300,6 +304,9 @@ export async function backfillAnswers(
   );
 
   const cache = new Map<string, QuizQuestion[]>();
+  const rows: (PlannedAnswer & { submissionId: string })[] = [];
+  const changes: { id: string; stored: number | null; given: number | null }[] =
+    [];
   for (const sub of subs) {
     let questions = cache.get(sub.quiz_id);
     if (!questions) {
@@ -317,7 +324,9 @@ export async function backfillAnswers(
     );
 
     summary.submissions += 1;
-    summary.answers += await insertAnswers(db, sub.id, plan.answers);
+    for (const answer of plan.answers) {
+      rows.push({ ...answer, submissionId: sub.id });
+    }
     if (exact) {
       summary.exact += 1;
     } else {
@@ -326,14 +335,22 @@ export async function backfillAnswers(
         given: plan.score,
         questions: plan.gradable,
       });
-      if (options.fixScores) {
-        const res = await db.unsafe(
-          `update ${SCHEMA}.quiz_submissions set score = $1
-            where id = $2 and score is not distinct from $3`,
-          [plan.score, sub.id, stored]
-        );
-        summary.fixed += Number(res.count ?? 0);
-      }
+      changes.push({ id: sub.id, stored, given: plan.score });
+    }
+  }
+
+  summary.answers = await insertAnswers(db, rows);
+
+  if (options.fixScores) {
+    for (let i = 0; i < changes.length; i += CHUNK) {
+      const part = changes.slice(i, i + CHUNK);
+      const res = await db.unsafe(
+        `update ${SCHEMA}.quiz_submissions s set score = x.new_score
+           from unnest($1::uuid[], $2::int[], $3::int[]) as x(id, new_score, old_score)
+          where s.id = x.id and s.score is not distinct from x.old_score`,
+        [part.map(c => c.id), part.map(c => c.given), part.map(c => c.stored)]
+      );
+      summary.fixed += Number(res.count ?? 0);
     }
   }
   return summary;

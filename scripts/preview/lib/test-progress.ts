@@ -393,7 +393,10 @@ export async function seedTrainee(
         trainee.organization_id,
       ]
     );
-    await insertAnswers(db, submission.id, plan.answers);
+    await insertAnswers(
+      db,
+      plan.answers.map(a => ({ ...a, submissionId: submission.id }))
+    );
     quiz += 1;
   }
 

@@ -245,7 +245,7 @@ describe('adding answers to existing seed submissions', () => {
     const insert = calls.find(c =>
       c.query.includes('insert into public_preview.quiz_submission_answers')
     )!;
-    expect(insert.params![0]).toBe('s1');
+    expect(insert.params![0]).toEqual(Array(10).fill('s1'));
     const chosen: string[] = insert.params![2];
     expect(chosen.filter(id => id.includes('-r'))).toHaveLength(7);
     expect(
@@ -273,7 +273,7 @@ describe('adding answers to existing seed submissions', () => {
     const r = await backfillAnswers(db, ['t1'], { fixScores: true });
     const updates = calls.filter(c => /\bupdate\b/.test(c.query));
     expect(updates).toHaveLength(1);
-    expect(updates[0].params).toEqual([70, 's1', 68]);
+    expect(updates[0].params).toEqual([['s1'], [70], [68]]);
     expect(updates[0].query).toContain('score is not distinct from');
     expect(r.fixed).toBe(1);
   });
@@ -289,11 +289,13 @@ describe('adding answers to existing seed submissions', () => {
       expect(query).toContain('public_preview.');
       expect(query.replace(/public_preview\./g, '')).not.toMatch(/public\./);
     }
+    // all answers go in one statement, only into the answers table
     const inserts = calls.filter(c => /^\s*insert into/.test(c.query));
-    expect(inserts).toHaveLength(2);
-    for (const c of inserts) {
-      expect(c.query).toContain('public_preview.quiz_submission_answers');
-    }
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].query).toContain(
+      'public_preview.quiz_submission_answers'
+    );
+    expect(inserts[0].params![0]).toHaveLength(12);
   });
 
   it('skips a submission whose quiz has no question', async () => {
