@@ -1433,19 +1433,19 @@ async function fetchTraineeDetailForTrainer(
         // 2. Recent submissions (last 10)
         const submissions = await db.execute(sql`
             (
-                SELECT 'enabler' as type, e.title, es.status, es.created_at as submitted_at, es.trainer_feedback
+                SELECT 'enabler' as type, e.title, es.status, es.submitted_at, es.trainer_feedback
                 FROM enabler_submissions es
                 JOIN enablers e ON e.id = es.enabler_id
                 WHERE es.trainee_id = ${trainee.id}
-                ORDER BY es.created_at DESC LIMIT 5
+                ORDER BY es.submitted_at DESC LIMIT 5
             )
             UNION ALL
             (
-                SELECT 'use_case' as type, uc.title, ucs.status, ucs.created_at as submitted_at, ucs.trainer_feedback
+                SELECT 'use_case' as type, uc.title, ucs.status, ucs.submitted_at, ucs.trainer_feedback
                 FROM use_case_submissions ucs
                 JOIN use_cases uc ON uc.id = ucs.use_case_id
                 WHERE ucs.trainee_id = ${trainee.id}
-                ORDER BY ucs.created_at DESC LIMIT 5
+                ORDER BY ucs.submitted_at DESC LIMIT 5
             )
             ORDER BY submitted_at DESC LIMIT 10
         `);

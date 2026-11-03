@@ -518,6 +518,19 @@ describe('fetchDataContext for a trainer', () => {
     expect(executed.length).toBeGreaterThan(0);
   });
 
+  it('the submissions of the detail query use submitted_at (the tables have no created_at: found on a real Postgres)', async () => {
+    const [anna] = makeTrainees(1);
+    const { executed } = installDb({
+      selects: [...snapshotSelects, [{ id: anna.id, fullName: 'Anna Muster', firstName: 'Anna', lastName: 'Muster' }]],
+    });
+    await fetchDataContext('trainer-1', 'TRAINER', 'Wie steht Anna Muster?');
+    const submissionSql = executed.find(text => text.includes('FROM enabler_submissions es'));
+    expect(submissionSql).toBeDefined();
+    expect(submissionSql).toContain('es.submitted_at');
+    expect(submissionSql).toContain('ucs.submitted_at');
+    expect(submissionSql).not.toMatch(/created_at/);
+  });
+
   it('a name that is not among the own trainees gets the neutral line', async () => {
     installDb({ selects: [...snapshotSelects, []] });
     const context = await fetchDataContext('trainer-1', 'TRAINER', 'Wie steht Max Mustermann?');
