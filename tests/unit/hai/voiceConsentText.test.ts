@@ -38,6 +38,31 @@ describe('consent text', () => {
     expect(text).not.toContain('{region}');
   });
 
+  it('Soniox: says that the microphone stays open for the whole conversation, how it ends and that the audio flows during that time', () => {
+    const paragraphs = consentParagraphs(['soniox', 'browser'], 'eu', tDe);
+    const live = paragraphs.find(p => p.includes('ganze Gespräch'));
+    expect(live).toBe(de['hai.voice.consent.live']);
+    expect(live).toContain('auch während die HAI antwortet');
+    expect(live).toContain('unterbrechen');
+    expect(live).toContain('laufend an Soniox gesendet');
+    expect(live).toContain('Esc');
+    expect(live).toContain('Stopp');
+    expect(live).toContain('von selbst ab');
+    // the sentence comes after the one that names Soniox as the recipient
+    expect(paragraphs.indexOf(live!)).toBeGreaterThan(
+      paragraphs.findIndex(p => p.includes('direkt von Ihrem Browser'))
+    );
+  });
+
+  it('the other providers and the browser alone do not mention an open microphone', () => {
+    expect(
+      consentParagraphs(['haus', 'browser'], null, tDe).join(' ')
+    ).not.toContain('ganze Gespräch');
+    expect(consentParagraphs(['browser'], null, tDe).join(' ')).not.toContain(
+      'ganze Gespräch'
+    );
+  });
+
   it('names the region of the US when that is the region', () => {
     expect(consentParagraphs(['soniox'], 'us', tDe).join('\n')).toContain(
       'Region: USA'

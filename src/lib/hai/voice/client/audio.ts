@@ -7,6 +7,7 @@
  */
 
 import { getOutputTap } from './outputLevel';
+import { mark } from './trace';
 
 // ============================================================================
 // THE PARTS OF THE WEB AUDIO API THAT ARE USED
@@ -92,6 +93,43 @@ export function pcm16ToFloat32(
 // ============================================================================
 
 /**
+ * Lead for the playback (against stutter when the provider delivers in chunks).
+ * It starts at `base` (default 0: the first sound is not delayed) and grows only
+ * after the measurement showed an audible gap: the audio ran out before the next
+ * chunk arrived. Then the next start waits `grow` (100 ms), after the next gap
+ * twice that, up to `max` (250 ms), like damicon (0.25 s, doubled after a gap).
+ * The learned lead holds for the whole page. `base` can be set in localStorage
+ * ('hai-voice-lead', milliseconds, 0 to 250), 'off' keeps it at 0 for good.
+ */
+export const LEAD_GROW_S = 0.1;
+export const LEAD_MAX_S = 0.25;
+export const LEAD_STORAGE_KEY = 'hai-voice-lead';
+/** Smaller gaps than this are rounding errors of the audio clock, not stutter. */
+const GAP_EPSILON_S = 0.02;
+
+let learnedLead = 0;
+
+/** For tests: forget the learned lead. */
+export function resetLeadForTests(): void {
+  learnedLead = 0;
+}
+
+export function currentLeadSeconds(): number {
+  let base = 0;
+  let off = false;
+  try {
+    const raw = window.localStorage.getItem(LEAD_STORAGE_KEY);
+    if (raw === 'off') off = true;
+    else if (raw !== null && Number.isFinite(Number(raw))) {
+      base = Math.min(LEAD_MAX_S, Math.max(0, Number(raw) / 1000));
+    }
+  } catch {
+    // no storage: the default
+  }
+  return off ? 0 : Math.max(base, learnedLead);
+}
+
+/**
  * One piece of speech in the playback. Chunks of audio are pushed as they
  * arrive, `finish()` says there are no more, `fail()` that the provider could
  * not deliver it. `done` resolves when the last chunk has been played and
@@ -124,6 +162,8 @@ export class OrderedPlayback {
   private sources = new Set<AudioSourceLike>();
   private nextStart = 0;
   private cancelled = false;
+  private firstScheduled = false;
+  private started = false;
 
   constructor(private readonly ctx: AudioContextLike) {}
 
@@ -213,7 +253,29 @@ export class OrderedPlayback {
     // read only tap for the mouth of the HAI figure (outputLevel.ts), the sound is unchanged
     const tap = getOutputTap(this.ctx);
     if (tap) source.connect(tap);
-    const start = Math.max(this.ctx.currentTime, this.nextStart);
+    const now = this.ctx.currentTime;
+    // late: sound played before, and it ran out before this chunk arrived (an audible gap)
+    const late = this.started && now > this.nextStart + GAP_EPSILON_S;
+    if (late) {
+      learnedLead = Math.min(
+        LEAD_MAX_S,
+        learnedLead === 0 ? LEAD_GROW_S : learnedLead * 2
+      );
+      mark('play.gap', {
+        ms: Math.round((now - this.nextStart) * 1000),
+        lead: learnedLead,
+      });
+    }
+    let start = Math.max(now, this.nextStart);
+    // the lead holds the start back when sound starts (or starts again after a gap)
+    if (!this.started || late)
+      start = Math.max(start, now + currentLeadSeconds());
+    this.started = true;
+    if (!this.firstScheduled) {
+      this.firstScheduled = true;
+      // the state of the context tells at once if the sound cannot play (suspended)
+      mark('play.first', { ctx: this.ctx.state ?? 'unknown' });
+    }
     this.nextStart = start + buffer.duration;
     slot.playing += 1;
     this.sources.add(source);

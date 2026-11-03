@@ -126,7 +126,7 @@ Gemeinsame Dateien, nur klein und lesend: `src/lib/hai/voice/client/audio.ts` (d
 - **Nicht mit echtem Gerät geprüft:** echtes Mikrofon, echter Ton, ob der Mund bei Soniox und Sokrates zur Stimme passt (der Abgriff ist gegen einen gefälschten Analyser getestet, nicht gegen echten Ton), Safari und iOS (Audio freischalten im Tipp), das Verhalten bei eingeblendeter Bildschirmtastatur auf dem Handy. Die Fälle stehen im Testplan, Gruppe J.
 - **Browser-Stimme:** Der Mund folgt hier einem Rhythmusmuster, nicht den Silben der Stimme, weil `speechSynthesis` keinen Pegel liefert. Er ist deshalb nicht lippensynchron, er bewegt sich nur, solange gesprochen wird.
 - **Die Figur liegt über der Seite** unten links und kann dort Inhalt verdecken, auch eine seitliche Navigation. Die Leiste ist klein, die Figur lässt Klicks durch, das Kreuz beendet sie.
-- **Pegel der Aufnahme:** Der Hook nimmt einen Pegel entgegen (`onlevel` des Erkenners), das Wasser folgt ihm im Zustand "hört zu". Die Anbieter melden ihn heute noch nicht, bis dahin laufen ruhige Ringe, schneller, solange Text des Azubi eintrifft. Das Weiterreichen von `onlevel` gehört in `src/lib/hai/voice/` und ist nicht Teil dieser Änderung.
+- **Pegel der Aufnahme:** Soniox und Sokrates melden den Pegel (`onlevel`), das Wasser folgt ihm im Zustand "hört zu" (Abschnitt 12). Der Browser als Anbieter meldet ihn nicht, dort laufen ruhige Ringe, schneller, solange Text des Azubi eintrifft.
 - **Quiz-Modus:** Er läuft nicht im Sprachmodus. Startet eine gesprochene Anfrage ihn trotzdem ("Frag mich ab"), endet der Sprachmodus, der Chat öffnet sich und zeigt die Quiz-Karte.
 - Aktionskarten (Bestätigung einer Schreibaktion) erscheinen nur im Chat, nicht im Sprachmodus.
 
@@ -135,3 +135,19 @@ Gemeinsame Dateien, nur klein und lesend: `src/lib/hai/voice/client/audio.ts` (d
 Übernommen aus damicon: das Gespräch mit dem Maskottchen und den Zuständen wartet, hört zu, denkt, spricht, die Untertitel, der Chat im Hintergrund, das Weiterlaufen über Seitenwechsel, die Zustandsschrift neben der Animation. Der Grundsatz "Warum kein neuer Chat" gilt hier genauso: Der Sprachmodus benutzt denselben Chat wie das Panel, und nach dem Gespräch steht alles dort zum Nachlesen.
 
 Anders als bei damicon: Die HAI hat keinen eigenen dritten Modus auf dem Server. Die gesprochenen Regeln (`buildVoiceRules`) und der Schalter existierten schon, der Sprachmodus ist hier nur die Oberfläche. Die Figur ist neu gezeichnet, in den Farben der Marke der HAI.
+
+## 12. Dauerzuhören, Mikrofonzustand und Rückfallhinweis (03.11.2026)
+
+Mit Soniox bleibt das Mikrofon, solange der Sprachmodus läuft, für das ganze Gespräch offen (Einzelheiten, Datenschutz und Schalter: `docs/hai-sprachassistent.md`, Abschnitt 8). Die Figur und die Leiste zeigen das so:
+
+- **Zustandstext:** "HAI hört zu" erscheint erst, wenn das Mikrofon wirklich offen ist (`voice.micOpen`), vorher steht "HAI richtet das Mikrofon ein". Mit Mikrofon aus bleibt "Mikrofon ist aus".
+- **Mikrofonknopf:** pulsiert nur bei offenem Mikrofon (`data-mic-open="true"`), steht sonst still. Der Knopf schaltet das Mikrofon wie bisher aus und an (`toggleMic`, beendet das offene Mikrofon sofort).
+- **Zusatzzeile "Mikrofon offen"** (`data-testid="hai-voice-mic-open"`) steht unter dem Zustand, solange die HAI denkt oder spricht und das Mikrofon dabei offen ist: Die Person sieht, dass sie die HAI unterbrechen kann. In Runden und bei ausgeschaltetem Mikrofon fehlt sie.
+- **Unterbrechen per Stimme:** Der Zustand der Figur wechselt von "spricht" zu "hört zu", sobald die Wiedergabe gestoppt ist, die Untertitel zeigen die neue Äußerung. Ein Tipp auf die Figur oder die Hand unterbricht weiter wie bisher.
+- **Hinweise:** Im Live-Modus steht dort zusätzlich "Das Mikrofon bleibt offen, solange der Sprachmodus läuft. Sie können die HAI unterbrechen, indem Sie einfach sprechen." (`hai.voice.liveHint`).
+- **Rückfallhinweis:** Neben dem Zustand steht in Amber eine Zeile, wenn Zuhören oder Sprechen nicht über den geplanten Anbieter läuft ("Ich höre über den Browser. Der Dienst hat den Schlüssel abgelehnt."), je Funktion eine Zeile (`HaiVoiceFallbackNotice`, `data-testid="hai-voice-fallback"`). Ohne Rückfall fehlt sie.
+- **Pegel:** Das Wasser folgt dem echten Pegel der Aufnahme (`voice.level`, von Soniox über `onlevel`), solange der Zustand "hört zu" ist.
+- **Wartesatz:** Dauert die Antwort länger als drei Sekunden, sagt die HAI einmal "Einen Moment." (`waitPhrase` der Sitzung), der Satz steht nicht in den Untertiteln und nicht im Chat.
+- **Einwilligungskarte:** nennt bei Soniox zusätzlich das offene Mikrofon (`hai.voice.consent.live`).
+
+Geändert gegenüber Abschnitt 10: Der Punkt "Pegel der Aufnahme" ist erledigt (Soniox und Sokrates melden `onlevel`, `ChainedRecognition` reicht ihn durch).

@@ -57,6 +57,11 @@ export const TTS_SAMPLE_RATE = 24_000;
 export const KEY_VALID_SECONDS = 90;
 /** One recognition round (one utterance) never needs more than this. */
 export const STT_SESSION_SECONDS = 180;
+/**
+ * A recognition that stays open over the whole conversation (live mode). Soniox
+ * ends the session then; the client opens a new one with the same microphone.
+ */
+export const STT_LIVE_SESSION_SECONDS = 900;
 /** One answer read aloud never needs more than this. */
 export const TTS_SESSION_SECONDS = 600;
 /** The call to Soniox gives up after this many milliseconds. */
@@ -113,6 +118,22 @@ export function loadSonioxConfig(env: Env): SonioxConfigResult {
   };
 }
 
+/**
+ * The end of the utterance, semantic (pauses, stress, sentence structure). The
+ * ranges are those of the Soniox documentation (checked 03.11.2026, only the
+ * model v5 knows the two adjustments): max delay 500 to 3000 ms (default 2000),
+ * sensitivity -1 to 1 (default 0), latency level 0 to 3 (default 0). Soniox names
+ * level 2, sensitivity 0.3 and 1500 ms as a start for voice assistants and says
+ * to tune with real conversations. A cut that is too early is the risk (the
+ * loop answers at the first endpoint), so we start more careful: level 1,
+ * sensitivity 0.2, at most 1000 ms. Measured in the browser as time A (trace.ts).
+ */
+export const STT_ENDPOINT = Object.freeze({
+  endpoint_latency_adjustment_level: 1,
+  endpoint_sensitivity: 0.2,
+  max_endpoint_delay_ms: 1_000,
+});
+
 /** What the browser sends first to the recognition websocket (the key goes in the handshake). */
 export function sttSessionConfig() {
   return {
@@ -120,7 +141,7 @@ export function sttSessionConfig() {
     audio_format: 'auto' as const,
     language_hints: ['de'],
     enable_endpoint_detection: true,
-    max_endpoint_delay_ms: 1_500,
+    ...STT_ENDPOINT,
     // Words the model would otherwise mishear. They weigh, they do not restrict.
     context: {
       general: [
@@ -187,7 +208,8 @@ export async function createSonioxToken(
   config: SonioxConfig,
   purpose: SonioxPurpose,
   clientReference: string,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  options: { live?: boolean } = {}
 ): Promise<SonioxTokenResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TOKEN_TIMEOUT_MS);
@@ -204,7 +226,11 @@ export async function createSonioxToken(
           usage_type: purpose === 'stt' ? 'transcribe_websocket' : 'tts_rt',
           expires_in_seconds: KEY_VALID_SECONDS,
           max_session_duration_seconds:
-            purpose === 'stt' ? STT_SESSION_SECONDS : TTS_SESSION_SECONDS,
+            purpose === 'stt'
+              ? options.live
+                ? STT_LIVE_SESSION_SECONDS
+                : STT_SESSION_SECONDS
+              : TTS_SESSION_SECONDS,
           client_reference_id: clientReference.slice(0, 256),
         }),
         signal: controller.signal,

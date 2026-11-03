@@ -13,7 +13,14 @@
 import { authFetch } from '@/lib/authFetch';
 import type { AudioContextLike } from './audio';
 import type { VoiceClientDeps } from './engine';
-import type { MediaStreamLike, RecorderLike, TokenGrant } from './soniox';
+import type {
+  MediaStreamLike,
+  MicProfile,
+  RecorderLike,
+  TokenGrant,
+} from './soniox';
+import { createTokenStore, type TokenPurpose } from './tokenStore';
+import { mark } from './trace';
 import { ProviderUnavailableError, type VoiceConfig } from './types';
 import { VOICE_FUNCTIONS, VOICE_PROVIDERS } from '../settings';
 
@@ -90,23 +97,95 @@ function recorderOptions(): MediaRecorderOptions | undefined {
   return supported ? { mimeType: supported } : undefined;
 }
 
+/** localStorage key to switch the microphone back to the processed signal (diagnosis). */
+export const MIC_PROFILE_KEY = 'hai-voice-mic';
+
+/**
+ * The microphone for the recognition on Soniox.
+ *
+ *  - `raw`: the recording the model was trained on and what the official web
+ *    SDK asks for: no echo cancellation, no noise suppression (they cut off the
+ *    start of syllables and quiet sounds), automatic gain on (quiet speakers),
+ *    one channel, 16 kHz as a wish (many browsers record with 48 kHz anyway, the
+ *    container tells Soniox). For one round at a time: the microphone is off
+ *    while the assistant speaks, so its own voice cannot come back in.
+ *  - `live`: for the microphone that stays open while the assistant speaks
+ *    (interrupting by voice). The echo cancellation MUST be on, otherwise the
+ *    assistant hears itself and interrupts itself. The noise suppression stays
+ *    off (it is what cuts syllables), the automatic gain on.
+ *  - `processed`: the browser's own treatment, echo and noise (Sokrates).
+ *
+ * `override` is the value of localStorage['hai-voice-mic'] ('raw', 'live' or
+ * 'processed'): it replaces the profile of the recognition on Soniox, to compare
+ * the settings on a device. The Sokrates recognition keeps `processed`.
+ */
+export function micConstraints(
+  profile: MicProfile = 'raw',
+  override?: string | null
+): MediaTrackConstraints {
+  const wanted: MicProfile =
+    profile !== 'processed' &&
+    (override === 'raw' || override === 'live' || override === 'processed')
+      ? override
+      : profile;
+  if (wanted === 'processed') {
+    return { channelCount: 1, echoCancellation: true, noiseSuppression: true };
+  }
+  return {
+    channelCount: 1,
+    sampleRate: { ideal: 16_000 },
+    echoCancellation: wanted === 'live',
+    noiseSuppression: false,
+    autoGainControl: true,
+  };
+}
+
+function readMicOverride(): string | null {
+  try {
+    return window.localStorage.getItem(MIC_PROFILE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** A short stable word of what the key route answered, for the reason of a fallback. */
+function tokenFailureDetail(data: unknown): string {
+  const reason = (data as { reason?: unknown } | null)?.reason;
+  return typeof reason === 'string'
+    ? `-${reason
+        .toLowerCase()
+        .replace(/[^a-z_]/g, '')
+        .slice(0, 24)}`
+    : '';
+}
+
 /** The real parts of the cloud providers. Create it in the browser only. */
 export function createCloudDeps(): VoiceClientDeps {
   let context: AudioContextLike | null = null;
 
-  return {
-    async fetchToken(purpose): Promise<TokenGrant> {
+  async function fetchFreshToken(purpose: TokenPurpose): Promise<TokenGrant> {
+    {
       let res: Response;
       try {
         res = await authFetch('/api/hai/voice/soniox-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ purpose }),
+          body: JSON.stringify({
+            purpose: purpose === 'tts' ? 'tts' : 'stt',
+            // a recognition that stays open over the conversation needs a longer session
+            ...(purpose === 'stt-live' ? { live: true } : {}),
+          }),
         });
       } catch {
         throw new ProviderUnavailableError('token-network');
       }
-      if (!res.ok) throw new ProviderUnavailableError(`token-${res.status}`);
+      if (!res.ok) {
+        // the reason of the server (no key, refused, region ...) rides along
+        const body = await res.json().catch(() => null);
+        throw new ProviderUnavailableError(
+          `token-${res.status}${tokenFailureDetail(body)}`
+        );
+      }
       const data = (await res
         .json()
         .catch(() => null)) as Partial<TokenGrant> | null;
@@ -126,6 +205,37 @@ export function createCloudDeps(): VoiceClientDeps {
         expiresInSeconds: Number(data.expiresInSeconds) || 0,
         config: data.config,
       };
+    }
+  }
+
+  // a key for each purpose is fetched ahead of its use (one key per connection)
+  const tokens = createTokenStore(fetchFreshToken);
+
+  return {
+    fetchToken: purpose => tokens.take(purpose),
+
+    prefetchToken(purpose) {
+      tokens.prefetch(purpose);
+    },
+
+    warmServer() {
+      // the route pings Sokrates with a time limit and answers { warmed, ms }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5_000);
+      void authFetch('/api/hai/voice/warmup', {
+        method: 'POST',
+        signal: controller.signal,
+      })
+        .then(res => res.json().catch(() => null))
+        .then(data => {
+          const result = data as { warmed?: unknown; ms?: unknown } | null;
+          mark('server.warm', {
+            warmed: result?.warmed === true,
+            ms: typeof result?.ms === 'number' ? result.ms : -1,
+          });
+        })
+        .catch(() => undefined)
+        .finally(() => clearTimeout(timer));
     },
 
     async transcribe(audio) {
@@ -172,14 +282,12 @@ export function createCloudDeps(): VoiceClientDeps {
       return socket as unknown as ReturnType<VoiceClientDeps['createSocket']>;
     },
 
-    async getUserMedia(): Promise<MediaStreamLike> {
-      return navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      });
+    async getUserMedia(
+      profile: MicProfile = 'processed'
+    ): Promise<MediaStreamLike> {
+      return (await navigator.mediaDevices.getUserMedia({
+        audio: micConstraints(profile, readMicOverride()),
+      })) as unknown as MediaStreamLike;
     },
 
     createRecorder(stream): RecorderLike {

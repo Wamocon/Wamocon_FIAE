@@ -66,10 +66,15 @@ async function load(voiceEnabled: boolean, pro = true) {
     intent: 'question',
     citations: [],
   }));
+  const processMessageStream = jest.fn(async (..._args: unknown[]) => ({
+    response: 'Antwort',
+    intent: 'question',
+    citations: [],
+  }));
   jest.doMock('@/lib/hai', () => ({
     __esModule: true,
     processMessage,
-    processMessageStream: jest.fn(),
+    processMessageStream,
   }));
   jest.doMock('@/lib/hai/providers', () => ({
     __esModule: true,
@@ -78,7 +83,7 @@ async function load(voiceEnabled: boolean, pro = true) {
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   const mod = (await import('@/app/api/hai/chat/route')) as any;
-  return { mod, processMessage, isVoiceAssistantEnabled };
+  return { mod, processMessage, processMessageStream, isVoiceAssistantEnabled };
 }
 
 const post = (body: Record<string, unknown>) =>
@@ -153,5 +158,73 @@ describe('HAI chat route: spoken questions', () => {
     );
     expect(res.status).toBe(200);
     expect((processMessage.mock.calls[0][1] as any).voice).toBe(false);
+  });
+
+  describe('the timing of a spoken question', () => {
+    const doneEvent = (text: string) =>
+      JSON.parse(
+        text
+          .split(String.fromCharCode(10))
+          .filter(line => line.startsWith('data: '))
+          .map(line => line.slice(6))
+          .find(line => line.includes('"done"'))!
+      );
+
+    it('says the time before the stream in the Server-Timing header and all stages with the done event', async () => {
+      const { mod, processMessageStream } = await load(true);
+      processMessageStream.mockImplementation(async (...args: unknown[]) => {
+        const context = args[1] as { timings?: Record<string, number> };
+        const onChunk = args[2] as (text: string) => void;
+        // the pipeline reports the search into the object the route handed over
+        if (context.timings) context.timings.search = 42;
+        onChunk('Hallo. ');
+        return { response: 'Hallo.', intent: 'question', citations: [] };
+      });
+      const res = await mod.POST(post({ voice: true, stream: true }));
+      expect(res.status).toBe(200);
+      expect(res.headers.get('server-timing')).toMatch(
+        /^auth;dur=\d+, prep;dur=\d+$/
+      );
+      const done = doneEvent(await res.text());
+      expect(Object.keys(done.timing).sort()).toEqual(
+        ['auth', 'first', 'prep', 'search', 'total'].sort()
+      );
+      expect(done.timing.search).toBe(42);
+      // numbers only: no text, no id, no key
+      for (const value of Object.values(done.timing)) {
+        expect(typeof value).toBe('number');
+      }
+      expect(done.timing.total).toBeGreaterThanOrEqual(done.timing.first);
+    });
+
+    it('leaves out the first token when no text came', async () => {
+      const { mod, processMessageStream } = await load(true);
+      processMessageStream.mockImplementation(async () => ({
+        response: '',
+        intent: 'question',
+        citations: [],
+      }));
+      const res = await mod.POST(post({ voice: true, stream: true }));
+      const done = doneEvent(await res.text());
+      expect(done.timing).not.toHaveProperty('first');
+      expect(done.timing).toHaveProperty('total');
+    });
+
+    it('a typed question gets no timing at all, neither header nor event', async () => {
+      const { mod, processMessageStream } = await load(true);
+      processMessageStream.mockImplementation(async (...args: unknown[]) => {
+        (args[2] as (text: string) => void)('Hallo. ');
+        return { response: 'Hallo.', intent: 'question', citations: [] };
+      });
+      const res = await mod.POST(post({ stream: true }));
+      expect(res.headers.get('server-timing')).toBeNull();
+      const done = doneEvent(await res.text());
+      expect(done).not.toHaveProperty('timing');
+      const context = processMessageStream.mock.calls[0][1] as Record<
+        string,
+        unknown
+      >;
+      expect(context.timings).toBeUndefined();
+    });
   });
 });

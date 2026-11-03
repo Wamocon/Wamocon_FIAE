@@ -135,6 +135,11 @@ export interface PipelineContext {
    */
   voice?: boolean;
   /**
+   * Filled by the pipeline with the time (ms) of its stages, only read by the chat
+   * route for the timing of the voice assistant (numbers, no content).
+   */
+  timings?: Record<string, number>;
+  /**
    * The person holds an admin level (SUPER_ADMIN, ADMIN, TEMP_ADMIN). Set by the
    * chat route from the session, only used to pick the admin pages for the
    * navigation, never taken from a message.
@@ -1110,6 +1115,7 @@ export async function processMessageStream(
     let retrievedContext = '';
     let usedTrainerSolutions: boolean | undefined;
 
+    const searchStartedAt = Date.now();
     if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
       // Same retrieval as processMessage: scoped to the user
       ({ searchResults, retrievedContext, usedTrainerSolutions } =
@@ -1144,6 +1150,9 @@ export async function processMessageStream(
         );
       }
     }
+
+    // retrieval and live data are done: the model call is what is left to wait for
+    if (context.timings) context.timings.search = Date.now() - searchStartedAt;
 
     // What the pipeline knows about a limit of access (denial.ts)
     const accessReasons = detectAccessReasons({

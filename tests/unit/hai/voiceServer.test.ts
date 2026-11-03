@@ -16,8 +16,12 @@ import {
   resolveChain,
 } from '@/lib/hai/voice/provider';
 import {
+  STT_ENDPOINT,
+  STT_LIVE_SESSION_SECONDS,
+  STT_SESSION_SECONDS,
   createSonioxToken,
   loadSonioxConfig,
+  sttSessionConfig,
   ttsStreamConfig,
 } from '@/lib/hai/voice/sonioxServer';
 import {
@@ -182,6 +186,54 @@ describe('Soniox configuration', () => {
   });
 });
 
+describe('the end of the utterance (endpoint detection) of the recognition', () => {
+  // ranges of the Soniox documentation (checked 03.11.2026, the two adjustments
+  // exist only for the model v5): max delay 500 to 3000 ms, sensitivity -1 to 1,
+  // latency level 0 to 3
+  it('sends the endpoint detection with careful values inside the documented ranges', () => {
+    const config = sttSessionConfig();
+    expect(config.enable_endpoint_detection).toBe(true);
+    expect(config.model).toBe('stt-rt-v5');
+    expect(config.endpoint_latency_adjustment_level).toBe(1);
+    expect(config.endpoint_sensitivity).toBe(0.2);
+    expect(config.max_endpoint_delay_ms).toBe(1_000);
+  });
+
+  it('keeps every value inside the limits of the service', () => {
+    expect(STT_ENDPOINT.max_endpoint_delay_ms).toBeGreaterThanOrEqual(500);
+    expect(STT_ENDPOINT.max_endpoint_delay_ms).toBeLessThanOrEqual(3_000);
+    expect(STT_ENDPOINT.endpoint_sensitivity).toBeGreaterThanOrEqual(-1);
+    expect(STT_ENDPOINT.endpoint_sensitivity).toBeLessThanOrEqual(1);
+    expect(
+      STT_ENDPOINT.endpoint_latency_adjustment_level
+    ).toBeGreaterThanOrEqual(0);
+    expect(STT_ENDPOINT.endpoint_latency_adjustment_level).toBeLessThanOrEqual(
+      3
+    );
+    expect(
+      Number.isInteger(STT_ENDPOINT.endpoint_latency_adjustment_level)
+    ).toBe(true);
+  });
+
+  it('is more careful than the recommendation for voice assistants (2, 0.3, 1500): a cut that is too early costs more', () => {
+    expect(STT_ENDPOINT.endpoint_latency_adjustment_level).toBeLessThanOrEqual(
+      2
+    );
+    expect(STT_ENDPOINT.endpoint_sensitivity).toBeLessThanOrEqual(0.3);
+    // never a negative sensitivity together with a level above 0 (the service advises against it)
+    expect(
+      STT_ENDPOINT.endpoint_sensitivity < 0 &&
+        STT_ENDPOINT.endpoint_latency_adjustment_level > 0
+    ).toBe(false);
+  });
+
+  it('asks for the container format of the recorder, never raw audio, and carries no key', () => {
+    const config = sttSessionConfig();
+    expect(config.audio_format).toBe('auto');
+    expect(JSON.stringify(config)).not.toMatch(/api_key|sample_rate/);
+  });
+});
+
 describe('Soniox short lived key', () => {
   const config = (() => {
     const result = loadSonioxConfig({ SONIOX_API_KEY: SECRET });
@@ -197,6 +249,37 @@ describe('Soniox short lived key', () => {
           headers: { 'content-type': 'application/json' },
         })
     );
+
+  it('the live mode gets a longer session than a round, speaking is not affected', async () => {
+    const sessionOf = async (
+      purpose: 'stt' | 'tts',
+      options?: { live?: boolean }
+    ) => {
+      const fetchMock = answer(201, { api_key: 'temp-key' });
+      await createSonioxToken(
+        config,
+        purpose,
+        'hai-voice:u1',
+        fetchMock as unknown as typeof fetch,
+        options
+      );
+      const calls = fetchMock.mock.calls as unknown as Array<
+        [string, { body: string }]
+      >;
+      return JSON.parse(calls[0][1].body).max_session_duration_seconds;
+    };
+    expect(await sessionOf('stt')).toBe(STT_SESSION_SECONDS);
+    expect(await sessionOf('stt', { live: false })).toBe(STT_SESSION_SECONDS);
+    expect(await sessionOf('stt', { live: true })).toBe(
+      STT_LIVE_SESSION_SECONDS
+    );
+    expect(STT_LIVE_SESSION_SECONDS).toBeGreaterThan(STT_SESSION_SECONDS);
+    // the service allows up to 18000 seconds
+    expect(STT_LIVE_SESSION_SECONDS).toBeLessThanOrEqual(18_000);
+    expect(await sessionOf('tts', { live: true })).not.toBe(
+      STT_LIVE_SESSION_SECONDS
+    );
+  });
 
   it('asks Soniox for a key for one websocket and hands out only that key', async () => {
     const fetchMock = answer(201, {

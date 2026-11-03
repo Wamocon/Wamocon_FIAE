@@ -91,6 +91,11 @@ export interface PieceEngine {
   readonly id: 'soniox' | 'haus' | 'browser';
   /** Speak the piece after the pieces before. Resolves when it was spoken, rejects when the provider failed. */
   speak(text: string): Promise<void>;
+  /**
+   * An answer is coming: open the connection already (optional). Must not start
+   * anything audible and must be safe to call more than once.
+   */
+  warm?(): void;
   /** Stop everything at once. */
   cancel(): void;
   /** Everything was spoken: release connections. */

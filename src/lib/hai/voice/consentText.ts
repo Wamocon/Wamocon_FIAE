@@ -34,6 +34,8 @@ export function consentParagraphs(
     t(`hai.voice.consent.provider.${id}`, { region: regionLabel });
   const [first, ...rest] = chain;
   const paragraphs = [t('hai.voice.consent.intro'), describe(first)];
+  // Soniox keeps the microphone open for the whole conversation (live mode)
+  if (chain.includes('soniox')) paragraphs.push(t('hai.voice.consent.live'));
   if (rest.length > 0) {
     paragraphs.push(t('hai.voice.consent.fallback'));
     for (const id of rest) paragraphs.push(describe(id));

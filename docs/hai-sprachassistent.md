@@ -137,7 +137,7 @@ Alle Routen verlangen eine angemeldete Person und den Schalter der Organisation 
 ## 6. Bekannte Grenzen und Folgearbeit
 
 - Die Schlüsselwörter der älteren Datenabsichten (Fortschritt, Kalender, Prüfung) sind ohne Umlaute geschrieben und erkennen "Prüfung" mit Umlaut nicht. Der Tagesbegleiter vereinheitlicht Umlaute nur für seine eigenen Wörter, damit sich das Verhalten des Chats nicht ändert. Wer das für den Sprachweg verbessern will, braucht ein eigenes Paket mit neuer Messung.
-- Kein Hineinsprechen, während die HAI spricht (das Mikrofon ist dann aus, wegen des Echos). Unterbrechen geht per Tipp.
+- Hineinsprechen: Mit Soniox unterbricht die Stimme die HAI (Abschnitt 8), mit Sokrates und dem Browser als Anbieter der Erkennung bleibt es beim Tipp, das Mikrofon ist dort während der Antwort aus.
 - Mit dem Anbieter Browser ist die Stimme die des Betriebssystems (lokale deutsche Stimme bevorzugt), mit Soniox die Stimme `Lena` (klanglich noch nicht mit Muttersprachlern geprüft), mit Sokrates die Stimme, die `HAI_TTS_HAUS_VOICE` nennt.
 - Soniox und der Rückfall sind bisher nur mit nachgebildeten Verbindungen getestet. Der erste Lauf mit echtem Schlüssel in der Preview ist der erste echte Test (Testplan E14 bis E16).
 - Beim Wechsel des Anbieters mitten in einer Antwort wird der Satz, der gerade lief, noch einmal gesprochen. Der Zustand "gestört" liegt im Speicher je Serverinstanz, mehrere Instanzen können kurz verschieden urteilen. Die Störung gilt je Anbieter und Funktion. Ein Fehler beim Schlüssel für das Zuhören sagt nichts über die Sprachausgabe desselben Anbieters, deren Zustand zeigt sich erst bei ihrem eigenen Aufruf (der Browser weicht dann im Gespräch selbst aus).
@@ -166,6 +166,115 @@ Anlass (02.11.2026, Preview): Auf "Was steht für mich an?" antwortete die HAI "
 **Fortschritt je Beruf:** Hat die Person mehrere Berufe, steht der Fortschritt je Beruf da, der im Reiter der App gewählte Beruf (Header `x-catalog`, `PipelineContext.preferredCatalogCode`) zuerst und als "gewählter Beruf" gekennzeichnet. Die Wahl ändert nur die Reihenfolge. Es werden nur die Berufe gelesen, die die Person hat (Katalog-Scope), ein fremder Code wird ignoriert. Die Tageslage selbst ist berufsübergreifend (Beschluss des Product Owners).
 
 **Prompt:** Der Abschnitt "Tageslage (Tagesbegleiter)" (`buildDayBriefingRules`) kommt bei jeder Tagesfrage dazu, auch getippt: höchstens drei Punkte, Dringendes zuerst, danach Fortschritt und nächster Schritt, Leeres konkret benennen, genau eine Frage am Ende, nichts erfinden. Gesprochen gilt zusätzlich der Sprachabschnitt (kurz, ohne Markup), die Eröffnungsfrage des Tages ist unverändert.
+
+## 8. Dauerzuhören, Unterbrechen, Messung und Rückfallanzeige (03.11.2026)
+
+Anlass: Im Test der Preview hörte die HAI beim Gespräch nichts, und die Stimme begann erst sehr versetzt, die Antwort vorzulesen. Die Recherche steht in `docs/hai-sprachmodus-recherche.md`, die Umsetzung hier. Gewinne sind erst belegt, wenn die Messpunkte (unten) in der Preview Zahlen geliefert haben. Gemessen ist bisher nur, was das Prüfwerkzeug unter "Messwerte" zeigt.
+
+### Dauerzuhören (Live-Modus) und Datenschutz
+
+Mit Soniox als Anbieter der Erkennung bleibt die Erkennung über das ganze Gespräch offen, **und das Mikrofon bleibt geöffnet, solange der Sprachmodus läuft, auch während die HAI antwortet.** Der Ton wird in dieser Zeit laufend an Soniox gesendet (Soniox rechnet die volle Streamdauer ab). Der Browser zeigt die Aufnahme dauerhaft an. Das gilt nur innerhalb des laufenden Sprachmodus und endet sofort bei "Stopp" oder "Sprachmodus beenden", Esc, dem Kreuz, "Mikrofon ausschalten", dem Verlassen der Seite und nach drei stillen Runden (dreimal 8 Sekunden ohne Wort im Zustand "hört zu", die Zeit, in der die HAI denkt oder spricht, zählt nicht).
+
+Der Einwilligungstext sagt das ausdrücklich (`hai.voice.consent.live`, nur wenn Soniox in der Kette ist). Wer vor dieser Änderung für Soniox eingewilligt hat, wird **erneut gefragt**: Die Einwilligung für das offene Mikrofon ist eine Marke `live` in der Liste der Einwilligung (`hai-voice-consent-v2:<Benutzer>`). Ohne die Marke gilt die Einwilligung nicht, sobald Soniox in der Kette ist und der Live-Modus an ist. Der Widerruf löscht die Marke mit.
+
+Zurück zu Runden (Mikrofon aus, solange die HAI spricht): `localStorage.setItem('hai-voice-live', 'off')`. Dann gilt die alte Einwilligung wieder. Sokrates und der Browser arbeiten immer in Runden, nur Soniox bleibt offen.
+
+Technik: `SonioxRecognition` mit `continuous = true`. Jedes Ende einer Äußerung (Endpunkterkennung, Token `<end>`) liefert `onutterance(text)`, die Aufnahme geht weiter, es wird kein leerer Textframe gesendet. Der Schlüssel für diesen Strom hat 900 Sekunden Sitzung (`STT_LIVE_SESSION_SECONDS`, Soniox erlaubt bis 18000), die Route `soniox-token` nimmt dafür `live: true`. Beendet Soniox die Sitzung (Limit des Schlüssels, Abbruch), öffnet der Client mit demselben Mikrofon eine neue (bis zu dreimal hintereinander), erst dann ist es ein Ausfall. Ein Ausfall einer laufenden Sitzung beendet die Runde, die Schleife öffnet die nächste Erkennung erst nach der Antwort (Rückfall auf den Browser), nie unter der Stimme der HAI.
+
+### Unterbrechen per Stimme
+
+Spricht die Person, während die HAI denkt oder spricht, stoppt die Wiedergabe sofort, die laufende Chat-Antwort wird abgebrochen (`stopGeneration`, der `AbortController` des Chats, der Strom wird nicht weitergelesen, was danach noch ankommt, wird nicht vorgelesen) und die neue Äußerung wird als nächste Frage verarbeitet. Damit die HAI sich nicht selbst hört:
+
+1. **Echounterdrückung an** (Profil `live` in `micConstraints`): Ohne sie würde die HAI ihre eigene Stimme hören und sich ständig unterbrechen. Die **Rauschunterdrückung bleibt aus**, weil sie nach dem offiziellen Soniox-SDK und nach den Erfahrungen von damicon Silbenanfänge und leise Laute abschneidet. Automatische Pegelregelung an (leise Sprecher). Das ist eine Begründung aus Quellen, keine eigene Messung: Der Befund am Gerät steht aus (Testplan E31).
+2. **Schwelle:** Eine Unterbrechung zählt erst bei mindestens zwei erkannten Wörtern, oder bei einem Wort und einer Mindestlautstärke der Aufnahme (`BARGE_IN_LEVEL` 0,2). Rauschen liefert kein Wort und löst nichts aus.
+3. **Eigene Stimme filtern:** Besteht die erkannte Äußerung nur aus Wörtern, die die HAI in dieser Antwort selbst gesagt hat (auch dem Wartesatz), ist es ihr Echo und keine Unterbrechung. Dasselbe gilt für Äußerungen in den 2,5 Sekunden nach dem Ende der Stimme (`ECHO_WINDOW_MS`).
+4. Eine Äußerung während der Antwort, die diese Schwelle nicht erreicht, wird verworfen und nicht als Frage gesendet.
+
+Einstellbar am Gerät: `localStorage['hai-voice-mic']` = `raw` (alles aus, nur mit Kopfhörern sinnvoll), `live` (Standard im Dauerbetrieb), `processed` (Echo- und Rauschunterdrückung, zum Vergleich). Der Wert ersetzt das Profil der Erkennung auf Soniox, Sokrates behält `processed`. Hilft das nicht gegen Selbsthören, ist das ein Befund für Testplan E31, nicht ein Grund, die Echounterdrückung abzuschalten.
+
+### Mikrofon wie im offiziellen SDK (Runden) und Pegel
+
+In Runden (Live-Modus aus) nimmt die Erkennung auf Soniox roh auf: `echoCancellation: false`, `noiseSuppression: false`, `autoGainControl: true`, ein Kanal, 16 kHz als Wunsch, Zeitscheibe 100 ms (vorher 250 ms; SDK 60, damicon 100). Das Echo der eigenen Stimme spielt dort keine Rolle, das Mikrofon ist während der Wiedergabe aus, und das Mikrofon der nächsten Runde öffnet 150 ms nach dem Ende der Stimme (`AFTER_ANSWER_MS`, nur bei der Erkennung von Soniox, der Browser bringt seine eigene Echounterdrückung mit).
+
+Der Pegel der Aufnahme (RMS, auf 0 bis 1 skaliert, alle 100 ms) geht über `onlevel` bis in die Figur. Die Anzeige "HAI hört zu" erscheint erst, wenn das Mikrofon offen ist (`onaudiostart`, bis dahin "HAI richtet das Mikrofon ein"). Der Hook gibt `micOpen` und `live` zurück.
+
+**Format der Aufnahme geprüft:** Die Erkennung bekommt den Container des Browsers (`MediaRecorder`, webm/opus, in Safari sonst mp4) mit `audio_format: auto`. Laut Soniox-Dokumentation (03.11.2026) erkennt `auto` aac, aiff, amr, asf, flac, mp3, ogg, wav und webm. **mp4 steht dort nicht**, damicon nennt mp4 für das iPhone als Praxis ("wie das offizielle SDK"). Das ist am Gerät zu prüfen (Messpunkt `stt.audio.first` nennt Container und Größe). webm/opus ist belegt: Das Prüfwerkzeug sendet genau diesen Weg an Soniox (siehe Messwerte).
+
+### Endpunkterkennung (Parameter)
+
+`sttSessionConfig()` sendet `endpoint_latency_adjustment_level: 1`, `endpoint_sensitivity: 0.2`, `max_endpoint_delay_ms: 1000` (vorher nur `max_endpoint_delay_ms: 1500`). Grenzen laut Soniox-Dokumentation (nur Modell v5): Stufe 0 bis 3, Empfindlichkeit -1 bis 1, Wartezeit 500 bis 3000 ms. Soniox empfiehlt für Sprachassistenten Stufe 2, Empfindlichkeit 0,3, 1500 ms und rät, mit echten Gesprächen nachzustellen. Wir starten vorsichtiger, weil ein zu früher Schnitt schwerer wiegt als eine halbe Sekunde (die Schleife antwortet am ersten Endpunkt). Gemessen wird Zeit A (Endpunktwartezeit) und die Zahl der abgeschnittenen Fragen, danach Stufe 2 probieren (`STT_ENDPOINT` in `sonioxServer.ts`).
+
+### Sprachausgabe vorwärmen, Schlüsselvorrat, Grenzen, Neuversuch
+
+- **Vorwärmen:** Beim Absenden einer Frage entsteht der Sprecher sofort und öffnet die Verbindung zu Soniox (`warm()`), noch bevor das Modell den ersten Satz geschrieben hat. Es wird kein Strom ohne Text geöffnet (Soniox beendet ihn nach wenigen Sekunden). Bleibt die Verbindung 20 Sekunden ungenutzt, schließt sie sich wieder und der nächste Satz öffnet sie neu, das ist kein Ausfall (`WARM_IDLE_MS`).
+- **Schlüsselvorrat** (`tokenStore.ts`): Der Kurzzeit-Schlüssel wird vorab geholt (beim Start für Zuhören und Sprechen, beim Absenden für die nächste Runde) und **höchstens einmal ausgegeben**. Das Prüfwerkzeug zeigt, dass Soniox einen Schlüssel in seiner Laufzeit auch für eine zweite Verbindung annimmt, trotzdem bleibt es bei einem Schlüssel je Verbindung, weil eine abgelehnte zweite Verbindung ein stiller Rückfall wäre. Ein Schlüssel wird in seinen letzten 15 Sekunden nicht mehr benutzt.
+- **Warmlauf des Servers:** Beim Start und nach jeder Antwort ruft der Client `POST /api/hai/voice/warmup`. Die Route pingt `GET <Sokrates>/models` (3 Sekunden Frist, 20 Aufrufe je Minute und Person), ohne Inhalt, ohne Sitzung, ohne Kosten für Fremdanbieter. Läuft Chat und Suche nicht auf Sokrates, tut sie nichts. Die Wirkung auf die Chat-Route ist **nicht belegt** (andere Serverinstanz möglich), sie zeigt sich in der Server-Zeit `search` und `first`.
+- **Grenzen:** höchstens zwei gleichzeitige Sprach-Ströme (das Konto erlaubt drei über alle Verbindungen und Anwendungen). Meldet Soniox für einen Satz das Limit (Code 429 oder ein Typ mit "concurrent" oder "limit"), wird der Satz nach 400 ms einmal mit neuer Strom-Kennung wiederholt, bevor die Kette den Anbieter wechselt. Der genaue Fehlertyp für das Kontolimit ist nicht dokumentiert, der Messpunkt `tts.error` und `stt.error` hält ihn fest.
+- **Zeitlimits:** Der Schlüssel und die Verbindung haben je 8 Sekunden (`CONNECT_MS`), danach gilt der Anbieter als nicht erreichbar (Grund `token-timeout`, `stt-connect-timeout`, `tts-connect-timeout`). Vorher hing die Oberfläche bei "hört zu", wenn der Schlüssel nicht kam.
+- **Neuversuch:** Ein kurzer Abbruch (nicht eine Ablehnung des Schlüssels, keine fehlende Einrichtung, keine Region, keine Organisation) bekommt einen Neuversuch nach 500 ms mit neuer Verbindung, erst der zweite Fehler führt zum Rückfall. Das gilt je Runde der Erkennung und je Antwort der Sprachausgabe.
+
+### Jitter-Vorlauf der Wiedergabe
+
+Standard 0 (der erste Ton wird nicht verzögert). Zählt der Messpunkt eine hörbare Lücke (die Aufnahme lief aus, bevor das nächste Stück kam, `play.gap`), wartet der nächste Start 100 ms, nach der nächsten Lücke 200, höchstens 250 ms (wie damicon), der gelernte Wert gilt für die ganze Seite. Am Gerät einstellbar: `localStorage['hai-voice-lead']` in Millisekunden (0 bis 250) als Grundwert, `off` für nie. Begründung für 0: Soniox liefert die Sprache in Stücken, ob das Aussetzer erzeugt, ist ungemessen, und ein fester Vorlauf verlängert die Wartezeit, die wir verkürzen wollen.
+
+### Wartesatz und erster Satz
+
+Kommt drei Sekunden nach dem Absenden kein Stück der Antwort, sagt die HAI einmal "Einen Moment." (`hai.voice.wait`, über den Sprecher, nicht in den Untertiteln und nicht im Chat, nie zweimal je Antwort, nicht nach Unterbrechen oder Stopp). Der Prompt für Gesprochenes verlangt, dass der erste Satz höchstens zwölf Wörter hat und die Frage in der Sache beantwortet, damit die Stimme früh beginnt. **Der Lauf des Golden Sets im Sprachweg (`HAI_GOLDEN_VOICE=yes`) steht aus**, weil der Prompt die Antwortqualität berührt.
+
+### Messpunkte
+
+Schalter: `localStorage.setItem('hai-voice-trace', '1')` und die Seite neu laden (aus: `removeItem`). Dann schreibt der Client `[hai-voice]`-Zeilen in die Konsole und setzt `performance.mark`. `haiVoiceTrace()` in der Konsole liefert alle Einträge. Aufgenommen werden nur Zeiten, Zähler, Anbieter-Kennungen, Zustände und Fehlercodes, **nie** Text, Transkript, Schlüssel oder Adresse (die Felder sind Zahlen, Wahrheitswerte und kurze Zeichenketten aus Buchstaben, Ziffern und `_ . : -`, alles andere wird verworfen, getestet).
+
+| Zeit | Von bis | Bedeutung |
+|---|---|---|
+| A | `stt.interim.first` bis `stt.endpoint` | Endpunktwartezeit (grob) |
+| B | `submit` bis `chat.first.text` | Server bis zum ersten Text, in Teilen: `chat.server.header` (auth, prep) und `chat.server` (auth, prep, search, first, total, ms) |
+| C | `chat.first.text` bis `piece.first` | Zerlegung in Sätze |
+| D | `piece.first` bis `play.first` | **Die Zahl für "Stimme beginnt versetzt"** |
+| E | `listen.start` bis `stt.interim.first` | Hörstart bis zum ersten Wort |
+| F, G | `stt.token.start` bis `.end`, `tts.token.start` bis `.end` | Schlüssel (nahe 0, wenn vorgehalten) |
+| H | `tts.ws.start` bis `tts.ws.open` | Sprach-Websocket (nahe 0, wenn vorgewärmt) |
+| I | `piece.first` bis `tts.audio.first` | erster Satz bis erstes Audio von Soniox |
+
+Weitere Marken: `start`, `audio.unlock` (Zustand des AudioContext), `stt.mic.ready` (tatsächliche Einstellungen des Mikrofons: Abtastrate, Echo, Rauschen, Pegelregelung, `muted`, `readyState`, Zustand des AudioContext), `stt.recorder.start` und `stt.audio.first` (Container, Codec, Größe), `stt.ws.open` (wie viele Stücke warteten), `stt.end` (**gesendete Stücke und Bytes, Spitzenpegel**: Beweis, dass Ton gesendet wird, `sentChunks` 0 bei gesprochener Frage wäre der Fehler), `stt.restart`, `stt.utterance`, `barge-in`, `utterance.ignored`, `listen.silent`, `play.gap`, `wait.phrase`, `server.warm`.
+
+**Rückfallgründe** stehen in der Marke `fallback` (Funktion, von, nach, Kategorie, Code): `key-refused` (Schlüssel abgelehnt, 401 oder 400), `organization` (403 oder 402), `limit` (429, Kontolimit), `region` (Region passt nicht), `not-configured` (kein Schlüssel auf dem Server), `timeout`, `network`, `unavailable`. Dazu `stt.fail` und `stt.error` mit Code und Typ von Soniox. Die Route `soniox-token` reicht ihren Grund (`NO_KEY`, `BAD_REGION`, `UPSTREAM_REFUSED`) im Code des Fehlers weiter (`token-503-upstream_refused`).
+
+### Rückfallanzeige
+
+Fällt das Zuhören oder das Sprechen auf einen anderen Anbieter, steht neben dem Becken (Sprachmodus) und unter dem Mikrofon des Chats eine kleine Zeile, zum Beispiel "Ich höre über den Browser. Der Dienst hat den Schlüssel abgelehnt." Ein stiller Rückfall (früher Ursache 1 von "hört nichts") ist damit sichtbar. Bausteine: `useHaiVoice().fallback` (`{ stt, tts }`, je `ProviderFallback` oder null, wird beim nächsten Start gelöscht) und `HaiVoiceFallbackNotice` (`src/components/hai/HaiVoiceFallbackNotice.tsx`, Texte `hai.voice.fallback.*`, Grund `hai.voice.fallback.reason.*`).
+
+### Server-Zeiten der Chat-Route
+
+Bei einer gesprochenen Frage setzt die Route `Server-Timing: auth;dur=…, prep;dur=…` (die Zeit vor dem Start des Stroms, ein Header geht vor dem ersten Zeichen hinaus) und schickt alle Stufen im `done`-Ereignis als `timing` (auth, prep, search, first, total, nur Zahlen in Millisekunden). `search` ist die Zeit von Suche und Live-Daten in `processMessageStream`, `first` das erste Zeichen des Modells. Getippte Fragen bekommen nichts davon. Geändert wurden dafür nur kleine Stellen in `route.ts` (Beginn von `POST`, Kontext, Strom, `done`, Header), `ragPipeline.ts` (Feld `timings` und zwei Zeilen um die Suche in `processMessageStream`) und `HaiProvider.tsx` (Import und zwei Aufrufe).
+
+### Messwerte des Prüfwerkzeugs (03.11.2026, Region EU, `npm run hai:voice-check -- --only soniox --webm`)
+
+| Prüfung | Messwert |
+|---|---|
+| Kurzzeit-Schlüssel | 0,1 bis 0,2 s |
+| Sprachausgabe, erster Satz mit Verbindungsaufbau | erster Ton nach 0,3 s |
+| Sprachausgabe, zweiter Satz auf der stehenden Verbindung | erster Ton nach 0,1 bis 0,2 s |
+| Erkennung, rohes PCM (wie bisher) | erkannt nach 0,8 s |
+| **Browserweg**: webm/opus in 800-Byte-Stücken in Echtzeit, Konfiguration der App (`auto`, Endpunkterkennung) | erkannt "Was ist ein Primärschlüssel?", erstes Wort nach 0,4 bis 0,9 s, **Endpunkt 0,6 s nach dem Ende der Sprache** |
+| Zweite Verbindung mit demselben Schlüssel | angenommen |
+
+Folgerungen: Das Protokoll des Browserwegs (Container, `auto`, Endpunkterkennung) ist in Ordnung, die Ursache 2 der Recherche ("unbekannter Browserweg") ist für webm/opus ausgeschlossen. Eine zweite Verbindung kostet nur den Verbindungsaufbau (0,1 bis 0,2 s gespart), deshalb lohnt das Vorwärmen. Was das Werkzeug **nicht** zeigt: das Mikrofon eines echten Browsers, mp4 in Safari, Echo und Selbsthören, den Zustand des AudioContext. Der Rückfall durch Schlüssel, Organisation oder Limit auf der Preview ist nur mit den Messpunkten und der Rückfallanzeige zu sehen.
+
+Aufruf `--webm`: kodiert die Sprachprobe mit `ffmpeg` zu webm/opus (fehlt ffmpeg, steht ein klarer Hinweis, Windows: `winget install Gyan.FFmpeg`), sendet sie mit der echten Konfiguration der App, misst das erste Wort und den Endpunkt, öffnet eine zweite Verbindung mit demselben Schlüssel und sendet zwei Sprach-Ströme über eine Verbindung. Kostet ein paar Cent bei Soniox, schreibt nichts, gibt nie einen Schlüssel aus.
+
+### Schalter am Gerät (localStorage)
+
+| Schlüssel | Werte | Wirkung |
+|---|---|---|
+| `hai-voice-trace` | `1` | Messpunkte an |
+| `hai-voice-live` | `off` | keine Dauererkennung, Runden wie bisher |
+| `hai-voice-mic` | `raw`, `live`, `processed` | Profil des Mikrofons der Erkennung auf Soniox |
+| `hai-voice-lead` | Millisekunden oder `off` | Grundwert des Vorlaufs der Wiedergabe |
+
+### Nicht umgesetzt
+
+Der Schalter "spekulatives Modell" (schnelles Modell für die erste Satzhälfte, großes Modell setzt fort) ist **nicht gebaut**, auch nicht als Schalter. Ein sauberer, getesteter Weg liegt nicht vor: Zwei Modelle für eine Antwort brauchen eine Fortsetzung auf dem Anfang des ersten Modells, die Lösungsschutz und Berufstrennung (beides hängt am Prompt und an den Wächtern der Pipeline) für beide Modelle sicherstellt, und die Kosten verworfener Aufrufe sind ungemessen. Ein Schalter ohne Funktion in der Verwaltung würde nur täuschen. Erst nach den Zeiten B, C und D aus der Preview entscheiden.
 
 ## Prüfen der Sprachanbieter
 

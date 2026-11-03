@@ -99,6 +99,8 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
     sendMessage,
     stopGeneration,
     placeholderText: t('hai.loading.thinking') || 'Thinking...',
+    // said once when the answer takes longer than three seconds, never in the chat
+    waitPhrase: t('hai.voice.wait'),
     env,
   });
   const voiceRef = useRef(voice);

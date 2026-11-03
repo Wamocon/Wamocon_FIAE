@@ -20,6 +20,7 @@ import React, {
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { authFetch } from '@/lib/authFetch';
+import { markServerDone, markServerTiming } from '@/lib/hai/voice/client/trace';
 import {
   isOpenConfirmation,
   isOpenDecline,
@@ -1331,6 +1332,10 @@ export function HaiProvider({
           }),
           signal: abortController.signal,
         });
+        // measuring point of the voice assistant (numbers only, off by default)
+        if (options?.voice === true) {
+          markServerTiming(response.headers?.get?.('server-timing'));
+        }
 
         if (response.ok && response.body) {
           const reader = response.body.getReader();
@@ -1423,6 +1428,7 @@ export function HaiProvider({
                 }
 
                 if (event.done) {
+                  if (options?.voice === true) markServerDone(event.timing);
                   attachPendingAction(assistantId, event.pendingAction);
                   attachNavigationOffer(
                     assistantId,
