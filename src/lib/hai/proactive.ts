@@ -96,7 +96,7 @@ export async function runProactiveChecks(
                 (await getCatalogScopeForUserId(userId))?.activeCatalogId ??
                 null;
             insights.push(...await checkMissingActivityReports(userId, traineeCatalogId));
-            insights.push(...await checkUpcomingExams(userId));
+            insights.push(...await checkUpcomingExams(userId, traineeCatalogId));
             insights.push(...await checkLowProgress(userId, traineeCatalogId));
             insights.push(...await suggestNextSteps(userId, traineeCatalogId));
         } else if (userRole === 'TRAINER') {
@@ -216,12 +216,19 @@ async function checkMissingActivityReports(
 }
 
 /**
- * Check for upcoming exams
+ * Check for upcoming exams of one occupation: an exam of the other training of
+ * a trainee in two trainings is not a reason to remind about this one.
  */
-async function checkUpcomingExams(userId: string): Promise<ProactiveInsight[]> {
+async function checkUpcomingExams(
+    userId: string,
+    catalogId: string | null
+): Promise<ProactiveInsight[]> {
     const insights: ProactiveInsight[] = [];
 
     try {
+        // Fail closed: without an occupation nothing is asked
+        if (!catalogId) return insights;
+
         // Find exams in the next 14 days
         const now = new Date();
         const twoWeeksLater = new Date(now);
@@ -238,6 +245,7 @@ async function checkUpcomingExams(userId: string): Promise<ProactiveInsight[]> {
                 and(
                     // Only the exams of this trainee, never those of others
                     eq(ausbildungBlocks.traineeId, userId),
+                    eq(ausbildungBlocks.trainingCatalogId, catalogId),
                     eq(ausbildungBlocks.blockType, 'EXAM'),
                     gte(ausbildungBlocks.startDate, now),
                     lte(ausbildungBlocks.startDate, twoWeeksLater)

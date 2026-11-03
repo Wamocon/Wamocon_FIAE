@@ -3,6 +3,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCatalog } from '@/contexts/CatalogContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { authFetch } from '@/lib/authFetch';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -78,6 +79,9 @@ const EXAM_TYPES = {
 export function ExamManager({ onChanged }: { onChanged?: () => void } = {}) {
   const { profile } = useAuth();
   const { t } = useLanguage();
+  // An exam belongs to one occupation: a switch of the occupation tab loads the
+  // list again (the server answers for the chosen occupation)
+  const { activeCode: catalog } = useCatalog();
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +92,7 @@ export function ExamManager({ onChanged }: { onChanged?: () => void } = {}) {
   useEffect(() => {
     if (!profile?.id) return;
     loadExams();
-  }, [profile?.id, activeView]);
+  }, [profile?.id, activeView, catalog]);
 
   const loadExams = async () => {
     if (!profile?.id) return;

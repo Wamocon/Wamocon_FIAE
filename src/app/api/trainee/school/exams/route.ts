@@ -20,6 +20,10 @@ import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { daysFromToday, startOfToday } from '@/lib/school/day';
 import { refreshTraineeDashboard } from '@/lib/school/dashboard-cache';
+import {
+  requireSchoolCatalogFilter,
+  resolveSchoolWriteCatalog,
+} from '@/lib/school/catalog-access';
 
 // Helper to get current Schuljahr
 function getCurrentSchuljahr(): string {
@@ -61,8 +65,16 @@ export async function GET(req: NextRequest) {
     const todayStart = startOfToday();
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
+    // The exams of the occupation the trainee works in (a trainee in two
+    // trainings never sees the exams of the other one)
+    const schoolCatalog = await requireSchoolCatalogFilter(session, req);
+    if (isErrorResponse(schoolCatalog)) return schoolCatalog;
+
     // Build query conditions
     const conditions = [eq(schoolExams.traineeId, traineeId as any)];
+    if (schoolCatalog.examCondition) {
+      conditions.push(schoolCatalog.examCondition);
+    }
 
     if (schuljahr) {
       conditions.push(eq(schoolExams.schuljahr, schuljahr));
@@ -90,6 +102,9 @@ export async function GET(req: NextRequest) {
       eq(ausbildungBlocks.traineeId, traineeId as any),
       eq(ausbildungBlocks.blockType, 'EXAM'),
     ];
+    if (schoolCatalog.blockCondition) {
+      blockConditions.push(schoolCatalog.blockCondition);
+    }
     if (upcoming) {
       blockConditions.push(gte(ausbildungBlocks.startDate, todayStart));
     }
@@ -224,6 +239,10 @@ export async function POST(req: NextRequest) {
 
     const organizationId = await getUserOrgId(traineeId);
 
+    // The exam belongs to the occupation the trainee works in (the tab)
+    const catalogId = await resolveSchoolWriteCatalog(session, req, traineeId);
+    if (isErrorResponse(catalogId)) return catalogId;
+
     // Get trainee profile for defaults
     const [trainee] = await db
       .select({
@@ -280,6 +299,7 @@ export async function POST(req: NextRequest) {
       .values({
         traineeId: traineeId as any,
         organizationId,
+        trainingCatalogId: catalogId,
         schuljahr: calculatedSchuljahr,
         ausbildungsjahr: calculatedAusbildungsjahr,
         examDate: new Date(examDate),

@@ -7,6 +7,7 @@ import { schoolExamResults, schoolExams, profiles, notifications } from '@/db/mi
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { notFoundUnlessUuid } from '@/lib/uuid';
 import { checkExamPoints } from '@/lib/school/exam-points';
+import { ensureSchoolRowInChosenCatalog } from '@/lib/school/catalog-access';
 
 interface RouteParams {
     params: Promise<{ examId: string }>;
@@ -50,7 +51,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
         // Get the exam to find traineeId
         const [exam] = await db
-            .select({ traineeId: schoolExams.traineeId })
+            .select({ traineeId: schoolExams.traineeId, trainingCatalogId: schoolExams.trainingCatalogId })
             .from(schoolExams)
             .where(eq(schoolExams.id, examId as any));
 
@@ -60,6 +61,15 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
         const access = await requireTraineeAccess(session, String(exam.traineeId), req, 'Exam not found');
         if (isErrorResponse(access)) return access;
+
+        // An exam of another chosen occupation is answered like a missing one
+        const outsideCatalog = await ensureSchoolRowInChosenCatalog(
+            session,
+            req,
+            exam,
+            () => NextResponse.json({ error: 'Exam not found' }, { status: 404 })
+        );
+        if (outsideCatalog) return outsideCatalog;
 
         const organizationId = await getUserOrgId(String(exam.traineeId));
 

@@ -9,6 +9,7 @@ import {
   mockTraineeAccess,
   traineeSession,
 } from '../../helpers/mockNext';
+import { SINGLE_FIAE_TABLES } from '../../helpers/schoolCatalogTables';
 
 // KFB-1167: creating an appointment in the calendar did not work. The page
 // computed the calendar week with its own formula, which is 0 (or off) for the
@@ -35,6 +36,7 @@ async function loadTraineeBlocks() {
     traineeSession('t1') as unknown as ReturnType<typeof fakeSession>
   );
   const mock = createTableDb({
+    ...SINGLE_FIAE_TABLES,
     profiles: [{ id: 't1', startOfTrainingDate: null }],
     ausbildungBlocks: [],
   });

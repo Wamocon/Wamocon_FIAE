@@ -22,6 +22,10 @@ import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { isoWeekOf } from '@/lib/school/day';
 import { refreshTraineeDashboard } from '@/lib/school/dashboard-cache';
+import {
+  requireSchoolCatalogFilter,
+  resolveSchoolWriteCatalog,
+} from '@/lib/school/catalog-access';
 
 // Helper to calculate the module phase for a block date.
 function calculateAusbildungsjahr(
@@ -73,8 +77,16 @@ export async function GET(req: NextRequest) {
     const access = await requireTraineeAccess(session, traineeId, req);
     if (isErrorResponse(access)) return access;
 
+    // Only the entries of the chosen occupation (a trainee in two trainings
+    // has a calendar per occupation), without a choice all of them
+    const schoolCatalog = await requireSchoolCatalogFilter(session, req);
+    if (isErrorResponse(schoolCatalog)) return schoolCatalog;
+
     // Build query conditions
     const conditions = [eq(ausbildungBlocks.traineeId, traineeId as any)];
+    if (schoolCatalog.blockCondition) {
+      conditions.push(schoolCatalog.blockCondition);
+    }
 
     if (year) {
       // OPTIONAL: Filter by year is tricky for spanning blocks.
@@ -201,6 +213,18 @@ export async function POST(req: NextRequest) {
         // The block belongs to the organization of the trainee
         const organizationId = await getUserOrgId(String(tid));
 
+        // ... and to the chosen occupation (the trainee belongs to it, checked
+        // above), without a choice to the default occupation of the trainee
+        const catalogId = await resolveSchoolWriteCatalog(
+          session,
+          req,
+          String(tid)
+        );
+        if (isErrorResponse(catalogId)) {
+          errors.push(`Occupation of trainee ${tid} not available`);
+          continue;
+        }
+
         const [trainee] = await db
           .select({
             firstName: profiles.firstName,
@@ -228,6 +252,7 @@ export async function POST(req: NextRequest) {
             .where(
               and(
                 eq(ausbildungBlocks.traineeId, tid as any),
+                eq(ausbildungBlocks.trainingCatalogId, catalogId),
                 eq(ausbildungBlocks.blockType, 'EXAM'),
                 eq(ausbildungBlocks.examSubType, examSubType)
               )
@@ -267,6 +292,7 @@ export async function POST(req: NextRequest) {
           .insert(ausbildungBlocks)
           .values({
             traineeId: access.traineeId as any,
+            trainingCatalogId: catalogId,
             schuljahr,
             ausbildungsjahr,
             calendarWeek,

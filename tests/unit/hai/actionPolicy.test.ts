@@ -162,7 +162,7 @@ describe('getUserOrgIdStrict', () => {
 });
 
 describe('HAI proactive checks only use the data of the person', () => {
-  async function run(role: 'TRAINEE' | 'TRAINER') {
+  async function run(role: 'TRAINEE' | 'TRAINER', catalogId?: string) {
     jest.resetModules();
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const rec = createTableDb({
@@ -179,15 +179,18 @@ describe('HAI proactive checks only use the data of the person', () => {
       getUserOrgIdStrict: async () => 'org-1',
     }));
     const { runProactiveChecks } = await import('@/lib/hai/proactive');
-    await runProactiveChecks(USER);
+    await runProactiveChecks(USER, catalogId);
     return rec;
   }
 
-  it('looks for exams of this trainee only', async () => {
-    const rec = await run('TRAINEE');
+  it('looks for exams of this trainee only (in the occupation it works in)', async () => {
+    const FIAE = '00000000-0000-4000-8000-000000000001';
+    const rec = await run('TRAINEE', FIAE);
     const where = rec.filters('select', 'ausbildungBlocks');
     expect(where.sql).toContain('"trainee_id"');
+    expect(where.sql).toContain('"training_catalog_id"');
     expect(where.params).toContain(USER);
+    expect(where.params).toContain(FIAE);
   });
 
   it('counts the pending reviews of the own organization only', async () => {

@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCatalog } from '@/contexts/CatalogContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { traineeDisplayName } from '@/lib/trainer/trainee-name';
 import { examsAsBlocks, type CalendarExam } from '@/lib/trainer/calendar-exams';
@@ -165,6 +166,9 @@ function isDateInBlock(date: Date, block: Block): boolean {
 export function TrainerCalendarTab() {
   const { profile } = useAuth();
   const { t } = useLanguage();
+  // Blocks and exams belong to one occupation: a switch of the occupation tab
+  // loads the calendar again (the server answers for the chosen occupation)
+  const { activeCode: catalog } = useCatalog();
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [selectedTraineeId, setSelectedTraineeId] = useState<string>('');
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -261,7 +265,7 @@ export function TrainerCalendarTab() {
       }
     }
     loadBlocks();
-  }, [selectedTraineeId, selectedYear]);
+  }, [selectedTraineeId, selectedYear, catalog]);
 
   // The blocks of the trainee and, view only, the exams the trainee entered
   const calendarBlocks = useMemo<Block[]>(() => {

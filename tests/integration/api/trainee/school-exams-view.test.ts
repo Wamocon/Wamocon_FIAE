@@ -15,6 +15,7 @@ import {
   makeRequest,
   mockSession,
 } from '../../../helpers/mockNext';
+import { SINGLE_FIAE_TABLES } from '../../../helpers/schoolCatalogTables';
 
 // KFB-1153: "Vergangene Prüfungen" listed exams that lie ahead. The route only
 // filtered for upcoming=true, upcoming=false meant "everything". The two views
@@ -51,6 +52,7 @@ async function listExams(query: string, tables: Record<string, any> = {}) {
   jest.resetModules();
   mockSession(me);
   const mock = createTableDb({
+    ...SINGLE_FIAE_TABLES,
     schoolExams: [],
     ausbildungBlocks: [],
     ...tables,

@@ -15,12 +15,14 @@ import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { isoWeekOf } from '@/lib/school/day';
 import { refreshTraineeDashboard } from '@/lib/school/dashboard-cache';
+import { ensureSchoolRowInChosenCatalog } from '@/lib/school/catalog-access';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
 }
 
-// A block of someone else is answered like a missing one
+// A block of someone else, or of the other occupation of the trainee, is
+// answered like a missing one
 const notFound = () =>
     NextResponse.json({ error: 'Block not found' }, { status: 404 });
 
@@ -40,6 +42,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         if (!block || String(block.traineeId) !== session.id) {
             return notFound();
         }
+        const outsideCatalog = await ensureSchoolRowInChosenCatalog(session, req, block, notFound);
+        if (outsideCatalog) return outsideCatalog;
 
         return NextResponse.json({ block });
     } catch (e) {
@@ -67,6 +71,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         if (!existing || String(existing.traineeId) !== session.id) {
             return notFound();
         }
+        const outsideCatalog = await ensureSchoolRowInChosenCatalog(session, req, existing, notFound);
+        if (outsideCatalog) return outsideCatalog;
 
         // An entry a trainer put in the calendar is the trainer's to change
         if (existing.createdByTrainerId) {
@@ -186,13 +192,15 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
 
         // Check block exists and belongs to the session user
         const [existing] = await db
-            .select({ id: ausbildungBlocks.id, traineeId: ausbildungBlocks.traineeId })
+            .select({ id: ausbildungBlocks.id, traineeId: ausbildungBlocks.traineeId, trainingCatalogId: ausbildungBlocks.trainingCatalogId })
             .from(ausbildungBlocks)
             .where(eq(ausbildungBlocks.id, id as any));
 
         if (!existing || String(existing.traineeId) !== session.id) {
             return notFound();
         }
+        const outsideCatalog = await ensureSchoolRowInChosenCatalog(session, req, existing, notFound);
+        if (outsideCatalog) return outsideCatalog;
 
         await db
             .delete(ausbildungBlocks)

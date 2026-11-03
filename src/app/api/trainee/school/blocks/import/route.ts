@@ -13,12 +13,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { resolveSchoolWriteCatalog } from '@/lib/school/catalog-access';
 
 // Helper to parse German date format "10.08." or "10.08. - 14.08."
 function parseGermanDateRange(
@@ -173,6 +174,10 @@ export async function POST(req: NextRequest) {
 
     const organizationId = await getUserOrgId(traineeId);
 
+    // The imported entries belong to the occupation the trainee works in (the tab)
+    const catalogId = await resolveSchoolWriteCatalog(session, req, traineeId);
+    if (isErrorResponse(catalogId)) return catalogId;
+
     // Get trainee profile for Ausbildungsjahr calculation
     const [trainee] = await db
       .select({
@@ -191,11 +196,17 @@ export async function POST(req: NextRequest) {
     const targetSchuljahr = schuljahr || getCurrentSchuljahr();
     const yearForParsing = baseYear || new Date().getFullYear();
 
-    // Optionally clear existing blocks for this schuljahr
+    // Optionally clear the existing blocks of the trainee in this occupation
+    // (the calendar of the other occupation is not touched)
     if (clearExisting) {
       await db
         .delete(ausbildungBlocks)
-        .where(eq(ausbildungBlocks.traineeId, traineeId as any));
+        .where(
+          and(
+            eq(ausbildungBlocks.traineeId, traineeId as any),
+            eq(ausbildungBlocks.trainingCatalogId, catalogId)
+          )
+        );
     }
 
     const result: ImportResult = {
@@ -273,6 +284,7 @@ export async function POST(req: NextRequest) {
         await db.insert(ausbildungBlocks).values({
           traineeId: traineeId as any,
           organizationId,
+          trainingCatalogId: catalogId,
           schuljahr: targetSchuljahr,
           ausbildungsjahr,
           calendarWeek: kw,

@@ -517,7 +517,7 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
     // of today is still upcoming.
     let appointments: Appointment[] = [];
     try {
-      appointments = await loadNextAppointments(userId);
+      appointments = await loadNextAppointments(userId, scope);
     } catch (appointmentErr) {
       console.error('Dashboard appointments error', appointmentErr);
     }
@@ -560,10 +560,21 @@ type Appointment = {
 /**
  * The next appointments of the calendar of a trainee: school blocks, exams and
  * personal entries that have not ended before today. The long phases in the
- * company are no appointment and stay out.
+ * company are no appointment and stay out. Blocks and exams belong to one
+ * occupation: a trainee in several trainings sees the appointments of the
+ * occupation of the tab only (a trainee with one occupation is not filtered).
  */
-async function loadNextAppointments(userId: string): Promise<Appointment[]> {
+async function loadNextAppointments(
+  userId: string,
+  scope: CatalogScope
+): Promise<Appointment[]> {
   const todayStart = startOfToday();
+  const blockCatalog = scope.selected
+    ? catalogCondition(ausbildungBlocks.trainingCatalogId, scope)
+    : undefined;
+  const examCatalog = scope.selected
+    ? catalogCondition(schoolExams.trainingCatalogId, scope)
+    : undefined;
   const [blockRows, examRows] = await Promise.all([
     db
       .select({
@@ -580,7 +591,8 @@ async function loadNextAppointments(userId: string): Promise<Appointment[]> {
         and(
           eq(ausbildungBlocks.traineeId, userId as any),
           ne(ausbildungBlocks.blockType, 'COMPANY' as any),
-          gte(ausbildungBlocks.endDate, todayStart)
+          gte(ausbildungBlocks.endDate, todayStart),
+          blockCatalog
         )
       )
       .orderBy(asc(ausbildungBlocks.startDate))
@@ -595,7 +607,8 @@ async function loadNextAppointments(userId: string): Promise<Appointment[]> {
       .where(
         and(
           eq(schoolExams.traineeId, userId as any),
-          gte(schoolExams.examDate, todayStart)
+          gte(schoolExams.examDate, todayStart),
+          examCatalog
         )
       )
       .orderBy(asc(schoolExams.examDate))

@@ -215,10 +215,13 @@ async function buildTraineeProfileText(
 // ============================================================================
 
 /**
- * Serialize trainee schedule (ausbildung blocks + school exams) into embeddable text
+ * Serialize trainee schedule (ausbildung blocks + school exams) into embeddable
+ * text. Blocks and exams belong to one occupation: the chunk holds those of the
+ * occupation it belongs to (like the progress chunk).
  */
 async function buildTraineeScheduleText(
-  traineeId: string
+  traineeId: string,
+  catalogId: string
 ): Promise<string | null> {
   try {
     // Get profile name for context
@@ -240,7 +243,12 @@ async function buildTraineeScheduleText(
         examSubType: ausbildungBlocks.examSubType,
       })
       .from(ausbildungBlocks)
-      .where(eq(ausbildungBlocks.traineeId, traineeId))
+      .where(
+        and(
+          eq(ausbildungBlocks.traineeId, traineeId),
+          eq(ausbildungBlocks.trainingCatalogId, catalogId)
+        )
+      )
       .orderBy(ausbildungBlocks.startDate);
 
     // Get ALL school exams (sorted by date)
@@ -253,7 +261,12 @@ async function buildTraineeScheduleText(
         notes: schoolExams.notes,
       })
       .from(schoolExams)
-      .where(eq(schoolExams.traineeId, traineeId))
+      .where(
+        and(
+          eq(schoolExams.traineeId, traineeId),
+          eq(schoolExams.trainingCatalogId, catalogId)
+        )
+      )
       .orderBy(schoolExams.examDate);
 
     // Get exam results
@@ -564,7 +577,10 @@ export async function indexTraineeData(
     }
 
     // 2. Index schedule & exams
-    const scheduleText = await buildTraineeScheduleText(traineeId);
+    const scheduleText = await buildTraineeScheduleText(
+      traineeId,
+      scope.trainingCatalogId ?? TRAINING_CATALOG_IDS.FIAE
+    );
     if (scheduleText) {
       const scheduleIndexResult = await indexContent({
         sourceType: 'trainee_schedule' as SourceType,
