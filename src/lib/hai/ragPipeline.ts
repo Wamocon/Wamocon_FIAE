@@ -497,6 +497,63 @@ function convertToProviderMessages(
 }
 
 // ============================================================================
+// STAGES AND LIVE DATA (shared by processMessage and processMessageStream)
+// ============================================================================
+
+/**
+ * The waiting stages of a turn the client may show ("Ich suche in den
+ * Unterlagen"). Data only, never a content: the stream route sends them when
+ * the client asked for them.
+ */
+export type PipelineStage = 'search' | 'answer';
+
+/**
+ * Runs `work` and adds its duration (ms) to `context.timings[name]`, also when
+ * it fails. Numbers only, read by the chat route for its timing line.
+ */
+async function timed<T>(
+  context: PipelineContext,
+  name: string,
+  work: () => Promise<T>
+): Promise<T> {
+  const startedAt = Date.now();
+  try {
+    return await work();
+  } finally {
+    if (context.timings) {
+      context.timings[name] = Date.now() - startedAt;
+    }
+  }
+}
+
+/**
+ * The live data of the person for the system prompt (non-fatal): undefined
+ * without a role or when the data could not be read. Never rejects, so it can
+ * run next to the retrieval and be awaited later.
+ */
+async function loadLiveDataContext(
+  userMessage: string,
+  context: PipelineContext
+): Promise<string | undefined> {
+  if (!context.userRole) return undefined;
+  try {
+    const dataCtx = await fetchDataContext(
+      context.userId,
+      context.userRole as UserRole,
+      userMessage,
+      {
+        preferredCatalogCode: context.preferredCatalogCode,
+        trainingScope: context.trainingScope,
+      }
+    );
+    return dataCtx ? dataCtx.summary : undefined;
+  } catch (dataError) {
+    console.warn('HAI.ai: DataContext fetch failed (non-fatal):', dataError);
+    return undefined;
+  }
+}
+
+// ============================================================================
 // RETRIEVAL (shared by processMessage and processMessageStream)
 // ============================================================================
 
@@ -511,6 +568,37 @@ export interface RetrievedContext {
    * that this text never comes back as context for a role that may not have it.
    */
   usedTrainerSolutions?: boolean;
+}
+
+/**
+ * Characters of the chunks of the knowledge base that go into one prompt. The
+ * model reads every token of the prompt before the first word of the answer
+ * (about one second per 1,000 tokens on Sokrates, docs/hai-geschwindigkeit.md).
+ * Five chunks of the index are 5,000 characters on average and stay whole; the
+ * budget cuts only the rare case of five long chunks (up to 3,000 characters
+ * each). The chunks are in the order of their relevance, the least relevant
+ * ones go first, the two most relevant ones always stay.
+ */
+export const RETRIEVED_CONTEXT_MAX_CHARS = 9000;
+/** The most relevant chunks that always stay, whatever their length. */
+const RETRIEVED_CONTEXT_MIN_CHUNKS = 2;
+
+/**
+ * The chunks that fit into the budget, in the given order. A chunk that is not
+ * in the prompt is not cited either, so the caller keeps only these.
+ */
+export function limitToContextBudget<T extends { content: string }>(
+  results: T[],
+  maxChars: number = RETRIEVED_CONTEXT_MAX_CHARS
+): T[] {
+  const kept: T[] = [];
+  let used = 0;
+  for (const result of results) {
+    used += result.content.length;
+    if (kept.length >= RETRIEVED_CONTEXT_MIN_CHUNKS && used > maxChars) break;
+    kept.push(result);
+  }
+  return kept;
 }
 
 /** Heading note of a chunk that holds a model solution (trainer knowledge). */
@@ -590,6 +678,8 @@ export async function retrieveContext(
       r => !isTrainerSolutionChunk(r.metadata)
     );
   }
+  // the prompt gets as many chunks as fit the budget (relevance order)
+  searchResults = limitToContextBudget(searchResults);
   const usedTrainerSolutions =
     mayUseSolutions &&
     searchResults.some(r => isTrainerSolutionChunk(r.metadata));
@@ -837,6 +927,10 @@ export async function processMessage(
     let retrievedContext = '';
     let usedTrainerSolutions: boolean | undefined;
 
+    // Step 3b: live data context (non-fatal). It runs next to the retrieval,
+    // the two do not depend on each other.
+    const liveDataPromise = loadLiveDataContext(userMessage, context);
+
     if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
       // Vector search and PageIndex, limited to the occupation, audience and
       // organization of the user (one function for both pipelines)
@@ -849,29 +943,7 @@ export async function processMessage(
       mode = 'general';
     }
 
-    // Step 3b: Fetch live data context (non-fatal)
-    let liveDataContext: string | undefined;
-    if (context.userRole) {
-      try {
-        const dataCtx = await fetchDataContext(
-          context.userId,
-          context.userRole as UserRole,
-          userMessage,
-          {
-            preferredCatalogCode: context.preferredCatalogCode,
-            trainingScope: context.trainingScope,
-          }
-        );
-        if (dataCtx) {
-          liveDataContext = dataCtx.summary;
-        }
-      } catch (dataError) {
-        console.warn(
-          'HAI.ai: DataContext fetch failed (non-fatal):',
-          dataError
-        );
-      }
-    }
+    const liveDataContext = await liveDataPromise;
 
     // Step 3c: what the pipeline knows about a limit of access (denial.ts)
     const accessReasons = detectAccessReasons({
@@ -1019,7 +1091,8 @@ export async function processMessage(
 export async function processMessageStream(
   userMessage: string,
   context: PipelineContext,
-  onChunk: (text: string) => void
+  onChunk: (text: string) => void,
+  onStage?: (stage: PipelineStage) => void
 ): Promise<PipelineResult> {
   // Quick validation — fall back to non-streaming for empty/uninitialized
   if (!userMessage.trim()) {
@@ -1110,16 +1183,25 @@ export async function processMessageStream(
     // Logic to determine if we should use web search
     let enableWebSearch = intent === 'web_search';
 
-    // Retrieve context
+    // Retrieve context and fetch the live data at the same time: they do not
+    // depend on each other, so the turn waits for the slower one, not for both
     let searchResults: SearchResult[] = [];
     let retrievedContext = '';
     let usedTrainerSolutions: boolean | undefined;
 
     const searchStartedAt = Date.now();
+    const liveDataPromise = timed(context, 'data', () =>
+      loadLiveDataContext(userMessage, context)
+    );
     if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
       // Same retrieval as processMessage: scoped to the user
+      onStage?.('search');
+      const retrievalStartedAt = Date.now();
       ({ searchResults, retrievedContext, usedTrainerSolutions } =
         await retrieveContext(userMessage, context, access));
+      if (context.timings) {
+        context.timings.retrieval = Date.now() - retrievalStartedAt;
+      }
     }
 
     let mode = determineMode(intent, context);
@@ -1127,32 +1209,12 @@ export async function processMessageStream(
       mode = 'general';
     }
 
-    // Fetch live data context (non-fatal)
-    let liveDataContext: string | undefined;
-    if (context.userRole) {
-      try {
-        const dataCtx = await fetchDataContext(
-          context.userId,
-          context.userRole as UserRole,
-          userMessage,
-          {
-            preferredCatalogCode: context.preferredCatalogCode,
-            trainingScope: context.trainingScope,
-          }
-        );
-        if (dataCtx) {
-          liveDataContext = dataCtx.summary;
-        }
-      } catch (dataError) {
-        console.warn(
-          'HAI.ai: DataContext fetch failed (non-fatal):',
-          dataError
-        );
-      }
-    }
+    // Live data context (non-fatal, never rejects)
+    const liveDataContext = await liveDataPromise;
 
     // retrieval and live data are done: the model call is what is left to wait for
     if (context.timings) context.timings.search = Date.now() - searchStartedAt;
+    onStage?.('answer');
 
     // What the pipeline knows about a limit of access (denial.ts)
     const accessReasons = detectAccessReasons({
