@@ -67,6 +67,32 @@ describe('DashboardOccupation', () => {
     expect(label).not.toHaveTextContent('Fachinformatiker');
   });
 
+  describe('in English (KFB-1183)', () => {
+    beforeEach(() => localStorage.setItem('language', 'en'));
+    afterEach(() => localStorage.removeItem('language'));
+
+    it('names the occupation in English for FIAE and KfBM', async () => {
+      context({ catalogs: [FIAE, KFBM], activeCode: 'KFBM', isMultiple: true });
+      const { rerender } = renderWithProviders(<DashboardOccupation />);
+      expect(
+        await screen.findByText('Office Management Clerk')
+      ).toBeInTheDocument();
+      expect(screen.getByText('Occupation')).toBeInTheDocument();
+      context({ catalogs: [FIAE, KFBM], activeCode: 'FIAE', isMultiple: true });
+      rerender(<DashboardOccupation />);
+      expect(
+        screen.getByText('IT Specialist for Application Development')
+      ).toBeInTheDocument();
+    });
+
+    it('keeps the title of an occupation without a translation', async () => {
+      const ELEK = { ...KFBM, code: 'ELEK', title: 'Elektroniker/in' };
+      context({ catalogs: [FIAE, ELEK], activeCode: 'ELEK', isMultiple: true });
+      renderWithProviders(<DashboardOccupation />);
+      expect(await screen.findByText('Elektroniker/in')).toBeInTheDocument();
+    });
+  });
+
   it('follows the occupation chosen in the tabs', () => {
     context({ catalogs: [FIAE, KFBM], activeCode: 'FIAE', isMultiple: true });
     const { rerender } = renderWithProviders(<DashboardOccupation />);

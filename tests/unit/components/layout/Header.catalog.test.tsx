@@ -88,10 +88,20 @@ describe('Header and the occupation', () => {
       expect(
         container.querySelector('[data-tour^="header-catalog"]')
       ).toBeNull();
-      expect(container.children).toHaveLength(1);
       expect(container.firstElementChild?.tagName).toBe('HEADER');
+      // with tabs the active occupation is named, FIAE included (KFB-1179),
+      // the strip below the header is the phone variant of the badge
+      expect(container.children).toHaveLength(role === 'trainee' ? 1 : 2);
     }
   );
+
+  it('names FIAE in the header when the user has tabs (KFB-1179)', () => {
+    render({ catalogs: [FIAE, KFBM], isMultiple: true, tabs: [FIAE, KFBM] });
+    expect(screen.getByTestId('catalog-badge-bar')).toHaveTextContent('FIAE');
+    expect(screen.getByTestId('catalog-badge-strip')).toHaveTextContent(
+      'FIAE'
+    );
+  });
 
   it('keeps language, theme and the other header controls', () => {
     render({ catalogs: [FIAE, KFBM], isMultiple: true });

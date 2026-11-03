@@ -6,6 +6,7 @@
  * @module lib/hai/voice/client/audio
  */
 
+import { getOutputTap } from './outputLevel';
 import { mark } from './trace';
 
 // ============================================================================
@@ -249,6 +250,9 @@ export class OrderedPlayback {
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(this.ctx.destination);
+    // read only tap for the mouth of the HAI figure (outputLevel.ts), the sound is unchanged
+    const tap = getOutputTap(this.ctx);
+    if (tap) source.connect(tap);
     const now = this.ctx.currentTime;
     // late: sound played before, and it ran out before this chunk arrived (an audible gap)
     const late = this.started && now > this.nextStart + GAP_EPSILON_S;

@@ -687,6 +687,22 @@ describe('WMCNL-3004: quiz cards without double entries', () => {
     );
   });
 
+  it('keeps the action buttons on one line and lets the row wrap instead (KFB-1177)', async () => {
+    world({ quizzes: [quizItem(1)] });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    const card = screen.getByText('Quiz 1').closest('.group') as HTMLElement;
+    const mark = within(card).getByRole('button', {
+      name: /Als bewertet markieren/,
+    });
+    expect(mark.className).toContain('whitespace-nowrap');
+    expect(within(card).getByRole('link', { name: 'Details' }).className)
+      .toContain('whitespace-nowrap');
+    // the row wraps, the group of actions does not shrink
+    expect(mark.parentElement?.className).toContain('shrink-0');
+    expect(mark.parentElement?.parentElement?.className).toContain('flex-wrap');
+  });
+
   it('marks a quiz as reviewed: it leaves the list of the open ones and the total goes down', async () => {
     world({ quizzes: [quizItem(1), quizItem(2)], quizTotal: 2100 });
     render('view=quizzes');

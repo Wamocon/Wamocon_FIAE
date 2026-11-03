@@ -18,7 +18,7 @@
 
 import type { RetrievalAccess } from '../retrievalAccess';
 import type { HaiTrainingScope } from '../trainingScope';
-import { detectNavigationIntent } from './intent';
+import { detectNavigationIntent, isDirectCommand } from './intent';
 import type { NavigationOffer } from './offer';
 import {
   NAVIGATION_UNAVAILABLE_TEXT,
@@ -59,6 +59,8 @@ export function navigationLevel(
 
 function withClosing(outcome: NavigationOutcome, voice: boolean): string {
   if (outcome.kind !== 'offer') return outcome.text;
+  // a command that is carried out needs no closing: the text says "Ich öffne ..."
+  if (outcome.offer?.auto) return outcome.text;
   return `${outcome.text} ${voice ? NAVIGATION_VOICE_QUESTION : NAVIGATION_TEXT_HINT}`;
 }
 
@@ -86,6 +88,8 @@ export async function handleNavigationMessage(
     outcome = await resolveNavigation(intent, {
       userId: access.userId,
       level,
+      // a clear command is carried out, a question for the way is an offer
+      direct: isDirectCommand(userMessage),
       // the targets follow all occupations of the person, the chosen one (if
       // the access was narrowed to it) is looked at first
       catalogIds: access.allowedCatalogIds ?? access.catalogIds,

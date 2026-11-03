@@ -123,6 +123,10 @@ interface ModuleProgressChartProps {
   loading?: boolean;
 }
 
+/** Course names on the axis: characters shown and the width they need (KFB-1176) */
+const MODULE_NAME_MAX = 30;
+const MODULE_NAME_WIDTH = 170;
+
 export function ModuleProgressChart({
   data,
   loading = false,
@@ -171,8 +175,8 @@ export function ModuleProgressChart({
   // Create safe data copy with abbreviated names
   const safeData = data.map(item => ({
     name:
-      String(item?.name || '').length > 22
-        ? String(item?.name || '').substring(0, 21) + '…'
+      String(item?.name || '').length > MODULE_NAME_MAX
+        ? String(item?.name || '').substring(0, MODULE_NAME_MAX - 1) + '…'
         : String(item?.name || ''),
     fullName: String(item?.name || ''),
     completed: Number(item?.completed || 0),
@@ -212,7 +216,7 @@ export function ModuleProgressChart({
           <YAxis
             type="category"
             dataKey="name"
-            width={120}
+            width={MODULE_NAME_WIDTH}
             stroke="currentColor"
             fontSize={10}
             tick={{ fill: 'currentColor' }}

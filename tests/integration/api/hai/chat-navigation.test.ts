@@ -296,21 +296,79 @@ describe('HAI chat route: the navigation offer of the pipeline', () => {
 describe('HAI chat route with the real pipeline behind it', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('typed: answers "öffne meine Berichte" with the offer and the hint at the button, no model call', async () => {
+  it('typed: a clear command ("öffne meine Berichte") comes back as an offer marked auto, no model call', async () => {
     const { mod, rec } = await load('real');
     const res = await mod.POST(post({ stream: false }));
     expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.navigationOffer).toEqual({ ...OFFER, auto: true });
+    expect(body.response).toBe('Ich öffne die Seite Ausbildungsnachweis.');
+    expect(body.intent).toBe('navigation');
+    expect(model).not.toHaveBeenCalled();
+    expect(assistantInserts(rec)[0].content).toBe(body.response);
+  });
+
+  it('typed: a question for the way is an offer for the button, not marked auto', async () => {
+    const { mod } = await load('real');
+    const res = await mod.POST(
+      post({ stream: false, message: 'Wo finde ich meine Berichte?' })
+    );
     const body = await res.json();
     expect(body.navigationOffer).toEqual(OFFER);
     expect(body.response).toContain('Mit Öffnen gelangst du direkt dorthin.');
     expect(body.response).not.toContain('Soll ich sie öffnen?');
     expect(model).not.toHaveBeenCalled();
-    expect(assistantInserts(rec)[0].content).toBe(body.response);
   });
 
-  it('spoken: ends with "Soll ich sie öffnen?" and sends the offer in the final event', async () => {
+  it('streaming: a clear command sends the text, then the offer marked auto with the final event', async () => {
     const { mod } = await load('real');
-    const res = await mod.POST(post({ stream: true, voice: true }));
+    const res = await mod.POST(
+      post({ stream: true, message: 'Bring mich zum Dashboard.' })
+    );
+    const events = await readEvents(res);
+    const text = events
+      .filter((e: any) => typeof e.chunk === 'string')
+      .map((e: any) => e.chunk)
+      .join('');
+    expect(text).toBe('Ich öffne die Seite Dashboard.');
+    expect(events.find((e: any) => e.done).navigationOffer).toMatchObject({
+      path: '/trainee/dashboard',
+      auto: true,
+    });
+    expect(model).not.toHaveBeenCalled();
+  });
+
+  it('spoken: a clear command is carried out without a question, the final event carries the offer marked auto', async () => {
+    const { mod } = await load('real');
+    const res = await mod.POST(
+      post({
+        stream: true,
+        voice: true,
+        message: 'öffne bitte den ausbildungsnachweis',
+      })
+    );
+    const events = await readEvents(res);
+    const text = events
+      .filter((e: any) => typeof e.chunk === 'string')
+      .map((e: any) => e.chunk)
+      .join('');
+    expect(text).toBe('Ich öffne die Seite Ausbildungsnachweis.');
+    expect(events.find((e: any) => e.done).navigationOffer).toEqual({
+      ...OFFER,
+      auto: true,
+    });
+    expect(model).not.toHaveBeenCalled();
+  });
+
+  it('spoken: a question for the way ends with "Soll ich sie öffnen?" and sends the offer in the final event', async () => {
+    const { mod } = await load('real');
+    const res = await mod.POST(
+      post({
+        stream: true,
+        voice: true,
+        message: 'wo finde ich meine berichte',
+      })
+    );
     const events = await readEvents(res);
     const text = events
       .filter((e: any) => typeof e.chunk === 'string')
@@ -319,6 +377,38 @@ describe('HAI chat route with the real pipeline behind it', () => {
     expect(text.endsWith('Soll ich sie öffnen?')).toBe(true);
     expect(events.find((e: any) => e.done).navigationOffer).toEqual(OFFER);
     expect(model).not.toHaveBeenCalled();
+  });
+
+  it('keeps the tab of the page in the path: the calendar of the trainee', async () => {
+    const { mod } = await load('real');
+    const res = await mod.POST(
+      post({ stream: false, message: 'Ich will zum Blockkalender.' })
+    );
+    const body = await res.json();
+    expect(body.navigationOffer).toMatchObject({
+      path: '/trainee/school?tab=calendar',
+      auto: true,
+    });
+  });
+
+  it('takes a spoken number word and a page of the menu "Lernen" through the real route', async () => {
+    const { mod } = await load('real');
+    const enabler = await (
+      await mod.POST(
+        post({ stream: false, message: 'öffne enabler drei', voice: true })
+      )
+    ).json();
+    expect(enabler.navigationOffer).toMatchObject({
+      path: `/trainee/enablers/${E1}`,
+      auto: true,
+    });
+    const courses = await (
+      await mod.POST(post({ stream: false, message: 'Öffne meine Kurse.' }))
+    ).json();
+    expect(courses.navigationOffer).toMatchObject({
+      path: '/trainee/courses',
+      auto: true,
+    });
   });
 
   it('refuses the page of the trainer area to a trainee: friendly text, no offer', async () => {
@@ -345,6 +435,7 @@ describe('HAI chat route with the real pipeline behind it', () => {
     );
     const body = await res.json();
     expect(body.navigationOffer.path).toBe(`/trainee/enablers/${E1}`);
+    expect(body.navigationOffer.auto).toBe(true);
   });
 
   it('leaves a learning question to the model: no offer', async () => {

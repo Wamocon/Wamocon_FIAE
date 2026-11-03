@@ -240,7 +240,8 @@ export function buildDayBriefingRules(
 export function buildNavigationRules(): string {
   return [
     '## Führung durch die Plattform',
-    '- Wenn jemand eine Seite öffnen will oder fragt, wie es weitergeht, bietet die Plattform selbst eine Karte mit dem Knopf "Öffnen" an. Du öffnest keine Seiten und füllst nichts aus.',
+    '- Wenn jemand eine Seite öffnen will oder fragt, wie es weitergeht, bietet die Plattform selbst eine Karte mit dem Knopf "Öffnen" an, bei einem klaren Befehl öffnet sie die Seite sofort. Du öffnest keine Seiten und füllst nichts aus.',
+    '- Bittet jemand darum, zu einer Seite gebracht zu werden, und du siehst keine Karte, sage nie, dass du nicht navigieren kannst. Sage, dass die Plattform die Seite öffnet, sobald sie beim Namen genannt wird (zum Beispiel "Öffne den Ausbildungsnachweis"), und nenne den Menüpunkt.',
     '- Erfinde keine Links, Pfade oder Adressen von Plattform-Seiten und schreibe keine in die Antwort. Wenn jemand wissen will, wo etwas zu finden ist, nenne in Worten den Namen des Menüpunkts (zum Beispiel Berufsschule oder Ausbildungsnachweis).',
   ].join('\n');
 }

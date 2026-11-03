@@ -17,6 +17,12 @@ const {
   keyOfUseCaseFile,
   readSource,
   ascii,
+  topicOf,
+  docTitleOf,
+  sameTopic,
+  newScenarioTitle,
+  scenarioTitleFix,
+  planEnablerOrder,
 } = mod;
 
 test('every run needs the target preview, there is no production', () => {
@@ -521,4 +527,156 @@ test('--components keeps the tokens as typed and refuses a value that is no numb
     '2.3',
   ]);
   assert.ok(bad.errors.some(e => /--components/.test(e) && /2\.3/.test(e)));
+});
+
+// ---------------------------------------------------------------- enabler order and scenario titles
+
+test('the topic of a scenario file comes from its first paragraph, a heading "Behandelte Themen" says nothing', () => {
+  assert.equal(
+    docTitleOf([
+      '# Enabler Scenario: Software-Entwicklungsmodelle und Architekturen',
+      'Fragenkomplex (Komponente) 4',
+    ]),
+    'Software-Entwicklungsmodelle und Architekturen'
+  );
+  assert.equal(
+    docTitleOf(['Shells und Datentypen', 'Behandelte Themen']),
+    'Shells und Datentypen'
+  );
+  assert.equal(docTitleOf(['Behandelte Themen:', 'Arbeitsschutz']), null);
+  assert.equal(docTitleOf([]), null);
+  assert.equal(topicOf('Part_KORRIGIERT'), 'Part');
+  assert.equal(topicOf('KORRIGIERT'), '');
+});
+
+test('a shortened file name or a longer heading is the same topic, another topic is not', () => {
+  assert.ok(sameTopic('Der Markt', 'Der Markt: Theorie, Modelle und Realität'));
+  assert.ok(
+    sameTopic('Systemnahe Grundlagen und Hardware', 'Systemnahe Grundlagen und Hard')
+  );
+  assert.ok(
+    !sameTopic('Vertiefte Programmierkonzepte', 'Software-Entwicklungsmodelle')
+  );
+  assert.ok(!sameTopic('', 'Etwas'));
+});
+
+test('a row that shows the title of another topic gets the title of its file (K4 enabler 3, Part 7 to 9)', () => {
+  const base = { number: 7, suffix: '', slug: 'Software-Entwicklungsmodelle' };
+  // the file name alone shows that the title is wrong, the heading of the Word file is then needed
+  assert.equal(
+    scenarioTitleFix({ ...base, current: 'Szenario: Part 7: Vertiefte Programmierkonzepte' }),
+    'READ_FILE'
+  );
+  assert.equal(
+    scenarioTitleFix({
+      ...base,
+      current: 'Szenario: Part 7: Vertiefte Programmierkonzepte',
+      docTitle: 'Software-Entwicklungsmodelle und Architekturen',
+    }),
+    'Szenario: Part 7: Software-Entwicklungsmodelle und Architekturen'
+  );
+  // a title that fits the file name stays, without reading the file
+  assert.equal(
+    scenarioTitleFix({ ...base, current: 'Szenario: Part 7: Software-Entwicklungsmodelle' }),
+    null
+  );
+  // a file name that says nothing (Part4_KORRIGIERT) is decided by the heading
+  const bare = { number: 4, suffix: '', slug: 'KORRIGIERT' };
+  assert.equal(
+    scenarioTitleFix({ ...bare, current: 'Szenario: Part 4: Alt', docTitle: 'Systemstart und Partitionierung' }),
+    'Szenario: Part 4: Systemstart und Partitionierung'
+  );
+  assert.equal(
+    scenarioTitleFix({ ...bare, current: 'Szenario: Part 4: Systemstart', docTitle: 'Systemstart und Partitionierung' }),
+    null
+  );
+  // no topic anywhere: the title is left alone
+  assert.equal(
+    scenarioTitleFix({ ...bare, current: 'Szenario: Part 4: Alt', docTitle: null }),
+    null
+  );
+  // the letter of a part (5a) stays in the title
+  assert.equal(
+    scenarioTitleFix({ number: 5, suffix: 'a', slug: 'Datenanalyse_KORR', current: 'Szenario: Part 5a: Netz', docTitle: undefined }),
+    'READ_FILE'
+  );
+});
+
+test('a new scenario part gets the full heading when the file name is a shortened form of it', () => {
+  assert.equal(
+    newScenarioTitle({ number: 3, suffix: '', slug: 'Spezialthema_Künstliche_Intell', docTitle: 'Spezialthema Künstliche Intelligenz' }),
+    'Szenario: Part 3: Spezialthema Künstliche Intelligenz'
+  );
+  assert.equal(
+    newScenarioTitle({ number: 4, suffix: '', slug: 'Korrigiert', docTitle: 'Strategische Entscheidungen' }),
+    'Szenario: Part 4: Strategische Entscheidungen'
+  );
+  assert.equal(
+    newScenarioTitle({ number: 2, suffix: 'b', slug: 'Netzzugang_KORR', docTitle: null }),
+    'Szenario: Part 2b: Netzzugang'
+  );
+});
+
+test('an enabler whose folder number differs is moved (Peer 2 Peer on 13 instead of 04)', () => {
+  const folders = [
+    { nr: 1, folder: '01_a' },
+    { nr: 2, folder: '02_b' },
+    { nr: 3, folder: '03_c' },
+    { nr: 4, folder: '04_Peer' },
+    { nr: 5, folder: '05_d' },
+    { nr: 13, folder: '13_Handbuch' },
+  ];
+  const db = [
+    { id: 'a', order_index: 1 },
+    { id: 'b', order_index: 2 },
+    { id: 'c', order_index: 3 },
+    { id: 'd', order_index: 5 },
+    { id: 'p', order_index: 13 },
+    { id: 'h', order_index: 14 },
+  ];
+  const ids = ['a', 'b', 'c', 'p', 'd', 'h'];
+  const matched = new Map(
+    ids.map((id, i) => [i, { e: db.find(x => x.id === id), how: 'title' }])
+  );
+  const plan = planEnablerOrder(folders, matched, db);
+  assert.equal(plan.clear, true);
+  assert.deepEqual(
+    plan.fixes.map(f => [f.enabler.id, f.from, f.to]),
+    [
+      ['p', 13, 4],
+      ['h', 14, 13],
+    ]
+  );
+  // nothing to do when the order is right
+  const same = planEnablerOrder(
+    folders.slice(0, 3),
+    new Map([0, 1, 2].map(i => [i, { e: db[i], how: 'title' }])),
+    db.slice(0, 3)
+  );
+  assert.deepEqual(same, { clear: true, why: null, fixes: [] });
+});
+
+test('the order is not touched when two folders carry one number or when it would clash', () => {
+  const dup = planEnablerOrder(
+    [
+      { nr: 5, folder: '05a_x' },
+      { nr: 5, folder: '05b_y' },
+    ],
+    new Map(),
+    []
+  );
+  assert.equal(dup.clear, false);
+  assert.deepEqual(dup.fixes, []);
+  // the folder wants number 2 for 'x', but a Preview enabler that is not in the folder holds it
+  const db = [
+    { id: 'x', order_index: 7 },
+    { id: 'other', order_index: 2 },
+  ];
+  const clash = planEnablerOrder(
+    [{ nr: 2, folder: '02_x' }],
+    new Map([[0, { e: db[0], how: 'title' }]]),
+    db
+  );
+  assert.equal(clash.clear, false);
+  assert.deepEqual(clash.fixes, []);
 });

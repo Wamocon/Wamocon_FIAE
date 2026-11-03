@@ -1596,8 +1596,10 @@ export default function TrainerReviewsPage() {
               key={s.id}
               className={`group border-accent/30 bg-card hover:border-accent/50 hover:shadow-accent/5 rounded-3xl border p-5 transition-all duration-200 hover:scale-[1.005] hover:shadow-lg ${fadingOutIds.has(s.id) ? 'pointer-events-none scale-[0.98] opacity-40' : ''}`}
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
+              {/* The actions never wrap their text: when the title is long the row
+                  wraps and the actions move below it (KFB-1177) */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
                   {!s.isReviewed && (
                     <input
                       type="checkbox"
@@ -1623,7 +1625,7 @@ export default function TrainerReviewsPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <span className="bg-muted text-muted-foreground rounded-full px-2.5 py-1 text-xs">
                     {s.quizType
                       ? t(`trainer.reviews.quizType.${s.quizType}`)
@@ -1639,14 +1641,14 @@ export default function TrainerReviewsPage() {
                   <Link
                     href={`/trainer/reviews/quizzes/${s.id}`}
                     onClick={() => rememberListState(quizzes.length)}
-                    className="border-accent/30 hover:border-accent/60 hover:bg-accent/10 hover:text-accent rounded-md border px-3 py-2 text-sm transition-all duration-200"
+                    className="border-accent/30 hover:border-accent/60 hover:bg-accent/10 hover:text-accent rounded-md border px-3 py-2 text-sm whitespace-nowrap transition-all duration-200"
                   >
                     {t('trainer.reviews.details')}
                   </Link>
                   <button
                     disabled={busyIds.has(s.id)}
                     onClick={() => toggleSubmissionReviewed(s.id, s.isReviewed)}
-                    className={`rounded-md px-3 py-2 text-sm transition-colors disabled:opacity-50 ${s.isReviewed ? 'border border-green-600/40 text-green-600' : 'border-accent/30 hover:bg-background/60 border'}`}
+                    className={`rounded-md px-3 py-2 text-sm whitespace-nowrap transition-colors disabled:opacity-50 ${s.isReviewed ? 'border border-green-600/40 text-green-600' : 'border-accent/30 hover:bg-background/60 border'}`}
                   >
                     {s.isReviewed ? (
                       <span className="inline-flex items-center gap-1">
@@ -1655,7 +1657,7 @@ export default function TrainerReviewsPage() {
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1">
-                        <Circle className="h-4 w-4" />{' '}
+                        <Circle className="h-4 w-4 shrink-0" />{' '}
                         {t('trainer.reviews.markAsReviewed')}
                       </span>
                     )}

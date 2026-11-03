@@ -19,6 +19,7 @@ import {
 import ResendConfirmation from '@/components/auth/ResendConfirmation';
 import { authFetch } from '@/lib/authFetch';
 import { writePreferredCatalog } from '@/lib/catalog/selection';
+import { catalogDisplayTitle } from '@/lib/catalog/display-title';
 import {
   OCCUPATION_CHOICE_PATH,
   needsOccupationChoice,
@@ -125,7 +126,11 @@ export default function LoginForm({
         `/api/me/catalogs?catalog=${encodeURIComponent(code)}`
       );
       if (res.status === 403) {
-        toast.error(t(notAllowedKey, { title: catalogTitle ?? code }));
+        toast.error(
+          t(notAllowedKey, {
+            title: catalogDisplayTitle(t, code, catalogTitle),
+          })
+        );
         return 'denied';
       }
       return res.ok ? 'allowed' : 'unknown';
@@ -235,7 +240,9 @@ export default function LoginForm({
               role="status"
               className="text-foreground mt-4 text-sm font-medium"
             >
-              {t('catalogs.login.banner', { title: catalogTitle })}
+              {t('catalogs.login.banner', {
+                title: catalogDisplayTitle(t, catalogCode, catalogTitle),
+              })}
             </p>
           )}
           {catalogCode && catalogState === 'unknown' && (

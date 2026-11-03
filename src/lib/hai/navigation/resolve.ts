@@ -48,6 +48,7 @@ import {
   denialAreaText,
   denialContinueText,
   denialLockedText,
+  denialTraineePageText,
   denialUnknownPageText,
 } from '../denial';
 import {
@@ -71,6 +72,13 @@ export interface NavigationScope {
   preferredCatalogIds?: readonly string[];
   /** The phases whose content is due now (trainees), for "Weiter lernen". */
   plan?: NextStepPlan | null;
+  /**
+   * The person gave a clear command ("Öffne ...", "Bring mich zu ..."): an
+   * offer carries `auto` and the text says "Ich öffne ...", so the interface
+   * opens the page right away. A question for the way or a substitute page
+   * stays an offer for the person to confirm.
+   */
+  direct?: boolean;
 }
 
 export type NavigationOutcomeKind =
@@ -118,7 +126,15 @@ function ownPageExamples(level: NavigationLevel): string {
  * only to the administration. Nothing else about the page is said.
  */
 function denied(id: StaticTargetId, level: NavigationLevel): NavigationOutcome {
-  const area = STATIC_TARGETS[id]?.TRAINER ? 'TRAINER' : 'ADMIN';
+  const definition = STATIC_TARGETS[id];
+  // a page of the trainees only (no entry of the trainer area or the admins)
+  if (definition && !definition.TRAINER && !definition.ADMIN) {
+    return {
+      kind: 'denied',
+      text: denialTraineePageText(ownPageExamples(level)),
+    };
+  }
+  const area = definition?.TRAINER ? 'TRAINER' : 'ADMIN';
   return {
     kind: 'denied',
     text: denialAreaText(area, ownPageExamples(level)),
@@ -133,15 +149,28 @@ function unknownPage(level: NavigationLevel): NavigationOutcome {
   };
 }
 
+/**
+ * An offer. With `opening` (a clear command of the person) the offer carries
+ * `auto` and the text is that short report ("Ich öffne ..."), otherwise the text
+ * introduces the card and the person confirms.
+ */
 function offerOutcome(
   path: string | null,
   label: string,
   reason: string,
-  intro: string
+  intro: string,
+  opening?: string
 ): NavigationOutcome {
   // Defence in depth: a path that is not on the allow list is never offered
   if (!path || !isAllowedNavigationPath(path)) {
     return { kind: 'unavailable', text: NAVIGATION_UNAVAILABLE_TEXT };
+  }
+  if (opening) {
+    return {
+      kind: 'offer',
+      text: opening,
+      offer: { path, label, reason, auto: true },
+    };
   }
   return {
     kind: 'offer',
@@ -153,7 +182,8 @@ function offerOutcome(
 function staticOffer(
   id: StaticTargetId,
   level: NavigationLevel,
-  intro?: string
+  intro?: string,
+  opening?: string
 ): NavigationOutcome {
   const target = staticTargetFor(id, level);
   if (!target) return denied(id, level);
@@ -161,8 +191,14 @@ function staticOffer(
     target.path,
     target.label,
     target.reason,
-    intro ?? `Ich habe die Seite ${target.label} für dich.`
+    intro ?? `Ich habe die Seite ${target.label} für dich.`,
+    opening
   );
+}
+
+/** The short report of a command that is carried out: "Ich öffne die Seite X." */
+function openingOf(scope: NavigationScope, text: string): string | undefined {
+  return scope.direct ? text : undefined;
 }
 
 function listTitles(titles: string[]): string {
@@ -185,8 +221,26 @@ export async function resolveNavigation(
   scope: NavigationScope
 ): Promise<NavigationOutcome> {
   switch (intent.kind) {
-    case 'static':
-      return staticOffer(intent.target, scope.level);
+    case 'static': {
+      // a trainer who asks for the courses is taken to the content management,
+      // that is a substitute and not the page asked for: an offer, no command
+      if (intent.target === 'courses' && scope.level !== 'TRAINEE') {
+        return staticOffer(
+          'courses',
+          scope.level,
+          'Kurse verwaltest du in der Inhaltsverwaltung.'
+        );
+      }
+      const target = staticTargetFor(intent.target, scope.level);
+      return staticOffer(
+        intent.target,
+        scope.level,
+        undefined,
+        target
+          ? openingOf(scope, `Ich öffne die Seite ${target.label}.`)
+          : undefined
+      );
+    }
 
     case 'unknown_page':
       return unknownPage(scope.level);
@@ -258,14 +312,19 @@ async function resolveContinue(
         pathOfEnabler(step.entry.enablerId),
         title,
         step.reason,
-        `Weiter geht es mit dem Enabler ${title}.`
+        `Weiter geht es mit dem Enabler ${title}.`,
+        openingOf(scope, `Ich öffne den Enabler ${title}. ${step.reason}`)
       );
     }
     case 'all_done':
       return staticOffer(
         'dashboard',
         'TRAINEE',
-        'Du hast alle freigeschalteten Enabler abgeschlossen.'
+        'Du hast alle freigeschalteten Enabler abgeschlossen.',
+        openingOf(
+          scope,
+          'Du hast alle freigeschalteten Enabler abgeschlossen. Ich öffne dein Dashboard.'
+        )
       );
     case 'all_locked':
       // GESPERRT: the order of work or a lock of the trainer
@@ -304,7 +363,8 @@ async function resolveContent(
       pathOfUseCase(found.item.id),
       title,
       `Das ist der Use Case im Kurs ${plainText(found.item.courseTitle)}.`,
-      `Ich habe den Use Case ${title} für dich.`
+      `Ich habe den Use Case ${title} für dich.`,
+      openingOf(scope, `Ich öffne den Use Case ${title}.`)
     );
   }
 
@@ -347,7 +407,8 @@ async function resolveContent(
       pathOfEnabler(enabler.id),
       `Quiz zu ${title}`,
       'Die Quizze findest du auf der Seite des Enablers.',
-      `Ich habe den Enabler ${title} mit seinen Quizzen für dich.`
+      `Ich habe den Enabler ${title} mit seinen Quizzen für dich.`,
+      openingOf(scope, `Ich öffne den Enabler ${title} mit seinen Quizzen.`)
     );
   }
 
@@ -355,7 +416,8 @@ async function resolveContent(
     pathOfEnabler(enabler.id),
     title,
     `Das ist der Enabler im Kurs ${plainText(enabler.courseTitle)}.`,
-    `Ich habe den Enabler ${title} für dich.`
+    `Ich habe den Enabler ${title} für dich.`,
+    openingOf(scope, `Ich öffne den Enabler ${title}.`)
   );
 }
 

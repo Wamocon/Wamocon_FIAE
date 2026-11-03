@@ -89,8 +89,24 @@ interface NavigationCase {
   expected: {
     kind: 'denied' | 'unknown_page' | 'locked' | 'not_found' | 'offer';
     path?: string;
+    /** A clear command: carried out at once (the offer is marked auto). */
+    direct?: boolean;
   };
   forbiddenWords: string[];
+}
+
+/** A realistic sentence with what must happen (see the list "phrases"). */
+interface NavigationPhrase {
+  id: string;
+  level: 'TRAINEE' | 'TRAINER';
+  occupation: 'FIAE' | 'KFBM';
+  style: 'typed' | 'spoken';
+  question: string;
+  expected: {
+    kind: 'offer' | 'denied' | 'none';
+    path?: string;
+    direct?: boolean;
+  };
 }
 
 const set = JSON.parse(
@@ -105,7 +121,7 @@ const set = JSON.parse(
     ),
     'utf-8'
   )
-) as { cases: NavigationCase[] };
+) as { cases: NavigationCase[]; phrases: NavigationPhrase[] };
 
 const USER = '10000000-0000-4000-8000-000000000001';
 const CATALOG = {
@@ -232,13 +248,136 @@ describe.each(
           expect(isAllowedNavigationPath(result.navigationOffer?.path)).toBe(
             true
           );
-          // spoken: asks, typed: points at the button
-          expect(result.response.endsWith('Soll ich sie öffnen?')).toBe(voice);
-          expect(result.response.includes('Mit Öffnen')).toBe(!voice);
+          if (c.expected.direct) {
+            // a clear command is carried out: no question, no hint at a button
+            expect(result.navigationOffer?.auto).toBe(true);
+            expect(result.response).toMatch(/^Ich öffne /);
+            expect(result.response).not.toContain('Soll ich sie öffnen?');
+            expect(result.response).not.toContain('Mit Öffnen');
+          } else {
+            expect(result.navigationOffer?.auto).toBeUndefined();
+            // spoken: asks, typed: points at the button
+            expect(result.response.endsWith('Soll ich sie öffnen?')).toBe(
+              voice
+            );
+            expect(result.response.includes('Mit Öffnen')).toBe(!voice);
+          }
           break;
       }
     }
   );
+});
+
+// The realistic sentences, through both pipelines. The style of a sentence
+// decides whether it is sent as a spoken question (voice) or typed. What counts:
+// a clear command opens the page at once, a question for the way or a soft wish
+// is an offer, and everything else is left to the model (no offer).
+describe.each(pipelines.map(([name, run]) => [name, run] as const))(
+  'navigation phrases through %s',
+  (_name, run) => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      mockChat.mockResolvedValue({ text: 'Antwort', citations: [] });
+      mockNext.mockResolvedValue([
+        {
+          enablerId: E1,
+          title: 'SQL Grundlagen',
+          courseTitle: 'Datenbanken',
+          stage: 1,
+          chapter: 1,
+          orderIndex: 1,
+          completed: false,
+          locked: false,
+        },
+      ]);
+      mockEnablers.mockResolvedValue([
+        {
+          id: E1,
+          title: 'Enabler 3: SQL Grundlagen',
+          code: '3',
+          courseId: 'course-1',
+          courseTitle: 'Datenbanken',
+        },
+      ]);
+      mockLock.mockResolvedValue({
+        locked: false,
+        lockedByTitle: null,
+        hasActiveQuiz: true,
+      });
+    });
+
+    it.each(set.phrases.map(p => [p.id, p.question, p] as const))(
+      '%s: %s',
+      async (_id, _question, p) => {
+        mockAccess.mockResolvedValue({
+          catalogIds: [CATALOG[p.occupation]],
+          audience: p.level === 'TRAINER' ? 'trainer' : 'trainee',
+          organizationId: 'org-1',
+          userId: USER,
+        });
+        const voice = p.style === 'spoken';
+        const result = await run(p.question, {
+          userId: USER,
+          userRole: p.level,
+          ...(voice ? { voice: true } : {}),
+        });
+
+        // never a write, whatever the sentence
+        expect(result.pendingAction).toBeUndefined();
+        expect(result.actionResult).toBeUndefined();
+
+        switch (p.expected.kind) {
+          case 'none':
+            // left to the pipeline: no offer, and no refusal of a page either
+            expect(result.navigationOffer).toBeUndefined();
+            expect(result.intent).not.toBe('navigation');
+            break;
+          case 'denied':
+            expect(result.navigationOffer).toBeUndefined();
+            expect(result.intent).toBe('navigation');
+            expect(namesDenialReason(result.response, 'ROLLE')).toBe(true);
+            expect(mockChat).not.toHaveBeenCalled();
+            break;
+          case 'offer':
+            expect(mockChat).not.toHaveBeenCalled();
+            expect(result.intent).toBe('navigation');
+            expect(result.navigationOffer?.path).toBe(p.expected.path);
+            expect(isAllowedNavigationPath(result.navigationOffer?.path)).toBe(
+              true
+            );
+            if (p.expected.direct) {
+              expect(result.navigationOffer?.auto).toBe(true);
+              expect(result.response).toMatch(/^(?:Ich öffne |Du hast alle)/);
+            } else {
+              expect(result.navigationOffer?.auto).toBeUndefined();
+              expect(result.response.endsWith('Soll ich sie öffnen?')).toBe(
+                voice
+              );
+              expect(result.response.includes('Mit Öffnen')).toBe(!voice);
+            }
+            break;
+        }
+      }
+    );
+  }
+);
+
+describe('the navigation phrases', () => {
+  it('are many and cover typed, spoken, trainee, trainer, both occupations, command, question and no navigation', () => {
+    const ids = set.phrases.map(p => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(set.phrases.length).toBeGreaterThanOrEqual(40);
+    for (const style of ['typed', 'spoken']) {
+      expect(set.phrases.some(p => p.style === style)).toBe(true);
+    }
+    expect(set.phrases.some(p => p.level === 'TRAINER')).toBe(true);
+    expect(set.phrases.some(p => p.occupation === 'KFBM')).toBe(true);
+    expect(set.phrases.some(p => p.expected.direct === true)).toBe(true);
+    expect(set.phrases.some(p => p.expected.direct === false)).toBe(true);
+    expect(set.phrases.some(p => p.expected.kind === 'none')).toBe(true);
+    expect(set.phrases.some(p => p.expected.kind === 'denied')).toBe(true);
+  });
 });
 
 describe('the navigation cases', () => {

@@ -213,6 +213,14 @@ export function denialAreaText(
 }
 
 /**
+ * ROLLE: a page that only the trainees have ("Ausbilder-Feedback"), asked for
+ * by a person of the trainer level.
+ */
+export function denialTraineePageText(examples: string): string {
+  return `Diese Seite gibt es nur für Auszubildende, sie ist für deine Rolle nicht vorgesehen. Ich bringe dich gern zu einer Seite, die für dich da ist, zum Beispiel ${examples}.`;
+}
+
+/**
  * Not a permission at all: the page is not known. Says so, so nobody takes it
  * for a missing right.
  */
