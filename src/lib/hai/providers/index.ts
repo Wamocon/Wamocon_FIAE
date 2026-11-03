@@ -39,6 +39,7 @@ import {
   describeChatFailure,
   type FallbackState,
 } from './errors';
+import { CachedEmbeddingProvider } from './embeddingCache';
 import { GeminiChatProvider, GeminiEmbeddingProvider } from './gemini';
 import { OllamaEmbeddingProvider } from './ollama';
 import { SokratesEmbeddingProvider } from './sokrates-embedding';
@@ -105,6 +106,10 @@ function ensureInitialized(): void {
       config.gemini.embeddingDimensions
     );
   }
+
+  // The embedding of a question is kept in memory for a short time (same text,
+  // same vector, no person in the key): see embeddingCache.ts
+  _embeddingProvider = new CachedEmbeddingProvider(_embeddingProvider);
 
   // --- CHAT PROVIDER (environment-based) ---
   if (config.chatProvider === 'gemini') {

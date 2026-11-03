@@ -105,14 +105,24 @@ export interface PageIndexOptions {
 /** Maximum number of PDFs to fetch per query */
 const MAX_PDFS_PER_QUERY = 5;
 
-/** Maximum number of relevant pages to include in context */
-const MAX_PAGES_IN_CONTEXT = 8;
+/**
+ * Maximum number of relevant pages to include in context. Was 8: with 3,000
+ * characters per page that is up to 24,000 characters (about 7,000 tokens) on
+ * top of the chunks, and the model reads all of it before its first word
+ * (docs/hai-geschwindigkeit.md). The pages are ordered by relevance, so the
+ * five best stay.
+ */
+const MAX_PAGES_IN_CONTEXT = 5;
 
 /** Minimum relevance score for a page to be included (0-1) */
 const MIN_PAGE_RELEVANCE = 0.15;
 
-/** Maximum character limit per page to include in context */
-const MAX_CHARS_PER_PAGE = 3000;
+/**
+ * Maximum character limit per page to include in context. Was 3,000: a page of
+ * the course PDFs has 1,800 characters on average (measured on 4 PDFs), so 2,400
+ * leaves the usual page whole and cuts only the long ones.
+ */
+const MAX_CHARS_PER_PAGE = 2400;
 
 // In-memory PDF text cache (avoids re-fetching the same PDF within short timeframe)
 const _pdfCache = new Map<

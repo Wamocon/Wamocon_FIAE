@@ -79,6 +79,12 @@ interface ChatRequestBody {
    * route decides, the text of the message never does.
    */
   voice?: boolean;
+  /**
+   * The client wants the waiting stages of a streamed turn as events
+   * (`{ stage: 'search' | 'answer' | 'busy' }`, data only). Off by default: a client
+   * that does not know them must not get an event before the first chunk.
+   */
+  stageEvents?: boolean;
 }
 
 // ============================================================================
@@ -595,6 +601,28 @@ async function getContextTitles(
   return { enablerTitle, courseTitle, inScope: true };
 }
 
+/**
+ * Time after which a streamed turn without a first word counts as "the model
+ * server is busy". An idle Sokrates answers in about 1.5 s, the search in about
+ * 1 s: 12 s is clearly more (docs/hai-geschwindigkeit.md).
+ */
+const STAGE_BUSY_AFTER_MS = 12_000;
+
+/**
+ * One log line with the time of the stages of a turn (milliseconds, numbers
+ * only, no content). The runtime log is the only place to see how long the
+ * stages of a real turn took, so every turn writes it.
+ */
+function logTurnTiming(
+  timings: Record<string, number>,
+  fields: Record<string, number | string | null>
+): void {
+  const parts = Object.entries({ ...fields, ...timings })
+    .filter(([, value]) => value !== null && value !== undefined)
+    .map(([key, value]) => `${key}=${value}`);
+  console.log(`HAI.ai chat timing: ${parts.join(' ')}`);
+}
+
 // ============================================================================
 // ROUTE HANDLERS
 // ============================================================================
@@ -922,31 +950,43 @@ export async function POST(req: NextRequest) {
     // role is the one of the database, never one from the request.
     const allowTrainerKnowledge = mayUseTrainerKnowledgeInPrompt(user[0].role);
 
-    // Get previous messages for context (with stored summary if available)
-    const {
-      messages: previousMessages,
-      summary: storedSummary,
-      holdsTrainerKnowledge,
-    } = await getPreviousMessages(sessionId, 10, allowTrainerKnowledge);
-
     // NOTE: Conversation summary is NO LONGER fetched here.
     // It was making an OpenRouter API call on every message (even "Hi"),
     // burning rate-limited API quota. The summary is only useful for
     // complex questions with >10 messages — those are handled inside
     // the pipeline only when the intent requires an actual LLM call.
 
-    // Load cross-session memory (key facts + summaries from other chats)
+    const userRole = toHaiRole(user[0].role);
+    // The four reads do not depend on each other, so they run together (each
+    // was a round trip to the database one after the other):
+    //  - previous messages for context (with stored summary if available)
+    //  - cross-session memory (key facts + summaries from other chats)
+    //  - the occupation chosen in the app: it limits the titles below like it
+    //    limits the search (a code outside the occupations is ignored)
+    //  - phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
+    const prepStartedAt = Date.now();
+    const [history, memoryResult, catalogChoice, phasePlan] = await Promise.all(
+      [
+        getPreviousMessages(sessionId, 10, allowTrainerKnowledge),
+        loadUserMemory(userId, sessionId, allowTrainerKnowledge),
+        resolveCatalogChoice(userId, requestedCatalogCode(req)),
+        userRole === 'TRAINEE' && user[0].startOfTrainingDate
+          ? loadPhasePlanForUser(userId, user[0].ausbildungDurationYears)
+          : Promise.resolve(null),
+      ]
+    );
+    const {
+      messages: previousMessages,
+      summary: storedSummary,
+      holdsTrainerKnowledge,
+    } = history;
     const { memory: crossSessionMemory, holdsTrainerKnowledge: memoryHolds } =
-      await loadUserMemory(userId, sessionId, allowTrainerKnowledge);
+      memoryResult;
 
     // Get context titles (only for an enabler or course of the user's occupation)
     // The occupation chosen in the app limits the titles too: an enabler of
     // another occupation of the user is dropped like one of a foreign occupation
     // (same rule as the search, a code outside the occupations is ignored)
-    const catalogChoice = await resolveCatalogChoice(
-      userId,
-      requestedCatalogCode(req)
-    );
     const { enablerTitle, courseTitle, inScope } = await getContextTitles(
       context?.enablerId,
       context?.courseId,
@@ -954,17 +994,15 @@ export async function POST(req: NextRequest) {
     );
 
     // Build pipeline context (Phase 1: pass userRole for live data context)
-    const userRole = toHaiRole(user[0].role);
-    // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
-    const phasePlan =
-      userRole === 'TRAINEE' && user[0].startOfTrainingDate
-        ? await loadPhasePlanForUser(userId, user[0].ausbildungDurationYears)
-        : null;
-    const timings: Record<string, number> = {};
+    // The stages are always measured (numbers only, for the log line), the
+    // voice assistant gets them in the end event as well
+    const timings: Record<string, number> = {
+      context: Date.now() - prepStartedAt,
+    };
     const pipelineContext: PipelineContext = {
       userId,
       sessionId,
-      ...(wantsVoice ? { timings } : {}),
+      timings,
       // the occupation chosen in the app comes first in the persona
       preferredCatalogCode: requestedCatalogCode(req),
       currentEnablerId: inScope ? context?.enablerId : undefined,
@@ -998,10 +1036,21 @@ export async function POST(req: NextRequest) {
       }),
     };
 
-    // Save user message (skip if we are editing an existing message)
-    if (!validEditMessageId) {
-      await saveMessage(sessionId, 'user', message.trim());
-    }
+    // Save user message (skip if we are editing an existing message). The write
+    // runs while the pipeline works: the history was read above, and the answer
+    // is stored only after this write is done (the order of the two messages
+    // stays), a failure is raised there.
+    const userMessageSaved: Promise<Error | null> = validEditMessageId
+      ? Promise.resolve(null)
+      : saveMessage(sessionId, 'user', message.trim()).then(
+          () => null,
+          (error: unknown) =>
+            error instanceof Error ? error : new Error(String(error))
+        );
+    const ensureUserMessageSaved = async () => {
+      const failure = await userMessageSaved;
+      if (failure) throw failure;
+    };
 
     // Handle streaming response
     if (stream) {
@@ -1009,8 +1058,28 @@ export async function POST(req: NextRequest) {
       // what happened before the stream starts (the header can only say this much)
       const prepMs = Date.now() - startedAt - authMs;
       let firstChunkMs: number | null = null;
+      // the client gets the waiting stages only if it asked for them (an early
+      // event ends the "thinking" text of clients that do not know them)
+      const wantsStages = body.stageEvents === true;
       const readableStream = new ReadableStream({
         async start(controller) {
+          // no first word after STAGE_BUSY_AFTER_MS: the model server is busy.
+          // Said once, so the client can tell the person the truth ("Der Server
+          // ist gerade ausgelastet") instead of showing dots for a minute.
+          const busyTimer = wantsStages
+            ? setTimeout(() => {
+                if (firstChunkMs !== null) return;
+                try {
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({ stage: 'busy' })}\n\n`
+                    )
+                  );
+                } catch {
+                  // the stream is already closed
+                }
+              }, STAGE_BUSY_AFTER_MS)
+            : null;
           try {
             const result = await processMessageStream(
               message.trim(),
@@ -1021,8 +1090,15 @@ export async function POST(req: NextRequest) {
                 controller.enqueue(
                   encoder.encode(`data: ${JSON.stringify({ chunk })}\n\n`)
                 );
-              }
+              },
+              wantsStages
+                ? stage =>
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({ stage })}\n\n`)
+                    )
+                : undefined
             );
+            await ensureUserMessageSaved();
 
             // No chat provider could answer (the primary failed and there is no
             // Sokrates fallback): send the key of the message for the user and
@@ -1123,6 +1199,15 @@ export async function POST(req: NextRequest) {
               }
             }
 
+            logTurnTiming(timings, {
+              mode: 'stream',
+              intent: result.intent,
+              auth: authMs,
+              prep: prepMs,
+              first: firstChunkMs,
+              total: Date.now() - startedAt,
+            });
+
             // Send final event with metadata
             controller.enqueue(
               encoder.encode(
@@ -1164,6 +1249,8 @@ export async function POST(req: NextRequest) {
               encoder.encode(`data: ${JSON.stringify({ error: errorMsg })}\n\n`)
             );
             controller.close();
+          } finally {
+            if (busyTimer) clearTimeout(busyTimer);
           }
         },
       });
@@ -1184,6 +1271,7 @@ export async function POST(req: NextRequest) {
 
     // Non-streaming response
     const result = await processMessage(message.trim(), pipelineContext);
+    await ensureUserMessageSaved();
 
     // No chat provider could answer: a clear error, nothing stored as an answer
     if (result.errorKey) {
@@ -1270,6 +1358,12 @@ export async function POST(req: NextRequest) {
         );
       }
     }
+
+    logTurnTiming(timings, {
+      mode: 'blocking',
+      intent: result.intent,
+      total: Date.now() - startedAt,
+    });
 
     return NextResponse.json({
       success: true,
