@@ -30,6 +30,46 @@ export function quizReviewedMessage(input: {
   return `${subject} wurde bewertet${result}.${feedback}`;
 }
 
+/** Room for the quiz titles in the text of a bundled notification. */
+export const BUNDLED_TITLES_MAX_CHARS = 160;
+
+/**
+ * The text of the one notification a trainee gets when a trainer marks several
+ * of their quizzes as reviewed in one step (WMCNL-3001): "Deine 5 Quizze wurden
+ * bewertet: „A“, „B“ …". The titles are named as far as they fit
+ * (BUNDLED_TITLES_MAX_CHARS), a quiz handed in twice is named once, and the
+ * ellipsis says that more titles exist than are named. The bell knows
+ * the sentence (src/lib/notification-text.ts). For exactly one quiz use
+ * quizReviewedMessage, the text stays what it was.
+ */
+export function quizzesReviewedMessage(
+  count: number,
+  titles: Array<string | null | undefined>
+): string {
+  const head = `Deine ${count} Quizze wurden bewertet`;
+  const unique: string[] = [];
+  for (const title of titles) {
+    const text = (title ?? '').trim();
+    if (text && !unique.includes(text)) unique.push(text);
+  }
+  if (unique.length === 0) return `${head}.`;
+  const named: string[] = [];
+  let length = 0;
+  for (const title of unique) {
+    const part = `„${title}“`;
+    const next = length + (named.length ? 2 : 0) + part.length;
+    if (named.length > 0 && next > BUNDLED_TITLES_MAX_CHARS) break;
+    named.push(part);
+    length = next;
+  }
+  // a single title longer than the room is cut, so the text stays short
+  if (length > BUNDLED_TITLES_MAX_CHARS) {
+    named[0] = `${named[0].slice(0, BUNDLED_TITLES_MAX_CHARS - 2)}…“`;
+  }
+  const more = named.length < unique.length;
+  return `${head}: ${named.join(', ')}${more ? ' …' : ''}`;
+}
+
 type NotificationRow = {
   type?: string | null;
   message?: string | null;

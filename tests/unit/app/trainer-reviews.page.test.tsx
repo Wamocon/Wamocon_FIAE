@@ -111,6 +111,9 @@ type World = {
   quizTotal?: number;
   documents?: any[];
   patch?: (url: string, body: any) => Response;
+  /** POST /api/trainer/quiz-submissions/bulk-review */
+  bulk?: (body: any) => Response;
+  courses?: Array<{ id: string; title: string }>;
 };
 
 let calls: string[] = [];
@@ -122,6 +125,26 @@ function world(w: World) {
     calls.push(`${init?.method ?? 'GET'} ${url}`);
     if (init?.method === 'PATCH') {
       return w.patch?.(url, JSON.parse(init.body)) ?? json({ ok: true });
+    }
+    if (
+      init?.method === 'POST' &&
+      url.endsWith('/quiz-submissions/bulk-review')
+    ) {
+      const body = JSON.parse(init.body);
+      return (
+        w.bulk?.(body) ??
+        json({
+          ok: true,
+          requested: body.ids.length,
+          marked: body.ids.length,
+          alreadyReviewed: 0,
+          skipped: 0,
+          reviewedIds: body.ids,
+        })
+      );
+    }
+    if (url === '/api/trainer/courses') {
+      return json({ courses: w.courses ?? [] });
     }
     const q = new URL(url, 'http://x').searchParams;
     const offset = Number(q.get('offset') ?? 0);
@@ -731,5 +754,401 @@ describe('WMCNL-3005: the model solution says what it is', () => {
       'Use Case K2-a: Musterlösung (PDF)'
     );
     expect(viewer).toHaveAttribute('data-subtitle', 'Musterlösung');
+  });
+});
+
+const COURSE_A = '77777777-7777-4777-8777-777777777777';
+const COURSE_B = '88888888-8888-4888-8888-888888888888';
+
+const openQuizzes = (n: number, over: Record<string, unknown> = {}) =>
+  Array.from({ length: n }, (_, i) => quizItem(i + 1, over));
+
+const markButton = () =>
+  screen.getByRole('button', { name: 'Ausgewählte als bewertet markieren' });
+const selectAll = () =>
+  screen.getByRole('checkbox', { name: 'Alle auf dieser Seite auswählen' });
+const postedBulk = () =>
+  authFetchMock.mock.calls.filter(c => (c[1] as any)?.method === 'POST');
+const confirmInDialog = async () =>
+  fireEvent.click(
+    within(await screen.findByRole('dialog')).getByRole('button', {
+      name: 'Als bewertet markieren',
+    })
+  );
+
+describe('WMCNL-3001: collective action "Als bewertet markieren"', () => {
+  it('has a checkbox per open quiz, a select-all and a counter', async () => {
+    world({
+      quizzes: [
+        quizItem(1, { traineeName: 'Leon Moretz' }),
+        quizItem(2),
+        quizItem(3),
+      ],
+    });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    expect(
+      screen.getByRole('checkbox', {
+        name: 'Quiz „Quiz 1“ von Leon Moretz auswählen',
+      })
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent('0 ausgewählt');
+    expect(markButton()).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Quiz „Quiz 2“/ }));
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent('1 ausgewählt');
+    expect(markButton()).toBeEnabled();
+    expect(selectAll()).not.toBeChecked();
+
+    fireEvent.click(selectAll());
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent('3 ausgewählt');
+    expect(selectAll()).toBeChecked();
+
+    fireEvent.click(selectAll());
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent('0 ausgewählt');
+  });
+
+  it('offers no checkbox for a quiz that is reviewed already', async () => {
+    world({ quizzes: [quizItem(1), quizItem(2, { isReviewed: true })] });
+    render('view=quizzes&status=all');
+    await screen.findByText('Quiz 1');
+    expect(
+      screen.getAllByRole('checkbox', { name: /auswählen$/ })
+    ).toHaveLength(2);
+    fireEvent.click(selectAll());
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent('1 ausgewählt');
+  });
+
+  it('asks first, names the number of quizzes and trainees, and sends nothing before the confirmation', async () => {
+    world({
+      quizzes: [
+        quizItem(1, { traineeId: 't1' }),
+        quizItem(2, { traineeId: 't1' }),
+        quizItem(3, { traineeId: 't2', traineeName: 'Anna Beck' }),
+      ],
+    });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    fireEvent.click(selectAll());
+    fireEvent.click(markButton());
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(
+      'Du markierst 3 Quizze von 2 Azubis als bewertet.'
+    );
+    expect(dialog).toHaveTextContent(
+      'Jeder dieser Azubis erhält dazu eine Benachrichtigung.'
+    );
+    // the focus starts on "Abbrechen", so a stray Enter confirms nothing
+    expect(
+      within(dialog).getByRole('button', { name: 'Abbrechen' })
+    ).toHaveFocus();
+    expect(postedBulk()).toHaveLength(0);
+  });
+
+  it('says "1 Quiz von 1 Azubi" for one', async () => {
+    world({ quizzes: [quizItem(1)] });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    fireEvent.click(selectAll());
+    fireEvent.click(markButton());
+    expect(await screen.findByRole('dialog')).toHaveTextContent(
+      'Du markierst 1 Quiz von 1 Azubi als bewertet.'
+    );
+  });
+
+  it('closes with Escape and with "Abbrechen" and keeps the selection', async () => {
+    world({ quizzes: openQuizzes(2) });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    fireEvent.click(selectAll());
+    fireEvent.click(markButton());
+    await screen.findByRole('dialog');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    );
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent('2 ausgewählt');
+
+    fireEvent.click(markButton());
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Abbrechen',
+      })
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    );
+    expect(postedBulk()).toHaveLength(0);
+  });
+
+  it('keeps the focus inside the dialog (Tab walks in a circle)', async () => {
+    world({ quizzes: openQuizzes(2) });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    fireEvent.click(selectAll());
+    fireEvent.click(markButton());
+    const dialog = await screen.findByRole('dialog');
+    within(dialog)
+      .getByRole('button', { name: 'Als bewertet markieren' })
+      .focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(
+      within(dialog).getByRole('button', { name: 'Abbrechen' })
+    ).toHaveFocus();
+  });
+
+  it('sends the selected ids once confirmed, takes them from the list and the total, and says what happened', async () => {
+    world({ quizzes: openQuizzes(3), quizTotal: 2158 });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    fireEvent.click(screen.getByRole('checkbox', { name: /Quiz „Quiz 1“/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Quiz „Quiz 3“/ }));
+    fireEvent.click(markButton());
+    await confirmInDialog();
+    await waitFor(() =>
+      expect(screen.queryByText('Quiz 1')).not.toBeInTheDocument()
+    );
+    expect(calls).toContain('POST /api/trainer/quiz-submissions/bulk-review');
+    expect(JSON.parse((postedBulk()[0][1] as any).body)).toEqual({
+      ids: ['q1', 'q3'],
+    });
+    expect(screen.queryByText('Quiz 3')).not.toBeInTheDocument();
+    expect(screen.getByText('Quiz 2')).toBeInTheDocument();
+    expect(screen.getByTestId('reviews-count')).toHaveTextContent(
+      '1 von 2156 angezeigt'
+    );
+    expect(screen.getByTestId('bulk-result')).toHaveTextContent(
+      '2 Quizze als bewertet markiert.'
+    );
+    expect(toast.success).toHaveBeenCalledWith(
+      '2 Quizze als bewertet markiert.'
+    );
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent('0 ausgewählt');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('reports what was already done and what was skipped, and never calls a skipped quiz done', async () => {
+    world({
+      quizzes: openQuizzes(3),
+      bulk: () =>
+        json({
+          ok: true,
+          requested: 3,
+          marked: 1,
+          alreadyReviewed: 1,
+          skipped: 1,
+          reviewedIds: ['q1', 'q2'],
+        }),
+    });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    fireEvent.click(selectAll());
+    fireEvent.click(markButton());
+    await confirmInDialog();
+    await waitFor(() =>
+      expect(screen.queryByText('Quiz 1')).not.toBeInTheDocument()
+    );
+    // the one the server skipped is still open in the list
+    expect(screen.getByText('Quiz 3')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-result')).toHaveTextContent(
+      '1 Quiz als bewertet markiert. 1 war bereits bewertet. 1 nicht geändert (nicht gefunden oder keine Berechtigung).'
+    );
+    expect(toast.error).toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('keeps everything and says so when the server fails', async () => {
+    world({
+      quizzes: openQuizzes(2),
+      bulk: () => json({ error: 'x' }, false, 500),
+    });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    fireEvent.click(selectAll());
+    fireEvent.click(markButton());
+    await confirmInDialog();
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(String(toastError.mock.calls[0][0])).toContain(
+      'konnten nicht als bewertet markiert werden'
+    );
+    expect(screen.getByText('Quiz 1')).toBeInTheDocument();
+    expect(screen.getByText('Quiz 2')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent('2 ausgewählt');
+    expect(screen.queryByTestId('bulk-result')).not.toBeInTheDocument();
+  });
+
+  it('shows the quizzes as reviewed (not gone) in the list of all', async () => {
+    world({ quizzes: openQuizzes(2) });
+    render('view=quizzes&status=all');
+    await screen.findByText('Quiz 1');
+    fireEvent.click(selectAll());
+    fireEvent.click(markButton());
+    await confirmInDialog();
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: 'Bewertet' })).toHaveLength(
+        2
+      )
+    );
+    expect(screen.getByText('Quiz 1')).toBeInTheDocument();
+    // nothing is open any more: no action bar
+    expect(screen.queryByTestId('bulk-bar')).not.toBeInTheDocument();
+  });
+
+  it('selects at most 100 and says so', async () => {
+    world({ quizzes: openQuizzes(130) });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    fireEvent.click(screen.getByRole('button', { name: 'Weitere laden' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('reviews-count')).toHaveTextContent(
+        '100 von 130'
+      )
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Weitere laden' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('reviews-count')).toHaveTextContent(
+        '130 von 130'
+      )
+    );
+    fireEvent.click(selectAll());
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent(
+      '100 ausgewählt'
+    );
+    expect(screen.getByTestId('bulk-bar')).toHaveTextContent('höchstens 100');
+    fireEvent.click(screen.getByRole('checkbox', { name: /Quiz „Quiz 101“/ }));
+    expect(toastError).toHaveBeenCalledWith(
+      'Es lassen sich höchstens 100 Quizze auf einmal auswählen.'
+    );
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent(
+      '100 ausgewählt'
+    );
+  });
+
+  it('drops the selection when the filter changes', async () => {
+    world({ quizzes: openQuizzes(2) });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    fireEvent.click(selectAll());
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent('2 ausgewählt');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Fragenkomplex:' }), {
+      target: { value: 'global' },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('bulk-count')).toHaveTextContent('0 ausgewählt')
+    );
+  });
+});
+
+describe('WMCNL-3001: filter by question set (Fragenkomplex)', () => {
+  const courseSelect = () =>
+    screen.getByRole('combobox', { name: 'Fragenkomplex:' });
+
+  it('offers all, global and the question sets of the occupation', async () => {
+    world({
+      quizzes: openQuizzes(1),
+      courses: [
+        { id: COURSE_A, title: 'K1 Telefonieren' },
+        { id: COURSE_B, title: 'K2 Schriftverkehr' },
+      ],
+    });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    await waitFor(() =>
+      expect(within(courseSelect()).getAllByRole('option')).toHaveLength(4)
+    );
+    expect(
+      within(courseSelect())
+        .getAllByRole('option')
+        .map(o => o.textContent)
+    ).toEqual(['Alle', 'Global', 'K1 Telefonieren', 'K2 Schriftverkehr']);
+    expect(calls).toContain('GET /api/trainer/courses');
+  });
+
+  it('asks the server for the question set and keeps it in the address', async () => {
+    world({
+      quizzes: openQuizzes(2),
+      courses: [{ id: COURSE_A, title: 'K1 Telefonieren' }],
+    });
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    await waitFor(() =>
+      expect(within(courseSelect()).getAllByRole('option')).toHaveLength(3)
+    );
+    fireEvent.change(courseSelect(), { target: { value: COURSE_A } });
+    await waitFor(() =>
+      expect(urls('/api/trainer/quiz-submissions?').at(-1)).toBe(
+        `/api/trainer/quiz-submissions?onlyPending=true&limit=50&offset=0&course=${COURSE_A}`
+      )
+    );
+    expect(window.location.search).toContain(`course=${COURSE_A}`);
+
+    fireEvent.change(courseSelect(), { target: { value: 'global' } });
+    await waitFor(() =>
+      expect(urls('/api/trainer/quiz-submissions?').at(-1)).toContain(
+        'course=global'
+      )
+    );
+    expect(window.location.search).toContain('course=global');
+
+    fireEvent.change(courseSelect(), { target: { value: 'all' } });
+    await waitFor(() =>
+      expect(urls('/api/trainer/quiz-submissions?').at(-1)).not.toContain(
+        'course='
+      )
+    );
+    expect(window.location.search).not.toContain('course');
+  });
+
+  it('takes the question set from the address (reload, link, way back)', async () => {
+    world({
+      quizzes: openQuizzes(1),
+      courses: [{ id: COURSE_A, title: 'K1 Telefonieren' }],
+    });
+    render(`view=quizzes&course=${COURSE_A}`);
+    await screen.findByText('Quiz 1');
+    expect(urls('/api/trainer/quiz-submissions?')[0]).toContain(
+      `course=${COURSE_A}`
+    );
+    await waitFor(() => expect(courseSelect()).toHaveValue(COURSE_A));
+  });
+
+  it('ignores a value in the address that is no question set', async () => {
+    world({ quizzes: openQuizzes(1) });
+    render('view=quizzes&course=nope');
+    await screen.findByText('Quiz 1');
+    expect(urls('/api/trainer/quiz-submissions?')[0]).not.toContain('course=');
+  });
+
+  it('drops a question set of another occupation once the list of this one is known', async () => {
+    world({
+      quizzes: openQuizzes(1),
+      courses: [{ id: COURSE_B, title: 'K2' }],
+    });
+    render(`view=quizzes&course=${COURSE_A}`);
+    await screen.findByText('Quiz 1');
+    await waitFor(() => expect(courseSelect()).toHaveValue('all'));
+  });
+
+  it('still works when the question sets cannot be loaded', async () => {
+    world({ quizzes: openQuizzes(1) });
+    const original = authFetchMock.getMockImplementation()!;
+    authFetchMock.mockImplementation(async (input: any, init: any) =>
+      String(input) === '/api/trainer/courses'
+        ? json({}, false, 500)
+        : original(input, init)
+    );
+    render('view=quizzes');
+    await screen.findByText('Quiz 1');
+    expect(within(courseSelect()).getAllByRole('option')).toHaveLength(2);
+  });
+
+  it('is not part of the address of the lessons and use cases', async () => {
+    world({ quizzes: openQuizzes(1), enablers: [enablerItem(1)] });
+    render('view=quizzes&course=global');
+    await screen.findByText('Quiz 1');
+    expect(window.location.search).toContain('course=global');
+    fireEvent.click(screen.getByRole('button', { name: 'Themenkreise' }));
+    await screen.findByText('Themenkreis 1');
+    expect(window.location.search).not.toContain('course');
   });
 });

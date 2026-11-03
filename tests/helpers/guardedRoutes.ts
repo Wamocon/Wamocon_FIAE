@@ -539,6 +539,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   {
+    route: 'trainer/quiz-submissions/bulk-review',
+    method: 'POST',
+    guard: 'trainer',
+    params: [],
+  },
+  {
     route: 'trainer/quizzes/[quizId]',
     method: 'GET',
     guard: 'trainer',
