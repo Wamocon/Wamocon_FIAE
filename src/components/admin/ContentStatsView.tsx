@@ -14,6 +14,7 @@ import {
 import { authFetch } from '@/lib/authFetch';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { ContentCheckPanel } from '@/components/admin/ContentCheckPanel';
 import { ContentTargetsForm } from '@/components/admin/ContentTargetsForm';
 import { SequenceRulePanel } from '@/components/admin/SequenceRulePanel';
 import type {
@@ -267,6 +268,12 @@ function CatalogCard({
           </dd>
         </div>
       </dl>
+      {canEditTargets && (
+        <ContentCheckPanel
+          catalogId={catalog.catalogId}
+          catalogCode={catalog.code}
+        />
+      )}
     </section>
   );
 }
