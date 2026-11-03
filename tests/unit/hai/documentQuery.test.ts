@@ -567,6 +567,28 @@ describe('answerDocumentQuestion', () => {
     expect(answer.documentIds).toEqual([]);
   });
 
+  it('a shorter piece of a name is asked for as the whole name, so it cannot fill the limit of the query', async () => {
+    installDb([
+      row({
+        id: 'target',
+        title: 'Szenario K14-i (PDF)',
+        fileName: 'Szenario_14i.pdf',
+      }),
+    ]);
+    const answer = await answerDocumentQuestion({
+      message: 'Was steht in Szenario_14i.pdf?',
+      access: traineeAccess,
+    });
+    expect(answer.documentIds).toEqual(['target']);
+    // real data: "szenario" is in hundreds of titles, the 200 rows of the limit
+    // were full of them and the file that was named was cut off
+    const call = sqlOf(0);
+    expect(call.params).toContain('%szenario 14i%');
+    expect(call.params).not.toContain('%szenario%');
+    expect(call.params).toContain('szenario');
+    expect(call.text).toMatch(/= \$\d+ OR .* = \$\d+/);
+  });
+
   it('loads the pages only of PDF files', async () => {
     installDb(docs);
     const answer = await answerDocumentQuestion({
@@ -645,6 +667,39 @@ describe('answerDocumentQuestion', () => {
       answer.text.split('\n').filter(l => l.startsWith('- '))
     ).toHaveLength(20);
     expect(answer.text).toContain('45 Dateien gefunden, die ersten 20');
+  });
+
+  it('does not call the count of a read that stopped at its row limit "all files"', async () => {
+    // the database returns at most 200 rows, a trainee of the real Preview sees about 1000
+    installDb(
+      Array.from({ length: 200 }, (_, i) =>
+        row({ id: `d${i}`, fileName: `Datei_${i}.pdf`, title: `Titel ${i}` })
+      )
+    );
+    const answer = await answerDocumentQuestion({
+      message: 'Welche Dateien gibt es?',
+      access: traineeAccess,
+    });
+    expect(answer.text).toContain('Mindestens 200 Dateien gefunden');
+    expect(answer.text).toContain('Nenne keine genaue Gesamtzahl');
+    expect(answer.text).not.toContain('200 Dateien gefunden, die ersten');
+    expect(
+      answer.text.split('\n').filter(l => l.startsWith('- '))
+    ).toHaveLength(20);
+  });
+
+  it('names the exact count while the read stays below its limit', async () => {
+    installDb(
+      Array.from({ length: 199 }, (_, i) =>
+        row({ id: `d${i}`, fileName: `Datei_${i}.pdf`, title: `Titel ${i}` })
+      )
+    );
+    const answer = await answerDocumentQuestion({
+      message: 'Welche Dateien gibt es?',
+      access: traineeAccess,
+    });
+    expect(answer.text).toContain('199 Dateien gefunden, die ersten 20');
+    expect(answer.text).not.toContain('Mindestens');
   });
 
   it('is neutral when nothing is visible', async () => {
