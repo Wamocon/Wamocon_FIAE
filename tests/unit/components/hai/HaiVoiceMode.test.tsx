@@ -256,12 +256,12 @@ const flush = async () => {
 
 const openButtons = () =>
   screen.queryAllByRole('button', { name: /Gespräch mit der HAI starten/ });
-const dialog = () => screen.queryByRole('dialog', { name: /Sprachmodus/ });
+const figure = () =>
+  screen.queryByRole('region', { name: 'Sprachmodus: Gespräch mit der HAI' });
 const status = () => screen.getByTestId('hai-voice-status').textContent;
-const mascotState = () =>
-  within(screen.getByTestId('hai-voice-mode'))
-    .getByTestId('hai-mascot')
-    .getAttribute('data-state');
+const character = () =>
+  within(figure()!).getByTestId('hai-character') as HTMLElement;
+const mascotState = () => character().getAttribute('data-state');
 
 /** The first "Gespräch" button (header of the chat) opens the voice mode. */
 async function openVoiceMode() {
@@ -364,24 +364,54 @@ describe('the button "Gespräch"', () => {
 });
 
 describe('opening and ending the voice mode', () => {
-  it('opens a modal dialog with a name, the mascot and the state as text', async () => {
+  it('opens the HAI figure at the bottom left: no dialog, no full screen, the state as text', async () => {
     routes();
     const { browser } = await mount();
     await openVoiceMode();
 
-    const modal = dialog()!;
-    expect(modal).toBeTruthy();
-    expect(modal.getAttribute('aria-modal')).toBe('true');
-    expect(screen.getByRole('heading', { name: 'Sprachmodus' })).toBeTruthy();
+    const root = figure()!;
+    expect(root).toBeTruthy();
+    // a figure next to the page, not a dialog and not a full screen
+    expect(screen.queryByRole('dialog', { name: /Sprachmodus/ })).toBeNull();
+    expect(root.getAttribute('aria-modal')).toBeNull();
+    expect(root.className).toContain('fixed');
+    expect(root.className).not.toContain('inset-0');
+    expect(document.querySelector('[data-testid="hai-voice-mode"]')).toBeNull();
+    // bottom left, under the dialogs and viewers (z-40, like the HAI button)
+    expect(root.className).toContain('z-40');
+    expect(root.className).toContain('bottom-4');
+    expect(root.className).toContain('left-4');
+    // with the safe area of a phone (notch, home bar)
+    expect(root.className).toContain('safe-area-inset-bottom');
+    // clicks go through to the page, only the figure and the controls take them
+    expect(root.className).toContain('pointer-events-none');
+    expect(
+      within(root).getByRole('button', { name: 'Sprachmodus beenden' })
+        .className
+    ).toContain('pointer-events-auto');
+    // the figure is decoration, the state is text (small, polite)
+    expect(character().getAttribute('aria-hidden')).toBe('true');
     // with the consent given it listens at once
     expect(browser.recognitions).toHaveLength(1);
     expect(browser.recognitions[0].started).toBe(true);
     expect(status()).toBe('HAI hört zu');
     expect(mascotState()).toBe('listening');
-    // the state is announced politely
     expect(
       screen.getByTestId('hai-voice-status').getAttribute('aria-live')
     ).toBe('polite');
+  });
+
+  it('lets the figure rise out of the water and stand there while the mode runs', async () => {
+    routes();
+    await mount();
+    await openVoiceMode();
+    expect(character().getAttribute('data-phase')).toBe('rising');
+    await waitFor(
+      () => expect(character().getAttribute('data-phase')).toBe('standing'),
+      { timeout: 3000 }
+    );
+    // it keeps standing: the phase does not change again while the mode is open
+    expect(character().getAttribute('data-phase')).toBe('standing');
   });
 
   it('ends with Esc, turns the microphone off and gives the focus back to the button', async () => {
@@ -393,9 +423,25 @@ describe('opening and ending the voice mode', () => {
     await act(async () => {
       fireEvent.keyDown(document, { key: 'Escape' });
     });
-    expect(dialog()).toBeNull();
+    expect(figure()).toBeNull();
     expect(browser.recognitions[0].aborted).toBe(true);
     expect(document.activeElement).toBe(opener);
+  });
+
+  it('leaves Esc alone when something else on the page already used it', async () => {
+    routes();
+    await mount();
+    await openVoiceMode();
+    await act(async () => {
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
+      event.preventDefault();
+      document.dispatchEvent(event);
+    });
+    expect(figure()).toBeTruthy();
   });
 
   it('ends with the close button', async () => {
@@ -407,8 +453,33 @@ describe('opening and ending the voice mode', () => {
         screen.getByRole('button', { name: 'Sprachmodus beenden' })
       );
     });
-    expect(dialog()).toBeNull();
+    expect(figure()).toBeNull();
     expect(browser.recognitions[0].aborted).toBe(true);
+  });
+
+  it('dives into the water at the end: only the figure stays for a moment, without controls and text', async () => {
+    routes();
+    await mount();
+    await openVoiceMode();
+    await act(async () => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+    });
+    // the controls and the state text are gone at once
+    expect(figure()).toBeNull();
+    expect(screen.queryByTestId('hai-voice-status')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Sprachmodus beenden' })
+    ).toBeNull();
+    // the figure dives, then it is gone
+    const diving = screen.getByTestId('hai-voice-figure');
+    expect(diving.getAttribute('data-phase')).toBe('diving');
+    expect(
+      within(diving).getByTestId('hai-character').getAttribute('data-phase')
+    ).toBe('diving');
+    await waitFor(
+      () => expect(screen.queryByTestId('hai-voice-figure')).toBeNull(),
+      { timeout: 3000 }
+    );
   });
 
   it('ends with the spoken command "Sprachmodus beenden" and sends nothing', async () => {
@@ -419,11 +490,10 @@ describe('opening and ending the voice mode', () => {
       browser.recognitions[0].say('Sprachmodus beenden');
     });
     await flush();
-    expect(dialog()).toBeNull();
+    expect(figure()).toBeNull();
     expect(chatCalls()).toHaveLength(0);
     // the round was over when the command arrived: nothing listens any more
     expect(browser.recognitions).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: 'HAI hört zu' })).toBeNull();
   });
 
   it('opens again after it ended', async () => {
@@ -434,39 +504,85 @@ describe('opening and ending the voice mode', () => {
       fireEvent.keyDown(document, { key: 'Escape' });
     });
     await openVoiceMode();
-    expect(dialog()).toBeTruthy();
+    expect(figure()).toBeTruthy();
     expect(browser.recognitions).toHaveLength(2);
+  });
+
+  it('puts the large chat back to the panel, so it does not cover the figure', async () => {
+    routes();
+    await mount(consented, { chat: 'full' });
+    await openVoiceMode();
+    expect(figure()).toBeTruthy();
+    expect(hai.viewMode).toBe('widget');
+  });
+
+  it('puts the chat panel away on a phone, where it would cover the whole width', async () => {
+    const original = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        onchange: null,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        dispatchEvent: () => false,
+      }),
+    });
+    try {
+      routes();
+      await mount();
+      await openVoiceMode();
+      expect(figure()).toBeTruthy();
+      expect(hai.viewMode).toBe('hidden');
+    } finally {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        configurable: true,
+        value: original,
+      });
+    }
   });
 });
 
-describe('focus trap', () => {
-  it('keeps Tab and Shift+Tab inside the dialog', async () => {
+describe('the page behind stays usable', () => {
+  it('has no focus trap: Tab leaves the controls of the figure and reaches the page', async () => {
     routes();
     await mount();
     await openVoiceMode();
-    const modal = dialog()!;
-    const inside = () =>
-      Array.from(modal.querySelectorAll<HTMLElement>('button')).filter(
-        b => b.getAttribute('aria-hidden') !== 'true'
-      );
-    const buttons = inside();
-    expect(buttons.length).toBeGreaterThanOrEqual(3);
-    // the first focus lands on the mascot, the main action
-    expect(modal.contains(document.activeElement)).toBe(true);
+    const root = figure()!;
+    // the first focus is on the microphone button of the figure
+    expect(root.contains(document.activeElement)).toBe(true);
     expect(document.activeElement?.getAttribute('data-autofocus')).toBe('');
-
-    // Tab from the last wraps to the first
+    // the controls are real buttons that Tab reaches in turn
+    const buttons = Array.from(root.querySelectorAll<HTMLElement>('button'));
+    expect(buttons.length).toBeGreaterThanOrEqual(4);
+    // walking on from the last control leaves the figure
     buttons[buttons.length - 1].focus();
-    await userEvent.tab();
-    expect(document.activeElement).toBe(buttons[0]);
-    // Shift+Tab from the first wraps to the last
-    await userEvent.tab({ shift: true });
-    expect(document.activeElement).toBe(buttons[buttons.length - 1]);
-    // many Tabs never leave the dialog
-    for (let i = 0; i < buttons.length * 2 + 1; i++) {
+    let left = false;
+    for (let i = 0; i < 40 && !left; i++) {
       await userEvent.tab();
-      expect(modal.contains(document.activeElement)).toBe(true);
+      left = !root.contains(document.activeElement);
     }
+    expect(left).toBe(true);
+  });
+
+  it('puts no dark layer and nothing that fills the screen over the page', async () => {
+    routes();
+    await mount();
+    await openVoiceMode();
+    const root = figure()!;
+    for (const node of [root, ...Array.from(root.querySelectorAll('*'))]) {
+      const classes = String(node.getAttribute('class') ?? '');
+      expect(classes).not.toContain('inset-0');
+      expect(classes).not.toContain('bg-black');
+    }
+    // the voice mode does not lock the page: no modal, no aria-hidden on the rest
+    expect(document.querySelector('[aria-modal="true"]')).toBeNull();
+    expect(document.body.getAttribute('aria-hidden')).toBeNull();
   });
 });
 
@@ -482,11 +598,13 @@ describe('consent comes first', () => {
     expect(consent.textContent).toMatch(/Browser/);
     expect(browser.recognitions).toHaveLength(0);
     expect(status()).toBe('HAI wartet');
-    expect(
-      screen
-        .getByRole('button', { name: 'HAI wartet' })
-        .getAttribute('aria-disabled')
-    ).toBe('true');
+    // the consent is a small card next to the basin, not a full screen
+    expect(figure()!.contains(consent)).toBe(true);
+    expect(consent.className).not.toContain('inset-0');
+    // the microphone button waits for the answer
+    expect(screen.getByTestId('hai-voice-mic').hasAttribute('disabled')).toBe(
+      true
+    );
 
     await act(async () => {
       fireEvent.click(
@@ -503,7 +621,7 @@ describe('consent comes first', () => {
     expect(browser.recognitions).toHaveLength(1);
     expect(screen.queryByTestId('hai-voice-mode-consent')).toBeNull();
     expect(status()).toBe('HAI hört zu');
-    // the focus goes on to the mascot
+    // the focus goes on to the microphone button
     expect(document.activeElement?.getAttribute('data-autofocus')).toBe('');
   });
 
@@ -514,25 +632,25 @@ describe('consent comes first', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
     });
-    expect(dialog()).toBeNull();
+    expect(figure()).toBeNull();
     expect(browser.recognitions).toHaveLength(0);
     expect(browser.store[CONSENT]).toBeUndefined();
   });
 
-  it('never starts a recording by the tap on the mascot without consent', async () => {
+  it('never starts a recording by a tap on the figure without consent', async () => {
     routes();
     const { browser } = await mount({ [DAY_DONE]: '2026-11-02' });
     await openVoiceMode();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'HAI wartet' }));
+      fireEvent.click(screen.getByTestId('hai-voice-figure-body'));
     });
     await flush();
     expect(browser.recognitions).toHaveLength(0);
   });
 });
 
-describe('the states of the mascot follow the voice loop', () => {
-  it('listens, thinks, speaks and listens again, each state as text and as mascot', async () => {
+describe('the states of the figure follow the voice loop', () => {
+  it('listens, thinks, speaks and listens again, each state as text and as figure', async () => {
     routes({
       answers: [
         { text: 'Ein Primärschlüssel kennzeichnet eine Zeile eindeutig.' },
@@ -609,7 +727,7 @@ describe('the states of the mascot follow the voice loop', () => {
     expect(screen.getByRole('alert').textContent).toContain(
       'Tippen Sie auf die HAI'
     );
-    // a tap on the mascot listens again
+    // the button listens again
     const before = browser.recognitions.length;
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Erneut zuhören' }));
@@ -633,7 +751,7 @@ describe('the states of the mascot follow the voice loop', () => {
     );
   });
 
-  it('a tap on the mascot interrupts the speech and listens', async () => {
+  it('the interrupt button stops the speech and listens', async () => {
     routes({
       answers: [
         {
@@ -649,7 +767,7 @@ describe('the states of the mascot follow the voice loop', () => {
 
     await act(async () => {
       fireEvent.click(
-        within(dialog()!).getByRole('button', {
+        within(figure()!).getByRole('button', {
           name: 'Unterbrechen und zuhören',
         })
       );
@@ -660,12 +778,11 @@ describe('the states of the mascot follow the voice loop', () => {
     expect(mascotState()).toBe('listening');
   });
 
-  it('lets the mascot react while the person talks (words arrive)', async () => {
+  it('lets the figure react while the person talks (words arrive)', async () => {
     routes();
     const { browser } = await mount();
     await openVoiceMode();
-    const mascot = () =>
-      within(screen.getByTestId('hai-voice-mode')).getByTestId('hai-mascot');
+    const mascot = () => character();
     expect(mascot().getAttribute('data-activity')).toBe('false');
     await act(async () => {
       browser.recognitions[0].hear('Was ist');
@@ -708,10 +825,10 @@ describe('subtitles', () => {
     );
     expect(answer.textContent).toContain('Er darf nie leer sein.');
     expect(answer.textContent).not.toContain('*');
-    // the last sentence is the emphasized one
+    // the last sentence is the emphasized one, in the speech bubble next to the head
     const pieces = answer.querySelectorAll('span:not(.sr-only)');
-    expect(pieces[pieces.length - 1].className).toContain('text-white');
-    expect(pieces[0].className).toContain('text-white/55');
+    expect(pieces[pieces.length - 1].className).toContain('font-medium');
+    expect(pieces[0].className).toContain('/60');
   });
 
   it('can be switched off and on, and the choice stays in the browser', async () => {
@@ -799,7 +916,7 @@ describe('the chat in the background', () => {
     await act(async () => {
       fireEvent.keyDown(document, { key: 'Escape' });
     });
-    expect(dialog()).toBeNull();
+    expect(figure()).toBeNull();
     const chat = screen.getAllByText('Und ein Fremdschlüssel?');
     expect(chat.length).toBeGreaterThan(0);
     expect(
@@ -821,7 +938,7 @@ describe('the chat in the background', () => {
       voice: true,
     });
     await waitFor(() => expect(browser.spoken.length).toBeGreaterThan(0));
-    // the greeting is the first thing the mascot says, as subtitle too
+    // the greeting is the first thing the figure says, as subtitle too
     expect(screen.getByTestId('hai-caption-answer').textContent).toContain(
       'Guten Morgen. Heute steht ein Bericht an.'
     );
@@ -835,19 +952,33 @@ describe('navigation by voice', () => {
     offer: NAV,
   };
 
-  it('shows a button for the offered page under the subtitles, opens nothing by itself', async () => {
+  /** Asks, the HAI offers the page, the person says "Ja", the page opens. */
+  async function openByVoice() {
+    routes({ answers: [offerAnswer] });
+    const { browser } = await mount();
+    await openVoiceMode();
+    await ask(browser, 'Öffne meine Berichte', 0);
+    await finishSpeech(browser);
+    await act(async () => {
+      browser.recognitions[1].say('Ja');
+    });
+    await flush();
+    return browser;
+  }
+
+  it('shows a button for the offered page next to the figure, opens nothing by itself', async () => {
     routes({ answers: [offerAnswer] });
     const { browser } = await mount();
     await openVoiceMode();
     await ask(browser, 'Öffne meine Berichte', 0);
 
-    const card = within(dialog()!).getByTestId('hai-navigation-card');
+    const card = within(figure()!).getByTestId('hai-navigation-card');
     expect(within(card).getByText('Ausbildungsnachweis')).toBeTruthy();
     expect(mockPush).not.toHaveBeenCalled();
-    expect(screen.getByTestId('hai-voice-mode')).toBeTruthy();
+    expect(figure()).toBeTruthy();
   });
 
-  it('"ja" opens the page, the voice mode stays on as a small mascot and keeps listening', async () => {
+  it('"ja" opens the page, the figure keeps standing and keeps listening', async () => {
     routes({ answers: [offerAnswer] });
     const { browser } = await mount();
     await openVoiceMode();
@@ -855,6 +986,7 @@ describe('navigation by voice', () => {
     await finishSpeech(browser);
     browser.spoken.length = 0;
     expect(browser.recognitions).toHaveLength(2);
+    const standing = figure()!;
 
     await act(async () => {
       browser.recognitions[1].say('Ja');
@@ -866,11 +998,9 @@ describe('navigation by voice', () => {
     expect(mockPush).toHaveBeenCalledWith('/trainee/activity-reports');
     expect(chatCalls()).toHaveLength(1);
 
-    // the large mode gave way to the small unit, it did not end
-    expect(dialog()).toBeNull();
-    const mini = screen.getByTestId('hai-voice-mini');
-    expect(mini.getAttribute('role')).toBe('region');
-    expect(within(mini).getByRole('status').textContent).toBe('HAI spricht');
+    // the same figure keeps standing (no small state, nothing rebuilt)
+    expect(figure()).toBe(standing);
+    expect(status()).toBe('HAI spricht');
     // the chat panel does not cover the page
     expect(hai.viewMode).toBe('hidden');
 
@@ -882,10 +1012,7 @@ describe('navigation by voice', () => {
     );
     await finishSpeech(browser);
     expect(browser.recognitions).toHaveLength(3);
-    expect(
-      within(screen.getByTestId('hai-voice-mini')).getByRole('status')
-        .textContent
-    ).toBe('HAI hört zu');
+    expect(status()).toBe('HAI hört zu');
 
     // both turns are in the chat
     expect(hai.messages.slice(-2).map(m => [m.role, m.content])).toEqual([
@@ -905,10 +1032,10 @@ describe('navigation by voice', () => {
     });
     await flush();
     expect(mockPush).toHaveBeenCalledWith('/trainee/activity-reports');
-    expect(screen.getByTestId('hai-voice-mini')).toBeTruthy();
+    expect(figure()).toBeTruthy();
   });
 
-  it('"nein" opens nothing and the large mode stays', async () => {
+  it('"nein" opens nothing and the figure stays', async () => {
     routes({ answers: [offerAnswer] });
     const { browser } = await mount();
     await openVoiceMode();
@@ -919,16 +1046,11 @@ describe('navigation by voice', () => {
     });
     await flush();
     expect(mockPush).not.toHaveBeenCalled();
-    expect(screen.getByTestId('hai-voice-mode')).toBeTruthy();
-    expect(screen.queryByTestId('hai-voice-mini')).toBeNull();
-    expect(
-      within(screen.getByTestId('hai-voice-mode')).queryByTestId(
-        'hai-navigation-card'
-      )
-    ).toBeNull();
+    expect(figure()).toBeTruthy();
+    expect(within(figure()!).queryByTestId('hai-navigation-card')).toBeNull();
   });
 
-  it('the button of the card opens the page as well, then the mascot moves to the edge', async () => {
+  it('the button of the card opens the page as well, the figure stays', async () => {
     routes({ answers: [offerAnswer] });
     const { browser } = await mount();
     await openVoiceMode();
@@ -936,88 +1058,53 @@ describe('navigation by voice', () => {
 
     await act(async () => {
       fireEvent.click(
-        within(dialog()!).getByRole('button', {
+        within(figure()!).getByRole('button', {
           name: /Öffnen/,
         })
       );
     });
     expect(mockPush).toHaveBeenCalledWith('/trainee/activity-reports');
-    expect(screen.getByTestId('hai-voice-mini')).toBeTruthy();
-    expect(dialog()).toBeNull();
+    expect(figure()).toBeTruthy();
   });
 
-  it('a tap on the small mascot brings the large mode back, still listening', async () => {
-    routes({ answers: [offerAnswer] });
-    const { browser } = await mount();
-    await openVoiceMode();
-    await ask(browser, 'Öffne meine Berichte', 0);
+  it('keeps the microphone untouched while the page changes', async () => {
+    const browser = await openByVoice();
     await finishSpeech(browser);
-    await act(async () => {
-      browser.recognitions[1].say('Ja');
-    });
-    await flush();
-    await finishSpeech(browser);
-    expect(screen.getByTestId('hai-voice-mini')).toBeTruthy();
     const last = browser.recognitions[browser.recognitions.length - 1];
-
-    await act(async () => {
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Sprachmodus wieder groß anzeigen' })
-      );
-    });
-    expect(screen.queryByTestId('hai-voice-mini')).toBeNull();
-    expect(dialog()).toBeTruthy();
-    // the same loop goes on: no new start, the microphone was not touched
+    expect(figure()).toBeTruthy();
+    // the same loop goes on: the microphone of the last round was not touched
     expect(last.aborted).toBe(false);
-    expect(browser.recognitions[browser.recognitions.length - 1]).toBe(last);
     expect(status()).toBe('HAI hört zu');
-    // the page stays opened, the large mode does not open it again
+    // the page stays opened, nothing opens it again
     expect(mockPush).toHaveBeenCalledTimes(1);
   });
 
-  it('the cross of the small mascot ends the mode and the microphone', async () => {
-    routes({ answers: [offerAnswer] });
-    const { browser } = await mount();
-    await openVoiceMode();
-    await ask(browser, 'Öffne meine Berichte', 0);
-    await finishSpeech(browser);
-    await act(async () => {
-      browser.recognitions[1].say('Ja');
-    });
-    await flush();
+  it('the close button ends the mode and the microphone after a page was opened', async () => {
+    const browser = await openByVoice();
     await finishSpeech(browser);
     const last = browser.recognitions[browser.recognitions.length - 1];
     expect(last.aborted).toBe(false);
 
     await act(async () => {
       fireEvent.click(
-        within(screen.getByTestId('hai-voice-mini')).getByRole('button', {
+        within(figure()!).getByRole('button', {
           name: 'Sprachmodus beenden',
         })
       );
     });
-    expect(screen.queryByTestId('hai-voice-mini')).toBeNull();
+    expect(figure()).toBeNull();
     expect(last.aborted).toBe(true);
   });
 
-  it('the spoken "Sprachmodus beenden" ends the small mascot too', async () => {
-    routes({ answers: [offerAnswer] });
-    const { browser } = await mount();
-    await openVoiceMode();
-    await ask(browser, 'Öffne meine Berichte', 0);
-    await finishSpeech(browser);
-    await act(async () => {
-      browser.recognitions[1].say('Ja');
-    });
-    await flush();
+  it('the spoken "Sprachmodus beenden" ends the mode after a page was opened', async () => {
+    const browser = await openByVoice();
     await finishSpeech(browser);
     const last = browser.recognitions[browser.recognitions.length - 1];
     await act(async () => {
       last.say('Sprachmodus beenden');
     });
     await flush();
-    expect(screen.queryByTestId('hai-voice-mini')).toBeNull();
-    expect(dialog()).toBeNull();
+    expect(figure()).toBeNull();
   });
 
   it('the session survives the new page: the provider lives above the pages, nothing is rebuilt', async () => {
@@ -1043,7 +1130,7 @@ describe('navigation by voice', () => {
     expect(chatBody(1)).toMatchObject({ sessionId: 's1', voice: true });
   });
 
-  it('does not move to the edge for a page that was opened outside of the voice mode', async () => {
+  it('does not open the figure for a page that was opened outside of the voice mode', async () => {
     routes({ answers: [offerAnswer] });
     await mount();
     await act(async () => {
@@ -1054,27 +1141,7 @@ describe('navigation by voice', () => {
       hai.openNavigation(id);
     });
     expect(mockPush).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId('hai-voice-mini')).toBeNull();
-    expect(dialog()).toBeNull();
-  });
-
-  it('puts the small mascot at the top while the chat panel is open, so it does not cover the input', async () => {
-    routes({ answers: [offerAnswer] });
-    const { browser } = await mount();
-    await openVoiceMode();
-    await ask(browser, 'Öffne meine Berichte', 0);
-    await finishSpeech(browser);
-    await act(async () => {
-      browser.recognitions[1].say('Ja');
-    });
-    await flush();
-    expect(screen.getByTestId('hai-voice-mini').className).toContain(
-      'bottom-28'
-    );
-    await act(async () => {
-      hai.setViewMode('widget');
-    });
-    expect(screen.getByTestId('hai-voice-mini').className).toContain('top-3');
+    expect(figure()).toBeNull();
   });
 });
 
@@ -1083,18 +1150,18 @@ describe('quiz mode', () => {
     routes();
     const { browser } = await mount();
     await openVoiceMode();
-    expect(dialog()).toBeTruthy();
+    expect(figure()).toBeTruthy();
 
     await act(async () => {
       quiz.start();
     });
-    expect(dialog()).toBeNull();
+    expect(figure()).toBeNull();
     expect(browser.recognitions[0].aborted).toBe(true);
     // the chat is open, so the quiz card is seen
     expect(hai.viewMode).toBe('widget');
   });
 
-  it('opens the hidden chat for the quiz that a small mascot leaves behind', async () => {
+  it('opens the hidden chat for the quiz that a page opened by voice leaves behind', async () => {
     routes({
       answers: [
         {
@@ -1115,7 +1182,7 @@ describe('quiz mode', () => {
     await act(async () => {
       quiz.start();
     });
-    expect(screen.queryByTestId('hai-voice-mini')).toBeNull();
+    expect(figure()).toBeNull();
     expect(hai.viewMode).toBe('widget');
   });
 
@@ -1124,7 +1191,7 @@ describe('quiz mode', () => {
     await mount();
     await openVoiceMode();
     expect(quiz.active).toBe(false);
-    expect(dialog()).toBeTruthy();
+    expect(figure()).toBeTruthy();
   });
 });
 
@@ -1138,7 +1205,7 @@ describe('reduced motion', () => {
     });
   });
 
-  it('the mascot in the voice mode stands still and the state stays as text', async () => {
+  function reduceMotion() {
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       configurable: true,
@@ -1153,47 +1220,169 @@ describe('reduced motion', () => {
         dispatchEvent: () => false,
       }),
     });
+  }
+
+  it('the figure stands without rising, the state stays as text and the controls work as before', async () => {
+    reduceMotion();
+    routes();
+    const { browser } = await mount();
+    await openVoiceMode();
+    expect(character().getAttribute('data-motion')).toBe('reduced');
+    // no rise: it stands at once
+    await waitFor(() =>
+      expect(character().getAttribute('data-phase')).toBe('standing')
+    );
+    expect(status()).toBe('HAI hört zu');
+    expect(mascotState()).toBe('listening');
+    // the mouth shape is still written (data attribute), only motion is off
+    expect(character().getAttribute('data-mouth')).toBe('closed');
+
+    // the microphone button works the same
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Mikrofon ausschalten' })
+      );
+    });
+    expect(status()).toBe('Mikrofon ist aus');
+    expect(browser.recognitions[0].aborted).toBe(true);
+  });
+
+  it('ends without diving: the figure is gone at once', async () => {
+    reduceMotion();
     routes();
     await mount();
     await openVoiceMode();
-    const mascot = within(screen.getByTestId('hai-voice-mode')).getByTestId(
-      'hai-mascot'
-    );
-    expect(mascot.getAttribute('data-motion')).toBe('reduced');
-    expect(screen.queryAllByTestId('hai-mascot-ring')).toHaveLength(0);
+    await act(async () => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+    });
+    expect(screen.queryByTestId('hai-voice-figure')).toBeNull();
+  });
+});
+
+describe('the microphone button', () => {
+  it('switches the microphone off (the figure stays, nothing is recorded) and on again', async () => {
+    routes();
+    const { browser } = await mount();
+    await openVoiceMode();
+    expect(browser.recognitions).toHaveLength(1);
+    const mic = () => screen.getByTestId('hai-voice-mic');
+    expect(mic().getAttribute('aria-label')).toBe('Mikrofon ausschalten');
+
+    await act(async () => {
+      fireEvent.click(mic());
+    });
+    await flush();
+    expect(figure()).toBeTruthy();
+    expect(browser.recognitions[0].aborted).toBe(true);
+    expect(status()).toBe('Mikrofon ist aus');
+    expect(mascotState()).toBe('paused');
+    expect(mic().getAttribute('aria-label')).toBe('Mikrofon einschalten');
+    expect(mic().getAttribute('data-muted')).toBe('true');
+    // nothing listens while it is off
+    expect(browser.recognitions).toHaveLength(1);
+
+    await act(async () => {
+      fireEvent.click(mic());
+    });
+    await flush();
+    expect(browser.recognitions).toHaveLength(2);
     expect(status()).toBe('HAI hört zu');
+    expect(mic().getAttribute('data-muted')).toBe('false');
+  });
+
+  it('is reached and used with the keyboard', async () => {
+    routes();
+    const { browser } = await mount();
+    await openVoiceMode();
+    const mic = screen.getByTestId('hai-voice-mic');
+    // the focus is on it after the opening
+    expect(document.activeElement).toBe(mic);
+    await userEvent.keyboard('{Enter}');
+    await flush();
+    expect(browser.recognitions[0].aborted).toBe(true);
+    expect(screen.getByTestId('hai-voice-mic').getAttribute('data-muted')).toBe(
+      'true'
+    );
   });
 });
 
 describe('names and roles', () => {
-  it('every control of the large mode has a role and a name', async () => {
-    routes();
-    await mount();
+  it('every control of the figure has a role and a name, the figure itself is decoration', async () => {
+    routes({ answers: [{ text: 'Eine Antwort, die man auch lesen könnte.' }] });
+    const { browser } = await mount();
     await openVoiceMode();
-    const modal = within(dialog()!);
-    expect(modal.getByRole('heading', { name: 'Sprachmodus' })).toBeTruthy();
+    await ask(browser, 'Eine Frage', 0);
+    const root = within(figure()!);
     expect(
-      modal.getByRole('button', { name: 'Sprachmodus beenden' })
+      root.getByRole('button', { name: 'Sprachmodus beenden' })
     ).toBeTruthy();
-    expect(modal.getByRole('switch', { name: 'Untertitel' })).toBeTruthy();
-    expect(modal.getByRole('status')).toBeTruthy();
     expect(
-      modal.getByRole('region', { name: 'Untertitel des Gesprächs' })
+      root.getByRole('button', { name: 'Mikrofon ausschalten' })
     ).toBeTruthy();
-    // the picture of the mascot is decoration, the button around it has the name
-    expect(modal.getByRole('button', { name: 'HAI hört zu' })).toBeTruthy();
-    for (const button of modal.getAllByRole('button')) {
+    expect(root.getByRole('switch', { name: 'Untertitel' })).toBeTruthy();
+    expect(
+      root.getByRole('button', { name: 'Hinweise zum Sprachmodus' })
+    ).toBeTruthy();
+    expect(
+      root.getByRole('button', { name: 'Unterbrechen und zuhören' })
+    ).toBeTruthy();
+    expect(root.getByRole('status')).toBeTruthy();
+    expect(
+      root.getByRole('region', { name: 'Untertitel des Gesprächs' })
+    ).toBeTruthy();
+    // the figure is decoration, hidden from assistive technology
+    expect(character().getAttribute('aria-hidden')).toBe('true');
+    expect(root.queryByRole('img')).toBeNull();
+    for (const button of root.getAllByRole('button')) {
       expect(
         (button.getAttribute('aria-label') ?? button.textContent ?? '').trim()
       ).not.toBe('');
     }
-    // where the audio goes and how to end it are written down
-    expect(
-      screen.getByText(/Sprachmodus beenden“ oder drücken Sie Esc/)
-    ).toBeTruthy();
   });
 
-  it('the mic panel of the chat still works with the same loop', async () => {
+  it('writes down where the audio goes and how to end it, behind the notes button', async () => {
+    routes();
+    await mount();
+    await openVoiceMode();
+    expect(screen.queryByTestId('hai-voice-info')).toBeNull();
+    const notes = screen.getByRole('button', {
+      name: 'Hinweise zum Sprachmodus',
+    });
+    expect(notes.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => {
+      fireEvent.click(notes);
+    });
+    expect(notes.getAttribute('aria-expanded')).toBe('true');
+    const info = screen.getByTestId('hai-voice-info');
+    expect(info.textContent).toMatch(
+      /Sprachmodus beenden“ oder drücken Sie Esc/
+    );
+    expect(info.textContent).toMatch(/Browser|Spracherkennung/);
+  });
+
+  it('a tap on the figure interrupts the speech and listens, like the button', async () => {
+    routes({
+      answers: [
+        {
+          text: 'Eine lange Antwort der HAI, die ihr Ende noch nicht erreicht hat.',
+        },
+      ],
+    });
+    const { browser } = await mount();
+    await openVoiceMode();
+    await ask(browser, 'Erkläre mir SQL', 0);
+    expect(mascotState()).toBe('speaking');
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('hai-voice-figure-body'));
+    });
+    await flush();
+    expect(browser.recognitions).toHaveLength(2);
+    expect(mascotState()).toBe('listening');
+  });
+});
+
+describe('the mic panel of the chat', () => {
+  it('still works with the same loop', async () => {
     routes();
     const { browser } = await mount();
     await waitFor(() =>
@@ -1213,7 +1402,7 @@ describe('names and roles', () => {
       fireEvent.click(openButtons()[0]);
     });
     await flush();
-    expect(dialog()).toBeTruthy();
+    expect(figure()).toBeTruthy();
     expect(browser.recognitions).toHaveLength(1);
     expect(status()).toBe('HAI hört zu');
   });
