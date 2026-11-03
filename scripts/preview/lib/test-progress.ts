@@ -8,6 +8,8 @@
  *          building prerequisites
  *   reset  removes everything a test created for those trainees (progress tables
  *          and uploaded files) and seeds the baseline again
+ *   answers  adds the single answers to quiz submissions of an earlier seed that have
+ *          none (see quiz-answers.ts)
  *
  * Nothing here touches Production: every statement names public_preview, the
  * entry scripts refuse any database role but app_preview_migrator, and a real run
@@ -15,6 +17,14 @@
  * repository is public): the levels are handed out by the order of the e-mail
  * addresses, see LEVEL_CYCLE.
  */
+
+import {
+  achievableRange,
+  correctFor,
+  insertAnswers,
+  loadQuizQuestions,
+  planAnswers,
+} from './quiz-answers';
 
 export const SCHEMA = 'public_preview';
 export const BUCKET = 'submission-files';
@@ -79,7 +89,7 @@ export const PROGRESS_TABLES: ReadonlyArray<{
 ];
 
 export interface Options {
-  command: 'seed' | 'reset';
+  command: 'seed' | 'reset' | 'answers';
   apply: boolean;
   confirmHost: string | null;
   dbUrlEnv: string;
@@ -88,6 +98,8 @@ export interface Options {
   level: Level | null;
   clearOnly: boolean;
   keepFiles: boolean;
+  /** Only for 'answers': also set the stored score to the one the answers give. */
+  fixScores: boolean;
 }
 
 export type ParsedArgs =
@@ -107,6 +119,7 @@ export function parseArgs(
     '--level',
     '--clear-only',
     '--keep-files',
+    '--fix-scores',
   ]);
   const valueOf = (flag: string): string | null => {
     const i = argv.indexOf(flag);
@@ -156,10 +169,23 @@ export function parseArgs(
   }
   const clearOnly = argv.includes('--clear-only');
   const keepFiles = argv.includes('--keep-files');
-  if (command === 'seed' && (clearOnly || keepFiles)) {
+  if (command !== 'reset' && (clearOnly || keepFiles)) {
     return {
       ok: false,
       error: '--clear-only and --keep-files belong to the reset script.',
+    };
+  }
+  const fixScores = argv.includes('--fix-scores');
+  if (command !== 'answers' && fixScores) {
+    return {
+      ok: false,
+      error: '--fix-scores belongs to the script that adds quiz answers.',
+    };
+  }
+  if (command === 'answers' && levelRaw !== null) {
+    return {
+      ok: false,
+      error: '--level has no meaning when quiz answers are added.',
     };
   }
   return {
@@ -173,6 +199,7 @@ export function parseArgs(
       level: levelRaw as Level | null,
       clearOnly,
       keepFiles,
+      fixScores,
     },
   };
 }
@@ -329,21 +356,46 @@ export async function seedTrainee(
 ): Promise<SeedSummary> {
   const base = [trainee.id, trainee.organization_id, trainee.level];
 
-  const quiz = await db.unsafe(
-    `with ${DONE_CTE},
-     todo as (
-       select distinct l.quiz_id from ${SCHEMA}.enabler_quiz_links l
-       join done d on d.id = l.enabler_id
-       join ${SCHEMA}.quizzes qz on qz.id = l.quiz_id and qz.is_active
-       where not exists (select 1 from ${SCHEMA}.quiz_submissions s where s.trainee_id = $1 and s.quiz_id = l.quiz_id)
-     )
-     insert into ${SCHEMA}.quiz_submissions
-       (trainee_id, quiz_id, score, submitted_at, is_reviewed, attempt_number, organization_id)
-     select $1, quiz_id, 60 + (abs(hashtext(quiz_id::text)) % 41),
-            now() - ((abs(hashtext(quiz_id::text || 't')) % 4000) || ' minutes')::interval, false, 1, $2
-     from todo`,
+  // quiz submissions of the finished enablers, each with its single answers: the share
+  // of right answers comes from the hash of the quiz (60 to 100 percent), the score is
+  // then the platform formula of the number of right answers (quiz-answers.ts)
+  const todo = await db.unsafe(
+    `with ${DONE_CTE}
+     select distinct l.quiz_id,
+            60 + (abs(hashtext(l.quiz_id::text)) % 41) as target,
+            (abs(hashtext(l.quiz_id::text || 't')) % 4000) as minutes_ago
+     from ${SCHEMA}.enabler_quiz_links l
+     join done d on d.id = l.enabler_id
+     join ${SCHEMA}.quizzes qz on qz.id = l.quiz_id and qz.is_active
+     where not exists (select 1 from ${SCHEMA}.quiz_submissions s where s.trainee_id = $1 and s.quiz_id = l.quiz_id)
+     order by l.quiz_id`,
     base
   );
+  let quiz = 0;
+  for (const row of todo) {
+    const questions = await loadQuizQuestions(db, row.quiz_id);
+    const { gradable } = achievableRange(questions);
+    const plan = planAnswers(
+      questions,
+      correctFor(Number(row.target), gradable),
+      `${trainee.id}|${row.quiz_id}`
+    );
+    const [submission] = await db.unsafe(
+      `insert into ${SCHEMA}.quiz_submissions
+         (trainee_id, quiz_id, score, submitted_at, is_reviewed, attempt_number, organization_id)
+       values ($1, $2, $3, now() - make_interval(mins => $4::int), false, 1, $5)
+       returning id`,
+      [
+        trainee.id,
+        row.quiz_id,
+        plan.score,
+        Number(row.minutes_ago),
+        trainee.organization_id,
+      ]
+    );
+    await insertAnswers(db, submission.id, plan.answers);
+    quiz += 1;
+  }
 
   // hand-ins of use cases: three per occupation, one in each state
   const haveUc = Number(
@@ -488,7 +540,7 @@ export async function seedTrainee(
 
   return {
     level: trainee.level,
-    quiz: Number(quiz.count ?? 0),
+    quiz,
     useCase,
     enabler,
     reports,

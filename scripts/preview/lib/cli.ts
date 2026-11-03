@@ -1,5 +1,5 @@
 /**
- * The run of the two Preview test progress scripts (seed and reset).
+ * The run of the three Preview test progress scripts (seed, reset, quiz answers).
  *
  * The default is a DRY RUN: everything happens in one transaction that is rolled back, the
  * counts are printed, the storage is only read. A real run needs --apply and
@@ -20,6 +20,7 @@ import {
   seedTrainee,
   type Options,
 } from './test-progress';
+import { backfillAnswers } from './quiz-answers';
 import {
   listTraineeFiles,
   removeTraineeFiles,
@@ -75,6 +76,32 @@ export async function main(command: Options['command'], argv: string[]) {
         if (trainees.length === 0) throw new Error('No trainee found.');
         const trainer = await findTrainer(tx);
 
+        if (command === 'answers') {
+          const r = await backfillAnswers(
+            tx,
+            trainees.map(t => t.id),
+            { fixScores: options.fixScores }
+          );
+          console.log(
+            `Seed quiz submissions without answers: ${r.submissions}, answers added: ${r.answers}`
+          );
+          console.log(
+            `  score reproduced exactly: ${r.exact}, stored score not possible: ${r.deviations.length}`
+          );
+          // group the deviations, so the log stays short
+          const groups = new Map<string, number>();
+          for (const d of r.deviations) {
+            const key = `stored ${d.stored ?? 'none'} -> answers give ${d.given ?? 'none'} (${d.questions} graded questions)`;
+            groups.set(key, (groups.get(key) ?? 0) + 1);
+          }
+          for (const [key, n] of groups) console.log(`    ${n} x ${key}`);
+          console.log(
+            options.fixScores
+              ? `  scores changed to the answers: ${r.fixed}`
+              : '  scores were not changed (--fix-scores would set them to the answers)'
+          );
+        }
+
         if (command === 'reset') {
           const counts = await clearProgress(
             tx,
@@ -106,7 +133,10 @@ export async function main(command: Options['command'], argv: string[]) {
           }
         }
 
-        if (!(command === 'reset' && options.clearOnly)) {
+        if (
+          command !== 'answers' &&
+          !(command === 'reset' && options.clearOnly)
+        ) {
           for (const t of trainees) {
             const s = await seedTrainee(tx, t, trainer);
             console.log(

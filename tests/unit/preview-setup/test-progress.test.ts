@@ -36,6 +36,17 @@ function fakeDb(
   return { db, calls };
 }
 
+/** A choice question with one right and one wrong option. */
+const mcq = (id: string) => ({
+  id,
+  question_type: 'MCQ',
+  expected_answer: null,
+  options: [
+    { id: `${id}-r`, is_correct: true },
+    { id: `${id}-w`, is_correct: false },
+  ],
+});
+
 const parse = (argv: string[], command: 'seed' | 'reset' = 'seed') =>
   parseArgs(argv, command);
 
@@ -249,8 +260,17 @@ describe('the seed', () => {
     } = {}
   ) =>
     fakeDb((query, params) => {
+      if (query.includes('select distinct l.quiz_id')) {
+        return [
+          { quiz_id: 'q1', target: 70, minutes_ago: 5 },
+          { quiz_id: 'q2', target: 90, minutes_ago: 9 },
+        ];
+      }
+      if (query.includes('from public_preview.questions q')) {
+        return [mcq('a'), mcq('b'), mcq('c'), mcq('d'), mcq('e')];
+      }
       if (query.includes('insert into public_preview.quiz_submissions')) {
-        return Object.assign([], { count: 5 });
+        return [{ id: 's1' }];
       }
       if (
         query.includes('count(*) as n from public_preview.use_case_submissions')
@@ -320,6 +340,7 @@ describe('the seed', () => {
 
   it('is repeatable: a second run on a seeded trainee writes nothing', async () => {
     const { db, calls } = fakeDb((query, params) => {
+      if (query.includes('select distinct l.quiz_id')) return [];
       if (query.includes('count(*) as n')) return [{ n: '3' }];
       if (query.includes('select 1 from public_preview.activity_reports')) {
         return [{ x: 1 }];
@@ -328,13 +349,26 @@ describe('the seed', () => {
     });
     const s = await seedTrainee(db, trainee, 'trainer1');
     expect(s).toMatchObject({ quiz: 0, useCase: 0, enabler: 0, reports: 0 });
-    expect(
-      calls.filter(
-        c =>
-          /^\s*insert into/.test(c.query) ||
-          (c.query.includes('with ') && c.query.includes('insert into'))
-      )
-    ).toHaveLength(1); // only the quiz statement, which skips what exists by itself
+    expect(calls.filter(c => /^\s*insert into/.test(c.query))).toHaveLength(0);
+  });
+
+  it('gives every new quiz submission its single answers, score from the right ones', async () => {
+    const { db, calls } = world();
+    const s = await seedTrainee(db, trainee, 'trainer1');
+    expect(s.quiz).toBe(2);
+    const subs = calls.filter(c =>
+      c.query.includes('insert into public_preview.quiz_submissions')
+    );
+    const answers = calls.filter(c =>
+      c.query.includes('insert into public_preview.quiz_submission_answers')
+    );
+    expect(subs).toHaveLength(2);
+    expect(answers).toHaveLength(2);
+    // target 70 and 90 percent of 5 questions: 4 and 5 right (the share is rounded
+    // up to a passed score when needed), score = platform formula
+    expect(subs.map(c => c.params![2])).toEqual([80, 100]);
+    expect(answers[0].params![1]).toHaveLength(5);
+    expect(answers[0].params![0]).toBe('s1');
   });
 
   it('creates a report only for a week that has none', async () => {
