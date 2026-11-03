@@ -59,6 +59,20 @@ describe('the voice section of the system prompt', () => {
     expect(rules).toMatch(/Höchstens eine Frage je Antwort/);
   });
 
+  it('asks for a short first sentence that answers the question (the voice starts with it)', () => {
+    const rules = prompts.buildVoiceRules('TRAINEE');
+    expect(rules).toMatch(/Der erste Satz hat höchstens zwölf Wörter/);
+    expect(rules).toMatch(/beantwortet die Frage in der Sache/);
+    expect(rules).toMatch(/ohne Vorspann/);
+    // the rule is for the voice only: the prompt of a typed question has none
+    const typed = prompts.buildSystemPrompt({
+      mode: 'general',
+      persona: FIAE_PERSONA,
+      userRole: 'TRAINEE',
+    });
+    expect(typed).not.toMatch(/höchstens zwölf Wörter/);
+  });
+
   it('describes the day companion: at most three points, one question, no invented dates', () => {
     const rules = prompts.buildVoiceRules('TRAINEE');
     expect(rules).toMatch(/Tagesbegleiter/);
