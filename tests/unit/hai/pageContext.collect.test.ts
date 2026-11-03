@@ -203,6 +203,16 @@ describe('collectPageContext', () => {
     ).toBe('Enabler Normalisierung');
   });
 
+  it('does not take the brand heading of the sidebar as the page heading when main has none', () => {
+    const doc = page(
+      `<aside><h1>LFA</h1></aside><main><h2>Dashboard</h2></main>`,
+      'LFA Plattform'
+    );
+    expect(collectPageContext('/trainee/dashboard', doc, '').title).toBe(
+      'LFA Plattform'
+    );
+  });
+
   it('takes a heading outside main only when main has none', () => {
     const doc = page(`<div><h1>Seite ohne main</h1></div>`);
     expect(collectPageContext('/trainer/dashboard', doc, '').title).toBe(

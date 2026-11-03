@@ -85,7 +85,9 @@ function titleOf(doc: Document): string {
   // single selector list ('main h1, h1') would return it before the page heading
   const headings = [
     ...Array.from(doc.querySelectorAll('main h1')),
-    ...Array.from(doc.querySelectorAll('h1')),
+    ...Array.from(doc.querySelectorAll('h1')).filter(
+      h => !h.closest('aside, nav, header, footer')
+    ),
   ];
   for (const h of headings) {
     if (isIgnored(h)) continue;
