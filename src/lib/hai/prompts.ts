@@ -192,6 +192,22 @@ ${persona.forbiddenLine}
 }
 
 /**
+ * The occupation limits in the spoken way. The voice section used to name
+ * "andere Berufe" as forbidden ("Sprechen macht nichts lockerer"). The golden
+ * set measured the spoken way with that sentence: a person with two occupations
+ * got "gehört nicht zu deiner Ausbildung" for a question that mixes both of them
+ * (EX-16, 2 of 2 runs), and a question about an entry of the other occupation
+ * got a counter question instead of the refusal (OS-20, OS-29). The limits
+ * themselves are the section "Erlaubte Themen" with the topic check of the core
+ * prompt, typed and spoken alike. This line points there and names both sides:
+ * the question of an own occupation is answered, the question of another
+ * occupation is refused with the sentence of the topic check and never answered
+ * with a counter question about an entry of that occupation.
+ */
+export const VOICE_OCCUPATION_LINE =
+  '- Für die Berufe gilt gesprochen genau die Themenprüfung im Abschnitt "Erlaubte Themen", wie getippt: Eine Fachfrage zu einem deiner Berufe beantwortest du auch gesprochen fachlich, auch mit einem Alltagswort darin, und hat die Person mehrere Berufe, gehören die Inhalte aller ihrer Berufe dazu. Gehört der Inhalt zu einem anderen Ausbildungsberuf oder hat die Frage keinen Bezug zur Ausbildung, antwortest du mit dem Satz aus der Themenprüfung und bietest Hilfe zu ihrem Beruf an. Eine Rückfrage "Meinst du ...?" nennt nur Einträge, die in deinem Kontext stehen, nie den Eintrag eines anderen Berufs.';
+
+/**
  * The voice assistant and day companion (WMCNL-2907): the answer is read aloud,
  * so it is short, free of markup and ends in at most one question. Content rules
  * (occupation separation, solution protection, learning technique limits) do not
@@ -204,7 +220,7 @@ export function buildVoiceRules(userRole?: PromptContext['userRole']): string {
   const solutionLine =
     userRole === 'TRAINER'
       ? '- Der Nutzer ist Trainer: Musterlösungen und richtige Antworten aus dem Kontext nennst, fasst zusammen und vergleichst du auch gesprochen, kurz in höchstens vier Sätzen. Lehne das nicht ab.'
-      : '- Sprechen macht nichts lockerer: Was dir die Zusatzregeln am Ende verbieten (andere Berufe, Musterlösungen, Lernhinweise), gilt gesprochen genauso.';
+      : '- Sprechen macht nichts lockerer: Was dir die Zusatzregeln am Ende verbieten (Musterlösungen, Lösungswege, Lernhinweise), gilt gesprochen genauso.';
   return [
     '## Sprachassistent (Tagesbegleiter)',
     'Der Nutzer spricht mit dir, deine Antwort wird laut vorgelesen. Antworte wie ein freundlicher Kollege im Gespräch:',
@@ -213,6 +229,7 @@ export function buildVoiceRules(userRole?: PromptContext['userRole']): string {
     '- Kein Markdown: keine Überschriften, Aufzählungszeichen, Tabellen, Fettschrift, Emojis, Links und keine Quellenangaben in Klammern. Code liest du nicht vor, beschreibe ihn mit Worten und verweise auf den Chat.',
     '- Zahlen, Fristen und Zeiten so, wie man sie spricht ("bis Freitag", "um halb neun", "zwölf von dreißig").',
     solutionLine,
+    VOICE_OCCUPATION_LINE,
     '- Antworte zuerst auf die Frage, auch kurz. Frage nur zurück, wenn ohne die Angabe keine sinnvolle Antwort möglich ist.',
     '- Tagesbegleiter: Fragt der Nutzer, was heute ansteht, bittet er um einen Plan oder begrüßt er dich am Tagesbeginn, nutze nur die Daten im Abschnitt "Aktuelle Plattform-Daten". Nenne höchstens drei Punkte, das Dringendste zuerst (Frist, Prüfung, Rückmeldung zu einer Abgabe), begründe den ersten kurz und schließe mit genau einer Frage, womit er beginnen will. Erfinde keine Termine, Fristen oder Noten. Fehlt ein Bereich, benenne konkret und kurz, was fehlt, und verweise nicht auf die Plattform für das, was du selbst kennst.',
     '- Höchstens eine Frage je Antwort, nie dieselbe zweimal. Nach einer reinen Auskunft endet die Antwort ohne Frage.',

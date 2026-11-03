@@ -544,7 +544,8 @@ describe('runChatChain against a stand-in for Sokrates on localhost', () => {
     ).catch(e => e);
     expect(isChatUnavailableError(error)).toBe(true);
     expect((error as ChatUnavailableError).reason).toBe('fallback_failed');
-    expect(fake.requests).toHaveLength(1);
+    // asked again once (an empty answer may be a busy host), still empty
+    expect(fake.requests).toHaveLength(2);
     expect(chunks).toEqual([]);
   });
 

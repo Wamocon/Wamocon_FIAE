@@ -107,8 +107,10 @@ const MODEL_BUSY_STATUSES: ReadonlySet<number> = new Set([
 /**
  * Whether a failure of a chat provider means "busy or too slow" and not "wrong
  * setup": a time limit (the model server queues requests), 429, 502, 503, 504 or
- * 524. A key that is refused (401, 403), a bad request (400) or an empty answer
- * is a different thing and keeps the general message. Reads only the kind, the
+ * 524. A key that is refused (401, 403) or a bad request (400) is a different
+ * thing and keeps the general message. An empty answer is not "busy" in itself
+ * (see isEmptyAnswerError): the chain asks again once and, if it stays empty,
+ * marks the ChatUnavailableError as busy. Reads only the kind, the
  * name and the status, never a message (it could carry parts of the request).
  */
 export function isModelBusyError(error: unknown): boolean {
@@ -127,6 +129,17 @@ export function isModelBusyError(error: unknown): boolean {
     return typeof status === 'number' && MODEL_BUSY_STATUSES.has(status);
   }
   return false;
+}
+
+/**
+ * The provider answered, but with no text (kind `empty`). A busy host does this
+ * (Sokrates answered empty for minutes under load, golden set 03.11.2026). Not
+ * part of isModelBusyError (a thinking model that spends its whole limit on
+ * thoughts is empty too), but the chain asks again once and then tells the
+ * person the same thing as for a busy model.
+ */
+export function isEmptyAnswerError(error: unknown): boolean {
+  return error instanceof ChatProviderError && error.kind === 'empty';
 }
 
 /** The body fields the client reads for a busy model (no internals, no names). */

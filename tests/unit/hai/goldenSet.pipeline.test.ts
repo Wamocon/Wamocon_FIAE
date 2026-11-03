@@ -114,6 +114,7 @@ import {
   isSolutionRequest,
 } from '@/lib/hai/solutionRequest';
 import {
+  askAgainOnServerFailure,
   mergeRuns,
   parseRepeat,
   scoreAnswer,
@@ -576,7 +577,9 @@ describe('persona and prompt of the cases', () => {
       // sentence (the model copied it where the question was a subject question,
       // golden set 03.11.2026); the pipeline sends that text itself
       expect(prompt).not.toContain(persona.refusalPrompt);
-      expect(prompt).toContain('Diese Frage wurde bereits als fachlich geprüft');
+      expect(prompt).toContain(
+        'Diese Frage wurde bereits als fachlich geprüft'
+      );
       // the role comes from the server, whatever the client claims
       expect(prompt).toContain(
         goldenCase.role === 'TRAINER'
@@ -700,20 +703,24 @@ const RUN_MODEL = process.env.HAI_GOLDEN_MODEL_RUN === 'yes';
                   undefined,
                   { maxOutputTokens: 1024, temperature: 0 }
                 );
-              let reply = await ask();
               // An EMPTY reply is a failure of the server (a busy host answers
               // nothing for minutes), not an answer of the model: ask again,
               // up to HAI_GOLDEN_EMPTY_RETRIES times (default 2), and count them.
-              for (
-                let retry = 0;
-                retry < emptyRetries && reply.text.trim() === '';
-                retry += 1
-              ) {
-                emptyReplies += 1;
-                await new Promise(resolve => setTimeout(resolve, 10_000));
-                reply = await ask();
-              }
-              return reply.text;
+              // The provider does not return an empty text, it THROWS (kind
+              // empty, turned into a ChatUnavailableError by the chain): that
+              // case counts too (the old loop only looked at a returned text and
+              // never ran, emptyRepliesAskedAgain stayed 0).
+              const { reply, askedAgain, failure } =
+                await askAgainOnServerFailure(
+                  ask,
+                  emptyRetries,
+                  () => new Promise(resolve => setTimeout(resolve, 10_000))
+                );
+              emptyReplies += askedAgain;
+              // what remains is handled like in the product: the pipeline turns
+              // the error into an empty text with the key of the message
+              if (failure) throw failure;
+              return reply?.text ?? '';
             };
             const result = await processMessage(
               goldenCase.question,
