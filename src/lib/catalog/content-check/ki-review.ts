@@ -12,7 +12,8 @@
  *    positive list, key only from the environment. No fallback to another
  *    provider, the client does not retry, does not follow a redirect and does
  *    not log. The review only runs where the content upload is available
- *    (contentUploadAvailability: not in Production).
+ *    (contentUploadAvailability: not in Production) or where the owner allowed it
+ *    for Production with CONTENT_CHECK_KI_PRODUCTION=true (ki-availability.ts).
  *  - What is sent is checked by the guard of the upload (checkRequest) right
  *    before the call: shape, length, marker words of a solution, wording that
  *    speaks to a model, personal patterns. A request the guard refuses is not sent.
@@ -48,7 +49,10 @@ import {
 import { checkRequest } from '@/lib/content-upload/ki/guard';
 import { newNonce, safeTitle } from '@/lib/content-upload/ki/prompt';
 import type { KiCallStatus, KiUsage } from '@/lib/content-upload/ki/repo';
-import { contentUploadAvailability } from '@/lib/content-upload/staging/config';
+import {
+  contentCheckKiAvailable,
+  contentCheckKiEnv,
+} from '@/lib/catalog/content-check/ki-availability';
 import { z } from 'zod';
 import {
   buildKiUnits,
@@ -323,7 +327,7 @@ export interface KiReviewOptions {
   env?: Env;
   fetchImpl?: typeof fetch;
   clock?: () => number;
-  /** False where the content upload is not available (Production). */
+  /** False where neither the content upload nor the Production switch allows the review. */
   available?: () => boolean;
   /** Only the tests pass it (a local server is neither https nor on the list). */
   config?: () => KiConfigResult;
@@ -408,7 +412,9 @@ export async function runKiReview(
   snapshot: ContentSnapshot,
   options: KiReviewOptions = {}
 ): Promise<KiReviewResult> {
-  const env: Env = options.env ?? process.env;
+  const rawEnv: Env = options.env ?? process.env;
+  // In Production with the switch on, the AI stage counts as switched on
+  const env: Env = contentCheckKiEnv(rawEnv);
   const clock = options.clock ?? Date.now;
   const empty = (notes: string[]): KiReviewResult => ({
     ran: false,
@@ -418,7 +424,7 @@ export async function runKiReview(
   });
 
   const available =
-    options.available ?? (() => contentUploadAvailability().enabled);
+    options.available ?? (() => contentCheckKiAvailable(rawEnv));
   if (!available()) {
     return empty([
       'KI-Prüfung nicht gelaufen: Sie ist in dieser Umgebung nicht verfügbar.',

@@ -19,7 +19,7 @@ Stand: 02.11.2026. Ein Blatt für die Entscheidung. Die Einzelheiten stehen im R
 
 | Punkt | Ergebnis |
 |---|---|
-| Migrationsreihe | 41 Dateien von `20261023100000` bis `20261103000100`, Freigabetor am Backfill (`20261025000000`) |
+| Migrationsreihe | 42 Dateien von `20261023100000` bis `20261103000200`, Freigabetor am Backfill (`20261025000000`) |
 | Generalprobe Migrationen | 31.10.2026 auf Wegwerf-Container, längste Datei 2,4 Sekunden, Nachchecks N01 bis N09 wie erwartet, Rückbau erprobt |
 | Generalprobe Schritt 8 | App gegen die Kopie, Smoke S1 bis S6, siehe `docs/probelauf-2026-11-02.md` |
 | Lesende Messung Production | 02.11.2026 wiederholt (V01 bis V14): 3 Azubis, alle freigeschaltet, 8 Konten in `auth.users`, Ledger bereinigt (1 Zeile), keine unerwartete Abweichung zum 31.10.2026 |
@@ -39,6 +39,7 @@ Stand: 02.11.2026. Ein Blatt für die Entscheidung. Die Einzelheiten stehen im R
 | V5 | Variablen in Vercel (Ziel Production) für die HAI: `HAI_EMBEDDING_PROVIDER` und `HAI_CHAT_PROVIDER` erst in H7 | Niko |
 | V6 | SMTP-Zugang von Resend für fiae-learn.com (E-Mail-Bestätigung, WMCNL-2847), kann nach dem Rollout folgen | Niko |
 | V7 | Schlüssel und Passwörter wechseln (service_role und anon auf publishable und secret, Passwörter, alter Sokrates-Schlüssel), nach dem Rollout | Niko, Claude |
+| V8 | Variablen in Vercel (Ziel Production) für die KI-Stufen der Inhaltsprüfung und des Plan-Lesers: `OPENAI_COMPATIBLE_MODEL=sokrates-fast` muss in Production gesetzt sein (ohne sie fragt die KI nach einem Modell, das Sokrates nicht kennt), dazu mit dem Produktivgang `CONTENT_CHECK_KI_PRODUCTION=true`. Bis zum Go ist der Schalter in Production NICHT gesetzt. Danach `npm run content:hash` (Prüfsummen der Dokumente, Probelauf zuerst, Details in `docs/content-stats.md`) | Niko, Claude |
 
 ## 4. Reihenfolge am Tag
 

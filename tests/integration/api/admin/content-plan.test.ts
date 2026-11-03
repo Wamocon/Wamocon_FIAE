@@ -548,6 +548,72 @@ describe('POST /content-plan/parse', () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
+    describe('in Production (switch CONTENT_CHECK_KI_PRODUCTION)', () => {
+      const production = () => {
+        process.env.VERCEL_ENV = 'production';
+        process.env.OPENAI_COMPATIBLE_API_KEY = 'test-key-123';
+        process.env.OPENAI_COMPATIBLE_MODEL = 'sokrates-fast';
+        delete process.env.OPENAI_COMPATIBLE_BASE_URL;
+        delete process.env.CONTENT_UPLOAD_KI_ENABLED;
+      };
+
+      it('switch off (the default): 503 KI_UNAVAILABLE, nothing sent', async () => {
+        production();
+        delete process.env.CONTENT_CHECK_KI_PRODUCTION;
+        const spy = jest.spyOn(global, 'fetch');
+        const { mod } = await load(ROUTE, superAdmin());
+        const res = await mod.POST(
+          post(file('plan.docx', new Uint8Array(await doc())), { ki: 'true' }),
+          params()
+        );
+        expect(res.status).toBe(503);
+        expect((await res.json()).code).toBe('KI_UNAVAILABLE');
+        expect(spy).not.toHaveBeenCalled();
+      });
+
+      it('switch on: the AI reads the plan, Sokrates is the only target and the model is the one of the environment', async () => {
+        production();
+        process.env.CONTENT_CHECK_KI_PRODUCTION = 'true';
+        const spy = jest.spyOn(global, 'fetch').mockResolvedValue(
+          answer([
+            {
+              bereich: 'gesamt',
+              feld: 'komponenten',
+              wert: 12,
+              fundstelle:
+                'Die Ausbildung umfasst 12 Komponenten und 60 Enabler.',
+            },
+          ])
+        );
+        const { mod } = await load(ROUTE, superAdmin());
+        const res = await mod.POST(
+          post(file('plan.docx', new Uint8Array(await doc())), { ki: 'true' }),
+          params()
+        );
+        expect(res.status).toBe(200);
+        expect((await res.json()).method).toBe('ki');
+        expect(spy).toHaveBeenCalledTimes(1);
+        const [target, init] = spy.mock.calls[0] as [string, RequestInit];
+        expect(new URL(target).host).toBe(
+          'sokrates.test-qualitaetsmanagement.com'
+        );
+        expect(JSON.parse(String(init.body)).model).toBe('sokrates-fast');
+      });
+
+      it('switch on, but the right stays: an organization admin gets 403 and nothing is sent', async () => {
+        production();
+        process.env.CONTENT_CHECK_KI_PRODUCTION = 'true';
+        const spy = jest.spyOn(global, 'fetch');
+        const { mod } = await load(ROUTE, orgAdmin());
+        const res = await mod.POST(
+          post(file('plan.docx', new Uint8Array(await doc())), { ki: 'true' }),
+          params()
+        );
+        expect(res.status).toBe(403);
+        expect(spy).not.toHaveBeenCalled();
+      });
+    });
+
     it('returns a proposal that only holds checked fields, and stores nothing', async () => {
       kiOn();
       const spy = jest.spyOn(global, 'fetch').mockResolvedValue(

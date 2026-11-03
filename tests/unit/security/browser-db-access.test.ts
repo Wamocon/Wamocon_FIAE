@@ -181,6 +181,8 @@ describe('browser access to the database', () => {
       'src/app/auth/callback/route.ts',
       'src/lib/auth-helpers.ts',
       'src/lib/auth/session.ts',
+      // the existence check of the content check: secret key, server only, behind the platform-admin route (only a HEAD request, no file is loaded)
+      'src/lib/catalog/content-check/file-check.ts',
       'src/lib/content-upload/staging/storage.ts',
       'src/lib/content-upload/transfer/content-bucket.ts',
       'src/lib/document-file-cleanup.ts',

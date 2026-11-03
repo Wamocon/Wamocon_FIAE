@@ -144,12 +144,93 @@ describe('structure', () => {
     ]);
   });
 
-  it('enabler without a use case and use case without an enabler', () => {
-    const f = check(s => {
-      s.useCases[1].enablerId = null;
+  describe('links of enablers and use cases', () => {
+    /** Ten enablers, each with a use case (KfBM like: 1:1). */
+    const oneToOne = (s: ContentSnapshot) => {
+      for (let n = 3; n <= 10; n += 1) addCompleteEnabler(s, n);
+    };
+    /** Ten enablers with ten use cases, the use cases linked to no enabler. */
+    const unlink = (s: ContentSnapshot, count: number) => {
+      s.useCases.slice(0, count).forEach(u => {
+        u.enablerId = null;
+      });
+    };
+
+    it('KfBM like (1:1): one gap is a warning with the object named', () => {
+      const f = check(s => {
+        oneToOne(s);
+        unlink(s, 1);
+      });
+      const noUseCase = rule(f, 'enabler.usecase.missing');
+      const noEnabler = rule(f, 'usecase.enabler.missing');
+      expect(noUseCase).toHaveLength(1);
+      expect(noUseCase[0]).toMatchObject({ severity: 'warning' });
+      expect(noUseCase[0].refs).toHaveLength(1);
+      expect(noEnabler[0]).toMatchObject({ severity: 'warning' });
+      expect(noEnabler[0].refs).toHaveLength(1);
     });
-    expect(rule(f, 'enabler.usecase.missing')[0].refs[0].id).toBe('en2');
-    expect(rule(f, 'usecase.enabler.missing')[0].refs[0].id).toBe('uc2');
+
+    it('exactly 80 percent still counts as the 1:1 relation', () => {
+      const f = check(s => {
+        oneToOne(s);
+        unlink(s, 2);
+      });
+      expect(rule(f, 'enabler.usecase.missing')[0].severity).toBe('warning');
+      expect(rule(f, 'usecase.enabler.missing')[0].severity).toBe('warning');
+    });
+
+    it('FIAE like before the linking: one note with the numbers, no list', () => {
+      const f = check(s => {
+        oneToOne(s);
+        unlink(s, 10);
+      });
+      const noUseCase = rule(f, 'enabler.usecase.missing');
+      const noEnabler = rule(f, 'usecase.enabler.missing');
+      expect(noUseCase).toHaveLength(1);
+      expect(noUseCase[0]).toMatchObject({ severity: 'info', refs: [] });
+      expect(noUseCase[0].summary).toBe(
+        'In dieser Ausbildung hat nicht jeder Enabler einen Use Case (0 von 10).'
+      );
+      expect(noEnabler).toHaveLength(1);
+      expect(noEnabler[0]).toMatchObject({ severity: 'info', refs: [] });
+      expect(noEnabler[0].summary).toContain('(0 von 10)');
+    });
+
+    it('FIAE like after the linking: the alarm per use case is gone, the note about the enablers stays', () => {
+      // 10 enablers, only 4 of them have a use case, every use case is linked
+      const f = check(s => {
+        oneToOne(s);
+        s.useCases = s.useCases.slice(0, 4);
+      });
+      expect(rule(f, 'usecase.enabler.missing')).toEqual([]);
+      const noUseCase = rule(f, 'enabler.usecase.missing');
+      expect(noUseCase).toHaveLength(1);
+      expect(noUseCase[0]).toMatchObject({ severity: 'info', refs: [] });
+      expect(noUseCase[0].summary).toContain('(4 von 10)');
+    });
+
+    it('a mostly linked catalog without the 1:1 relation of every enabler stays a warning', () => {
+      // 9 of 10 enablers have a use case: the rest is an irregularity
+      const f = check(s => {
+        oneToOne(s);
+        s.useCases = s.useCases.slice(0, 9);
+      });
+      const noUseCase = rule(f, 'enabler.usecase.missing');
+      expect(noUseCase[0].severity).toBe('warning');
+      expect(noUseCase[0].refs).toHaveLength(1);
+      expect(rule(f, 'usecase.enabler.missing')).toEqual([]);
+    });
+
+    it('the small clean set: one use case without an enabler is a note, not a list', () => {
+      // 1 of 2 use cases linked is below 80 percent
+      const f = check(s => {
+        s.useCases[1].enablerId = null;
+      });
+      expect(rule(f, 'enabler.usecase.missing')[0].severity).toBe('info');
+      expect(rule(f, 'usecase.enabler.missing')[0].summary).toContain(
+        '(1 von 2)'
+      );
+    });
   });
 
   it('a catalog without any use case is no gap per enabler', () => {
@@ -464,6 +545,85 @@ describe('documents', () => {
       );
     });
     expect(rule(f, 'document.copy.suspected')).toEqual([]);
+  });
+});
+
+describe('identical copies by checksum', () => {
+  const SHA = 'a'.repeat(64);
+  const OTHER = 'b'.repeat(64);
+
+  it('the same checksum in different enablers is a note naming the second document', () => {
+    const f = check(s => {
+      s.documents = s.documents.map(d =>
+        d.type === 'THEORY' ? { ...d, contentSha256: SHA } : d
+      );
+    });
+    const hit = rule(f, 'document.copy.identical');
+    expect(hit).toHaveLength(1);
+    expect(hit[0]).toMatchObject({ severity: 'info', category: 'document' });
+    expect(hit[0].refs).toHaveLength(1);
+    expect(hit[0].details).toContain('SHA-256');
+  });
+
+  it('different checksums, one enabler, an empty file or no checksum give no finding', () => {
+    const EMPTY =
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+    const f = check(s => {
+      s.documents.push(
+        doc('p', { enablerId: 'en1', type: 'REFERENCE', contentSha256: SHA }),
+        doc('q', { enablerId: 'en1', type: 'REFERENCE', contentSha256: SHA }),
+        doc('r', { enablerId: 'en1', type: 'OTHER', contentSha256: OTHER }),
+        doc('s', { enablerId: 'en2', type: 'OTHER', contentSha256: EMPTY }),
+        doc('t', { enablerId: 'en1', type: 'OTHER', contentSha256: EMPTY }),
+        doc('u', { enablerId: 'en2', type: 'OTHER' })
+      );
+    });
+    expect(rule(f, 'document.copy.identical')).toEqual([]);
+  });
+
+  it('use case documents with the same checksum count as well', () => {
+    const f = check(s => {
+      s.documents = s.documents.map(d =>
+        d.type === 'TRAINER_SOLUTION' ? { ...d, contentSha256: SHA } : d
+      );
+    });
+    expect(rule(f, 'document.copy.identical')).toHaveLength(1);
+  });
+
+  it('documents with a checksum are left out of the hint on size and pages, the others stay', () => {
+    let n = 0;
+    const f = check(s => {
+      s.documents = s.documents.map(d =>
+        d.type === 'THEORY'
+          ? {
+              ...d,
+              fileSize: 52_000,
+              pageCount: 12,
+              contentSha256: String(n++).repeat(64),
+            }
+          : d
+      );
+    });
+    // both have a checksum and the checksums differ: neither rule fires
+    expect(rule(f, 'document.copy.suspected')).toEqual([]);
+    expect(rule(f, 'document.copy.identical')).toEqual([]);
+
+    const mixed = check(s => {
+      let first = true;
+      s.documents = s.documents.map(d => {
+        if (d.type !== 'THEORY') return d;
+        const out = {
+          ...d,
+          fileSize: 52_000,
+          pageCount: 12,
+          contentSha256: first ? OTHER : null,
+        };
+        first = false;
+        return out;
+      });
+    });
+    // one without a checksum alone makes no pair
+    expect(rule(mixed, 'document.copy.suspected')).toEqual([]);
   });
 });
 

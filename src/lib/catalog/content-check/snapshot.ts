@@ -13,8 +13,10 @@
  *
  * What is NOT read: the files in the storage (the storage access of the
  * platform only downloads, and a download of every file would be far too
- * heavy for a page of the admin) and a checksum of the documents (the table
- * content_documents has none).
+ * heavy for a page of the admin). Whether the files exist is a separate check
+ * on request (file-check.ts). The checksum of a document is read as it is
+ * stored (content_documents.content_sha256, set by scripts/content/hash-documents.ts,
+ * null until then).
  */
 
 import { sql } from 'drizzle-orm';
@@ -114,6 +116,8 @@ export interface SnapshotDocument {
   hasText: boolean;
   fileSize: number | null;
   pageCount: number | null;
+  /** SHA-256 of the stored file (lower case hex), null until the script has set it. */
+  contentSha256: string | null;
 }
 
 export interface SnapshotLearningField {
@@ -259,7 +263,7 @@ export async function loadContentSnapshot(
       d.document_type::text as document_type, d.file_name,
       (nullif(btrim(d.storage_url), '') is not null) as has_file,
       (nullif(btrim(d.description), '') is not null) as has_text,
-      d.file_size, d.page_count
+      d.file_size, d.page_count, d.content_sha256
     from content_documents d
     where d.organization_id is null
       and (
@@ -374,6 +378,11 @@ export async function loadContentSnapshot(
       hasText: r.has_text === true,
       fileSize: numOrNull(r.file_size),
       pageCount: numOrNull(r.page_count),
+      contentSha256:
+        typeof r.content_sha256 === 'string' &&
+        /^[0-9a-f]{64}$/.test(r.content_sha256)
+          ? r.content_sha256
+          : null,
     })),
     learningFields: learningFields.map(r => ({
       id: str(r.id),
