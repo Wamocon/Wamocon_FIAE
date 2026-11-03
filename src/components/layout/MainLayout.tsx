@@ -7,6 +7,8 @@ import { usePathname } from 'next/navigation';
 import { CatalogTabs } from '@/components/catalog/CatalogTabs';
 import { useCatalog } from '@/contexts/CatalogContext';
 import { isCatalogTabPath } from '@/lib/catalog/tabs';
+import { HaiDockColumn } from '@/components/hai/HaiDockColumn';
+import { useHaiDockVars } from '@/components/hai/HaiDockContext';
 
 // Use the same User interface as AuthContext
 interface User {
@@ -58,6 +60,12 @@ export function MainLayout({
   // the epoch, so a switch loads every page again for the chosen occupation.
   // The tabs sit outside of the key and keep the focus.
   const { tabs, epoch } = useCatalog();
+  // The HAI panel docks as a column at the right edge of this layout (the
+  // header and the page get narrower). The layout reads the panel width from
+  // CSS variables that the dock writes onto this element while the panel opens,
+  // closes or is pulled: a width never renders the layout. Without HAI there is
+  // no column and no variable.
+  const dockVars = useHaiDockVars();
   const showTabs = tabs.length > 1 && isCatalogTabPath(pathname);
   const hideBackButton = useMemo(() => {
     if (!pathname) return false;
@@ -72,7 +80,10 @@ export function MainLayout({
   // Memoize the layout structure to prevent unnecessary re-renders
   const layoutContent = useMemo(
     () => (
-      <div className="from-background relative flex h-screen bg-gradient-to-br via-red-900/20 to-red-800/30">
+      <div
+        ref={dockVars}
+        className="from-background relative flex h-screen bg-gradient-to-br via-red-900/20 to-red-800/30"
+      >
         {/* Sidebar + hover edge wrapper */}
         <div className="group relative z-40">
           {/* Hover edge to reveal sidebar when hidden (desktop only) */}
@@ -100,7 +111,7 @@ export function MainLayout({
         )}
 
         {/* Main Content Area */}
-        <main className="flex flex-1 flex-col overflow-hidden">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* Header */}
           <Header
             onGoBack={onGoBack}
@@ -111,11 +122,14 @@ export function MainLayout({
           />
 
           {/* Page Content */}
-          <div className="from-background/80 flex-1 overflow-y-auto bg-gradient-to-br via-red-900/15 to-red-800/25">
+          <div className="from-background/80 min-w-0 flex-1 overflow-y-auto bg-gradient-to-br via-red-900/15 to-red-800/25">
             {showTabs && <CatalogTabs />}
             <Fragment key={epoch}>{children}</Fragment>
           </div>
         </main>
+
+        {/* The HAI panel (column at the right edge, 0 wide while it is closed) */}
+        <HaiDockColumn sidebarOpen={sidebarOpen} />
       </div>
     ),
     [
@@ -128,6 +142,7 @@ export function MainLayout({
       hideBackButton,
       showTabs,
       epoch,
+      dockVars,
     ]
   );
 

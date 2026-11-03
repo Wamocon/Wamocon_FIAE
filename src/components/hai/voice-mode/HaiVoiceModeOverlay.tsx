@@ -28,7 +28,7 @@
  * as text (aria-live, small), the controls have names and are reached by Tab.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Hand, Info, Mic, MicOff, Subtitles, X } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -88,6 +88,8 @@ function useRecentChange(value: string, ms: number): boolean {
 
 // The place is the anchor of the HAI symbol (haiLayout.ts): bottom right, the
 // same spot as the button, so the pond and the symbol are one and the same.
+// With the panel docked the anchor sits left of the panel, at the bottom right
+// of the page that is left, and follows the panel width.
 // The pond grows from the bottom right corner (HaiButton: origin-bottom-right),
 // so the figure, its speech bubble and the controls extend to the left of it.
 
@@ -120,6 +122,7 @@ function DivingFigure() {
   const anchor = useHaiAnchor();
   return createPortal(
     <div
+      ref={anchor.ref}
       data-testid="hai-voice-figure"
       data-phase="diving"
       className={`pointer-events-none ${anchor.className}`}
@@ -147,7 +150,16 @@ function LiveFigure() {
     toggleMic,
   } = useHaiVoiceSession();
 
-  const rootRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  // the root is the anchor as well: the dock variables are written onto it
+  const anchorRef = anchor.ref;
+  const setRoot = useCallback(
+    (element: HTMLDivElement | null) => {
+      rootRef.current = element;
+      anchorRef(element);
+    },
+    [anchorRef]
+  );
   const [info, setInfo] = useState(false);
 
   // Esc ends the voice mode (unless something else on the page already used it)
@@ -224,7 +236,7 @@ function LiveFigure() {
 
   const live = (
     <div
-      ref={rootRef}
+      ref={setRoot}
       role="region"
       aria-label={t('hai.voiceMode.dialogLabel')}
       data-testid="hai-voice-figure"

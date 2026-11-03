@@ -18,7 +18,8 @@ import React from 'react';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/contexts/AuthContext';
 import { isAccountStopped } from '@/lib/auth/access-state';
-import { HaiProvider, HaiContext } from './HaiProvider';
+import { HaiProvider, HaiContext, useHai } from './HaiProvider';
+import { HaiDockProvider } from './HaiDockContext';
 import { HaiQuizModeProvider } from './HaiQuizMode';
 import { HaiVoiceSessionProvider } from './voice-mode/HaiVoiceSession';
 
@@ -31,6 +32,19 @@ const HaiButton = dynamic(() => import('./HaiButton').then(m => m.HaiButton), {
 const HaiChat = dynamic(() => import('./HaiChat').then(m => m.HaiChat), {
   ssr: false,
 });
+
+/**
+ * The panel is a column of the app layout (HaiDockColumn in MainLayout): the
+ * dock provider needs to know whether the text chat is shown as a panel. It
+ * sits inside the chat provider, above the pages, so the width and the panel
+ * stay when the HAI opens another page.
+ */
+function HaiDockHost({ children }: { children: React.ReactNode }) {
+  const { viewMode } = useHai();
+  return (
+    <HaiDockProvider open={viewMode === 'widget'}>{children}</HaiDockProvider>
+  );
+}
 
 interface HaiWrapperProps {
   children?: React.ReactNode;
@@ -59,9 +73,11 @@ export function HaiWrapper({ children, context }: HaiWrapperProps) {
     <HaiQuizModeProvider>
       <HaiProvider userId={user.id} initialContext={context}>
         <HaiVoiceSessionProvider>
-          {children}
-          <HaiButton />
-          <HaiChat />
+          <HaiDockHost>
+            {children}
+            <HaiButton />
+            <HaiChat />
+          </HaiDockHost>
         </HaiVoiceSessionProvider>
       </HaiProvider>
     </HaiQuizModeProvider>
