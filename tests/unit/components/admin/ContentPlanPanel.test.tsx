@@ -1,4 +1,4 @@
-import { screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { act, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import toast from 'react-hot-toast';
 import { renderWithProviders } from '../../../helpers/renderWithProviders';
 import { ContentPlanPanel } from '@/components/admin/ContentPlanPanel';
@@ -340,6 +340,11 @@ describe('ContentPlanPanel: upload and proposal', () => {
     await open();
     chooseFile(container, xlsx());
     await screen.findByRole('heading', { name: 'Vorschlag aus plan.xlsx' });
+    // the rows are drawn once more shortly after the heading (the proposal settles):
+    // let it settle, then ask the DOM for the field and change it
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
     const field = screen.getByRole('textbox', { name: 'Wert von Enabler' });
     fireEvent.change(field, { target: { value: '-5' } });
     fireEvent.click(
