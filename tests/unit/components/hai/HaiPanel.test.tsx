@@ -22,10 +22,10 @@ import { SidebarProvider, useSidebar } from '@/contexts/SidebarContext';
 import { SessionContext } from '@/components/hai/voice-mode/voiceSessionContext';
 import { TRAINEE_HAI_STEPS, TRAINER_HAI_STEPS } from '@/lib/tour-steps';
 
-// The HAI at the bottom left: the round symbol (HaiButton) is the handle of the
-// chat panel. A click slides the panel in from the left, another click (or the
+// The HAI at the bottom right: the round symbol (HaiButton) is the handle of the
+// chat panel. A click slides the panel in from the right, another click (or the
 // close button, or Esc) slides it back. The page behind stays usable: no dark
-// layer, no focus trap. The panel sits next to the navigation, never over it.
+// layer, no focus trap. The navigation is at the left, so the two never meet.
 
 // A small double of the chat provider: the panel and the symbol only need the
 // view mode and a few no-ops, the real provider is tested elsewhere.
@@ -155,22 +155,22 @@ afterEach(() => {
   });
 });
 
-describe('the HAI symbol sits at the bottom left', () => {
-  it('is fixed at the bottom left and not at the right, over the page but under dialogs (z-40)', () => {
+describe('the HAI symbol sits at the bottom right', () => {
+  it('is fixed at the bottom right and not at the left, over the page but under dialogs (z-40)', () => {
     mount();
     const classes = anchor().className;
     expect(classes).toContain('fixed');
     expect(classes).toContain('bottom-4');
-    expect(classes).toContain('left-4');
+    expect(classes).toContain('right-4');
     expect(classes).toContain('sm:bottom-6');
-    expect(classes).toContain('sm:left-6');
-    expect(classes).not.toMatch(/(^|\s)(sm:)?right-/);
+    expect(classes).toContain('sm:right-6');
+    expect(classes).not.toMatch(/(^|\s)(sm:|lg:)?left-/);
     expect(classes).toContain('z-40');
     // the safe area of a phone (notch, home bar)
     expect(classes).toContain('safe-area-inset-bottom');
   });
 
-  it('is the target of the platform tour (data-tour), and the tour opens its tooltip to the right', () => {
+  it('is the target of the platform tour (data-tour), and the tour opens its tooltip to the left', () => {
     mount();
     expect(document.querySelectorAll('[data-tour="hai-button"]')).toHaveLength(
       1
@@ -178,19 +178,28 @@ describe('the HAI symbol sits at the bottom left', () => {
     expect(handle().closest('[data-tour="hai-button"]')).not.toBeNull();
     for (const step of [...TRAINEE_HAI_STEPS, ...TRAINER_HAI_STEPS]) {
       expect(step.targetSelector).toBe('[data-tour="hai-button"]');
-      expect(step.placement).toBe('right');
+      expect(step.placement).toBe('left');
     }
   });
 
-  it('starts right of the navigation when it is kept open (desktop), so it does not cover it', async () => {
+  it('does not move for the navigation (it is at the left): the anchor stays in the corner when the navigation is kept open', async () => {
     mount({ sidebar: true });
-    await waitFor(() =>
-      expect(anchor().className).toContain('lg:left-[19.5rem]')
-    );
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    expect(anchor().className).not.toMatch(/(^|\s)(sm:|md:|lg:)?left-/);
+    expect(anchor().className).toContain('right-4');
+  });
+
+  it('shows its tooltip to the left of the symbol (the page is to its left)', () => {
+    mount();
+    const tooltip = screen.getByText('Frag HAI');
+    expect(tooltip.className).toContain('right-full');
+    expect(tooltip.className).not.toContain('left-full');
   });
 });
 
-describe('the chat panel slides in from the left', () => {
+describe('the chat panel slides in from the right', () => {
   it('is closed at the start and opens with a click on the symbol', async () => {
     mount();
     expect(panel()).toBeNull();
@@ -213,12 +222,12 @@ describe('the chat panel slides in from the left', () => {
     expect(handle().getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('is anchored at the left edge: left-0, full height under the page header, 420 px wide from md up, the full width on a phone', async () => {
+  it('is anchored at the right edge: right-0, full height under the page header, 420 px wide from md up, the full width on a phone', async () => {
     mount({ initial: 'widget' });
     const classes = panel()!.className;
-    expect(panel()!.getAttribute('data-side')).toBe('left');
-    expect(classes).toContain('left-0');
-    expect(classes).not.toMatch(/(^|\s)(md:|lg:)?right-/);
+    expect(panel()!.getAttribute('data-side')).toBe('right');
+    expect(classes).toContain('right-0');
+    expect(classes).not.toMatch(/(^|\s)(md:|lg:)?left-/);
     // under the page header (h-16), down to the bottom
     expect(classes).toContain('top-16');
     expect(classes).toContain('md:bottom-0');
@@ -231,9 +240,13 @@ describe('the chat panel slides in from the left', () => {
     expect(classes).toContain('z-40');
   });
 
-  it('starts right of the navigation when it is kept open', async () => {
+  it('does not give way to the navigation (it is at the left): no offset when it is kept open', async () => {
     mount({ initial: 'widget', sidebar: true });
-    await waitFor(() => expect(panel()!.className).toContain('lg:left-72'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    expect(panel()!.className).not.toMatch(/(^|\s)(md:|lg:)?left-/);
+    expect(panel()!.className).toContain('right-0');
   });
 
   it('is an overlay: no dark layer, no blur, no dialog, the page behind stays usable', () => {
@@ -255,13 +268,13 @@ describe('the chat panel slides in from the left', () => {
     expect(document.activeElement).toBe(pageButton);
   });
 
-  it('keeps the symbol visible and clickable while open: it rides on the right edge of the panel', async () => {
+  it('keeps the symbol visible and clickable while open: it rides on the left edge of the panel', async () => {
     mount();
-    expect(anchor().className).not.toContain('md:translate-x-[420px]');
+    expect(anchor().className).not.toContain('md:-translate-x-[420px]');
     fireEvent.click(handle());
     await waitFor(() => expect(panel()).not.toBeNull());
-    // the symbol moves with the panel (420 px, from md up)
-    expect(anchor().className).toContain('md:translate-x-[420px]');
+    // the symbol moves with the panel (420 px to the left, from md up)
+    expect(anchor().className).toContain('md:-translate-x-[420px]');
     expect(anchor().getAttribute('data-panel')).toBe('open');
     // a small arrow shows that a click slides the panel back
     expect(screen.getByTestId('hai-handle-arrow')).not.toBeNull();
@@ -362,7 +375,7 @@ describe('the pond of the voice mode is the symbol', () => {
     expect(pond.className).toContain('scale-[2]');
     expect(pond.className).toContain('sm:scale-[2.8]');
     // grows out of the corner where the button sits
-    expect(pond.className).toContain('origin-bottom-left');
+    expect(pond.className).toContain('origin-bottom-right');
     // the pixel shark makes room for the figure
     expect(screen.getByTestId('shark').parentElement!.className).toContain(
       'opacity-0'

@@ -22,7 +22,7 @@ export interface HaiVoiceSession {
   voice: ReturnType<typeof useHaiVoice>;
   /** The voice assistant is on for the organization and this browser can use it. */
   available: boolean;
-  /** closed, or open: the HAI figure stands in its basin at the bottom left. */
+  /** closed, or open: the HAI figure stands in its basin at the bottom right. */
   view: VoiceModeView;
   /** Subtitles shown in the voice mode (a choice of the person, kept in the browser). */
   captions: boolean;

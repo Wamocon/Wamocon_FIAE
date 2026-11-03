@@ -364,27 +364,27 @@ describe('the button "Gespräch"', () => {
 });
 
 describe('opening and ending the voice mode', () => {
-  it('starts from the chat panel at the left: the panel stays, the figure stands at the place of the symbol (right of the panel)', async () => {
+  it('starts from the chat panel at the right: the panel stays, the figure stands at the place of the symbol (left of the panel)', async () => {
     routes();
     await mount();
     const panel = screen.getByTestId('hai-chat-panel');
-    expect(panel.getAttribute('data-side')).toBe('left');
+    expect(panel.getAttribute('data-side')).toBe('right');
     await openVoiceMode();
     // a wide screen: the panel stays open at its side
     expect(screen.getByTestId('hai-chat-panel')).toBe(panel);
-    // the figure shares the anchor of the symbol: bottom left, moved by the panel
+    // the figure shares the anchor of the symbol: bottom right, moved to the left of the panel
     const root = figure()!;
     expect(root.className).toContain('bottom-4');
-    expect(root.className).toContain('left-4');
-    expect(root.className).toContain('md:translate-x-[420px]');
-    expect(root.className).not.toMatch(/(^|\s)(sm:)?right-/);
+    expect(root.className).toContain('right-4');
+    expect(root.className).toContain('md:-translate-x-[420px]');
+    expect(root.className).not.toMatch(/(^|\s)(sm:)?left-/);
     // the pond is as wide as the grown symbol (the symbol scales by 2 and 2.8)
     expect(screen.getByTestId('hai-voice-figure-body').className).toContain(
       'sm:w-56'
     );
   });
 
-  it('opens the HAI figure at the bottom left: no dialog, no full screen, the state as text', async () => {
+  it('opens the HAI figure at the bottom right: no dialog, no full screen, the state as text', async () => {
     routes();
     const { browser } = await mount();
     await openVoiceMode();
@@ -397,10 +397,16 @@ describe('opening and ending the voice mode', () => {
     expect(root.className).toContain('fixed');
     expect(root.className).not.toContain('inset-0');
     expect(document.querySelector('[data-testid="hai-voice-mode"]')).toBeNull();
-    // bottom left, under the dialogs and viewers (z-40, like the HAI button)
+    // bottom right, under the dialogs and viewers (z-40, like the HAI button)
     expect(root.className).toContain('z-40');
     expect(root.className).toContain('bottom-4');
-    expect(root.className).toContain('left-4');
+    expect(root.className).toContain('right-4');
+    // the figure stands in the corner (at the right), the bubble and the controls
+    // are to its left
+    const body = screen.getByTestId('hai-voice-figure-body');
+    expect(body.parentElement!.className).toContain('flex-row-reverse');
+    expect(body.firstElementChild!.className).toContain('-right-[0.33rem]');
+    expect(body.firstElementChild!.className).not.toMatch(/(^|\s)-left-/);
     // with the safe area of a phone (notch, home bar)
     expect(root.className).toContain('safe-area-inset-bottom');
     // clicks go through to the page, only the figure and the controls take them
