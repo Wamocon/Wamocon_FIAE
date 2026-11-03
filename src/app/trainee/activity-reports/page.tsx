@@ -997,7 +997,7 @@ function CreateReportModal({
       if (entries.length === 0) {
         setError(
           t('reports.error.noEntries') ||
-            'Bitte fügen Sie mindestens eine Tätigkeit hinzu.'
+            'Bitte füge mindestens eine Tätigkeit hinzu.'
         );
         setSaving(false);
         return;
@@ -1009,7 +1009,7 @@ function CreateReportModal({
       if (missingHours.length > 0) {
         setError(
           t('reports.error.missingHours') ||
-            'Bitte tragen Sie für alle Tätigkeiten die IST-Stunden ein (> 0).'
+            'Bitte trage für alle Tätigkeiten die IST-Stunden ein (> 0).'
         );
         setSaving(false);
         return;
@@ -1021,16 +1021,14 @@ function CreateReportModal({
       if (submit && missingNotes.length > 0) {
         setError(
           t('reports.error.missingNotes') ||
-            'Bitte beschreiben Sie für alle Tätigkeiten, was Sie gelernt haben.'
+            'Bitte beschreibe für alle Tätigkeiten, was du gelernt hast.'
         );
         setSaving(false);
         return;
       }
 
       if (!periodValid) {
-        setError(
-          'Bitte geben Sie eine gültige Kalenderwoche (1-53) und Jahr an.'
-        );
+        setError(t('reports.error.invalidPeriod'));
         setSaving(false);
         return;
       }
@@ -1046,9 +1044,7 @@ function CreateReportModal({
 
       // Mandatory skill self-ratings when submitting
       if (submit && !COMPETENCY_AREAS.every(area => skillSelfRatings[area])) {
-        setError(
-          'Bitte bewerten Sie alle Kompetenzbereiche (Fachkompetenz, Methodenkompetenz, Personalkompetenz) mit einer Note 1-6.'
-        );
+        setError(t('reports.error.skillRatingsMissing'));
         setSaving(false);
         return;
       }

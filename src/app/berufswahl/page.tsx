@@ -92,7 +92,11 @@ export default function BerufswahlPage() {
           {t('catalog.tiles.title')}
         </h1>
         <p className="text-muted-foreground mb-8 max-w-2xl text-sm">
-          {t('catalog.tiles.subtitle')}
+          {t(
+            isTrainerLevelRole(profile.role)
+              ? 'catalog.tiles.subtitle'
+              : 'catalog.tiles.subtitleTrainee'
+          )}
         </p>
         <CatalogTiles />
         <div className="text-muted-foreground mt-10 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">

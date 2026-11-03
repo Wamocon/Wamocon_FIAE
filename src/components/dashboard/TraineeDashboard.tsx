@@ -22,6 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCatalog } from '@/contexts/CatalogContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { achievementText, deadlineLabel } from '@/lib/dashboard-text';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { DashboardOccupation } from '@/components/catalog/DashboardOccupation';
 import dynamic from 'next/dynamic';
@@ -445,7 +446,7 @@ export default function TraineeDashboard() {
                   <div className="bg-muted/20 mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full">
                     <Filter className="h-6 w-6 opacity-50" />
                   </div>
-                  <p>No modules found for this filter.</p>
+                  <p>{t('dashboard.noModulesForFilter')}</p>
                 </div>
               )}
             </div>
@@ -470,7 +471,7 @@ export default function TraineeDashboard() {
                     className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors"
                   >
                     <span className="text-foreground font-medium">
-                      {a.text}
+                      {achievementText(t, a)}
                     </span>
                     <div className="bg-accent/20 flex h-8 w-8 items-center justify-center rounded-full">
                       {a.kind === 'quiz' && (
@@ -539,7 +540,8 @@ export default function TraineeDashboard() {
                     className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors"
                   >
                     <span className="text-foreground font-medium">
-                      {d.label}: {new Date(d.dueDate).toLocaleDateString()}
+                      {deadlineLabel(t, d)}:{' '}
+                      {new Date(d.dueDate).toLocaleDateString()}
                     </span>
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-500/20">
                       <Calendar className="h-4 w-4 text-purple-400" />

@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { DB_SCHEMA } from '@/lib/db-schema';
 import { authFetch } from '@/lib/authFetch';
+import { notificationText } from '@/lib/notification-text';
 
 export type UINotification = {
   id: string;
@@ -242,32 +243,36 @@ export default function NotificationsBell() {
               const readItems = items.filter(i => i.isRead);
               const visible = [...unreadItems, ...readItems.slice(0, 5)];
 
-              return visible.map(n => (
-                <button
-                  key={n.id}
-                  onClick={() => onItemClick(n)}
-                  className={`border-border/30 hover:bg-muted w-full border-b px-4 py-3 text-left text-sm transition-colors ${n.isRead ? 'opacity-60' : 'bg-accent/10 font-medium'}`}
-                >
-                  <div className="flex items-start gap-2">
-                    {!n.isRead && (
-                      <span className="bg-accent mt-1.5 h-2 w-2 shrink-0 rounded-full" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="text-foreground line-clamp-1">
-                        {n.title}
-                      </div>
-                      {n.message && (
-                        <div className="text-muted-foreground line-clamp-2 text-xs font-normal">
-                          {n.message}
-                        </div>
+              return visible.map(n => {
+                // Title and message in the language of the reader
+                const text = notificationText(t, n);
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => onItemClick(n)}
+                    className={`border-border/30 hover:bg-muted w-full border-b px-4 py-3 text-left text-sm transition-colors ${n.isRead ? 'opacity-60' : 'bg-accent/10 font-medium'}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {!n.isRead && (
+                        <span className="bg-accent mt-1.5 h-2 w-2 shrink-0 rounded-full" />
                       )}
-                      <div className="text-muted-foreground mt-1 text-[10px] font-normal">
-                        {new Date(n.createdAt).toLocaleString()}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-foreground line-clamp-1">
+                          {text.title}
+                        </div>
+                        {text.message && (
+                          <div className="text-muted-foreground line-clamp-2 text-xs font-normal">
+                            {text.message}
+                          </div>
+                        )}
+                        <div className="text-muted-foreground mt-1 text-[10px] font-normal">
+                          {new Date(n.createdAt).toLocaleString()}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
-              ));
+                  </button>
+                );
+              });
             })()}
           </div>
         </div>
