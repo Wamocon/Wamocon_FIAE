@@ -6,6 +6,8 @@
  * @module lib/hai/voice/client/audio
  */
 
+import { getOutputTap } from './outputLevel';
+
 // ============================================================================
 // THE PARTS OF THE WEB AUDIO API THAT ARE USED
 // ============================================================================
@@ -208,6 +210,9 @@ export class OrderedPlayback {
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(this.ctx.destination);
+    // read only tap for the mouth of the HAI figure (outputLevel.ts), the sound is unchanged
+    const tap = getOutputTap(this.ctx);
+    if (tap) source.connect(tap);
     const start = Math.max(this.ctx.currentTime, this.nextStart);
     this.nextStart = start + buffer.duration;
     slot.playing += 1;
