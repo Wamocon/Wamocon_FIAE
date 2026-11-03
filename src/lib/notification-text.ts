@@ -177,6 +177,90 @@ const PATTERNS: Pattern[] = [
     names: ['title'],
     key: 'notifications.message.BLOCK_CANCELLED',
   },
+  // Notices for the trainer (KFB-1180): registrations, exam results, activity
+  // reports and the request for another occupation
+  {
+    type: 'TRAINEE_REGISTERED',
+    match:
+      /^(.+) \(([^()\s]+)\) hat sich registriert und wartet auf Freischaltung\. Die E-Mail-Adresse ist noch nicht bestätigt\.$/,
+    names: ['name', 'email'],
+    key: 'notifications.message.TRAINEE_REGISTERED_UNCONFIRMED',
+  },
+  {
+    type: 'TRAINEE_REGISTERED',
+    match: /^(.+) \(([^()\s]+)\) hat sich registriert und wartet auf Freischaltung\.$/,
+    names: ['name', 'email'],
+    key: 'notifications.message.TRAINEE_REGISTERED',
+  },
+  {
+    type: 'TRAINEE_REGISTERED',
+    match: /^(.+) \(([^()\s]+)\) wurde als Azubi hinzugefügt\.$/,
+    names: ['name', 'email'],
+    key: 'notifications.message.TRAINEE_ADDED',
+  },
+  {
+    type: 'EXAM_RESULT_SUBMITTED',
+    match: /^(.+) hat ein Ergebnis für "(.+)" eingetragen\.$/,
+    names: ['name', 'subject'],
+    key: 'notifications.message.EXAM_RESULT_SUBMITTED',
+  },
+  {
+    type: 'ACTIVITY_REPORT_SUBMITTED',
+    match:
+      /^(.+) hat den Tätigkeitsnachweis für KW (\d+)\/(\d+) eingereicht\.$/,
+    names: ['name', 'week', 'year'],
+    key: 'notifications.message.ACTIVITY_REPORT_SUBMITTED',
+  },
+  {
+    type: 'catalog_request',
+    match: /^(.+) \((.+)\) fragt den Beruf (.+) an\.\nNachricht: ([\s\S]+)$/,
+    names: ['name', 'organization', 'occupation', 'note'],
+    key: 'notifications.message.catalog_request_note',
+  },
+  {
+    type: 'catalog_request',
+    match: /^(.+) \((.+)\) fragt den Beruf (.+) an\.$/,
+    names: ['name', 'organization', 'occupation'],
+    key: 'notifications.message.catalog_request',
+  },
+];
+
+/**
+ * Types whose stored title is not fixed by the type (the same type is written
+ * with different titles, or the title holds a name): the title is translated by
+ * the pattern of the stored title. Only a title that matches is replaced.
+ */
+const TITLE_PATTERNS: Pattern[] = [
+  {
+    type: 'TRAINEE_REGISTERED',
+    match: /^Neue Azubi-Registrierung$/,
+    names: [],
+    key: 'notifications.title.TRAINEE_REGISTERED',
+  },
+  {
+    type: 'TRAINEE_REGISTERED',
+    match: /^Neuer Azubi hinzugefügt$/,
+    names: [],
+    key: 'notifications.title.TRAINEE_ADDED',
+  },
+  {
+    type: 'EXAM_RESULT_SUBMITTED',
+    match: /^Prüfungsergebnis eingetragen$/,
+    names: [],
+    key: 'notifications.title.EXAM_RESULT_SUBMITTED',
+  },
+  {
+    type: 'ACTIVITY_REPORT_SUBMITTED',
+    match: /^Tätigkeitsnachweis zur Genehmigung$/,
+    names: [],
+    key: 'notifications.title.ACTIVITY_REPORT_SUBMITTED',
+  },
+  {
+    type: 'catalog_request',
+    match: /^Abo-Anfrage für den Beruf (.+)$/,
+    names: ['code'],
+    key: 'notifications.title.catalog_request',
+  },
 ];
 
 /** Level word and status word of a stored sentence, translated by key. */
@@ -197,9 +281,20 @@ export function notificationText(
   t: Translate,
   n: { type: string; title: string; message: string | null }
 ): { title: string; message: string | null } {
-  const title = TITLED_TYPES.has(n.type)
+  let title = TITLED_TYPES.has(n.type)
     ? t(`notifications.type.${n.type}.title`)
     : n.title;
+  for (const p of TITLE_PATTERNS) {
+    if (p.type !== n.type) continue;
+    const found = p.match.exec(n.title);
+    if (!found) continue;
+    const data: Record<string, string> = {};
+    p.names.forEach((name, i) => {
+      data[name] = found[i + 1];
+    });
+    title = t(p.key, data);
+    break;
+  }
   let message = n.message;
   if (n.message) {
     for (const p of PATTERNS) {
