@@ -56,17 +56,31 @@ export function TourOverlay() {
       return;
     }
 
+    // Without a target (or with one that is off-screen, e.g. a hidden sidebar)
+    // there is no spotlight, but the card is still placed inside the window,
+    // so "Weiter" can always be clicked (WMCNL-2972)
+    const centerCard = () => {
+      setSpotlight(null);
+      const w = Math.min(320, window.innerWidth - 32);
+      const h = tooltipRef.current?.offsetHeight || 200;
+      setTooltipPos({
+        top: Math.max(16, (window.innerHeight - h) / 2),
+        left: Math.max(16, (window.innerWidth - w) / 2),
+      });
+    };
+
     const el = document.querySelector(currentStep.targetSelector);
     if (!el) {
-      setSpotlight(null);
+      centerCard();
       return;
     }
 
+    // An entry further down a scrolling menu is brought into view first
+    el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     const rect = el.getBoundingClientRect();
 
-    // If the element is off-screen (e.g. sidebar hidden), skip spotlight
     if (rect.right < 0 || rect.bottom < 0 || rect.left > window.innerWidth || rect.top > window.innerHeight) {
-      setSpotlight(null);
+      centerCard();
       return;
     }
 
@@ -156,7 +170,10 @@ export function TourOverlay() {
     if (!isActive) return;
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') skipTour();
-      if (e.key === 'ArrowRight' || e.key === 'Enter') nextStep();
+      // Enter on a focused button presses that button: the window must not
+      // advance a second time (it skipped a step)
+      const onButton = (e.target as HTMLElement | null)?.closest?.('button');
+      if (e.key === 'ArrowRight' || (e.key === 'Enter' && !onButton)) nextStep();
       if (e.key === 'ArrowLeft') prevStep();
     };
     window.addEventListener('keydown', handleKey);
@@ -233,7 +250,7 @@ export function TourOverlay() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2, delay: 0.05 }}
-          className="absolute z-[9999] w-[min(320px,calc(100vw-32px))] rounded-2xl border border-border bg-card p-5 shadow-2xl backdrop-blur-xl"
+          className="absolute z-[9999] max-h-[calc(100vh-32px)] w-[min(320px,calc(100vw-32px))] overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-2xl backdrop-blur-xl"
           style={{
             top: tooltipPos.top,
             left: tooltipPos.left,

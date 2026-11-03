@@ -3,6 +3,7 @@
 import { GraduationCap } from 'lucide-react';
 import { useCatalog } from '@/contexts/CatalogContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { catalogDisplayTitle } from '@/lib/catalog/display-title';
 
 /**
  * Names the occupation (the title from the catalog) at the top of a dashboard.
@@ -33,7 +34,7 @@ export function DashboardOccupation() {
           {t('catalog.dashboard.occupation')}
         </span>
         <span className="text-foreground truncate font-semibold">
-          {active.title}
+          {catalogDisplayTitle(t, active.code, active.title)}
         </span>
       </div>
     </div>

@@ -156,6 +156,142 @@ describe('submissionNoticeText (the German text stored with the row)', () => {
   });
 });
 
+describe('other notices of the trainer bell speak English (KFB-1180)', () => {
+  const stored = (type: string, title: string, message: string) =>
+    row({ type, title, message });
+
+  it('translates the registration of a trainee, with and without the unconfirmed e-mail', () => {
+    const plain = formatNotification(
+      stored(
+        'TRAINEE_REGISTERED',
+        'Neue Azubi-Registrierung',
+        'Max Muster (max@example.com) hat sich registriert und wartet auf Freischaltung.'
+      ),
+      tEn
+    );
+    expect(plain).toEqual({
+      title: 'New trainee registration',
+      message:
+        'Max Muster (max@example.com) has registered and is waiting for activation.',
+    });
+    const unconfirmed = formatNotification(
+      stored(
+        'TRAINEE_REGISTERED',
+        'Neue Azubi-Registrierung',
+        'Max Muster (max@example.com) hat sich registriert und wartet auf Freischaltung. Die E-Mail-Adresse ist noch nicht bestätigt.'
+      ),
+      tEn
+    );
+    expect(unconfirmed.message).toContain('not confirmed yet');
+    const added = formatNotification(
+      stored(
+        'TRAINEE_REGISTERED',
+        'Neuer Azubi hinzugefügt',
+        'Max Muster (max@example.com) wurde als Azubi hinzugefügt.'
+      ),
+      tEn
+    );
+    expect(added).toEqual({
+      title: 'New trainee added',
+      message: 'Max Muster (max@example.com) was added as a trainee.',
+    });
+  });
+
+  it('translates exam results and activity reports', () => {
+    expect(
+      formatNotification(
+        stored(
+          'EXAM_RESULT_SUBMITTED',
+          'Prüfungsergebnis eingetragen',
+          'Leon Moretz hat ein Ergebnis für "Mathe" eingetragen.'
+        ),
+        tEn
+      )
+    ).toEqual({
+      title: 'Exam result entered',
+      message: 'Leon Moretz entered a result for "Mathe".',
+    });
+    expect(
+      formatNotification(
+        stored(
+          'ACTIVITY_REPORT_SUBMITTED',
+          'Tätigkeitsnachweis zur Genehmigung',
+          'Leon Moretz hat den Tätigkeitsnachweis für KW 44/2026 eingereicht.'
+        ),
+        tEn
+      )
+    ).toEqual({
+      title: 'Activity report awaiting approval',
+      message: 'Leon Moretz submitted the activity report for week 44/2026.',
+    });
+  });
+
+  it('translates the request for an occupation, with and without a message', () => {
+    const base = 'Anna (Wamocon GmbH) fragt den Beruf Kaufmann/-frau für Büromanagement an.';
+    expect(
+      formatNotification(
+        stored('catalog_request', 'Abo-Anfrage für den Beruf KFBM', base),
+        tEn
+      )
+    ).toEqual({
+      title: 'Subscription request for the occupation KFBM',
+      message:
+        'Anna (Wamocon GmbH) requests the occupation Kaufmann/-frau für Büromanagement.',
+    });
+    const withNote = formatNotification(
+      stored(
+        'catalog_request',
+        'Abo-Anfrage für den Beruf KFBM',
+        base + '\nNachricht: Bitte bis Montag.'
+      ),
+      tEn
+    );
+    expect(withNote.message).toBe(
+      'Anna (Wamocon GmbH) requests the occupation Kaufmann/-frau für Büromanagement.\nMessage: Bitte bis Montag.'
+    );
+  });
+
+  it('reads the same in German as it was stored', () => {
+    const cases: [string, string, string][] = [
+      [
+        'TRAINEE_REGISTERED',
+        'Neue Azubi-Registrierung',
+        'Max Muster (max@example.com) hat sich registriert und wartet auf Freischaltung.',
+      ],
+      [
+        'EXAM_RESULT_SUBMITTED',
+        'Prüfungsergebnis eingetragen',
+        'Leon Moretz hat ein Ergebnis für "Mathe" eingetragen.',
+      ],
+      [
+        'ACTIVITY_REPORT_SUBMITTED',
+        'Tätigkeitsnachweis zur Genehmigung',
+        'Leon Moretz hat den Tätigkeitsnachweis für KW 44/2026 eingereicht.',
+      ],
+      [
+        'catalog_request',
+        'Abo-Anfrage für den Beruf KFBM',
+        'Anna (Wamocon GmbH) fragt den Beruf KfBM an.\nNachricht: Hallo',
+      ],
+    ];
+    for (const [type, title, message] of cases) {
+      expect(formatNotification(stored(type, title, message), tDe)).toEqual({
+        title,
+        message,
+      });
+    }
+  });
+
+  it('keeps a title or sentence that no pattern knows', () => {
+    expect(
+      formatNotification(
+        stored('TRAINEE_REGISTERED', 'Etwas anderes', 'Freitext'),
+        tEn
+      )
+    ).toEqual({ title: 'Etwas anderes', message: 'Freitext' });
+  });
+});
+
 describe('sortNewestFirst', () => {
   it('orders by date, whatever the read state or the incoming order', () => {
     const items = [

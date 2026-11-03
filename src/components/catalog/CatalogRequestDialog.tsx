@@ -10,6 +10,7 @@ import {
 } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { catalogDisplayTitle } from '@/lib/catalog/display-title';
 import { authFetch } from '@/lib/authFetch';
 
 /** Same limit as the server (CATALOG_REQUEST_MESSAGE_MAX). */
@@ -131,7 +132,9 @@ export function CatalogRequestDialog({
           className="bg-card text-foreground border-border fixed top-1/2 left-1/2 z-[101] max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border p-6 shadow-2xl"
         >
           <Dialog.Title className="text-foreground text-lg font-bold">
-            {t('catalog.tiles.request.title', { title: catalog.title })}
+            {t('catalog.tiles.request.title', {
+              title: catalogDisplayTitle(t, catalog.code, catalog.title),
+            })}
           </Dialog.Title>
           <Dialog.Description className="text-muted-foreground mt-2 text-sm">
             {t('catalog.tiles.request.explain')}

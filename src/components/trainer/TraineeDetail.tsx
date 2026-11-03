@@ -41,6 +41,9 @@ import {
   buildTraineeReport,
   renderTraineeReportPdf,
 } from '@/lib/trainer/trainee-report';
+import { useCatalog } from '@/contexts/CatalogContext';
+import { catalogDisplayTitle } from '@/lib/catalog/display-title';
+import { formatReportDate } from '@/lib/trainer/trainee-detail-view';
 
 interface TraineeDetailProps {
   traineeId: string;
@@ -174,6 +177,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
   const { t, language } = useLanguage();
   const { breadcrumbs, setBreadcrumbs } = useBreadcrumbs();
   const locale = language === 'en' ? 'en-GB' : 'de-DE';
+  const { catalogs, activeCode } = useCatalog();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -261,6 +265,12 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         fullName: trainee?.full_name || '',
         startDate: trainee?.training_start_date,
         durationLabel: formatDurationLabel(trainee?.ausbildung_duration_years),
+        occupation: (() => {
+          const active = catalogs?.find(c => c.code === activeCode);
+          return active
+            ? catalogDisplayTitle(t, active.code, active.title)
+            : null;
+        })(),
       },
       overview: {
         ...source,
@@ -274,9 +284,14 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       t,
       locale,
     });
-    const bytes = await renderTraineeReportPdf(lines, (page, pages) =>
-      t('trainee.detail.pdfPage', { page, pages })
-    );
+    const bytes = await renderTraineeReportPdf(lines, {
+      pageLabel: (page, pages) => t('trainee.detail.pdfPage', { page, pages }),
+      brand: { name: t('sidebar.title'), subtitle: t('sidebar.subtitle') },
+      footerNote: `${t('trainee.detail.pdfCreatedOn')} ${formatReportDate(new Date(), locale)}`,
+      // the logo of the app (also its icon), the report stays without it if
+      // it cannot be loaded
+      logo: '/WMC_Logo.png',
+    });
     // bytes is a Uint8Array - convert to a plain ArrayBuffer slice to satisfy strict BlobPart typing
     const ab = bytes.buffer.slice(
       bytes.byteOffset,
