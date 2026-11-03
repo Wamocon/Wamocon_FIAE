@@ -6,7 +6,10 @@ import {
 } from '@/lib/catalog/content-plan/parse-document';
 import { getContentPlan } from '@/lib/catalog/content-plan/store';
 import { safeFileName } from '@/lib/catalog/content-plan/types';
-import { contentUploadAvailability } from '@/lib/content-upload/staging/config';
+import {
+  contentCheckKiAvailable,
+  contentCheckKiEnv,
+} from '@/lib/catalog/content-check/ki-availability';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Several requests to the AI may follow one another
@@ -70,8 +73,8 @@ export async function POST(
     const outcome = await parsePlanDocument(
       { fileName, bytes, useKi: form.get('ki') === 'true' },
       {
-        env: process.env,
-        available: contentUploadAvailability().enabled,
+        env: contentCheckKiEnv(process.env),
+        available: contentCheckKiAvailable(process.env),
       }
     );
     if (!outcome.ok) return error(outcome.status, outcome.code);
