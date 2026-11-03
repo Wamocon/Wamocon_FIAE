@@ -38,7 +38,12 @@ export function ContentTargetsForm({ catalog, onSaved, onClose }: Props) {
   const [values, setValues] = useState<Record<ContentMetricId, string>>(() => {
     const initial = {} as Record<ContentMetricId, string>;
     for (const id of CONTENT_METRICS) {
-      const target = catalog.metrics.find(m => m.id === id)?.target;
+      // Only the manual number is edited here: a number that comes from the plan
+      // document must not be saved as a manual one by accident
+      const source = catalog.targetSources?.[id];
+      const target = source
+        ? source.manual
+        : catalog.metrics.find(m => m.id === id)?.target;
       initial[id] =
         target === null || target === undefined ? '' : String(target);
     }

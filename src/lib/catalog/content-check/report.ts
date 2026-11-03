@@ -124,7 +124,8 @@ export async function buildContentCheckReport(
         const finding = normalizePlanFinding(item);
         if (finding) findings.push(finding);
       }
-      ran.plan = true;
+      // without a plan and without targets the plan part only says so (rule plan.none): it did not really run
+      ran.plan = !(list.length === 1 && list[0].rule === 'plan.none');
     }
   } catch {
     notes.push(PLAN_FAILED_NOTE);

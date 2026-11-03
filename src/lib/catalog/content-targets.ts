@@ -166,12 +166,28 @@ export type ContentMetric = {
   percent: number | null;
 };
 
+/**
+ * Where the target of one kind of content comes from, only for the platform
+ * admin. The manual number wins over the plan (see content-plan/effective.ts),
+ * and both are kept so the screen can point out a difference between them.
+ */
+export type MetricTargetSource = {
+  origin: 'manual' | 'plan';
+  manual: number | null;
+  plan: number | null;
+};
+
 export type CatalogContentStats = {
   catalogId: string;
   code: string;
   title: string;
   isActive: boolean;
   metrics: ContentMetric[];
+  /**
+   * Origin of every target that exists (manual or plan document). Left out
+   * for viewers who may not see targets.
+   */
+  targetSources?: Partial<Record<ContentMetricId, MetricTargetSource>>;
   /** All questions of the quizzes of the catalog. */
   questions: number;
   /** Assignments of enablers and use cases to learning fields. */

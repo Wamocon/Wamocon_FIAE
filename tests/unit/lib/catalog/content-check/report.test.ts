@@ -168,6 +168,17 @@ describe('buildContentCheckReport', () => {
       expect(plan).toHaveLength(2);
     });
 
+    it('the single info of the plan check without a plan and targets does not count as a plan run', async () => {
+      const { db } = fakeDb();
+      const report = await buildContentCheckReport(db, CATALOG, {
+        ki: false,
+        planLoader: () => async () => [f('plan.none', 'info', 'plan')],
+      });
+      expect(report?.ran.plan).toBe(false);
+      // the hint itself stays visible
+      expect(report?.findings.some(x => x.rule === 'plan.none')).toBe(true);
+    });
+
     it('without the module the report has no plan part and nothing fails', async () => {
       const { db } = fakeDb();
       const report = await buildContentCheckReport(db, CATALOG, {
