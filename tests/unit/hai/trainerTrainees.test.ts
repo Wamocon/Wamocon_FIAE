@@ -568,3 +568,74 @@ describe('fetchDataContext for a trainer', () => {
     expect(context?.summary).not.toContain('Azubi-Suche');
   });
 });
+
+describe('fetchDataContext: follow-up question and failed list', () => {
+  const trainerRow = [
+    {
+      fullName: 'Tina Trainer',
+      firstName: 'Tina',
+      role: 'TRAINER',
+      startOfTrainingDate: null,
+      ausbildungDurationYears: 3,
+    },
+  ];
+  const snapshotSelects: Row[][] = [trainerRow, [{ cnt: 0 }], []];
+  const history = [
+    { role: 'user', parts: [{ text: 'Welche Azubis habe ich?' }] },
+    { role: 'model', parts: [{ text: 'Du hast aktuell 5 Auszubildende.' }] },
+  ];
+
+  beforeEach(() => {
+    (toHaiRole as jest.Mock).mockReturnValue('TRAINER');
+    (getCatalogScopeForUserId as jest.Mock).mockResolvedValue(null);
+  });
+
+  it('"Welche mit Namen?" after the list loads the list with the names (no noun, no name in the message)', async () => {
+    const [anna] = makeTrainees(1);
+    installDb({
+      selects: [...snapshotSelects, [anna]],
+      progress: [{ trainee_id: anna.id, completed: 1, total: 2 }],
+      catalogs: CATALOGS,
+    });
+    const context = await fetchDataContext(
+      'trainer-1',
+      'TRAINER',
+      'Welche mit Namen?',
+      { previousMessages: history }
+    );
+    expect(context?.dataIntent).toBe('trainee_overview');
+    expect(context?.summary).toContain('Azubi Nummer1');
+    expect(context?.summary).toContain('Fortschritt 50 %');
+  });
+
+  it('the same follow-up without a list in the history loads nothing of the trainees', async () => {
+    installDb({ selects: [...snapshotSelects] });
+    const context = await fetchDataContext(
+      'trainer-1',
+      'TRAINER',
+      'Welche mit Namen?',
+      { previousMessages: [] }
+    );
+    expect(context?.dataIntent).toBe('none');
+    expect(context?.summary).not.toContain('Azubi-Übersicht');
+  });
+
+  it('a failed list says so plainly and carries no number of trainees (the model must not fall back on a number without names)', async () => {
+    installDb({
+      selects: [...snapshotSelects, makeTrainees(1)],
+      failExecute: true,
+    });
+    const context = await fetchDataContext(
+      'trainer-1',
+      'TRAINER',
+      'Welche Azubis habe ich?'
+    );
+    expect(context?.dataIntent).toBe('trainee_overview');
+    expect(context?.summary).toContain(
+      'Die Liste konnte gerade nicht geladen werden'
+    );
+    expect(context?.summary).toContain('keine fehlende Berechtigung');
+    expect(context?.summary).not.toContain('Azubi Nummer1');
+    expect(context?.summary).not.toMatch(/[–—]/);
+  });
+});

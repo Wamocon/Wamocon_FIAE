@@ -16,16 +16,33 @@
  * @module lib/hai/navigation/flow
  */
 
+import {
+  isLiveDataOnlyTurn,
+  resolveDataIntent,
+  type HistoryTurnMessage,
+} from '../dataIntent';
 import type { RetrievalAccess } from '../retrievalAccess';
 import type { HaiTrainingScope } from '../trainingScope';
-import { detectNavigationIntent, isDirectCommand } from './intent';
-import type { NavigationOffer } from './offer';
+import {
+  askWhereToText,
+  detectNavigationFollowUp,
+  lastAnswerOfferedPage,
+  targetsFromHistory,
+} from './followUp';
+import { foldText } from './fold';
+import {
+  detectNavigationIntent,
+  isDirectCommand,
+  isWayQuestion,
+  type NavigationIntent,
+} from './intent';
+import { toNavigationOffer, type NavigationOffer } from './offer';
 import {
   NAVIGATION_UNAVAILABLE_TEXT,
   resolveNavigation,
   type NavigationOutcome,
 } from './resolve';
-import type { NavigationLevel } from './targets';
+import { staticTargetFor, type NavigationLevel } from './targets';
 
 export interface NavigationFlowContext {
   /** The question was spoken (set by the chat route after the check of the organization). */
@@ -33,6 +50,15 @@ export interface NavigationFlowContext {
   /** An admin level, set by the chat route from the session, never from the message. */
   isAdmin?: boolean;
   trainingScope?: HaiTrainingScope;
+  /**
+   * The earlier messages of the session (server side). A request without a new
+   * target ("bring mich dahin", "ja") is resolved against them.
+   */
+  previousMessages?: readonly HistoryTurnMessage[];
+  /** A quiz round is running: a short "ja" is an answer there, not a request. */
+  quizState?: { active?: boolean };
+  /** The role of the turn from the server (data intent of a follow-up question). */
+  userRole?: 'TRAINER' | 'TRAINEE';
 }
 
 /** Fits PipelineResult: an answer with an optional offer, nothing was changed. */
@@ -65,31 +91,57 @@ function withClosing(outcome: NavigationOutcome, voice: boolean): string {
 }
 
 /**
- * Turn a navigation request in the message into an answer with an offer.
- * Returns null when the message holds none, so the pipeline answers it as
- * usual.
+ * The card "Auszubildende" for the answer to a question for the own trainees
+ * ("Welche Azubis habe ich?", also the short follow-up "Welche mit Namen?"):
+ * the live data answer stays, the person gets the direct way to the page. The
+ * server builds it from the allow list for the level (never the model), it is
+ * no command (no `auto`) and only trainer levels get it. Undefined for every
+ * other turn.
  */
-export async function handleNavigationMessage(
+export function traineeListOfferFor(
   userMessage: string,
+  context: Pick<
+    NavigationFlowContext,
+    'previousMessages' | 'userRole' | 'isAdmin'
+  >,
+  access: Pick<RetrievalAccess, 'audience'> | null
+): NavigationOffer | undefined {
+  if (!access || context.userRole !== 'TRAINER') return undefined;
+  // only a plain question for the list (or its short follow-up), not every
+  // sentence that holds the word "Azubi" ("Welche Aufgaben gebe ich meinen Azubis?")
+  if (
+    !isLiveDataOnlyTurn(userMessage, 'TRAINER', context.previousMessages) ||
+    resolveDataIntent(userMessage, 'TRAINER', context.previousMessages) !==
+      'trainee_overview'
+  ) {
+    return undefined;
+  }
+  const target = staticTargetFor(
+    'trainees',
+    navigationLevel(access, context.isAdmin)
+  );
+  if (!target) return undefined;
+  return toNavigationOffer({
+    path: target.path,
+    label: target.label,
+    reason: target.reason,
+  });
+}
+
+/** Resolve a recognized intent for the person (rights, occupation, records). */
+async function resolveFor(
+  intent: NavigationIntent,
+  direct: boolean,
   context: NavigationFlowContext,
-  access: RetrievalAccess | null
-): Promise<NavigationFlowResult | null> {
-  // Without a scope there is no navigation (the persona gate answers before)
-  if (!access) return null;
-
-  const intent = detectNavigationIntent(userMessage);
-  if (!intent) return null;
-
-  const level = navigationLevel(access, context.isAdmin);
+  access: RetrievalAccess
+): Promise<NavigationOutcome> {
   const scope = context.trainingScope;
-
-  let outcome: NavigationOutcome;
   try {
-    outcome = await resolveNavigation(intent, {
+    return await resolveNavigation(intent, {
       userId: access.userId,
-      level,
+      level: navigationLevel(access, context.isAdmin),
       // a clear command is carried out, a question for the way is an offer
-      direct: isDirectCommand(userMessage),
+      direct,
       // the targets follow all occupations of the person, the chosen one (if
       // the access was narrowed to it) is looked at first
       catalogIds: access.allowedCatalogIds ?? access.catalogIds,
@@ -106,13 +158,103 @@ export async function handleNavigationMessage(
   } catch (error) {
     // Fail closed: nothing is offered when the rights cannot be checked
     console.error('HAI.ai: navigation could not be resolved:', error);
-    outcome = { kind: 'unavailable', text: NAVIGATION_UNAVAILABLE_TEXT };
+    return { kind: 'unavailable', text: NAVIGATION_UNAVAILABLE_TEXT };
   }
+}
 
+function resultOf(
+  outcome: NavigationOutcome,
+  voice: boolean
+): NavigationFlowResult {
   return {
-    response: withClosing(outcome, context.voice === true),
+    response: withClosing(outcome, voice),
     intent: 'navigation',
     citations: [],
     ...(outcome.offer ? { navigationOffer: outcome.offer } : {}),
   };
+}
+
+/**
+ * A request without a new target ("dann bring mich dahin", "du navigierst",
+ * "ja"): the page comes from the history of the session, on the server. Exactly
+ * one page is opened (a command) or offered (a question for the way), no page
+ * or several are asked back with examples of the level. A bare agreement only
+ * counts right after an answer that offered a page, otherwise the message goes
+ * to the pipeline as usual (null).
+ */
+async function handleFollowUp(
+  userMessage: string,
+  context: NavigationFlowContext,
+  access: RetrievalAccess
+): Promise<NavigationFlowResult | null> {
+  const kind = detectNavigationFollowUp(userMessage);
+  if (!kind) return null;
+  // a short "ja" in a quiz round answers the question of the quiz
+  if (kind === 'confirm') {
+    if (context.quizState?.active === true) return null;
+    if (!lastAnswerOfferedPage(context.previousMessages)) return null;
+  }
+
+  const level = navigationLevel(access, context.isAdmin);
+  const candidates = targetsFromHistory(context.previousMessages, level);
+  const voice = context.voice === true;
+
+  if (candidates.length === 1) {
+    // "wie komme ich dahin" stays an offer, the rest is a command
+    const direct = !isWayQuestion(foldText(userMessage));
+    const outcome = await resolveFor(
+      { kind: 'static', target: candidates[0] },
+      direct,
+      context,
+      access
+    );
+    return resultOf(outcome, voice);
+  }
+
+  // none or several: ask back, no page, no card
+  if (candidates.length === 0 && kind === 'confirm') return null;
+  return {
+    response: askWhereToText(candidates, level),
+    intent: 'navigation',
+    citations: [],
+  };
+}
+
+/**
+ * Turn a navigation request in the message into an answer with an offer.
+ * Returns null when the message holds none, so the pipeline answers it as
+ * usual.
+ */
+export async function handleNavigationMessage(
+  userMessage: string,
+  context: NavigationFlowContext,
+  access: RetrievalAccess | null
+): Promise<NavigationFlowResult | null> {
+  // Without a scope there is no navigation (the persona gate answers before)
+  if (!access) return null;
+
+  const intent = detectNavigationIntent(userMessage);
+  if (!intent) return handleFollowUp(userMessage, context, access);
+
+  // "Zeig mir meine Azubis" asks for the list, not for the page: the pipeline
+  // answers it from the live data and puts the card under the answer (an
+  // "Öffne ..." and a question for the way stay navigation)
+  if (
+    intent.kind === 'static' &&
+    intent.target === 'trainees' &&
+    context.userRole === 'TRAINER' &&
+    !isDirectCommand(userMessage) &&
+    !isWayQuestion(foldText(userMessage)) &&
+    isLiveDataOnlyTurn(userMessage, 'TRAINER', context.previousMessages)
+  ) {
+    return null;
+  }
+
+  const outcome = await resolveFor(
+    intent,
+    isDirectCommand(userMessage),
+    context,
+    access
+  );
+  return resultOf(outcome, context.voice === true);
 }

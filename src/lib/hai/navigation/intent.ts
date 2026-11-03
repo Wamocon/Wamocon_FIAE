@@ -124,7 +124,7 @@ const TARGET_PATTERNS: ReadonlyArray<readonly [StaticTargetId, RegExp]> = [
   // the menu entry "Lernen" of a trainee: "meine Kurse", "zum Lernen"
   [
     'courses',
-    /\b(?:kurse[nrs]?|lernbereich\w*|lernseite|lernstoff|lerninhalte?|lernmodule?|zum\s+lernen)\b/,
+    /\b(?:kurse[nrs]?|lernbereich\w*|lernseite|lernstoff|lerninhalte?|lernmodule?|zum\s+lernen|(?:bereich|menuepunkt|rubrik|reiter)\s+lernen)\b/,
   ],
   ['statistics', /\b(?:statistik\w*|inhaltsstatistik|auswertung\w*)\b/],
   ['calendar', /\b(?:blockkalender|schulkalender|kalender)\b/],
@@ -140,7 +140,12 @@ const TARGET_PATTERNS: ReadonlyArray<readonly [StaticTargetId, RegExp]> = [
     'trainer_feedback',
     /\b(?:(?:ausbilder|trainer)-?\s?feedback|feedback\w*|rueckmeldung\w*)\b/,
   ],
-  ['trainees', /\b(?:auszubildende[nr]?|azubis|azubi-?verwaltung|trainees)\b/],
+  // the menu entry "Auszubildende" and the words trainers use for it:
+  // "Auszubildenden-Übersicht", "Azubi-Übersicht", "Azubiliste", "meine Azubis"
+  [
+    'trainees',
+    /\b(?:auszubildende[nr]?|azubis|azubi-?\s?(?:verwaltung|uebersicht|liste|seite|bereich)|azubiliste|trainees|lehrlinge)\b/,
+  ],
   ['profile', /\b(?:profil\w*)\b/],
   ['dashboard', /\b(?:dashboard|startseite|startbildschirm)\b/],
 ];
@@ -316,6 +321,25 @@ function hasCue(text: string): boolean {
 /** The question for the way ("wo finde ich", "wie komme ich", "wo geht es weiter"). */
 const WAY_QUESTION =
   /\b(?:wo|wohin)\s+(?:\w+\s+){0,2}(?:finde|sehe|ist|sind|liegt|liegen|geht|gehts|kann|muss|soll)\b|\bwie\s+(?:komme|geht|gehts|kann|finde|gelange)\b|\bwas\s+(?:soll|sollte|kann|muss|lerne|mache|bearbeite)\b|\bnaechste[nrms]?\s+(?:schritt|enabler|lektion|lerneinheit)\b/;
+
+/** The folded text asks for the way ("wo finde ich", "wie komme ich dahin"), no command. */
+export function isWayQuestion(foldedText: string): boolean {
+  return WAY_QUESTION.test(foldedText);
+}
+
+/**
+ * All static targets a text names (menu names and words for them), in the order
+ * of the priority list, each once. No cue is needed: it is used on the earlier
+ * messages of a conversation to find the page that was talked about.
+ */
+export function mentionedTargets(message: string): StaticTargetId[] {
+  if (typeof message !== 'string') return [];
+  const text = foldText(message);
+  if (!text) return [];
+  return TARGET_PATTERNS.filter(([, pattern]) => pattern.test(text)).map(
+    ([target]) => target
+  );
+}
 
 /** A clear command to go somewhere: the verb says "do it", not "show me" or "where". */
 const DIRECT_PATTERNS: readonly RegExp[] = [

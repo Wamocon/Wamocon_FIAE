@@ -39,17 +39,14 @@ import {
 import { toHaiRole } from '@/lib/auth-helpers';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { buildHaiTrainingScope } from './trainingScope';
-import { isLearningTechniqueQuestion } from './learningTechniques/detect';
 import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 import { traineeSearchNotFoundLine } from './denial';
-import { foldUmlauts, isDayBriefingMessage } from './dayQuestion';
 import { formatDayProgress, loadDayProgress } from './dayProgress';
 import type { DayProgress } from './dayProgress';
 import type { HaiTrainingScope } from './trainingScope';
 import {
     answerDocumentQuestion,
-    isDocumentQuestion,
     type DocumentAccess,
     type DocumentScope,
 } from './documentQuery';
@@ -58,24 +55,18 @@ import {
 // TYPES
 // ============================================================================
 
-export type UserRole = 'TRAINER' | 'TRAINEE';
+import {
+    extractPotentialTraineeName,
+    isTraineeListQuestion,
+    resolveDataIntent,
+} from './dataIntent';
+import type {
+    DataIntent,
+    HistoryTurnMessage,
+    UserRole,
+} from './dataIntent';
+export * from './dataIntent';
 
-export type DataIntent =
-    | 'progress_query'      // "Wie ist mein Fortschritt?"
-    | 'calendar_query'      // "Wann habe ich Berufsschule?"
-    | 'exam_query'          // "Wann ist meine naechste Pruefung?"
-    | 'exam_results_query'  // "Welche Note habe ich?" / "Habe ich bestanden?"
-    | 'report_query'        // "Wie ist der Stand meiner Nachweise?"
-    | 'submission_query'    // "Was habe ich abgegeben?" / "Welche Abgaben sind offen?"
-    | 'use_case_query'      // "Welche Use Cases habe ich erledigt?"
-    | 'notification_query'  // "Habe ich neue Benachrichtigungen?"
-    | 'review_query'        // Trainer: "Was muss ich bewerten?"
-    | 'trainee_overview'    // Trainer: "Wie stehen meine Azubis?"
-    | 'trainee_detail_query' // Trainer: "Wie steht [Name]?" / "Noten von [Name]"
-    | 'learning_query'      // Trainee: tips on learning (quiz scores, next exams)
-    | 'day_briefing'        // "Was steht heute an?" / "Guten Morgen" (day companion)
-    | 'document_query'      // "Welche Dateien hat dieser Enabler?" / "Wie heisst die Datei?"
-    | 'none';               // No data intent detected
 
 export interface LiveDataContext {
     /** Formatted German text ready for system prompt injection */
@@ -102,6 +93,11 @@ export interface DataContextOptions {
     documentAccess?: DocumentAccess | null;
     /** Records of the page the person is on (ids already checked by the page context). */
     page?: DocumentScope | null;
+    /**
+     * The earlier messages of the session (server side): a short follow-up of a
+     * trainer ("Welche mit Namen?") asks for the list of the own trainees again.
+     */
+    previousMessages?: readonly HistoryTurnMessage[];
 }
 
 export interface UserSnapshot {
@@ -221,296 +217,6 @@ export interface TrainerTraineeInfo {
     occupations: TrainerTraineeOccupation[];
     /** Open items waiting for the trainer to review (submissions, reports). */
     pendingSubmissions: number;
-}
-
-// ============================================================================
-// DATA INTENT CLASSIFIER
-// ============================================================================
-
-// Broadened keyword sets for intent classification (natural German phrasing)
-const KW_PROGRESS = ['fortschritt', 'wie weit', 'status', 'abgeschlossen', 'erledigt', 'progress', 'geschafft', 'wie viel', 'noch offen', 'wie stehe ich', 'mein stand', 'schaffe ich', 'bin ich fertig', 'komme ich voran', 'was fehlt noch'];
-const KW_CALENDAR = ['kalender', 'woche', 'berufsschule', 'schulblock', 'betrieb', 'urlaub', 'ferien', 'wann habe ich', 'naechste woche', 'diese woche', 'block', 'zeitplan', 'stundenplan', 'schultag', 'frei', 'wann bin ich'];
-const KW_EXAM_RESULTS = ['note', 'noten', 'bestanden', 'durchgefallen', 'ergebnis', 'punkte', 'prozent', 'wie habe ich abgeschnitten', 'klausurergebnis', 'pruefungsergebnis', 'zeugnis', 'welche note', 'meine noten', 'notenspiegel', 'notenuebersicht', 'schnitt'];
-const KW_EXAM = ['pruefung', 'klausur', 'ihk', 'abschlusspruefung', 'examen', 'naechste pruefung', 'wann schreibe ich', 'ap1', 'ap2', 'teil 1', 'teil 2', 'zwischenpruefung', 'pruefungstermin'];
-const KW_SUBMISSION = ['abgabe', 'abgaben', 'eingereicht', 'einreichung', 'submission', 'abgegeben', 'was habe ich abgegeben', 'feedback', 'bewertung meiner', 'rueckmeldung', 'rückmeldung', 'meine loesung', 'meine abgabe', 'korrektur', 'bewertet'];
-const KW_USE_CASE = ['use case', 'use-case', 'usecase', 'fallstudie', 'praktische aufgabe', 'praxisaufgabe'];
-const KW_REPORT = ['nachweis', 'taetigkeitsnachweis', 'bericht', 'berichtsheft', 'wochenbericht', 'activity report', 'nachweise', 'ausbildungsnachweis', 'wie viele berichte', 'taetigkeit'];
-const KW_NOTIFICATION = ['benachrichtigung', 'neuigkeiten', 'notification', 'neue nachrichten', 'was gibt es neues', 'updates', 'ungelesen', 'inbox'];
-const KW_REVIEW = ['bewerten', 'ausstehend', 'korrigieren', 'review', 'eingereicht', 'submissions', 'pruefe', 'zu bewerten', 'offene abgaben', 'pending', 'was muss ich'];
-// The day at a glance (day companion, voice or chat) is recognized by dayQuestion.ts:
-// fixed phrases and natural questions about the own tasks, with folded umlauts. It is
-// checked first: "was muss ich heute" would otherwise land in the review list of the
-// trainers.
-
-/** Lower case with ae, oe, ue, ss: a spoken or typed "für" meets the keyword "fuer". */
-export { foldUmlauts };
-
-const KW_OVERVIEW =['ueberblick', 'meine azubis', 'wie stehen', 'fortschritt meiner', 'alle azubis', 'azubi-uebersicht', 'meine auszubildenden'];
-
-// ============================================================================
-// NAME EXTRACTION (for trainer → trainee queries)
-// ============================================================================
-
-/**
- * Words that are no names (folded: lower case, ae oe ue ss): question and
- * command words, pronouns, small words and the generic nouns of a trainer's
- * question ("Azubis", "Dateien", "Woche"). Matched as a whole word.
- */
-const NOT_NAMES = new Set([
-    // question and command words, greetings
-    'wie', 'was', 'wer', 'wem', 'wen', 'wessen', 'wo', 'wann', 'warum', 'wieso',
-    'weshalb', 'wohin', 'welche', 'welcher', 'welchen', 'welchem', 'welches',
-    'zeig', 'zeige', 'zeigst', 'liste', 'gib', 'gibt', 'gebe', 'nenne', 'nenn',
-    'sag', 'sage', 'sagst', 'kannst', 'koennte', 'koenntest', 'kann', 'bitte',
-    'hallo', 'hi', 'hey', 'danke', 'guten', 'morgen', 'tag', 'abend', 'moin',
-    'ok', 'okay', 'dann', 'also', 'und', 'oder', 'aber', 'nicht', 'auch', 'noch',
-    'schon', 'mal', 'nur', 'ja', 'nein', 'wenn', 'dass', 'weil', 'ob',
-    // small words, pronouns, verbs
-    'hat', 'von', 'der', 'die', 'das', 'ist', 'bei', 'mit', 'nach', 'sich',
-    'den', 'dem', 'des', 'ein', 'eine', 'einem', 'einen', 'einer', 'eines',
-    'habe', 'haben', 'hast', 'wird', 'sind', 'sein', 'seine', 'war', 'waren',
-    'ich', 'mir', 'mich', 'mein', 'meine', 'meinen', 'meinem', 'meiner', 'meines',
-    'du', 'dir', 'dich', 'wir', 'uns', 'sie', 'ihr', 'ihm', 'ihn', 'es', 'man',
-    'alle', 'allen', 'aller', 'alles', 'jede', 'jeder', 'jeden', 'viele', 'wieviele',
-    'stand', 'status', 'liste', 'listen', 'uebersicht', 'ueberblick', 'name',
-    'namen', 'person', 'personen', 'leute', 'frage', 'fragen', 'trainer',
-    'admin', 'chef', 'herr', 'frau',
-    // nouns of the platform and of the training
-    'note', 'noten', 'use', 'case', 'cases', 'progress', 'enabler', 'enablern',
-    'quiz', 'quizze', 'klausur', 'klausuren', 'schulblock', 'block', 'bloecke',
-    'blocks', 'woche', 'wochen', 'jahr', 'jahre', 'jahren', 'monat', 'monate',
-    'phase', 'phasen', 'kurs', 'kurse', 'kursen', 'schule', 'betrieb', 'datei',
-    'dateien', 'pdf', 'pdfs', 'anhang', 'anhaenge', 'unterlage', 'unterlagen',
-    'fortschritt', 'abgaben', 'abgabe', 'berichte', 'bericht', 'ergebnis',
-    'ergebnisse', 'pruefung', 'pruefungen', 'kalender', 'termin',
-    'termine', 'beruf', 'berufe', 'fiae', 'kfbm', 'fachinformatiker',
-]);
-
-/**
- * Stems of generic nouns, also as the start of a compound ("Azubiliste",
- * "Berufsschulblock"): a capitalized word that starts with one is no name. No
- * short stems here, a surname like "Block" stays possible.
- */
-const NOT_NAME_STEMS = [
-    'azubi', 'auszubildend', 'trainee', 'lehrling', 'ausbildung', 'dokument',
-    'abgabe', 'bericht', 'pruefung', 'beruf', 'enabler', 'fortschritt',
-    'datei', 'unterlage', 'kalender', 'nachweis', 'taetigkeit', 'ergebnis',
-    'uebersicht', 'ueberblick', 'berufsschul', 'anwendungsentwicklung',
-];
-
-const NAME_WORD = "[A-ZÄÖÜ][a-zäöüß]{2,}(?:-[A-ZÄÖÜ][a-zäöüß]{2,})?";
-const NAME_WORD_RE = new RegExp(`^${NAME_WORD}$`);
-const PREP_NAME_RE = new RegExp(
-    `\\b(?:von|fuer|für|zu|ueber|über)\\s+(${NAME_WORD}(?:\\s+${NAME_WORD})?)`
-);
-
-/** True for a word that is a generic noun, a question word or a small word. */
-function isNotAName(word: string): boolean {
-    const folded = foldUmlauts(word.replace(/[?!.,;:]+$/, ''));
-    if (folded.length === 0) return true;
-    // "Azubi-Liste" and the like: one generic part is enough
-    const parts = folded.split('-');
-    return parts.some(
-        part =>
-            NOT_NAMES.has(part) ||
-            NOT_NAME_STEMS.some(stem => part.startsWith(stem))
-    );
-}
-
-export interface TraineeNameCandidate {
-    name: string;
-    /**
-     * True when the message names a person clearly: first and last name. A
-     * single capitalized word, in the middle of a sentence or after "von",
-     * "für", "zu", "über", is a weak signal only (every German noun is
-     * capitalized, "für Datenbanken" is a topic): it counts as a person only
-     * together with a cue like "wie steht" or "Fortschritt" (hasPersonQueryCue).
-     */
-    strong: boolean;
-}
-
-/**
- * Extract a potential trainee name from a trainer's message.
- * Matches patterns like "von Max", "fuer Max Mustermann", "Wie steht Max?".
- * Generic nouns ("Azubis", "Dateien"), question words and the start of a
- * sentence are no names. The result is a candidate only: whether the person
- * exists is decided against the list of the own trainees (findTraineeByName).
- */
-export function extractTraineeNameCandidate(
-    message: string
-): TraineeNameCandidate | null {
-    // Pattern 1: "von [Name]" / "fuer [Name]" / "zu [Name]" / "ueber [Name]"
-    const prepMatch = message.match(PREP_NAME_RE);
-    if (prepMatch) {
-        const parts = prepMatch[1].trim().split(/\s+/);
-        if (!isNotAName(parts[0])) {
-            const second = parts[1];
-            if (second && !isNotAName(second)) {
-                return { name: `${parts[0]} ${second}`, strong: true };
-            }
-            // "für Datenbanken" is as likely a topic as a person
-            return { name: parts[0], strong: false };
-        }
-    }
-
-    // Pattern 2: capitalized words that are neither at the start of a sentence
-    // nor generic words
-    const words = message.split(/\s+/).filter(Boolean);
-    for (let i = 1; i < words.length; i++) {
-        // the first word after . ! ? is a sentence start, too
-        if (/[.!?]$/.test(words[i - 1])) continue;
-        const w = words[i].replace(/[?!.,;:]+$/, '');
-        if (NAME_WORD_RE.test(w) && !isNotAName(w)) {
-            // Check if next word is also capitalized (full name)
-            const next = words[i + 1]?.replace(/[?!.,;:]+$/, '');
-            if (
-                next &&
-                !/[.!?,;:]$/.test(words[i]) &&
-                NAME_WORD_RE.test(next) &&
-                !isNotAName(next)
-            ) {
-                return { name: `${w} ${next}`, strong: true };
-            }
-            return { name: w, strong: false };
-        }
-    }
-
-    return null;
-}
-
-/** Kept for the callers that only need the name. */
-function extractPotentialTraineeName(message: string): string | null {
-    return extractTraineeNameCandidate(message)?.name ?? null;
-}
-
-// ----------------------------------------------------------------------------
-// "Which trainees do I have": generic question about the own trainees
-// ----------------------------------------------------------------------------
-
-/** Nouns for trainees (folded). "Trainer" is no trainee. */
-const TRAINEE_NOUN_RE =
-    /\b(azubis?|auszubildende[rnms]?|azubiliste|trainees?|lehrlinge?|schuetzlinge?)\b/;
-/** Phrases that ask for the own trainees (folded). */
-const TRAINEE_LIST_PHRASES = [
-    'zugeordnet',
-    'zugewiesen',
-    'betreue ich',
-    'betreuen ich',
-    'wen betreue',
-    'wer sind meine',
-    'wer ist mir',
-    'wie viele azubis',
-    'wie viele auszubildende',
-    'ausbildungsjahr',
-    'welchen beruf',
-    'welche berufe',
-];
-
-/**
- * Cues that a question is about how a person is doing (folded). A single
- * capitalized word is taken for a name only together with such a cue, so that
- * a technical question of a trainer ("Was ist ein Primärschlüssel?") is no
- * search for a person called "Primärschlüssel".
- */
-const PERSON_QUERY_CUES = [
-    'wie steht', 'wie stehen', 'wie laeuft', 'wie lief', 'wie macht', 'wie geht',
-    'wie schlaegt', 'wie weit', 'wie gut', 'wer ist', 'was macht',
-    'fortschritt', 'stand', 'status', 'note', 'noten', 'ergebnis', 'abgabe',
-    'abgaben', 'bericht', 'berichte', 'leistung', 'zeugnis', 'bewertung',
-    'fehlzeiten', 'urlaub', 'krank', 'anwesenheit', 'info', 'infos',
-    'informationen', 'details', 'daten von',
-];
-
-/** True when the message reads like a question about a person's progress. */
-export function hasPersonQueryCue(message: string): boolean {
-    const folded = foldUmlauts(message);
-    return PERSON_QUERY_CUES.some(cue =>
-        new RegExp(`(^|[^a-z])${cue}([^a-z]|$)`).test(folded)
-    );
-}
-
-/**
- * A question about the own trainees as a group ("Welche Azubis sind mir
- * zugeordnet?", "Wer sind meine Azubis?", "Wie viele Azubis habe ich?"). Reads
- * the folded text, so spoken text without capitals, umlauts or punctuation
- * counts as well.
- */
-export function isTraineeListQuestion(message: string): boolean {
-    const folded = foldUmlauts(message);
-    if (TRAINEE_NOUN_RE.test(folded)) return true;
-    if (TRAINEE_LIST_PHRASES.some(p => folded.includes(p))) return true;
-    // the old keyword list, read as before (no folding of umlauts)
-    const lower = message.toLowerCase();
-    return KW_OVERVIEW.some(k => lower.includes(k));
-}
-
-/**
- * Classify the data intent from a user message.
- * Uses German keyword matching to detect when the user asks about live data.
- *
- * @param message - The user's chat message
- * @param userRole - The user's role (TRAINER or TRAINEE)
- * @returns The detected DataIntent
- */
-export function classifyDataIntent(message: string, userRole: UserRole): DataIntent {
-    const lower = message.toLowerCase();
-
-    // The day at a glance, for both roles. Only this recognition reads the message
-    // with folded umlauts (a spoken "für" must meet "fuer"); the older lists keep
-    // their behavior, so a learning question with the word "Prüfung" stays a
-    // learning one.
-    if (isDayBriefingMessage(message)) return 'day_briefing';
-
-    // A question about files (names, lists, PDF, extensions): answered from the
-    // database with the access rules of the PageIndex (documentQuery.ts). Before
-    // the name search of a trainer: "Dateien" is no person.
-    if (isDocumentQuestion(message)) return 'document_query';
-
-    // Trainer-only intents first (more specific)
-    if (userRole === 'TRAINER') {
-        if (KW_REVIEW.some(k => lower.includes(k))) return 'review_query';
-
-        // Two steps. First the generic words are taken out of the candidates
-        // ("Azubis", "Dateien", "Welche" are no names). A clear name ("von
-        // Anna", "Max Mustermann") is a detail query even when the message
-        // also says "Azubi". A single capitalized noun next to a trainee word
-        // ("Welche Azubis sind in Datenbanken fit?") is a group question.
-        // Whether a person of that name exists is decided against the own
-        // trainees in fetchDataContext, a name that is not found there falls
-        // back to the overview when the message asks for the group.
-        const candidate = extractTraineeNameCandidate(message);
-        const listQuestion = isTraineeListQuestion(message);
-        // A single capitalized word needs a cue that the question is about how
-        // a person is doing, otherwise every capitalized noun would be a search
-        // for a person.
-        if (
-            candidate &&
-            (candidate.strong || (!listQuestion && hasPersonQueryCue(message)))
-        ) {
-            return 'trainee_detail_query';
-        }
-
-        // Group question about the own trainees → overview
-        if (listQuestion || lower.includes('azubi') || lower.includes('trainee')) {
-            return 'trainee_overview';
-        }
-    }
-
-    // Shared intents (both roles)
-    if (KW_PROGRESS.some(k => lower.includes(k))) return 'progress_query';
-    if (KW_CALENDAR.some(k => lower.includes(k))) return 'calendar_query';
-    if (KW_EXAM_RESULTS.some(k => lower.includes(k))) return 'exam_results_query';
-    if (KW_EXAM.some(k => lower.includes(k))) return 'exam_query';
-    if (KW_SUBMISSION.some(k => lower.includes(k))) return 'submission_query';
-    if (KW_USE_CASE.some(k => lower.includes(k))) return 'use_case_query';
-    if (KW_REPORT.some(k => lower.includes(k))) return 'report_query';
-    if (KW_NOTIFICATION.some(k => lower.includes(k))) return 'notification_query';
-
-    // Tips on learning and memorizing (package B): the trainee's own quiz
-    // scores and upcoming exams, nothing else. Only when no other intent matched.
-    if (userRole === 'TRAINEE' && isLearningTechniqueQuestion(message)) return 'learning_query';
-
-    return 'none';
 }
 
 // ============================================================================
@@ -1877,6 +1583,19 @@ export function formatTraineeOverview(trainees: TrainerTraineeInfo[]): string {
     return lines.join('\n');
 }
 
+/**
+ * The live data of an intent could not be loaded (a failed query). A line for
+ * the prompt that names it as a technical failure, never as a missing right,
+ * and keeps the model from naming a number or a name from memory.
+ */
+export function dataUnavailableLine(intent: DataIntent): string {
+    const what =
+        intent === 'trainee_overview'
+            ? '**Azubi-Übersicht:** Die Liste konnte gerade nicht geladen werden.'
+            : '**Hinweis:** Die Daten zu dieser Frage konnten gerade nicht geladen werden.';
+    return `${what} Das ist eine technische Störung und keine fehlende Berechtigung. Nenne dazu keine Zahlen, Namen oder Werte und sage kurz, dass die Daten gerade nicht geladen werden konnten. Bitte darum, die Frage gleich noch einmal zu stellen.`;
+}
+
 // ============================================================================
 // MAIN ENTRY POINT
 // ============================================================================
@@ -1911,7 +1630,7 @@ export async function fetchDataContext(
         }
 
         // Step 2: Classify data intent
-        const dataIntent = classifyDataIntent(message, userRole);
+        const dataIntent = resolveDataIntent(message, userRole, options.previousMessages);
 
         // Step 3: Build summary parts
         const parts: string[] = [formatSnapshot(snapshot)];
@@ -2088,6 +1807,10 @@ export async function fetchDataContext(
             } catch (intentError) {
                 // Non-fatal: intent-specific fetch failed, still return snapshot
                 console.warn(`HAI.ai DataContext: Intent fetch failed for ${dataIntent}:`, intentError);
+                // Say it plainly instead of leaving the snapshot alone: without
+                // this the model only sees a few numbers and answers "no names
+                // available", which reads like a missing right
+                parts.push(dataUnavailableLine(dataIntent));
             }
         }
 
