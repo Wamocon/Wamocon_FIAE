@@ -31,6 +31,7 @@ const USERS = '/trainer/admin/users';
 const CONTENT_STATS = '/trainer/admin/content-stats';
 // the speech provider of the voice assistant: only the platform admin
 const HAI_ADMIN = '/trainer/admin/hai';
+const HAI_MEMORY = '/trainer/admin/hai-memory';
 const CONTENT_UPLOAD = '/trainer/admin/content-upload';
 
 function renderFor(
@@ -116,6 +117,7 @@ describe('Sidebar', () => {
       USERS,
       CONTENT_STATS,
       HAI_ADMIN,
+      HAI_MEMORY,
       CONTENT_UPLOAD,
       PROFILE,
     ]);
@@ -138,6 +140,7 @@ describe('Sidebar', () => {
         CONTENT_STATS,
         // the HAI admin page is not switched off in Production
         HAI_ADMIN,
+        HAI_MEMORY,
         PROFILE,
       ]);
       expect(screen.queryByText('Inhalts-Upload')).toBeNull();
@@ -154,6 +157,7 @@ describe('Sidebar', () => {
       USERS,
       CONTENT_STATS,
       HAI_ADMIN,
+      HAI_MEMORY,
       CONTENT_UPLOAD,
       PROFILE,
     ]);

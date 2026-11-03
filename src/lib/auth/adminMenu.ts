@@ -32,7 +32,8 @@ export type AdminMenuItem = {
     | 'adminUsers'
     | 'contentUpload'
     | 'contentStats'
-    | 'haiAdmin';
+    | 'haiAdmin'
+    | 'haiMemory';
   href: string;
   /** Key of the label in the locale files. */
   labelKey: string;
@@ -84,6 +85,27 @@ export function haiAdminMenuItems(
 ): AdminMenuItem[] {
   if (!isSuperAdmin(subject)) return [];
   return [{ id: 'haiAdmin', href: HAI_ADMIN_HREF, labelKey: 'admin.hai.menu' }];
+}
+
+const HAI_MEMORY_HREF = '/trainer/admin/hai-memory';
+
+/**
+ * The entry of the HAI memory page (shared memory for all users: approve, reject,
+ * change, create): only the platform admin, like the routes behind it
+ * (requireSuperAdmin). The page never shows the memory of one person. Like the
+ * rest of the menu this is not the protection.
+ */
+export function haiMemoryMenuItems(
+  subject: RoleSubject | null | undefined
+): AdminMenuItem[] {
+  if (!isSuperAdmin(subject)) return [];
+  return [
+    {
+      id: 'haiMemory',
+      href: HAI_MEMORY_HREF,
+      labelKey: 'admin.haiMemory.menu',
+    },
+  ];
 }
 
 const CONTENT_STATS_HREF = '/trainer/admin/content-stats';

@@ -1346,6 +1346,51 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   { route: 'hai/voice/haus/speech', method: 'POST', guard: 'user', params: [] },
+  // the memory of the HAI of the signed-in user (docs/hai-gedaechtnis.md): only the
+  // entries of the session user, no route names another user. Behind the switch
+  // HAI_MEMORY (404 while it is off, GET answers { available: false }), see
+  // tests/integration/api/hai/memory.test.ts
+  { route: 'hai/memory', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/memory', method: 'PATCH', guard: 'user', params: [] },
+  { route: 'hai/memory', method: 'DELETE', guard: 'user', params: [] },
+  {
+    route: 'hai/memory/[id]',
+    method: 'PATCH',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'hai/memory/[id]',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['id'],
+  },
+  // the shared memory of the HAI (for all users): only the platform admin, never
+  // the entries of one person
+  {
+    route: 'admin/hai/memory',
+    method: 'GET',
+    guard: 'superAdmin',
+    params: [],
+  },
+  {
+    route: 'admin/hai/memory',
+    method: 'POST',
+    guard: 'superAdmin',
+    params: [],
+  },
+  {
+    route: 'admin/hai/memory/[id]',
+    method: 'PATCH',
+    guard: 'superAdmin',
+    params: ['id'],
+  },
+  {
+    route: 'admin/hai/memory/suggest',
+    method: 'POST',
+    guard: 'superAdmin',
+    params: [],
+  },
   // the HAI admin page: only the platform admin
   {
     route: 'admin/hai/settings',

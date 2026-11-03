@@ -31,6 +31,7 @@ import { PASS_THRESHOLD } from '@/lib/catalog/progression';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { getAusbildungDurationLabel } from '@/lib/ausbildung/duration';
+import { HaiMemoryPanel } from '@/components/hai/HaiMemoryPanel';
 
 type TrainerStats = {
   trainees: number;
@@ -823,6 +824,9 @@ export function Profile() {
           )}
         </div>
       </div>
+
+      {/* What the HAI remembers about the person (nothing shown while it is off) */}
+      <HaiMemoryPanel />
 
       {/* Restart Tour */}
       <div className="bg-card border-border mt-6 rounded-3xl border p-6 shadow-lg">

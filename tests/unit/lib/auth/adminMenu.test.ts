@@ -5,6 +5,7 @@ import {
   adminMenuItems,
   contentStatsMenuItems,
   haiAdminMenuItems,
+  haiMemoryMenuItems,
   type AdminMenuItem,
 } from '@/lib/auth/adminMenu';
 import { GUARDED_ROUTES } from '../../../helpers/guardedRoutes';
@@ -205,6 +206,46 @@ describe('haiAdminMenuItems', () => {
   });
 });
 
+describe('haiMemoryMenuItems', () => {
+  it.each([
+    ['SUPER_ADMIN', superAdmin],
+    ['ADMIN of the platform organization', platformAdmin],
+  ])('%s sees the HAI memory page', (_name, subject) => {
+    expect(haiMemoryMenuItems(subject)).toEqual([
+      {
+        id: 'haiMemory',
+        href: '/trainer/admin/hai-memory',
+        labelKey: 'admin.haiMemory.menu',
+      },
+    ]);
+  });
+
+  it('no other level sees it, the routes behind it are for the platform admin only', () => {
+    for (const subject of [
+      admin,
+      tempAdmin,
+      platformTempAdmin,
+      { role: 'TRAINER', isPlatformOwner: true },
+      { role: 'TRAINEE', isPlatformOwner: true },
+      { role: null },
+      null,
+      undefined,
+    ]) {
+      expect(haiMemoryMenuItems(subject)).toEqual([]);
+    }
+    expect(guardOf('admin/hai/memory', 'GET')).toBe('superAdmin');
+    expect(guardOf('admin/hai/memory', 'POST')).toBe('superAdmin');
+    expect(guardOf('admin/hai/memory/[id]', 'PATCH')).toBe('superAdmin');
+    expect(guardOf('admin/hai/memory/suggest', 'POST')).toBe('superAdmin');
+  });
+
+  it('opens a page that exists', () => {
+    const [item] = haiMemoryMenuItems(superAdmin);
+    const page = path.join(process.cwd(), 'src/app', item.href, 'page.tsx');
+    expect(fs.existsSync(page)).toBe(true);
+  });
+});
+
 // The API routes each page calls. The first one is what the page cannot work
 // without when it opens.
 const PAGE_ROUTES: Record<
@@ -234,6 +275,12 @@ const PAGE_ROUTES: Record<
     { route: 'admin/hai/settings', method: 'GET' },
     { route: 'admin/hai/settings', method: 'PUT' },
     { route: 'admin/hai/voice-status', method: 'GET' },
+  ],
+  haiMemory: [
+    { route: 'admin/hai/memory', method: 'GET' },
+    { route: 'admin/hai/memory', method: 'POST' },
+    { route: 'admin/hai/memory/[id]', method: 'PATCH' },
+    { route: 'admin/hai/memory/suggest', method: 'POST' },
   ],
 };
 

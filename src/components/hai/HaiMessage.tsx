@@ -13,6 +13,8 @@ import React from 'react';
 import { HaiMessage as MessageType, useHai } from './HaiProvider';
 import { HaiActionCard } from './HaiActionCard';
 import { HaiNavigationCard } from './HaiNavigationCard';
+import { HaiMemoryCard } from './HaiMemoryCard';
+import { useHaiQuizMode } from './HaiQuizMode';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { MarkdownText } from '@/components/ui/MarkdownText';
 import { isDocumentId, openDocumentFile } from '@/lib/documentFileLink';
@@ -40,10 +42,14 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
     setActiveVersion,
     confirmPendingAction,
     cancelPendingAction,
+    answerMemoryProposal,
     openNavigation,
     retryMessage,
     messages,
   } = useHai();
+  // the memory never asks in the middle of a quiz round: the card waits (and
+  // shows up when the quiz card is closed)
+  const { active: quizActive } = useHaiQuizMode();
   const isUser = message.role === 'user';
   const hasCitations = message.citations && message.citations.length > 0;
   const isThinking = isStreaming && !message.content;
@@ -189,6 +195,16 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
             action={message.pendingAction}
             onConfirm={() => void confirmPendingAction(message.id)}
             onCancel={() => cancelPendingAction(message.id)}
+          />
+        )}
+
+        {/* Question of the memory: nothing is saved before the person says yes */}
+        {!isUser && !isStreaming && !quizActive && message.memoryProposal && (
+          <HaiMemoryCard
+            proposal={message.memoryProposal}
+            onAnswer={(decision, content) =>
+              void answerMemoryProposal(message.id, decision, content)
+            }
           />
         )}
 
