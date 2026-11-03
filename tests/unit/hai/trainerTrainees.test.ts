@@ -531,6 +531,18 @@ describe('fetchDataContext for a trainer', () => {
     expect(submissionSql).not.toMatch(/created_at/);
   });
 
+  it('the exam results of the detail query join on exam_id (the column school_exam_id does not exist: found on a real Postgres)', async () => {
+    const [anna] = makeTrainees(1);
+    const { executed } = installDb({
+      selects: [...snapshotSelects, [{ id: anna.id, fullName: 'Anna Muster', firstName: 'Anna', lastName: 'Muster' }]],
+    });
+    await fetchDataContext('trainer-1', 'TRAINER', 'Wie steht Anna Muster?');
+    const examSql = executed.find(text => text.includes('FROM school_exam_results ser'));
+    expect(examSql).toBeDefined();
+    expect(examSql).toContain('se.id = ser.exam_id');
+    expect(examSql).not.toContain('school_exam_id');
+  });
+
   it('a name that is not among the own trainees gets the neutral line', async () => {
     installDb({ selects: [...snapshotSelects, []] });
     const context = await fetchDataContext('trainer-1', 'TRAINER', 'Wie steht Max Mustermann?');

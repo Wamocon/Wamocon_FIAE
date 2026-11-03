@@ -1467,7 +1467,7 @@ async function fetchTraineeDetailForTrainer(
         const exams = await db.execute(sql`
             SELECT se.subject, ser.grade, ser.percentage, ser.passed, se.exam_date
             FROM school_exam_results ser
-            JOIN school_exams se ON se.id = ser.school_exam_id
+            JOIN school_exams se ON se.id = ser.exam_id
             WHERE ser.trainee_id = ${trainee.id}
             ORDER BY se.exam_date DESC LIMIT 5
         `);
