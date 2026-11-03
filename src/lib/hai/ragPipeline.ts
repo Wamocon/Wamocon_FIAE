@@ -83,7 +83,14 @@ import { isDayQuestion } from './dayQuestion';
 import type { UserRole } from './dataContext';
 import { handleActionMessage } from './actionFlow';
 import type { PendingAction } from './actionPolicy';
-import { handleNavigationMessage } from './navigation/flow';
+import {
+  handleNavigationMessage,
+  traineeListOfferFor,
+} from './navigation/flow';
+import { isLiveDataOnlyTurn } from './dataIntent';
+
+/** Head line of the detail of an own trainee in the live data (dataContext.ts). */
+const TRAINEE_DETAIL_MARKER = '**Azubi-Detail:';
 import type { NavigationOffer } from './navigation/offer';
 import type { HaiTrainingScope } from './trainingScope';
 import {
@@ -514,6 +521,24 @@ function isDayBriefingTurn(
   return !!context.userRole && isDayQuestion(userMessage);
 }
 
+/**
+ * A trainer asks for the own trainees or the open reviews (also as a short
+ * follow-up like "Welche mit Namen?"): the answer comes from the live data
+ * alone, so the turn skips the knowledge search and no source cards of the
+ * knowledge base (quizzes, orders) hang under it. A knowledge question keeps
+ * its search and its sources.
+ */
+function isLiveDataOnlyTurnOf(
+  userMessage: string,
+  context: PipelineContext
+): boolean {
+  return isLiveDataOnlyTurn(
+    userMessage,
+    context.userRole,
+    context.previousMessages
+  );
+}
+
 function determineMode(
   intent: IntentType,
   context: PipelineContext
@@ -587,6 +612,12 @@ async function timed<T>(
 /** What the live data of a turn hands to the retrieval (a file the question named). */
 interface DocumentTurn {
   documentIds?: string[];
+  /**
+   * The live data answers the question (the detail of an own trainee was
+   * found): the knowledge search of this turn is dropped, no source cards of
+   * the knowledge base belong to such an answer.
+   */
+  liveAnswer?: boolean;
 }
 
 /** The prompt section for the page of the user, or undefined (switch off, no page). */
@@ -615,6 +646,8 @@ async function loadLiveDataContext(
       {
         preferredCatalogCode: context.preferredCatalogCode,
         trainingScope: context.trainingScope,
+        // for the short follow-up of a trainer ("Welche mit Namen?")
+        previousMessages: context.previousMessages,
         // a question about files: what the person may read and the records of
         // the page (the database decides, not the page). Other turns get the
         // options as before.
@@ -630,6 +663,13 @@ async function loadLiveDataContext(
       }
     );
     if (turn && dataCtx?.documentIds) turn.documentIds = dataCtx.documentIds;
+    if (
+      turn &&
+      dataCtx?.dataIntent === 'trainee_detail_query' &&
+      dataCtx.summary.includes(TRAINEE_DETAIL_MARKER)
+    ) {
+      turn.liveAnswer = true;
+    }
     return dataCtx ? dataCtx.summary : undefined;
   } catch (dataError) {
     console.warn('HAI.ai: DataContext fetch failed (non-fatal):', dataError);
@@ -1018,9 +1058,11 @@ export async function processMessage(
 
     // Step 1: Classify intent
     const dayBriefing = isDayBriefingTurn(userMessage, context);
-    const intent: IntentType = dayBriefing
-      ? 'question'
-      : classifyIntent(userMessage, context.quizState, persona);
+    const liveOnly = isLiveDataOnlyTurnOf(userMessage, context);
+    const intent: IntentType =
+      dayBriefing || liveOnly
+        ? 'question'
+        : classifyIntent(userMessage, context.quizState, persona);
 
     // Handle special intents
     if (intent === 'greeting') {
@@ -1064,7 +1106,12 @@ export async function processMessage(
     const memoryScope = memoryScopeFor(access, persona);
     const memoryPromise = loadMemoryForPrompt(memoryScope);
 
-    if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
+    if (
+      intent !== 'quiz_answer' &&
+      !enableWebSearch &&
+      !dayBriefing &&
+      !liveOnly
+    ) {
       // A question about files: the file it names comes from the database (the
       // live data), so the retrieval waits for it and loads its pages
       if (isDocumentQuestion(userMessage)) await liveDataPromise;
@@ -1081,6 +1128,12 @@ export async function processMessage(
 
     const liveDataContext = await liveDataPromise;
     const memory = await memoryPromise;
+    // the live data answered (detail of an own trainee): no knowledge sources
+    if (documentTurn.liveAnswer) {
+      searchResults = [];
+      retrievedContext = '';
+      usedTrainerSolutions = undefined;
+    }
 
     // Step 3c: what the pipeline knows about a limit of access (denial.ts)
     const accessReasons = detectAccessReasons({
@@ -1090,6 +1143,8 @@ export async function processMessage(
         intent !== 'quiz_answer' &&
         !enableWebSearch &&
         !dayBriefing &&
+        !liveOnly &&
+        !documentTurn.liveAnswer &&
         !retrievedContext,
       contextDropped: context.contextDropped === true,
       liveDataContext,
@@ -1213,6 +1268,10 @@ export async function processMessage(
       quizActive: isQuizRound(intent, context.quizState),
     });
 
+    // A question for the list of the own trainees also gets the card to the
+    // page "Auszubildende" (the server builds it, never the model)
+    const listOffer = traineeListOfferFor(userMessage, context, access);
+
     return {
       response: responseData.text,
       intent,
@@ -1220,6 +1279,7 @@ export async function processMessage(
       quizState: newQuizState,
       ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
       ...(memoryProposal ? { memoryProposal } : {}),
+      ...(listOffer ? { navigationOffer: listOffer } : {}),
     };
   } catch (error) {
     if (isChatUnavailableError(error)) return chatUnavailableResult(error);
@@ -1313,9 +1373,11 @@ export async function processMessageStream(
     }
 
     const dayBriefing = isDayBriefingTurn(userMessage, context);
-    const intent: IntentType = dayBriefing
-      ? 'question'
-      : classifyIntent(userMessage, context.quizState, persona);
+    const liveOnly = isLiveDataOnlyTurnOf(userMessage, context);
+    const intent: IntentType =
+      dayBriefing || liveOnly
+        ? 'question'
+        : classifyIntent(userMessage, context.quizState, persona);
 
     // Handle special intents immediately
     if (intent === 'greeting') {
@@ -1348,7 +1410,12 @@ export async function processMessageStream(
     // empty without the switch HAI_MEMORY)
     const memoryScope = memoryScopeFor(access, persona);
     const memoryPromise = loadMemoryForPrompt(memoryScope);
-    if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
+    if (
+      intent !== 'quiz_answer' &&
+      !enableWebSearch &&
+      !dayBriefing &&
+      !liveOnly
+    ) {
       // Same retrieval as processMessage: scoped to the user
       onStage?.('search');
       const retrievalStartedAt = Date.now();
@@ -1370,6 +1437,12 @@ export async function processMessageStream(
     // Live data context (non-fatal, never rejects)
     const liveDataContext = await liveDataPromise;
     const memory = await memoryPromise;
+    // the live data answered (detail of an own trainee): no knowledge sources
+    if (documentTurn.liveAnswer) {
+      searchResults = [];
+      retrievedContext = '';
+      usedTrainerSolutions = undefined;
+    }
 
     // retrieval and live data are done: the model call is what is left to wait for
     if (context.timings) context.timings.search = Date.now() - searchStartedAt;
@@ -1383,6 +1456,8 @@ export async function processMessageStream(
         intent !== 'quiz_answer' &&
         !enableWebSearch &&
         !dayBriefing &&
+        !liveOnly &&
+        !documentTurn.liveAnswer &&
         !retrievedContext,
       contextDropped: context.contextDropped === true,
       liveDataContext,
@@ -1484,12 +1559,17 @@ export async function processMessageStream(
       quizActive: isQuizRound(intent, context.quizState),
     });
 
+    // The card to the page "Auszubildende" for a question for the list of the
+    // own trainees, like in processMessage
+    const listOffer = traineeListOfferFor(userMessage, context, access);
+
     return {
       response: response.text,
       intent,
       citations,
       ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
       ...(memoryProposal ? { memoryProposal } : {}),
+      ...(listOffer ? { navigationOffer: listOffer } : {}),
     };
   } catch (error) {
     if (isChatUnavailableError(error)) return chatUnavailableResult(error);

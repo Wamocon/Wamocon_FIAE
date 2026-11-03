@@ -13,6 +13,7 @@ import {
 } from './trainingScope';
 import { FIAE_PERSONA, type HaiPersona } from './persona';
 import { sanitizePromptData } from '../prompt-sanitize';
+import { MENU_ENTRY_NAMES } from './navigation/targets';
 import { isTrainerSolutionChunk } from './trainerSolutions';
 import { buildLearningTechniquePrompt } from './learningTechniques/promptSection';
 import {
@@ -273,12 +274,22 @@ export function buildDayBriefingRules(
  * navigation card when someone wants to open a page or asks where it goes on.
  * The model invents no link and no path, it only names the menu entry.
  */
-export function buildNavigationRules(): string {
+export function buildNavigationRules(
+  userRole?: PromptContext['userRole']
+): string {
+  // the real menu entries of the role (the strict trainee list without a role)
+  const entries =
+    MENU_ENTRY_NAMES[userRole === 'TRAINER' ? 'TRAINER' : 'TRAINEE'];
+  const example =
+    userRole === 'TRAINER'
+      ? 'Öffne die Auszubildenden'
+      : 'Öffne den Ausbildungsnachweis';
   return [
     '## Führung durch die Plattform',
-    '- Wenn jemand eine Seite öffnen will oder fragt, wie es weitergeht, bietet die Plattform selbst eine Karte mit dem Knopf "Öffnen" an, bei einem klaren Befehl öffnet sie die Seite sofort. Du öffnest keine Seiten und füllst nichts aus.',
-    '- Bittet jemand darum, zu einer Seite gebracht zu werden, und du siehst keine Karte, sage nie, dass du nicht navigieren kannst. Sage, dass die Plattform die Seite öffnet, sobald sie beim Namen genannt wird (zum Beispiel "Öffne den Ausbildungsnachweis"), und nenne den Menüpunkt.',
-    '- Erfinde keine Links, Pfade oder Adressen von Plattform-Seiten und schreibe keine in die Antwort. Wenn jemand wissen will, wo etwas zu finden ist, nenne in Worten den Namen des Menüpunkts (zum Beispiel Berufsschule oder Ausbildungsnachweis).',
+    '- Wenn jemand eine Seite öffnen will oder fragt, wie es weitergeht, bietet die Plattform selbst eine Karte mit dem Knopf "Öffnen" an, bei einem klaren Befehl öffnet sie die Seite sofort. Du klickst nichts an und füllst nichts aus, die Seite öffnet die Plattform.',
+    `- Sage nie, du hättest keine Berechtigung, Seiten zu öffnen oder die Person durch die Plattform zu führen, und sage nie, du könntest das nicht. Das stimmt nicht. Die Plattform öffnet die Seite, sobald die Person sie beim Namen nennt (zum Beispiel "${example}") oder die Karte antippt. Sage das in einem kurzen Satz und nenne den Menüpunkt.`,
+    `- Nenne nur echte Menüpunkte dieser Rolle: ${entries.join(', ')}. Erfinde keine anderen Namen und sage nie "auf deinem Dashboard", wenn die Seite ein eigener Menüpunkt ist.`,
+    '- Erfinde keine Links, Pfade oder Adressen von Plattform-Seiten und schreibe keine in die Antwort. Wenn jemand wissen will, wo etwas zu finden ist, nenne in Worten den Namen des Menüpunkts.',
   ].join('\n');
 }
 
@@ -592,7 +603,7 @@ Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, a
     parts.push(buildVoiceRules(context.userRole));
   }
   if (context.navigation) {
-    parts.push(buildNavigationRules());
+    parts.push(buildNavigationRules(context.userRole));
   }
   if (context.accessReasons && context.accessReasons.length > 0) {
     parts.push(buildAccessReasonRules(context.accessReasons));

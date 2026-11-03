@@ -1,6 +1,6 @@
 # HAI Agentenschicht: Führung durch die Plattform
 
-Stand: 03.11.2026. Teil des Zielbilds DamiAI. Die HAI hatte schon eine Aktionsschicht mit Bestätigung (Schreibaktionen wie "Bericht anlegen" oder "Enabler abschließen") und Informationsaktionen. Neu ist die Führung: Die HAI bringt die Person gezielt dorthin, wo sie hinwill oder als Nächstes hin sollte. Das Vorbild ist damicon (Werkzeuge für die Oberfläche, Freigabe, Führung), nur gelesen und für die LFA angepasst.
+Stand: 03.11.2026 (ergänzt um Abschnitt 6b). Teil des Zielbilds DamiAI. Die HAI hatte schon eine Aktionsschicht mit Bestätigung (Schreibaktionen wie "Bericht anlegen" oder "Enabler abschließen") und Informationsaktionen. Neu ist die Führung: Die HAI bringt die Person gezielt dorthin, wo sie hinwill oder als Nächstes hin sollte. Das Vorbild ist damicon (Werkzeuge für die Oberfläche, Freigabe, Führung), nur gelesen und für die LFA angepasst.
 
 ## 1. Zweck
 
@@ -100,6 +100,33 @@ Die Fälle stehen als Prüfliste `phrases` in `tests/unit/hai/golden/hai-navigat
 - **Nicht erkannt, bewusst:** englische Sätze ("Open the dashboard"), Ordnungszahlen ("den dritten Enabler"), einzelne Wörter ohne Verb ("Dashboard"), Kurse nach Namen ("Öffne den Kurs Datenbanken").
 - **Das Modell:** Erkennt die Erkennung einen Satz nicht, sagt der Prompt dem Modell, nie "ich kann nicht navigieren" zu antworten, sondern den Menüpunkt zu nennen und zu sagen, dass die Plattform die Seite öffnet, sobald sie beim Namen genannt wird.
 
+## 6b. Auszubildende erfragen und Führung ohne neues Ziel (Stand 03.11.2026)
+
+Anlass war die Meldung eines Trainers aus der Preview: "Welche Azubis habe ich?", "Welche mit Namen?" und "Du kannst mich doch durch das System führen" endeten bei einer Zahl ohne Namen, fachfremden Quellenkarten, einem erfundenen Menüpunkt ("Auszubildenden-Übersicht auf deinem Dashboard") und der Aussage, die HAI habe keine Berechtigung zu navigieren.
+
+**Ursachen**
+
+- Belegt: Die Übersicht der eigenen Azubis (`fetchTrainerTraineeOverview`) scheiterte auf einer echten Postgres wegen eines Datums im rohen SQL, der Fix steckt in der Basis dieses Zweigs. Bei einem Fehler lag im Prompt nur der Basiskontext, ohne jeden Hinweis, dass die Liste fehlt.
+- Belegt: "Welche mit Namen?" enthält kein Wort für Azubis und keinen Namen. `classifyDataIntent` ergab dafür `none`, also wurde keine Übersicht geladen.
+- Belegt: Bei einer Frage nach der eigenen Liste lief die Wissenssuche mit und hängte Quellenkarten mit Treffern ab 0,5 an, obwohl die Antwort aus den Live-Daten kam.
+- Belegt: Der Prompt sagte nur, die Plattform biete die Karten an, nannte keine Menüpunkte und verbot dem Modell nicht, Berechtigungen zu behaupten. Eine Bitte wie "Du kannst mich führen" ohne Seitennamen erkannte die Navigation nicht, sie ging an das Modell.
+- Vermutet, nicht belegt: Woher die Zahl "5 Auszubildende" im Prompt kam (Seitenkontext oder Gedächtnis), ließ sich nicht klären. Mit dem Hinweis bei einem Fehler steht nie mehr nur eine Zahl da.
+
+**Azubi-Auskunft**
+
+- `src/lib/hai/dataIntent.ts` (neu, aus `dataContext.ts` herausgelöst, ohne Datenbankzugriff, `dataContext.ts` exportiert alles weiter) enthält die Absichtserkennung und `resolveDataIntent`. Eine kurze Folgefrage eines Trainers ("Welche mit Namen?", "Wer genau?", "Mit Namen bitte", "Alle anzeigen", "Zeig sie mir", "Und wie viele davon sind in der Schule?", "Die Namen bitte") ist die Liste der eigenen Azubis, wenn eine der letzten vier Fragen der Person (aus der gespeicherten Sitzung des Servers, nie vom Modell) eine Azubi-Frage war. Eine Folgefrage wird durchschaut, die erste andere Frage beendet die Suche. Für Azubis und für Fragen mit eigenem Thema (Name, Bewertungen, Dateien, Tagesbegleiter) ändert sich nichts.
+- Bei einem Datenbankfehler steht im Kontext "Die Liste konnte gerade nicht geladen werden", mit dem Hinweis, dass es eine technische Störung und keine fehlende Berechtigung ist, und dem Verbot, Zahlen oder Namen zu nennen (`dataUnavailableLine`). Für die anderen Datenabfragen steht ein allgemeiner Satz derselben Art da.
+- Quellenkarten: Eine **reine Live-Datenfrage** (`isLiveDataOnlyTurn`) überspringt die Wissenssuche. Sie gilt nur für einen Trainer mit klarer Formulierung (Mehrzahl "Azubis" oder "Auszubildende" mit einem Listenwort, die offenen Bewertungen in klaren Worten, oder die Folgefrage einer Liste), höchstens 90 Zeichen und ohne ein Wort der Wissensfrage ("erkläre", "Aufgabe", "Frage", "Quiz", "SQL" und ähnliche). Eine Wissensfrage mit dem Wort Azubi ("Welche Aufgaben gebe ich meinen Azubis zu Joins?", "Prüfe diesen SQL-Befehl") behält Suche und Quellen. Das Detail eines eigenen Azubis ("Wie steht Anna Muster?") verwirft die Suche nachträglich, aber nur wenn der Azubi gefunden wurde (Überschrift "Azubi-Detail"), denn die Namenserkennung greift auch bei einem Wort wie "Kundenanfrage".
+
+**Führung**
+
+- Die Antwort auf die reine Frage nach der Liste trägt die Karte "Auszubildende" (`traineeListOfferFor`, `navigationOffer` ohne `auto`), nur für Trainer und Admin-Ebene. "Zeig mir meine Azubis" und "Auszubildende anzeigen" sind damit eine Frage nach der Liste, kein Seitenwechsel. "Öffne die Auszubildenden-Übersicht" und "Wo finde ich meine Azubis?" bleiben Navigation.
+- `src/lib/hai/navigation/followUp.ts` (neu): Eine **Anschlussbitte ohne neues Ziel** ("dann bring mich dahin", "führ mich hin", "öffne die Seite", "du navigierst", "du kannst mich durch das System führen", "mach das", "ja") wird gegen den Verlauf aufgelöst. Die Seite kommt aus den letzten drei Fragen, die erste Runde mit einem Treffer entscheidet: eine Azubi-Frage (die Plattform hat dort die Karte angeboten), die Seite, die die Person selbst genannt hat, oder die Menüpunkte, die die Antwort nennt. **Genau ein Ziel:** Die Seite wird wie ein Befehl sofort geöffnet ("Ich öffne die Seite Auszubildende."), oder als Karte angeboten, wenn die Bitte eine Frage nach dem Weg ist ("Wie komme ich dahin?"). **Kein oder mehr als ein Ziel:** kurze Rückfrage mit zwei oder drei Seiten der Rolle ("Gern, wohin soll ich dich führen? Zum Beispiel zu Auszubildende, Offene Bewertungen oder Dashboard. ..."), keine Seite, keine Karte. Ein bloßes "ja" oder "mach das" zählt nur direkt nach einer Antwort, die eine Seite genannt oder angeboten hat (Wörter wie Menüpunkt, öffnen, Seite, Karte), nicht in einer laufenden Quizrunde und nie ohne Ziel (dann geht es an das Modell).
+- Die Auflösung geht danach durch dieselben Prüfungen wie jede Navigation (Zulassungsliste, Ebene, Beruf). Der Pfad kommt nie aus dem Verlauf, nur die Auswahl des Ziels. Ein Azubi bekommt keinen Pfad `/trainer/...`: Steht ein Ziel des Trainerbereichs im Verlauf, bekommt er die freundliche Ablehnung mit dem Grund Rolle, bei mehreren Zielen die Rückfrage mit Seiten seiner Ebene.
+- Wortschatz: Die Menüpunkte der Seitenleiste (`src/locales/de.json`, Schlüssel `nav.*`) stehen in `MENU_ENTRY_NAMES` (`targets.ts`), ein Test gleicht sie mit der Sprachdatei ab. Neu erkannt für Trainer: "Auszubildenden-Übersicht", "Azubi-Übersicht", "Azubiliste", "Azubi-Verwaltung", "Lehrlinge", jeweils mit und ohne Bindestrich und Umlaut, dazu "Bereich Lernen" für den Menüpunkt "Lernen" des Azubis. Geprüft und schon vorhanden: Ausbildungsnachweis, Berufsschule, Inhaltsverwaltung, Quiz-Übersicht, Ausbilder-Feedback, Dashboard, Profil.
+- Prompt (`buildNavigationRules(userRole)`): Das Modell sagt nie, es habe keine Berechtigung oder könne keine Seiten öffnen. Es nennt nur die echten Menüpunkte der Rolle (Liste aus `MENU_ENTRY_NAMES`), nie "auf deinem Dashboard" für einen eigenen Menüpunkt, und sagt, dass die Plattform die Seite öffnet, wenn die Person sie beim Namen nennt oder die Karte antippt. Die Schutzregeln (Persona-Tor, Berufstrennung, Lösungsschutz, Grenzfälle) sind unverändert, der Abschnitt wird nur umformuliert.
+- Unverändert: Das Modell wählt nie einen Pfad. Eine Navigation schreibt nie. Texte aus dem Browser sind keine Anweisungen.
+
 ## 7. Dateien
 
 | Datei | Aufgabe |
@@ -111,6 +138,8 @@ Die Fälle stehen als Prüfliste `phrases` in `tests/unit/hai/golden/hai-navigat
 | `src/lib/hai/navigation/data.ts` | Abfragen: Einträge der Person, Sperre, nächster Schritt (Helfer der Reihenfolge der Arbeit) |
 | `src/lib/hai/navigation/resolve.ts` | Auflösung gegen Liste, Ebene und Einträge, Texte der Antworten |
 | `src/lib/hai/navigation/flow.ts` | Schritt der Pipeline, Schlusssatz getippt oder gesprochen |
+| `src/lib/hai/navigation/followUp.ts` | Anschlussbitte ohne Ziel, Ziel aus dem Verlauf, Rückfrage mit Beispielen der Rolle |
+| `src/lib/hai/dataIntent.ts` | Absicht einer Datenfrage, Folgefrage aus dem Verlauf, reine Live-Datenfrage (ohne Wissenssuche und Quellen) |
 | `src/lib/hai/navigation/offer.ts`, `confirm.ts`, `text.ts` | Angebot (Server und Browser), Antworten auf "Soll ich sie öffnen?", Titel als reiner Text |
 | `src/components/hai/HaiNavigationCard.tsx` | Karte mit dem Knopf "Öffnen" |
 | `src/components/hai/HaiProvider.tsx`, `HaiMessage.tsx` | Angebot an der Nachricht, `openNavigation`, gesprochenes "ja" |
@@ -127,4 +156,9 @@ Die Fälle stehen als Prüfliste `phrases` in `tests/unit/hai/golden/hai-navigat
 - `tests/unit/hai/prompts.navigation.test.ts`: Abschnitt nur mit dem Flag.
 - `tests/unit/components/hai/HaiNavigationCard.test.tsx`: Karte, Tipp und Enter, Provider (getippt öffnet nie, gesprochenes "ja", "nein", andere Frage, Pfad außerhalb der Liste).
 - `tests/integration/api/hai/chat-navigation.test.ts`: die Route liefert das Angebot (Stream und ohne Stream), die gesprochene Variante, `isAdmin` aus der Sitzung, und mit der echten Pipeline dahinter.
-- Test in der Preview: `docs/hai-testplan.md`, Abschnitt H.
+- `tests/unit/hai/dataIntent.followUp.test.ts`: Folgefragen ("Welche mit Namen?" und weitere), Verlauf, reine Live-Datenfrage mit Gegenbeispielen, Hinweis bei einer fehlgeschlagenen Liste.
+- `tests/unit/hai/navigation.followUp.test.ts`: Anschlussbitten und kurze Zustimmungen (mit und ohne Umlaute, Satzzeichen, gesprochen), Verlauf mit einem, keinem und zwei Zielen, Rückfrage, Azubi bekommt nie eine Seite des Trainerbereichs, Wortschatz der Menüpunkte gegen `de.json`.
+- `tests/unit/hai/ragPipeline.navigationFollowUp.test.ts`: beide Pipelines mit Attrappe als Modell, Liste und Folgefrage mit Karte und ohne Quellen, Wissensfragen unverändert, Öffnen oder Rückfrage ohne Modellaufruf, Rollentrennung.
+- `tests/unit/hai/trainerTrainees.test.ts`: Folgefrage und fehlgeschlagene Liste in `fetchDataContext`.
+- `tests/unit/hai/prompts.navigation.test.ts`: kein Satz "keine Berechtigung" mehr, echte Menüpunkte je Rolle, Schutzregeln unverändert, getippt und gesprochen.
+- Test in der Preview: `docs/hai-testplan.md`, Abschnitt H und Abschnitt O.

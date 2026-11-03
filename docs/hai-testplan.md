@@ -378,3 +378,28 @@ Anlass: Beim ersten Lauf gegen ein echtes Postgres (nicht gegen nachgebildete Ab
 - Der Sprachassistent in Production bleibt je Organisation aus, bis die Datenschutzfrage geklärt ist.
 - Wohin der Ton geht, zeigt die Einstellung im Chat: "über Soniox" (externer Dienst, Region EU), "über den eigenen Server (Sokrates)" oder beim Anbieter Browser "Spracherkennung auf diesem Gerät" beziehungsweise "über den Dienst Ihres Browsers".
 - Soniox und der Rückfall wurden ohne Live-Verbindung gebaut und getestet (nachgebildete Websocket-Verbindungen). Die ersten Gespräche mit echtem Schlüssel in der Preview sind der erste echte Test, Abweichungen bitte mit Browser und Uhrzeit melden.
+
+## O. Auszubildende erfragen, Folgefragen und Führung ohne neues Ziel (Meldung vom 03.11.2026)
+
+Anlass: Ein Trainer fragte in der Preview "Welche Azubis habe ich?", dann "Welche mit Namen?", dann "Du kannst mich doch durch das System führen". Die HAI nannte nur eine Zahl, zeigte fachfremde Quellenkarten (Quizze zu Ausbildungsvertrag und Bestellungen), nannte einen erfundenen Menüpunkt ("Auszubildenden-Übersicht auf deinem Dashboard") und sagte, sie habe keine Berechtigung zu navigieren. Ablauf und Regeln: `docs/hai-agentenschicht.md`, Abschnitt 6b. Konto: ein Trainer mit mindestens zwei zugeordneten Azubis, dazu ein Azubi. Alle Fälle in einem neuen Chat, damit der Verlauf stimmt. Ohne Sprachmodus, wenn nicht anders genannt.
+
+| Nr | Als | Schritt | Erwartung | P |
+|---|---|---|---|---|
+| O1 | Trainer | "Welche Azubis habe ich?" | Antwort mit Namen, Beruf, Ausbildungsjahr, Block, Fortschritt und offenen Abgaben. Unter der Antwort steht die Karte "Auszubildende" mit dem Knopf "Öffnen", und es erscheinen keine Quellenkarten | P |
+| O2 | Trainer | Danach "Welche mit Namen?" (ohne das Wort Azubi) | Wieder die Liste mit Namen, die Karte "Auszubildende", keine Quellenkarten | P |
+| O3 | Trainer | Danach "Wer genau?", "Alle anzeigen", "Und wie viele davon sind in der Schule?" | Jede Folgefrage wird aus der Liste beantwortet, nicht mit "keine Daten". Keine Quellenkarten | |
+| O4 | Trainer | "Zeig mir meine Azubis" und "Auszubildende anzeigen" | Wie O1 (Liste mit Karte), die Seite wechselt nicht von selbst | |
+| O5 | Trainer | "Öffne die Auszubildenden-Übersicht", dann "Öffne die Azubiliste" | Die Seite Auszubildende öffnet sich sofort ("Ich öffne die Seite Auszubildende."), ohne Modellantwort | P |
+| O6 | Trainer | Nach O1: "Dann bring mich dahin" | Die Seite Auszubildende öffnet sich sofort. Dieselbe Wirkung haben "Führ mich hin", "Öffne die Seite", "Du navigierst", "Du kannst mich doch durch das System führen" | P |
+| O7 | Trainer | Nach O1: "Und wie komme ich dahin?" | Karte mit dem Knopf "Öffnen" und dem Hinweis auf den Knopf, die Seite wechselt nicht von selbst | |
+| O8 | Trainer | Nach der Karte "Auszubildende" nur "ja" | Die Seite öffnet sich. Nach einer Antwort ohne Seitenhinweis (zum Beispiel einer Fachantwort) geht ein "ja" wie bisher an das Modell | |
+| O9 | Trainer | Neuer Chat, sofort "Führ mich hin" | Rückfrage mit drei Menüpunkten ("Auszubildende, Offene Bewertungen oder Dashboard"), keine Seite öffnet sich, keine Karte | P |
+| O10 | Trainer | Zwei Seiten im Gespräch ("Wo sehe ich meinen Stand?", Antwort nennt Dashboard und Ausbildungsnachweis), dann "Bring mich dahin" | Rückfrage mit beiden Namen, keine Seite öffnet sich | |
+| O11 | Trainer | "Was ist Normalisierung?" und "Welche Aufgaben gebe ich meinen Azubis zu Joins?" | Normale Fachantworten mit Quellenkarten wie bisher, keine Karte "Auszubildende" | P |
+| O12 | Trainer | Frage nach dem Weg: "Wie öffne ich die Seite?" oder "Kannst du mich führen?" | Die HAI sagt nie, sie habe keine Berechtigung oder könne keine Seiten öffnen. Sie nennt den echten Menüpunkt (zum Beispiel "Auszubildende", nie "auf deinem Dashboard") und sagt, dass die Plattform die Seite öffnet, wenn man sie beim Namen nennt oder die Karte antippt | P |
+| O13 | Azubi | "Welche Azubis habe ich?", dann "Bring mich dahin" | Keine Seite des Trainerbereichs. Die Antwort sagt freundlich, dass die Seite zum Trainerbereich gehört, und nennt Seiten des Azubis. In den Entwicklerwerkzeugen steht kein Pfad `/trainer/...` im Angebot | P |
+| O14 | Azubi | "Zeig mir meine Berufsschule", dann "Dann bring mich dahin" | Die Berufsschule öffnet sich sofort | |
+| O15 | Azubi | Im Quiz-Modus, mitten in einer Runde: "ja" | Das "ja" ist die Antwort des Quiz, keine Seite öffnet sich | |
+| O16 | Betrieb | Die Abfrage der Übersicht zum Scheitern bringen (nur auf einer Testdatenbank) und "Welche Azubis habe ich?" fragen | Die HAI sagt, dass die Liste gerade nicht geladen werden konnte (technische Störung), und nennt weder eine Zahl noch Namen. Sie sagt nicht, es fehle eine Berechtigung | |
+
+Pflichtfälle der Gruppe O: O1, O2, O5, O6, O9, O11, O12, O13. O13 darf in keinem Konto durchfallen (Rollentrennung der Navigation).

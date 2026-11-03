@@ -199,6 +199,36 @@ export const STATIC_TARGETS: Readonly<
   },
 });
 
+/**
+ * The names of the menu entries of the sidebar, in its order, as the person
+ * reads them (src/locales/de.json, keys nav.*). The prompt names these and no
+ * other entry, so the model does not invent a menu ("Auszubildenden-Übersicht
+ * auf deinem Dashboard"). The trainer level also reaches the pages of the admin
+ * entries through the platform, the sidebar of an admin shows more entries.
+ */
+export const MENU_ENTRY_NAMES: Readonly<
+  Record<'TRAINEE' | 'TRAINER', readonly string[]>
+> = Object.freeze({
+  TRAINEE: [
+    'Dashboard',
+    'Ausbildungsnachweis',
+    'Berufsschule',
+    'Lernen',
+    'Ausbilder-Feedback',
+    'Quizze',
+    'Profil',
+  ],
+  TRAINER: [
+    'Dashboard',
+    'Ausbildungsnachweis',
+    'Berufsschule',
+    'Inhaltsverwaltung',
+    'Quiz-Übersicht',
+    'Auszubildende',
+    'Profil',
+  ],
+});
+
 export const STATIC_TARGET_IDS = Object.keys(
   STATIC_TARGETS
 ) as StaticTargetId[];
