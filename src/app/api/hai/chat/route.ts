@@ -1159,6 +1159,10 @@ export async function POST(req: NextRequest) {
               ...(result.usedTrainerSolutions
                 ? { trainerKnowledge: true }
                 : {}),
+              // the id only (no text): so a conversation asks at most once
+              ...(result.memoryProposal
+                ? { memoryProposalId: result.memoryProposal.id }
+                : {}),
             };
             if (result.usedTrainerSolutions) {
               await markSessionTrainerKnowledge(sessionId);
@@ -1246,6 +1250,8 @@ export async function POST(req: NextRequest) {
                   pendingAction: result.pendingAction,
                   navigationOffer: result.navigationOffer,
                   quizMode: result.quizMode,
+                  // the question of the memory (card with yes, no, change)
+                  memoryProposal: result.memoryProposal,
                   // the stages of the voice assistant, in milliseconds (no content)
                   ...(wantsVoice
                     ? {
@@ -1341,6 +1347,10 @@ export async function POST(req: NextRequest) {
     const answerMeta = {
       intent: result.intent,
       ...(result.usedTrainerSolutions ? { trainerKnowledge: true } : {}),
+      // the id only (no text): so a conversation asks at most once
+      ...(result.memoryProposal
+        ? { memoryProposalId: result.memoryProposal.id }
+        : {}),
     };
     if (result.usedTrainerSolutions) {
       await markSessionTrainerKnowledge(sessionId);
@@ -1422,6 +1432,7 @@ export async function POST(req: NextRequest) {
       pendingAction: result.pendingAction,
       navigationOffer: result.navigationOffer,
       quizMode: result.quizMode,
+      memoryProposal: result.memoryProposal,
     });
   } catch (error) {
     console.error('HAI.ai chat error:', error);

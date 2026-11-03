@@ -32,6 +32,7 @@ import {
 import { isAllowedNavigationPath } from '@/lib/hai/navigation/targets';
 import { chatFailureKey } from '@/lib/hai/denial';
 import { toQuizStartScope } from '@/lib/hai/quizMode/session';
+import { decideMemory } from '@/lib/hai/memory/client';
 import { useHaiQuizMode } from './HaiQuizMode';
 import { currentPageContext } from '@/lib/hai/pageContext/collect';
 
@@ -79,6 +80,8 @@ export interface HaiMessage {
   pendingAction?: HaiPendingAction;
   /** A page HAI offers, shown as a card with the button "Open" (never a write) */
   navigationOffer?: HaiNavigationOffer;
+  /** A question of the memory (yes, no, change), shown as a card */
+  memoryProposal?: HaiMemoryProposal;
   /**
    * What HAI does right now while no text has come yet (stage events of the
    * server, opt-in). Shown as a small line below "thinking", gone with the
@@ -91,6 +94,46 @@ export interface HaiMessage {
    * button "Try again".
    */
   failure?: HaiFailure;
+}
+
+/**
+ * The question of the HAI memory: "Soll ich mir das merken?" with the buttons
+ * yes, no and change. The entry exists on the server as a proposal and acts only
+ * after the person said yes (PATCH /api/hai/memory/[id]).
+ */
+export interface HaiMemoryProposal {
+  id: string;
+  kind: 'preference' | 'learning_style' | 'learning_state' | 'weakness';
+  content: string;
+  status: 'open' | 'running' | 'saved' | 'rejected' | 'error';
+  /** Suffix of the i18n key hai.memory.card.error.<key> */
+  errorKey?: string;
+}
+
+const MEMORY_KINDS = [
+  'preference',
+  'learning_style',
+  'learning_state',
+  'weakness',
+] as const;
+
+/** The proposal of the server as card state, or undefined if it is malformed. */
+export function toMemoryProposal(raw: unknown): HaiMemoryProposal | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const { id, kind, content } = raw as Record<string, unknown>;
+  if (
+    typeof id !== 'string' ||
+    typeof content !== 'string' ||
+    !(MEMORY_KINDS as readonly unknown[]).includes(kind)
+  ) {
+    return undefined;
+  }
+  return {
+    id,
+    kind: kind as HaiMemoryProposal['kind'],
+    content,
+    status: 'open',
+  };
 }
 
 /** The stages the server reports while it works (SSE `{"stage": ...}`). */
@@ -295,6 +338,15 @@ interface HaiProviderState {
   regenerateFromEdit: (messageId: string, newContent: string) => Promise<void>;
   confirmPendingAction: (messageId: string) => Promise<void>;
   cancelPendingAction: (messageId: string) => void;
+  /**
+   * The answer to the question of the memory: yes (with a changed text, the
+   * "change" of the card) or no. Only the click calls the server.
+   */
+  answerMemoryProposal: (
+    messageId: string,
+    decision: 'confirm' | 'reject',
+    content?: string
+  ) => Promise<void>;
   /** Open the page of a navigation offer (tap on "Open" of the card) */
   openNavigation: (messageId: string) => void;
   setActiveVersion: (messageId: string, versionIndex: number) => void;
@@ -788,6 +840,81 @@ export function HaiProvider({
     [patchPendingAction]
   );
 
+  const attachMemoryProposal = useCallback((messageId: string, raw: unknown) => {
+    const proposal = toMemoryProposal(raw);
+    if (!proposal) return;
+    setMessages(prev =>
+      prev.map(m =>
+        m.id === messageId ? { ...m, memoryProposal: proposal } : m
+      )
+    );
+  }, []);
+
+  const patchMemoryProposal = useCallback(
+    (messageId: string, patch: Partial<HaiMemoryProposal>) => {
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId && m.memoryProposal
+            ? { ...m, memoryProposal: { ...m.memoryProposal, ...patch } }
+            : m
+        )
+      );
+    },
+    []
+  );
+
+  const answeringMemoryRef = React.useRef<Set<string>>(new Set());
+
+  const answerMemoryProposal = useCallback(
+    async (
+      messageId: string,
+      decision: 'confirm' | 'reject',
+      content?: string
+    ) => {
+      const proposal = messagesRef.current.find(
+        m => m.id === messageId
+      )?.memoryProposal;
+      if (
+        !proposal ||
+        (proposal.status !== 'open' && proposal.status !== 'error')
+      ) {
+        return;
+      }
+      // One click, one call
+      if (answeringMemoryRef.current.has(messageId)) return;
+      answeringMemoryRef.current.add(messageId);
+      patchMemoryProposal(messageId, {
+        status: 'running',
+        errorKey: undefined,
+      });
+      try {
+        const result = await decideMemory(proposal.id, decision, content);
+        if (result.ok) {
+          patchMemoryProposal(messageId, {
+            status: decision === 'confirm' ? 'saved' : 'rejected',
+            content:
+              decision === 'confirm' && result.data?.entry?.content
+                ? result.data.entry.content
+                : proposal.content,
+          });
+        } else {
+          patchMemoryProposal(messageId, {
+            status: 'error',
+            errorKey:
+              result.status === 422
+                ? 'content'
+                : result.status === 404 || result.status === 409
+                  ? 'gone'
+                  : 'generic',
+          });
+        }
+      } finally {
+        answeringMemoryRef.current.delete(messageId);
+      }
+    },
+    [patchMemoryProposal]
+  );
+
   const cancelPendingAction = useCallback(
     (messageId: string) => {
       const pending = messagesRef.current.find(
@@ -1018,6 +1145,7 @@ export function HaiProvider({
             citations: [],
             pendingAction: undefined,
             navigationOffer: undefined,
+            memoryProposal: undefined,
             versions,
             activeVersionIndex: newIndex,
             baseUserMessageId: messageId,
@@ -1175,6 +1303,7 @@ export function HaiProvider({
 
                 if (event.done) {
                   attachPendingAction(assistantId, event.pendingAction);
+                  attachMemoryProposal(assistantId, event.memoryProposal);
                   attachNavigationOffer(
                     assistantId,
                     event.navigationOffer,
@@ -1235,6 +1364,7 @@ export function HaiProvider({
         } else if (response.ok) {
           const data = await response.json();
           attachNavigationOffer(assistantId, data.navigationOffer, false);
+          attachMemoryProposal(assistantId, data.memoryProposal);
           startQuizFromSignal(data.quizMode);
 
           if (data.sessionId && data.sessionId !== currentSessionId) {
@@ -1537,6 +1667,7 @@ export function HaiProvider({
                 if (event.done) {
                   if (options?.voice === true) markServerDone(event.timing);
                   attachPendingAction(assistantId, event.pendingAction);
+                  attachMemoryProposal(assistantId, event.memoryProposal);
                   attachNavigationOffer(
                     assistantId,
                     event.navigationOffer,
@@ -1605,6 +1736,7 @@ export function HaiProvider({
             options?.voice === true
           );
           startQuizFromSignal(data.quizMode);
+          attachMemoryProposal(assistantId, data.memoryProposal);
 
           if (data.sessionId && data.sessionId !== currentSessionId) {
             setCurrentSessionId(data.sessionId);
@@ -1789,6 +1921,7 @@ export function HaiProvider({
     regenerateFromEdit,
     confirmPendingAction,
     cancelPendingAction,
+    answerMemoryProposal,
     openNavigation,
     setActiveVersion,
     loadSession,

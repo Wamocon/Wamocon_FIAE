@@ -7,6 +7,7 @@ import {
   contentStatsMenuItems,
   contentUploadMenuItems,
   haiAdminMenuItems,
+  haiMemoryMenuItems,
 } from '@/lib/auth/adminMenu';
 import { IS_PREVIEW_SCHEMA } from '@/lib/db-schema';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
@@ -28,6 +29,7 @@ import {
   Upload,
   BarChart3,
   Mic,
+  Brain,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -50,6 +52,7 @@ const ADMIN_MENU_ICONS = {
   contentUpload: Upload,
   contentStats: BarChart3,
   haiAdmin: Mic,
+  haiMemory: Brain,
 } as const;
 
 interface SidebarProps {
@@ -202,6 +205,7 @@ export function Sidebar({
                 isPlatformOwner,
               }),
               ...haiAdminMenuItems({ role: profile?.role, isPlatformOwner }),
+              ...haiMemoryMenuItems({ role: profile?.role, isPlatformOwner }),
               ...contentUploadMenuItems(
                 { role: profile?.role, isPlatformOwner },
                 {

@@ -90,6 +90,12 @@ import {
   isLearningTechniqueQuestion,
   usesLearningTechniques,
 } from './learningTechniques/detect';
+import {
+  loadMemoryForPrompt,
+  memoryScopeFor,
+  proposeMemoryForTurn,
+  type MemoryProposalPayload,
+} from './memory/turn';
 
 // ============================================================================
 // TYPES
@@ -208,6 +214,12 @@ export interface PipelineResult {
   pendingAction?: PendingAction;
   /** A page the interface can offer with a card "Öffnen", never a write */
   navigationOffer?: NavigationOffer;
+  /**
+   * A question of the memory (yes, no, change): the browser shows the card. The
+   * entry is stored as `proposed` and has no effect before the person says yes
+   * (src/lib/hai/memory/turn.ts). Only with the switch HAI_MEMORY on.
+   */
+  memoryProposal?: MemoryProposalPayload;
   /** The person asked to be quizzed: the browser opens the quiz card */
   quizMode?: QuizModeStartSignal;
   error?: string;
@@ -1033,6 +1045,10 @@ export async function processMessage(
       access,
       documentTurn
     );
+    // Step 3b2: the memory of the person in the occupation of this turn (never
+    // rejects, empty without the switch HAI_MEMORY), runs next to the retrieval
+    const memoryScope = memoryScopeFor(access, persona);
+    const memoryPromise = loadMemoryForPrompt(memoryScope);
 
     if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
       // A question about files: the file it names comes from the database (the
@@ -1050,6 +1066,7 @@ export async function processMessage(
     }
 
     const liveDataContext = await liveDataPromise;
+    const memory = await memoryPromise;
 
     // Step 3c: what the pipeline knows about a limit of access (denial.ts)
     const accessReasons = detectAccessReasons({
@@ -1087,6 +1104,7 @@ export async function processMessage(
       accessReasons,
       dayBriefing,
       pageContext: pageSectionFor(context),
+      ...(memory ? { memory } : {}),
     });
 
     // Step 5: Convert previous messages to provider format
@@ -1171,12 +1189,23 @@ export async function processMessage(
       };
     }
 
+    // A question of the memory (yes, no, change), at most one per conversation,
+    // never in a quiz round (null without the switch HAI_MEMORY)
+    const memoryProposal = await proposeMemoryForTurn({
+      scope: memoryScope,
+      message: userMessage,
+      sessionId: context.sessionId,
+      voice: context.voice === true,
+      quizActive: isQuizRound(intent, context.quizState),
+    });
+
     return {
       response: responseData.text,
       intent,
       citations,
       quizState: newQuizState,
       ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
+      ...(memoryProposal ? { memoryProposal } : {}),
     };
   } catch (error) {
     if (isChatUnavailableError(error)) return chatUnavailableResult(error);
@@ -1301,6 +1330,10 @@ export async function processMessageStream(
     const liveDataPromise = timed(context, 'data', () =>
       loadLiveDataContext(userMessage, context, access, documentTurn)
     );
+    // the memory of the person in the occupation of this turn (never rejects,
+    // empty without the switch HAI_MEMORY)
+    const memoryScope = memoryScopeFor(access, persona);
+    const memoryPromise = loadMemoryForPrompt(memoryScope);
     if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
       // Same retrieval as processMessage: scoped to the user
       onStage?.('search');
@@ -1322,6 +1355,7 @@ export async function processMessageStream(
 
     // Live data context (non-fatal, never rejects)
     const liveDataContext = await liveDataPromise;
+    const memory = await memoryPromise;
 
     // retrieval and live data are done: the model call is what is left to wait for
     if (context.timings) context.timings.search = Date.now() - searchStartedAt;
@@ -1359,6 +1393,7 @@ export async function processMessageStream(
       accessReasons,
       dayBriefing,
       pageContext: pageSectionFor(context),
+      ...(memory ? { memory } : {}),
     });
 
     // Convert messages to provider format
@@ -1425,11 +1460,22 @@ export async function processMessageStream(
       }
     }
 
+    // A question of the memory, like in processMessage (the card comes with the
+    // end event, after the text)
+    const memoryProposal = await proposeMemoryForTurn({
+      scope: memoryScope,
+      message: userMessage,
+      sessionId: context.sessionId,
+      voice: context.voice === true,
+      quizActive: isQuizRound(intent, context.quizState),
+    });
+
     return {
       response: response.text,
       intent,
       citations,
       ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
+      ...(memoryProposal ? { memoryProposal } : {}),
     };
   } catch (error) {
     if (isChatUnavailableError(error)) return chatUnavailableResult(error);
@@ -1449,6 +1495,18 @@ export async function processMessageStream(
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+/**
+ * A quiz round of the chat is running or starts with this message: the memory
+ * never asks a question in the middle of it.
+ */
+function isQuizRound(intent: IntentType, quizState?: QuizState): boolean {
+  return (
+    quizState?.active === true ||
+    intent === 'quiz_request' ||
+    intent === 'quiz_answer'
+  );
+}
 
 /**
  * Extract quiz topic from user message
