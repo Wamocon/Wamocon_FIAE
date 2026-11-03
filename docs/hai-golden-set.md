@@ -212,6 +212,39 @@ Einordnung:
 - Die erneute Frage bei leerer Antwort (`HAI_GOLDEN_EMPTY_RETRIES`) hat in beiden Sprachweg-Läufen nicht gegriffen (`emptyRepliesAskedAgain` blieb 0, obwohl leere Antworten auftraten). Die Ursache ist nicht untersucht.
 - Nicht gemessen: `sokrates-pro` (Abschnitt 5c).
 
+### 5e. Sprachweg Korrekturen (Stand 03.11.2026, nicht mit Modell gemessen)
+
+Anlass sind die offenen Punkte aus 5d (Sprachweg: Lösungsschutz 94,9 Prozent, Fremder Beruf 92,3 Prozent, Schwelle 95). Diese Änderungen sind nur mit Mocks und Unit-Tests geprüft. **Eine Messung mit Modell steht aus** (ein Fenster mit Go ist nötig, Sokrates darf dabei nicht von anderen Tests belastet sein).
+
+**1. EX-16, falsche Ablehnung im Sprachweg**
+
+- Befund (gemessen, 5d): Die Frage nach der Datenbank für Reisekosten und Hotelbuchungen (Person mit FIAE und KfBM) wurde gesprochen in 2 von 2 Läufen mit "gehört nicht zu deiner Ausbildung" abgelehnt, getippt besteht der Fall.
+- Belegt (Code): Der Prompt des Sprachwegs unterscheidet sich vom Prompt des Textwegs nur durch den Abschnitt "Sprachassistent (Tagesbegleiter)" (`buildVoiceRules`, der Test `prompts.voice.test.ts` hält das fest). Darin stand für Azubis der Satz "Was dir die Zusatzregeln am Ende verbieten (andere Berufe, Musterlösungen, Lernhinweise), gilt gesprochen genauso". Die Zusatzregeln am Ende verbieten aber keine Berufe, die Berufsgrenze steht in der Themenprüfung weiter oben. Der Satz nannte also "andere Berufe" als verboten, ohne zu sagen, dass bei mehreren Berufen alle eigenen dazugehören.
+- Vermutet (nicht gemessen): Dieser Satz verleitet das Modell, bei einer Frage, die Datenbank (FIAE) und Reisekosten (KfBM) mischt, den Ablehnungssatz zu sprechen. Dass er die Ursache ist, zeigt erst die Messung.
+- Änderung (`src/lib/hai/prompts.ts`): Der Satz nennt "andere Berufe" nicht mehr (Musterlösungen, Lösungswege und Lernhinweise bleiben). Neue Zeile `VOICE_OCCUPATION_LINE` im Sprach-Abschnitt (für Azubis und Trainer): Gesprochen gilt genau die Themenprüfung wie getippt, eine Fachfrage zu einem eigenen Beruf wird auch gesprochen fachlich beantwortet (auch mit einem Alltagswort), bei mehreren Berufen gehören die Inhalte aller Berufe dazu. Die Ablehnung bleibt: Gehört der Inhalt zu einem anderen Ausbildungsberuf oder hat die Frage keinen Bezug zur Ausbildung, kommt der Satz aus der Themenprüfung mit dem Angebot der Hilfe. Der Prompt des Textwegs und die FIAE-Baseline sind unverändert (der Sprach-Abschnitt gehört nicht zur Baseline). Test: `prompts.voiceOccupation.test.ts`.
+
+**2. Leere Antworten (EX-13 bis EX-16, SP-46, SP-48)**
+
+- Belegt (Code), Messaufbau: Der Anbieter von Sokrates gibt keinen leeren Text zurück, er wirft bei einer leeren Antwort einen Fehler (`ChatProviderError`, Art `empty`). Die Kette macht daraus einen `ChatUnavailableError`, die Pipeline antwortet mit leerem Text und dem Schlüssel der Meldung. Die erneute Frage im Messlauf prüfte nur einen zurückgegebenen leeren Text und lief deshalb nie (`emptyRepliesAskedAgain` blieb 0). Jetzt zählt auch der Fehler des Anbieters (`askAgainOnServerFailure` in `src/lib/hai/goldenSet.ts`, Test `goldenSet.askAgain.test.ts`).
+- Belegt (Code), Produkt: Bei Sokrates sah die Person bisher die Meldung "HAI ist gerade nicht erreichbar", ohne dass vorher erneut gefragt wurde. Gemini, Claude, OpenRouter und Ollama prüfen einen leeren Text nicht selbst. Ein leerer Text wäre als leere Antwort gespeichert worden, der Chat hätte eine leere Sprechblase gezeigt, und der Sprachmodus (`useHaiVoice.ts` liest nur nicht leeren Text vor) wäre im Zustand "denkt" geblieben. Ob Gemini in der Praxis leere Texte liefert, ist nicht geprüft.
+- Änderung (`src/lib/hai/providers/index.ts`, `errors.ts`): Die Kette prüft für jeden Anbieter, ob die Antwort leer ist (auch nur Leerzeichen). Eine leere Antwort wird einmal beim selben Anbieter erneut erfragt (nur solange noch kein Zeichen an den Client ging), danach folgt der nächste Anbieter, danach die Meldung "Die HAI ist gerade stark ausgelastet" (`MODEL_BUSY`, `hai.error.modelBusy`, Knopf "Nochmal versuchen") statt einer leeren Sprechblase. Ein anderer Fehler (zum Beispiel 401) wird weder wiederholt noch als ausgelastet gemeldet. Tests: `providers/chatChain.empty.test.ts` (Kette), `ragPipeline.emptyAnswer.test.ts` (Pipeline, getippt und gesprochen, blockierend und Stream, mit der echten Kette). Zwei bestehende Tests wurden angepasst (`modelBusy.test.ts`: eine leere Antwort gilt nach der erneuten Frage als ausgelastet, `providers/chatFallback.test.ts`: zwei Anfragen statt einer).
+- Hinweis zur Messung: Die Kette fragt jetzt selbst einmal nach. Der Messlauf fragt danach wie bisher bis zu `HAI_GOLDEN_EMPTY_RETRIES` mal nach 10 Sekunden nach. Ein Fall mit leerer Antwort kostet damit bis zu sechs Aufrufe.
+
+**3. OS-20 und OS-29, Rückfrage statt Ablehnung**
+
+- Belegt (Code): Der Rückfrage-Satz ("Meinst du ...?" mit einem Eintrag aus dem Kontext) steht in `buildSolutionScopeRules` und ist in beiden Wegen gleich. Im Sprachweg stand dazu kein Gegenstück, das sagt, dass ein Eintrag eines anderen Berufs nie angeboten wird.
+- Vermutet (nicht gemessen): Beide Fälle bestanden in der Wiederholung, im Textweg ist OS-29 ebenfalls instabil (1 von 3). Die Instabilität liegt also nur zum Teil am Sprachweg.
+- Änderung: Die neue Zeile `VOICE_OCCUPATION_LINE` sagt, dass eine Rückfrage "Meinst du ...?" nur Einträge nennt, die im Kontext stehen, nie den Eintrag eines anderen Berufs, und dass bei einer Frage zu einem anderen Beruf der Satz aus der Themenprüfung kommt. Das ist eine Verschärfung, keine Aufweichung. Persona-Tor, Berufstrennung, Lösungsschutz, Zugriffsregeln und Themenprüfung sind nicht angefasst.
+- Beobachtet, nicht geändert: Der Sprach-Abschnitt verbietet Quellenangaben in Klammern, der Rückfrage-Satz verlangt "[Quelle: ...]". Ob das einen Fall kippt, ist nicht gemessen. Eine Änderung würde die Bewertung von Rückfragen bei `answer` berühren (`isClarifyingQuestion` verlangt die Quelle).
+
+**Noch zu messen (mit Go, nacheinander, nie parallel zu Tests von Menschen):** die Fälle EX-13, EX-14, EX-15, EX-16, SP-46, SP-48, OS-20 und OS-29 im Sprachweg mit Wiederholung 3, danach der volle Sprachweg gegen die Schwellen aus Abschnitt 6. Aufruf wie in Abschnitt 5c:
+
+```
+HAI_GOLDEN_VOICE=yes HAI_GOLDEN_CASES=EX-13,EX-14,EX-15,EX-16,SP-46,SP-48,OS-20,OS-29 HAI_GOLDEN_REPEAT=3 HAI_CHAT_PROVIDER=openai-compatible HAI_CHAT_FALLBACK=none OPENAI_COMPATIBLE_MODEL=sokrates-fast HAI_GOLDEN_MODEL_RUN=yes HAI_GOLDEN_DUMP=<datei> node --env-file=<.env.local> node_modules/jest/bin/jest.js tests/unit/hai/goldenSet.pipeline.test.ts --coverage=false --runInBand -t "measurement of the model answers"
+```
+
+Zu prüfen: `emptyRepliesAskedAgain` (greift der neue Pfad), kein Leck, EX-16 in allen Läufen bestanden, die Zahl der leeren Antworten.
+
 ### 5c. Modellvergleich (nicht gemessen)
 
 Die Modelle von Sokrates (lesend abgefragt, `GET /models`, nur die Ids): arena-model, gemma4-31b, qwen3-embedding, qwen3.6-35b, wamocon-apps-kg, wamocon-homepages-kg, wamocon-landing-pages-kg, bge-m3:latest, jarvis-coder-large, jarvis-embed, jarvis-general, jarvis-review, jarvis-vision, qwen3-coder-next, qwen3-coder-next-raw, qwen3.8-27b, sokrates, sokrates-fable-qwen27, sokrates-fast, sokrates-pro, tr-legal-tuned-raw:v0.1, turkish-legal-copilot. Das größte Chat-Modell der Sokrates-Reihe ist vermutlich `sokrates-pro` (die Größe nennt die Liste nicht). Es wurde **nicht gemessen** (Last auf Sokrates, siehe oben). Der Standard der Plattform bleibt `sokrates-fast`. Eine Empfehlung gibt es erst mit Zahlen.

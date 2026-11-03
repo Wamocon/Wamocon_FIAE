@@ -17,6 +17,7 @@ import {
   namesDenialReason,
   type DenialCategory,
 } from './denial';
+import { isChatUnavailableError } from './providers/errors';
 
 export type GoldenRole = 'TRAINEE' | 'TRAINER';
 
@@ -653,4 +654,47 @@ export function summarizeScores(
     failed: scores.filter(s => !s.pass).map(s => s.caseId),
     violations,
   };
+}
+
+/**
+ * One question to the model, asked again when the SERVER did not answer.
+ *
+ * "The server did not answer" has two shapes, and the measurement used to know
+ * only the first: the provider returns an empty text, or it THROWS because it
+ * had nothing to return (an empty answer of Sokrates is a ChatProviderError of
+ * the kind empty, which the chain turns into a ChatUnavailableError). The
+ * pipeline then answers with an empty text and the key of the message, the
+ * scoring sees "empty answer", and the old retry loop (it looked at the returned
+ * text only) never ran: `emptyRepliesAskedAgain` stayed 0 although empty answers
+ * occurred (measurement of the spoken way, 03.11.2026). Both shapes count here.
+ * Every other error is not a failure of the server and goes on at once.
+ *
+ * @param ask - One call of the model
+ * @param retries - How often to ask again (0 asks once)
+ * @param pause - Waits before asking again (injected, so a test needs no time)
+ * @returns The last reply, how often it was asked again, and the failure that
+ *          remained if the last try failed too (the caller decides what to do)
+ */
+export async function askAgainOnServerFailure<T extends { text: string }>(
+  ask: () => Promise<T>,
+  retries: number,
+  pause: () => Promise<void>
+): Promise<{ reply: T | null; askedAgain: number; failure: unknown }> {
+  let askedAgain = 0;
+  for (let attempt = 0; ; attempt += 1) {
+    let reply: T | null = null;
+    let failure: unknown = null;
+    try {
+      reply = await ask();
+    } catch (error) {
+      if (!isChatUnavailableError(error)) throw error;
+      failure = error;
+    }
+    const serverFailed = failure !== null || reply?.text.trim() === '';
+    if (!serverFailed || attempt >= retries) {
+      return { reply, askedAgain, failure };
+    }
+    askedAgain += 1;
+    await pause();
+  }
 }

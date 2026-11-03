@@ -35,8 +35,10 @@ import {
 import { sokratesOnlyChain } from './sokratesOnly';
 import { ClaudeChatProvider } from './claude';
 import {
+  ChatProviderError,
   ChatUnavailableError,
   describeChatFailure,
+  isEmptyAnswerError,
   isModelBusyError,
   type FallbackState,
 } from './errors';
@@ -74,6 +76,7 @@ export {
   MODEL_BUSY_I18N_KEY,
   MODEL_BUSY_RETRY_AFTER_SEC,
   isChatUnavailableError,
+  isEmptyAnswerError,
   isModelBusyError,
   modelBusyPayload,
   type FallbackState,
@@ -324,9 +327,38 @@ export function getEmbeddingProvider(): EmbeddingProvider {
 }
 
 /**
+ * An empty answer (no text at all, or only blanks) is a failure of the provider,
+ * never a message: the person would see an empty bubble, the voice would stay
+ * silent. Sokrates already reports it as a failure (kind empty); Gemini, Claude,
+ * OpenRouter and Ollama could hand back an empty text, so the chain checks it
+ * once for all of them.
+ */
+function assertNotEmpty(
+  response: import('./types').ChatResponse
+): import('./types').ChatResponse {
+  if (typeof response.text !== 'string' || !response.text.trim()) {
+    throw new ChatProviderError(
+      'empty',
+      'Chat provider returned an empty answer'
+    );
+  }
+  return response;
+}
+
+/**
+ * How often the SAME provider is asked again after an empty answer, before the
+ * next provider (or the message "busy") follows. Only while no text has been
+ * sent to the client yet.
+ */
+export const EMPTY_ANSWER_RETRIES = 1;
+
+/**
  * Run one request along a chain: the primary first, then Sokrates, and nothing
- * else. Streaming: if the provider that failed had already sent text to
- * `onChunk`, there is no second try (a second answer would be glued onto the
+ * else. An empty answer is asked again once at the same provider (a busy host
+ * answers nothing now and something a moment later). If it stays empty, the next
+ * provider follows, and after the last one the person gets the message "busy"
+ * (modelBusy), not an empty bubble. Streaming: if the provider that failed had
+ * already sent text to `onChunk`, there is no second try (a second answer would be glued onto the
  * first); the caller gets ChatUnavailableError('interrupted'). The log carries
  * provider names and the kind of failure, never content.
  */
@@ -363,26 +395,52 @@ export async function runChatChain(
         }
       : undefined;
 
-    try {
-      if (guardedChunk) {
-        return await provider.generateResponseStream(
-          systemPrompt,
-          messages,
-          userMessage,
-          guardedChunk,
-          options
-        );
-      }
-      return await provider.generateResponse(
-        systemPrompt,
-        messages,
-        userMessage,
-        options
+    const askOnce = async () =>
+      assertNotEmpty(
+        guardedChunk
+          ? await provider.generateResponseStream(
+              systemPrompt,
+              messages,
+              userMessage,
+              guardedChunk,
+              options
+            )
+          : await provider.generateResponse(
+              systemPrompt,
+              messages,
+              userMessage,
+              options
+            )
       );
+    // one provider, asked again after an empty answer (only while nothing was
+    // sent to the client)
+    const askWithRetry = async () => {
+      for (let retry = 0; ; retry += 1) {
+        try {
+          return await askOnce();
+        } catch (error) {
+          if (
+            isEmptyAnswerError(error) &&
+            !emitted &&
+            retry < EMPTY_ANSWER_RETRIES
+          ) {
+            console.warn(
+              `HAI.ai [chatWithFallback]: provider "${provider.name}" answered empty, asking again`
+            );
+            continue;
+          }
+          throw error;
+        }
+      }
+    };
+
+    try {
+      return await askWithRetry();
     } catch (error) {
       const reason = describeChatFailure(error);
       failures.push(`${provider.name}: ${reason}`);
-      lastFailureBusy = isModelBusyError(error);
+      // an empty answer that stays empty is told like a busy model
+      lastFailureBusy = isModelBusyError(error) || isEmptyAnswerError(error);
 
       if (emitted) {
         console.warn(

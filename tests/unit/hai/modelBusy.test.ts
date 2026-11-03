@@ -6,7 +6,7 @@
 // limit or a status of overload (429, 502, 503, 504, 524) of the model server
 // ends in a ChatUnavailableError that is marked as busy, so the person is told
 // the truth (MODEL_BUSY, try again in a minute) and not "not reachable". A wrong
-// key, a bad request or an empty answer stays a different failure. The first
+// key or a bad request stays a different failure. An empty answer is asked again once and then told like a busy model. The first
 // byte limit is 90 seconds by default and can be set between 15 and 150 seconds.
 // No real model is called: Sokrates is a stand-in on localhost.
 
@@ -156,7 +156,7 @@ describe('runChatChain with Sokrates as the only provider', () => {
     }
   );
 
-  it('an empty answer is not busy', async () => {
+  it('an empty answer (asked again once, still empty) is told like a busy model', async () => {
     fake.setHandler((_s, res) =>
       reply(
         res,
@@ -165,7 +165,12 @@ describe('runChatChain with Sokrates as the only provider', () => {
       )
     );
     const error = await failureOf();
-    expect(error.modelBusy).toBe(false);
+    // the server did not answer: the person gets "busy, try again in a minute"
+    // and not an empty bubble (docs/hai-golden-set.md, 5e); the chain asks once
+    // more before it says so
+    expect(error.modelBusy).toBe(true);
+    expect(error.reason).toBe('no_fallback');
+    expect(fake.requests).toHaveLength(2);
   });
 
   it('a break-off after the first text is "interrupted" and not busy (the text is already there)', async () => {
