@@ -19,7 +19,7 @@ import { join } from 'path';
 // softskill criteria).
 
 const PROTECTED =
-  /\/api\/(notifications|trainer|admin|me\/catalog(?:s|-requests)|activity-reports|weekly-evaluations|grade-edit-history|breadcrumb\/label|trainee\/(school|annual-summary|courses|dashboard|enablers|evaluations(?!\/softskills(?![\w-]))|feedback|knowledge-notes|lesson-progress|lessons|progress|quizzes|use-case-hours|use-cases))(?![\w-])/;
+  /\/api\/(notifications|trainer|admin|me\/catalog(?:s|-requests)|activity-reports|weekly-evaluations|grade-edit-history|breadcrumb\/label|softskill-criteria|trainee\/(school|annual-summary|courses|dashboard|enablers|evaluations(?!\/softskills(?![\w-]))|feedback|knowledge-notes|lesson-progress|lessons|progress|quizzes|use-case-hours|use-cases))(?![\w-])/;
 const SRC = join(process.cwd(), 'src');
 const API = join(SRC, 'app', 'api');
 // The wrapper itself calls fetch() with the url it is given, and names a route

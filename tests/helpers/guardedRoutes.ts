@@ -795,6 +795,8 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   { route: 'me/catalogs', method: 'GET', guard: 'user', params: [] },
+  // soft skill criteria: any signed-in account (WMCNL, was open without a session)
+  { route: 'softskill-criteria', method: 'GET', guard: 'user', params: [] },
   {
     route: 'notifications',
     method: 'GET',
