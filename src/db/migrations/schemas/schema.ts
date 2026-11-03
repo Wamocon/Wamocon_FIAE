@@ -612,6 +612,8 @@ export const contentDocuments = pgTable('content_documents', {
   mimeType: text('mime_type').default('application/pdf'),
   storageUrl: text('storage_url').notNull(), // Supabase Storage URL
   storagePath: text('storage_path'), // Path in bucket for deletion
+  // SHA-256 of the stored file (lower case hex), null until scripts/content/hash-documents.ts sets it
+  contentSha256: text('content_sha256'),
 
   // PageIndex support for HAI
   pageCount: integer('page_count'), // Total pages in PDF

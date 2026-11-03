@@ -265,8 +265,8 @@ order by table_name, column_name;
 -- N checks (after a stage, the runbook says which)
 -- ============================================================================
 
--- N01. Ledger against the 42 files of the repository (202606260001 and the 41 files from
--- 20261023100000 to 20261103000100). Expect 0 rows after the release (and after the repair
+-- N01. Ledger against the 43 files of the repository (202606260001 and the 42 files from
+-- 20261023100000 to 20261103000200). Expect 0 rows after the release (and after the repair
 -- of 202606260001). Every row is a file whose version is missing in the ledger: it was not
 -- applied through the pipeline. Every new migration file needs its version in this list,
 -- tests/unit/migrations/rollout-checks-ledger.test.ts fails otherwise.
@@ -284,7 +284,7 @@ with expected(version) as (
          ('20261030000100'), ('20261030000200'), ('20261030000300'),
          ('20261101000100'), ('20261101000200'),
          ('20261102000100'), ('20261102000200'), ('20261102000300'), ('20261102000400'),
-         ('20261103000100')
+         ('20261103000100'), ('20261103000200')
 )
 select e.version as missing_in_ledger
 from expected e
@@ -353,6 +353,8 @@ from (
     ('column ausbildung_blocks.training_catalog_id (not null, with default)', exists (select 1 from pg_attribute where attrelid = to_regclass('public.ausbildung_blocks') and attname = 'training_catalog_id' and attnotnull and atthasdef and not attisdropped)),
     ('index school_exams_trainee_catalog_idx', to_regclass('public.school_exams_trainee_catalog_idx') is not null),
     ('index ausbildung_blocks_trainee_catalog_idx', to_regclass('public.ausbildung_blocks_trainee_catalog_idx') is not null),
+    -- 20261103000200: checksum of the stored file of a content document (nullable text, no default)
+    ('column content_documents.content_sha256 (nullable text, no default)', exists (select 1 from pg_attribute where attrelid = to_regclass('public.content_documents') and attname = 'content_sha256' and atttypid = 'text'::regtype and not attnotnull and not atthasdef and not attisdropped)),
     ('enum value user_role SUPER_ADMIN', exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'user_role' and e.enumlabel = 'SUPER_ADMIN')),
     ('PUBLIC cannot create in schema public', not has_schema_privilege('public', 'public', 'CREATE'))
 ) as t(check_name, present)
