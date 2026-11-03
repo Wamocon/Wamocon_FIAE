@@ -46,6 +46,12 @@ import { foldUmlauts, isDayBriefingMessage } from './dayQuestion';
 import { formatDayProgress, loadDayProgress } from './dayProgress';
 import type { DayProgress } from './dayProgress';
 import type { HaiTrainingScope } from './trainingScope';
+import {
+    answerDocumentQuestion,
+    isDocumentQuestion,
+    type DocumentAccess,
+    type DocumentScope,
+} from './documentQuery';
 
 // ============================================================================
 // TYPES
@@ -67,6 +73,7 @@ export type DataIntent =
     | 'trainee_detail_query' // Trainer: "Wie steht [Name]?" / "Noten von [Name]"
     | 'learning_query'      // Trainee: tips on learning (quiz scores, next exams)
     | 'day_briefing'        // "Was steht heute an?" / "Guten Morgen" (day companion)
+    | 'document_query'      // "Welche Dateien hat dieser Enabler?" / "Wie heisst die Datei?"
     | 'none';               // No data intent detected
 
 export interface LiveDataContext {
@@ -76,6 +83,8 @@ export interface LiveDataContext {
     tokenEstimate: number;
     /** Which data intent was detected */
     dataIntent: DataIntent;
+    /** document_query: files whose pages the PageIndex loads (a named file) */
+    documentIds?: string[];
 }
 
 /** What the pipeline knows about the turn, only used for the day companion. */
@@ -84,6 +93,14 @@ export interface DataContextOptions {
     preferredCatalogCode?: string | null;
     /** Training scope of the trainee (phase plan), for the next step. */
     trainingScope?: Pick<HaiTrainingScope, 'currentPhase' | 'allowedComponentPhases'>;
+    /**
+     * What the person may read (from the database, never from the request): the
+     * occupations, the audience and the organization. Without it a question about
+     * files gets the neutral answer (fail closed).
+     */
+    documentAccess?: DocumentAccess | null;
+    /** Records of the page the person is on (ids already checked by the page context). */
+    page?: DocumentScope | null;
 }
 
 export interface UserSnapshot {
@@ -271,6 +288,11 @@ export function classifyDataIntent(message: string, userRole: UserRole): DataInt
     // their behavior, so a learning question with the word "Prüfung" stays a
     // learning one.
     if (isDayBriefingMessage(message)) return 'day_briefing';
+
+    // A question about files (names, lists, PDF, extensions): answered from the
+    // database with the access rules of the PageIndex (documentQuery.ts). Before
+    // the name search of a trainer: "Dateien" is no person.
+    if (isDocumentQuestion(message)) return 'document_query';
 
     // Trainer-only intents first (more specific)
     if (userRole === 'TRAINER') {
@@ -1542,6 +1564,7 @@ export async function fetchDataContext(
         // Step 3: Build summary parts
         const parts: string[] = [formatSnapshot(snapshot)];
         let intentTokenEstimate = 0;
+        let documentIds: string[] | undefined;
 
         // Step 4: Fetch intent-specific data
         if (dataIntent !== 'none') {
@@ -1650,6 +1673,18 @@ export async function fetchDataContext(
                         }
                         break;
                     }
+                    case 'document_query': {
+                        // From the database, limited to the files the person may see
+                        const answer = await answerDocumentQuestion({
+                            message,
+                            access: options.documentAccess,
+                            page: options.page,
+                        });
+                        parts.push(answer.text);
+                        if (answer.documentIds.length > 0) documentIds = answer.documentIds;
+                        intentTokenEstimate = 150 + Math.min(answer.total, 20) * 40;
+                        break;
+                    }
                     case 'review_query': {
                         if (userRole === 'TRAINER') {
                             const reviews = await fetchTrainerPendingReviews(userId);
@@ -1694,6 +1729,7 @@ export async function fetchDataContext(
             summary,
             tokenEstimate,
             dataIntent,
+            ...(documentIds ? { documentIds } : {}),
         };
     } catch (error) {
         console.error('HAI.ai DataContext: Fatal error:', error);

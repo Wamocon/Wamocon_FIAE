@@ -33,6 +33,7 @@ import { isAllowedNavigationPath } from '@/lib/hai/navigation/targets';
 import { chatFailureKey } from '@/lib/hai/denial';
 import { toQuizStartScope } from '@/lib/hai/quizMode/session';
 import { useHaiQuizMode } from './HaiQuizMode';
+import { currentPageContext } from '@/lib/hai/pageContext/collect';
 
 // ============================================================================
 // TYPES
@@ -1068,6 +1069,8 @@ export function HaiProvider({
               enablerId: context.enablerId,
               courseId: context.courseId,
               scenarioText: context.scenarioText,
+              // the page of the user (data only, the server validates it)
+              page: currentPageContext(),
             },
             stream: true,
           }),
@@ -1413,6 +1416,8 @@ export function HaiProvider({
               enablerId: context.enablerId,
               courseId: context.courseId,
               scenarioText: context.scenarioText,
+              // the page of the user (data only, the server validates it)
+              page: currentPageContext(),
             },
             stream: true,
             // only the voice assistant sends it; the server checks the organization

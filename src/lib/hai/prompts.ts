@@ -88,6 +88,13 @@ export interface PromptContext {
    * never answer "no data" in general. Without it the prompt is unchanged.
    */
   dayBriefing?: boolean;
+  /**
+   * The finished section "Aktuelle Seite des Users" (pageContext/prompt.ts):
+   * data of the browser that resolves "this page" and "this file", no right and
+   * no source. Added behind the boundary rules, only in the chat and voice path.
+   * Without it the prompt is unchanged (byte for byte).
+   */
+  pageContext?: string;
 }
 
 // ============================================================================
@@ -503,6 +510,11 @@ Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, a
     parts.push(buildAccessReasonRules(context.accessReasons));
   }
   parts.push(buildBoundaryRules(context.userRole));
+
+  // The page of the user (data of the browser), behind the protection rules
+  if (context.pageContext) {
+    parts.push(context.pageContext);
+  }
 
   // Learning technique section (package B): limits and rules for tips on
   // learning and memorizing, for both pipelines, only when it applies

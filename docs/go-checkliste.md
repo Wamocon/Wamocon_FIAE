@@ -40,6 +40,7 @@ Stand: 02.11.2026. Ein Blatt für die Entscheidung. Die Einzelheiten stehen im R
 | V6 | SMTP-Zugang von Resend für fiae-learn.com (E-Mail-Bestätigung, WMCNL-2847), kann nach dem Rollout folgen | Niko |
 | V7 | Schlüssel und Passwörter wechseln (service_role und anon auf publishable und secret, Passwörter, alter Sokrates-Schlüssel), nach dem Rollout | Niko, Claude |
 | V8 | Variablen in Vercel (Ziel Production) für die KI-Stufen der Inhaltsprüfung und des Plan-Lesers: `OPENAI_COMPATIBLE_MODEL=sokrates-fast` muss in Production gesetzt sein (ohne sie fragt die KI nach einem Modell, das Sokrates nicht kennt), dazu mit dem Produktivgang `CONTENT_CHECK_KI_PRODUCTION=true`. Bis zum Go ist der Schalter in Production NICHT gesetzt. Danach `npm run content:hash` (Prüfsummen der Dokumente, Probelauf zuerst, Details in `docs/content-stats.md`) | Niko, Claude |
+| V9 | Schalter `HAI_PAGE_CONTEXT` (Seitenkontext der HAI, `docs/hai-ui-kontext.md`) für Production. Ohne Wert ist er in Production AUS (in Preview AN). Mit dem Produktivgang der HAI (nach H7) in Vercel (Ziel Production) `HAI_PAGE_CONTEXT=on` setzen, wenn die Fälle M10 bis M19 des Testplans bestanden sind. Rückweg: Wert `off`, der Prompt ist dann Byte für Byte der bisherige. Die Dateifragen und die Trainerfragen nach den Azubis haben keinen Schalter | Niko, Claude |
 
 ## 4. Reihenfolge am Tag
 

@@ -21,7 +21,8 @@
  */
 
 import haiDb from '@/db/haiDb';
-import { sql, type SQL } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
+import { documentAccessCondition } from './documentAccessSql';
 import {
   extractTextByPage,
   type PerPageExtractionResult,
@@ -96,6 +97,12 @@ export interface PageIndexOptions {
   audience: HaiAudience;
   /** Own organization and platform documents (NULL) only. */
   organizationId?: string | null;
+  /**
+   * Files the question named (documentQuery.ts found them for this person): their
+   * pages are loaded instead of hoping for a vector hit. The ids are checked
+   * again here against the occupations, the organization and the audience.
+   */
+  documentIds?: string[];
 }
 
 // ============================================================================
@@ -220,11 +227,31 @@ export async function fetchPageIndexContext(
       visibleToTrainees: boolean;
     })[] = [];
 
+    const namedDocumentIds = new Set(options.documentIds ?? []);
     for (const result of pdfResults) {
+      const before = allPages.length;
       for (const page of result.pages) {
         if (page.relevanceScore >= MIN_PAGE_RELEVANCE) {
           allPages.push({
             ...page,
+            docId: result.documentId,
+            docTitle: result.documentTitle,
+            fileName: result.fileName,
+            storageUrl: result.storageUrl,
+            visibleToTrainees: result.visibleToTrainees,
+          });
+        }
+      }
+      // A file the question named without a keyword that its pages hold ("Was
+      // steht in Datei X?"): the first pages stand in for it
+      if (
+        allPages.length === before &&
+        namedDocumentIds.has(result.documentId)
+      ) {
+        for (const page of result.pages.slice(0, 2)) {
+          allPages.push({
+            ...page,
+            relevanceScore: MIN_PAGE_RELEVANCE,
             docId: result.documentId,
             docTitle: result.documentTitle,
             fileName: result.fileName,
@@ -301,26 +328,9 @@ function isVisibleToTrainees(row: {
   );
 }
 
-/**
- * SQL condition on content_documents (alias cd) for the caller: trainees get
- * neither TRAINER_SOLUTION nor TRAINER_ONLY documents, everyone gets only
- * documents of the own organization or of the platform (organization_id NULL).
- */
-export function documentAccessCondition(
-  options: Pick<PageIndexOptions, 'audience' | 'organizationId'>
-): SQL {
-  const parts: SQL[] = [];
-  if (options.audience !== 'trainer') {
-    parts.push(sql`cd.document_type IS DISTINCT FROM 'TRAINER_SOLUTION'`);
-    parts.push(sql`cd.visibility IS DISTINCT FROM 'TRAINER_ONLY'`);
-  }
-  parts.push(
-    isUuid(options.organizationId)
-      ? sql`(cd.organization_id IS NULL OR cd.organization_id = ${options.organizationId}::uuid)`
-      : sql`cd.organization_id IS NULL`
-  );
-  return sql.join(parts, sql` AND `);
-}
+// The access condition lives in documentAccessSql.ts (shared with the file
+// questions of documentQuery.ts); re-exported so existing imports keep working.
+export { documentAccessCondition };
 
 /**
  * Find candidate PDFs based on vector search results and current context.
@@ -350,6 +360,57 @@ async function findCandidatePDFs(
     sql`, `
   );
   const access = documentAccessCondition(options);
+
+  // Priority 0: the files the question named. Same access as every other
+  // candidate (catalog of every linked record, organization, audience).
+  const namedIds = [...new Set((options.documentIds ?? []).filter(isUuid))];
+  if (namedIds.length > 0) {
+    try {
+      const result = await haiDb.execute(sql`
+        SELECT
+          cd.id, cd.title, cd.file_name, cd.storage_url,
+          cd.document_type, cd.visibility,
+          cd.enabler_id, e.title AS enabler_title,
+          cd.use_case_id, uc.title AS use_case_title
+        FROM content_documents cd
+        LEFT JOIN enablers e ON cd.enabler_id = e.id
+        LEFT JOIN use_cases uc ON cd.use_case_id = uc.id
+        LEFT JOIN courses co ON cd.course_id = co.id
+        WHERE cd.id IN (${sql.join(
+          namedIds.map(id => sql`${id}::uuid`),
+          sql`, `
+        )})
+          AND (cd.enabler_id IS NOT NULL OR cd.use_case_id IS NOT NULL OR cd.course_id IS NOT NULL)
+          AND (cd.enabler_id IS NULL OR e.training_catalog_id IN (${catalogList}))
+          AND (cd.use_case_id IS NULL OR uc.training_catalog_id IN (${catalogList}))
+          AND (cd.course_id IS NULL OR co.training_catalog_id IN (${catalogList}))
+          AND ${access}
+          AND cd.storage_url IS NOT NULL
+          AND cd.mime_type = 'application/pdf'
+        LIMIT ${MAX_PDFS_PER_QUERY}
+      `);
+      for (const row of result as any[]) {
+        if (seenIds.has(row.id)) continue;
+        seenIds.add(row.id);
+        candidates.push({
+          id: row.id,
+          title: row.title || row.file_name,
+          fileName: row.file_name,
+          storageUrl: row.storage_url,
+          visibleToTrainees: isVisibleToTrainees(row),
+          parentType: row.enabler_id
+            ? 'enabler'
+            : row.use_case_id
+              ? 'use_case'
+              : 'standalone',
+          parentId: row.enabler_id ?? row.use_case_id ?? null,
+          parentTitle: row.enabler_title ?? row.use_case_title ?? null,
+        });
+      }
+    } catch (err) {
+      console.warn('HAI.ai PageIndex: Error fetching named PDFs:', err);
+    }
+  }
 
   // Priority 1: PDFs linked to enablers/courses from vector results
   const enablerIds = new Set<string>();
@@ -384,7 +445,10 @@ async function findCandidatePDFs(
         FROM content_documents cd
         JOIN enablers e ON cd.enabler_id = e.id
         LEFT JOIN courses c ON e.course_id = c.id
-        WHERE cd.enabler_id IN (${sql.join(enablerIdArray.map(id => sql`${id}::uuid`), sql`, `)})
+        WHERE cd.enabler_id IN (${sql.join(
+          enablerIdArray.map(id => sql`${id}::uuid`),
+          sql`, `
+        )})
           AND e.training_catalog_id IN (${catalogList})
           AND ${access}
           AND cd.storage_url IS NOT NULL
@@ -429,7 +493,9 @@ async function findCandidatePDFs(
     try {
       const courseIdArray = validCourseIds;
       const useCaseDocumentType =
-        options.audience === 'trainer' ? 'TRAINER_SOLUTION' : 'TRAINEE_QUESTION';
+        options.audience === 'trainer'
+          ? 'TRAINER_SOLUTION'
+          : 'TRAINEE_QUESTION';
       const result = await haiDb.execute(sql`
         SELECT 
           cd.id, cd.title, cd.file_name, cd.storage_url,
@@ -437,7 +503,10 @@ async function findCandidatePDFs(
           cd.use_case_id, uc.title AS use_case_title, uc.year, uc.training_stage
         FROM content_documents cd
         JOIN use_cases uc ON cd.use_case_id = uc.id
-        WHERE uc.course_id IN (${sql.join(courseIdArray.map(id => sql`${id}::uuid`), sql`, `)})
+        WHERE uc.course_id IN (${sql.join(
+          courseIdArray.map(id => sql`${id}::uuid`),
+          sql`, `
+        )})
           AND uc.training_catalog_id IN (${catalogList})
           AND cd.document_type::text = ${useCaseDocumentType}
           AND ${access}
