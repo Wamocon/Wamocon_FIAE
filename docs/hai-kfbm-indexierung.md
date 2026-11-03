@@ -250,3 +250,4 @@ Die Spalte `hai_embeddings.embedding` ist `vector(3072)`. Ein HNSW-Index auf `ve
 - **Messung (8 Fragen, 2 Berufe, 16 Abfragen):** genau 26,4 s im Mittel, Index mit iterativer Suche 0,9 s im Mittel (die meisten 0,1 s, die schlechteste 5,9 s), 74 von 80 Treffern gleich wie bei der genauen Suche, alle 80 geliefert. Messskripte im Scratchpad (hnsw_test.cjs).
 - **Rückweg:** Schalter aus, danach `drop index concurrently if exists idx_hai_embeddings_embedding_hnsw`.
 - **Nicht umgestellt:** `findRelatedContent` und die übrigen Abfragen mit `embedding <=>` nutzen den Index nicht.
+- **Nachtrag 03.11.2026:** Am 03.11. wählte der Planer trotz Index und Schalter wieder den Weg über das Sortieren des ganzen Berufskatalogs (22 bis 38 Sekunden, `EXPLAIN ANALYZE`). Die breite Suche setzt deshalb in ihrer Transaktion zusätzlich `enable_sort = off` (2 bis 55 Millisekunden, dieselben fünf besten Treffer). Messung und Begründung: `docs/hai-geschwindigkeit.md`, Abschnitt 5.1.
