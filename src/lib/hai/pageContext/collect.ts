@@ -81,7 +81,14 @@ function labelOf(el: Element): string {
 
 /** The heading of the page: first h1 of the main area, else the document title. */
 function titleOf(doc: Document): string {
-  const headings = Array.from(doc.querySelectorAll('main h1, h1'));
+  // `main h1` first: the sidebar brand is an h1 that comes first in the DOM, a
+  // single selector list ('main h1, h1') would return it before the page heading
+  const headings = [
+    ...Array.from(doc.querySelectorAll('main h1')),
+    ...Array.from(doc.querySelectorAll('h1')).filter(
+      h => !h.closest('aside, nav, header, footer')
+    ),
+  ];
   for (const h of headings) {
     if (isIgnored(h)) continue;
     const text = shortLine(visibleText(h), PAGE_CONTEXT_LIMITS.title);

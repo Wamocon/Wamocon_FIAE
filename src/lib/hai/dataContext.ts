@@ -1227,6 +1227,9 @@ export async function fetchTrainerTraineeOverview(trainerId: string): Promise<Tr
 
         const idList = sql.join(trainees.map(t => sql`${t.id}`), sql`, `);
         const now = new Date();
+        // a raw query cannot bind a Date (postgres.js needs a column type): an ISO
+        // string cast to the type of the columns (timestamp, written as UTC)
+        const nowIso = now.toISOString();
 
         // Everything else in one query per fact, for all trainees at once
         const [progressRows, enrollmentRows, catalogRows, blockRows, pendingRows] =
@@ -1253,8 +1256,8 @@ export async function fetchTrainerTraineeOverview(trainerId: string): Promise<Tr
                     FROM ausbildung_blocks b
                     WHERE b.trainee_id IN (${idList})
                       AND b.block_type IN (${sql.join(OVERVIEW_BLOCK_TYPES.map(t => sql`${t}`), sql`, `)})
-                      AND b.start_date <= ${now}
-                      AND b.end_date >= ${now}
+                      AND b.start_date <= ${nowIso}::timestamp
+                      AND b.end_date >= ${nowIso}::timestamp
                     ORDER BY b.trainee_id, b.training_catalog_id, b.start_date DESC
                 `),
                 db.execute(sql`
@@ -1430,19 +1433,19 @@ async function fetchTraineeDetailForTrainer(
         // 2. Recent submissions (last 10)
         const submissions = await db.execute(sql`
             (
-                SELECT 'enabler' as type, e.title, es.status, es.created_at as submitted_at, es.trainer_feedback
+                SELECT 'enabler' as type, e.title, es.status, es.submitted_at, es.trainer_feedback
                 FROM enabler_submissions es
                 JOIN enablers e ON e.id = es.enabler_id
                 WHERE es.trainee_id = ${trainee.id}
-                ORDER BY es.created_at DESC LIMIT 5
+                ORDER BY es.submitted_at DESC LIMIT 5
             )
             UNION ALL
             (
-                SELECT 'use_case' as type, uc.title, ucs.status, ucs.created_at as submitted_at, ucs.trainer_feedback
+                SELECT 'use_case' as type, uc.title, ucs.status, ucs.submitted_at, ucs.trainer_feedback
                 FROM use_case_submissions ucs
                 JOIN use_cases uc ON uc.id = ucs.use_case_id
                 WHERE ucs.trainee_id = ${trainee.id}
-                ORDER BY ucs.created_at DESC LIMIT 5
+                ORDER BY ucs.submitted_at DESC LIMIT 5
             )
             ORDER BY submitted_at DESC LIMIT 10
         `);
@@ -1464,7 +1467,7 @@ async function fetchTraineeDetailForTrainer(
         const exams = await db.execute(sql`
             SELECT se.subject, ser.grade, ser.percentage, ser.passed, se.exam_date
             FROM school_exam_results ser
-            JOIN school_exams se ON se.id = ser.school_exam_id
+            JOIN school_exams se ON se.id = ser.exam_id
             WHERE ser.trainee_id = ${trainee.id}
             ORDER BY se.exam_date DESC LIMIT 5
         `);
