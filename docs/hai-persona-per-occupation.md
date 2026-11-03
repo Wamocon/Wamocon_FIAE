@@ -18,6 +18,10 @@ person.
   `tests/unit/hai/fixtures/fiae-baseline.json`, recorded with the code before this package
   (full text of the plain prompt of every mode, SHA-256 of 75 prompt combinations, the
   intent of 133 messages in 3 quiz states).
+  The baseline was recorded again on 29.10.2026 (boundary rules) and on 03.11.2026 (decision of the
+  owner: role section, scope of the solution protection, no fixed refusal sentence in the prompt after
+  the gate; the strict rules for trainees stay). The reasons are in the comment of the test and in
+  `docs/hai-golden-set.md`, section 5.
 - **Other occupations** take their texts from `training_catalogs.settings.hai`. A missing
   key falls back to a generic text without IT words and without fixed numbers. The
   trainee prompt carries no trainer topics.
