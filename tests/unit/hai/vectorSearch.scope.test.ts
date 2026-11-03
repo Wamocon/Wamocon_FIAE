@@ -282,6 +282,54 @@ describe('searchSimilar', () => {
       await searchSimilar('frage', trainee(), VECTOR);
       expect(mockExecute).toHaveBeenCalledTimes(1);
     });
+
+    // The planner underestimates the scope filter and sorts the whole catalog
+    // (22 to 35 s on the Preview database). The broad search makes the sort
+    // expensive so the index delivers the order (2 ms). Only the way to the
+    // order changes, never the filter. docs/hai-geschwindigkeit.md
+    describe('plan of the broad search', () => {
+      beforeEach(() => {
+        process.env.HAI_HALFVEC_SEARCH = 'on';
+        mockExecute.mockResolvedValue([row('a', 0.9)]);
+      });
+
+      it('the broad search (no source type, ids or course) turns the sort off for the transaction only', async () => {
+        await searchSimilar('frage', trainee(), VECTOR);
+        const settings = rendered(0).text;
+        expect(settings).toContain("set_config('enable_sort', 'off', true)");
+        // local to the transaction (third argument true), the other settings stay
+        expect(settings).toContain(
+          "set_config('hnsw.iterative_scan', 'relaxed_order', true)"
+        );
+      });
+
+      it('the search statement of the broad search is the same as before: same filter, same order', async () => {
+        await searchSimilar('frage', trainee(), VECTOR);
+        const search = rendered(1).text;
+        expect(search).toContain('ORDER BY embedding::halfvec(3072) <=> $');
+        expect(search).toContain('training_catalog_id IN');
+        expect(search).toContain("visibility = 'all'");
+        expect(search).not.toContain('enable_sort');
+      });
+
+      it.each([
+        ['a source type', { sourceType: 'learning_technique' as const }],
+        ['source ids', { sourceIds: ['3a0e4e4c-9f1e-4f3e-9c55-2f6a9d6a0001'] }],
+        ['a course', { courseId: '3a0e4e4c-9f1e-4f3e-9c55-2f6a9d6a0002' }],
+      ])('a narrow search with %s keeps the default plan', async (_, extra) => {
+        await searchSimilar('frage', trainee(extra), VECTOR);
+        const settings = rendered(0).text;
+        expect(settings).toContain("set_config('hnsw.max_scan_tuples'");
+        expect(settings).not.toContain('enable_sort');
+      });
+
+      it('without the switch nothing of this applies', async () => {
+        delete process.env.HAI_HALFVEC_SEARCH;
+        await searchSimilar('frage', trainee(), VECTOR);
+        expect(mockExecute).toHaveBeenCalledTimes(1);
+        expect(rendered(0).text).not.toContain('enable_sort');
+      });
+    });
   });
 
   it('returns nothing and calls neither database nor model without scope', async () => {

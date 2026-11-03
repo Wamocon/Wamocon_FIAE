@@ -142,6 +142,37 @@ export const HALFVEC_SEARCH_SETTINGS = sql`SELECT
   set_config('hnsw.ef_search', '100', true),
   set_config('hnsw.max_scan_tuples', '40000', true)`;
 
+/**
+ * Same settings plus `enable_sort = off`, for the broad search only (no source
+ * type, no source ids, no course: the whole catalog is searched).
+ *
+ * Why: the planner underestimates the rows of the scope filter (the test on the
+ * JSON key userId is guessed at 0.5 percent, the real value is almost every
+ * row: 82 estimated, 16,407 found). It then reads the whole catalog (about
+ * 23,000 buffers, the vectors are 12 KB each) and sorts it: 22 to 35 seconds on
+ * the Preview database, although the halfvec index exists. Sorting made very
+ * expensive, the planner takes the index, which delivers the order itself: 2
+ * milliseconds of execution, the same top five in the test (docs/hai-geschwindigkeit.md).
+ * The query, the filter and the rows that are allowed stay exactly as they
+ * are, only the way to the order changes. A narrow search (source ids, source
+ * type) keeps the default: its filter is estimated well and a b-tree is faster
+ * than an index scan that has to look for a few rows.
+ */
+export const HALFVEC_BROAD_SEARCH_SETTINGS = sql`SELECT
+  set_config('hnsw.iterative_scan', 'relaxed_order', true),
+  set_config('hnsw.ef_search', '100', true),
+  set_config('hnsw.max_scan_tuples', '40000', true),
+  set_config('enable_sort', 'off', true)`;
+
+/** The whole catalog is searched: no filter beyond the access scope. */
+function isBroadSearch(options: SearchOptions): boolean {
+  return (
+    !options.sourceType &&
+    !(options.sourceIds && options.sourceIds.length > 0) &&
+    !options.courseId
+  );
+}
+
 export function buildScopeCondition(scope: SearchScope): SQL | null {
   const catalogIds = [...new Set((scope.catalogIds ?? []).filter(isUuid))];
   if (catalogIds.length === 0) return null;
@@ -274,7 +305,11 @@ export async function searchSimilar(
     `;
     const results = halfvec
       ? await haiDb.transaction(async tx => {
-          await tx.execute(HALFVEC_SEARCH_SETTINGS);
+          await tx.execute(
+            isBroadSearch(options)
+              ? HALFVEC_BROAD_SEARCH_SETTINGS
+              : HALFVEC_SEARCH_SETTINGS
+          );
           return tx.execute(searchStatement);
         })
       : await haiDb.execute(searchStatement);
