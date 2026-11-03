@@ -2,7 +2,7 @@
 
 /**
  * The voice session of the HAI: ONE voice loop (useHaiVoice) for the whole app,
- * shared by the microphone of the chat and the voice mode with the mascot.
+ * shared by the microphone of the chat and the voice mode with the HAI figure.
  *
  * It sits inside the HaiProvider, above the pages, for two reasons:
  *  - the voice mode uses the SAME chat (same session, same messages): every
@@ -10,7 +10,7 @@
  *    read in the chat afterwards. There is no second path to the server.
  *  - the voice mode survives a change of page: when the HAI opens a page
  *    (the question "Soll ich sie öffnen?" and the answer "ja"), the loop keeps
- *    listening and the mascot moves to the edge as a small unit.
+ *    listening and the figure keeps standing at the bottom left of the new page.
  *
  * The voice mode does not change what the voice assistant is: the organization
  * switch, the consent with the named provider and the order of the loop stay
@@ -74,6 +74,11 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
   } = useHai();
 
   const [view, setView] = useState<VoiceModeView>('closed');
+  // the person switched the microphone off: the mode stays, the loop waits
+  const [muted, setMuted] = useState(false);
+  const mutedRef = useRef(false);
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
 
   // ask the organization only once the chat was opened (or the mode is open)
   const [chatSeen, setChatSeen] = useState(false);
@@ -139,7 +144,16 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
 
   const openMode = useCallback(() => {
     if (!available) return;
-    setView('full');
+    mutedRef.current = false;
+    setMuted(false);
+    setView('open');
+    // The chat panel must not cover the figure: the large chat gives way to the
+    // panel, and on a phone the panel (the whole width) is put away.
+    const phone =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(max-width: 767px)').matches;
+    if (viewModeRef.current === 'full') setViewMode('widget');
+    if (phone && viewModeRef.current !== 'hidden') setViewMode('hidden');
     const current = voiceRef.current;
     // a tap: the audio of a provider may start (iOS, Safari). Without consent the
     // voice mode asks first, nothing is recorded before the answer.
@@ -149,14 +163,29 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
     ) {
       current.start();
     }
-  }, [available]);
+  }, [available, setViewMode]);
 
   const closeMode = useCallback(() => {
+    mutedRef.current = false;
+    setMuted(false);
     voiceRef.current.stop();
     setView('closed');
   }, []);
 
-  const restore = useCallback(() => setView('full'), []);
+  // Microphone off: the loop stops (nothing is recorded, nothing is said) but the
+  // figure stays. On again: the loop starts as at the opening.
+  const toggleMic = useCallback(() => {
+    const current = voiceRef.current;
+    if (mutedRef.current) {
+      mutedRef.current = false;
+      setMuted(false);
+      current.start();
+    } else {
+      mutedRef.current = true;
+      setMuted(true);
+      current.stop();
+    }
+  }, []);
 
   const acceptConsent = useCallback(() => {
     voiceRef.current.giveConsent();
@@ -178,7 +207,8 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
     }
     if (wasActive.current) {
       wasActive.current = false;
-      setView('closed');
+      // a microphone that was switched off ends the loop, not the mode
+      if (!mutedRef.current) setView('closed');
     }
   }, [view, voice.phase]);
 
@@ -193,16 +223,15 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
     if (viewMode === 'hidden') setViewMode('widget');
   }, [quizActive, view, viewMode, setViewMode]);
 
-  // The HAI opened a page while the large voice mode was up: the mascot moves
-  // to the edge as a small unit and keeps listening above the new page. The
-  // chat panel goes away so it does not cover it.
+  // The HAI opened a page while the voice mode was up: the figure keeps
+  // standing and listening at the bottom left of the new page. The chat panel
+  // goes away so it does not cover the page.
   const openedCount = messages.filter(
     m => m.navigationOffer?.status === 'opened'
   ).length;
   const previousOpened = useRef(openedCount);
   useEffect(() => {
-    if (openedCount > previousOpened.current && view === 'full') {
-      setView('mini');
+    if (openedCount > previousOpened.current && view === 'open') {
       if (viewMode !== 'hidden') setViewMode('hidden');
     }
     previousOpened.current = openedCount;
@@ -228,7 +257,8 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
       openNavigation,
       openMode,
       closeMode,
-      restore,
+      muted,
+      toggleMic,
       acceptConsent,
     }),
     [
@@ -241,7 +271,8 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
       openNavigation,
       openMode,
       closeMode,
-      restore,
+      muted,
+      toggleMic,
       acceptConsent,
     ]
   );
@@ -249,7 +280,7 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
   return (
     <SessionContext.Provider value={value}>
       {children}
-      {view !== 'closed' && <HaiVoiceModeOverlay />}
+      <HaiVoiceModeOverlay />
     </SessionContext.Provider>
   );
 }
