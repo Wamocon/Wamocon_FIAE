@@ -17,6 +17,12 @@
  * a solution or a question for numbers ("wie viele Berichte") is not a
  * navigation request and stays with the pipeline.
  *
+ * Besides WHAT the person wants, `isDirectCommand` tells HOW: a clear command
+ * ("Öffne ...", "Bring mich zu ...", "Geh zu ...", "Ich will zum ...") is
+ * carried out right away, a question for the way ("Wo finde ich ...") or a
+ * softer wish ("Zeig mir ...", "Ich möchte ... sehen") stays an offer that the
+ * person confirms.
+ *
  * @module lib/hai/navigation/intent
  */
 
@@ -66,7 +72,31 @@ const CUE_PATTERNS: readonly RegExp[] = [
   /\bwie\s+komme\s+ich\s+(?:\w+\s+)?(?:zu|zum|zur|in|auf)\b/,
   /\b(?:moechte|will|moecht)\s+(?:\w+\s+){0,2}(?:zu|zum|zur)\b/,
   /\b(?:seite|link)\b/,
+  // "kannst du mich zum Berichtsheft bringen", "mich bitte zur Schule fuehren"
+  /\bmich\b(?:\s+\w+){0,5}\s+(?:bringen|fuehren|leiten|weiterleiten|navigieren|schicken|lotsen)\b/,
+  // "kannst du mir das Dashboard zeigen"
+  /\b(?:mir|uns)\b(?:\s+\w+){0,6}\s+(?:zeigen|anzeigen)\b/,
+  // "mach das Dashboard auf", "ruf bitte die Berufsschule auf"
+  /\b(?:mach|mache|machst|ruf|rufe|rufst)\b(?:\s+\w+){0,4}\s+auf\b/,
+  /\b(?:aufrufen|aufmachen)\b/,
+  // "nimm mich mit zum Dashboard", "lass uns zum Profil gehen"
+  /\b(?:nimm|nehm\w*)\s+(?:\w+\s+)?(?:mich|uns)\s+(?:\w+\s+)?mit\b/,
+  /\blass\s+(?:uns|mich)\b(?:\s+\w+){0,4}\s+(?:gehen|wechseln|oeffnen|springen|navigieren)\b/,
+  // "wo ist das Dashboard", "wo kann ich die Berichte sehen"
+  /\bwo\s+(?:ist|sind|liegt|liegen)\b/,
+  /\bwo\s+kann\s+ich\b.{0,40}\b(?:finden|sehen|einsehen|aufrufen)\b/,
+  // "ich moechte meine Berufsschule sehen"
+  /\b(?:moechte|will|moecht|wuerde\s+gern\w*)\s+(?:\w+\s+){0,3}(?:sehen|ansehen|anschauen|aufrufen)\b/,
 ];
+
+/**
+ * A short direction without a verb: "zum Dashboard bitte", "zurück zur
+ * Startseite", "zu den Quizzen". Only a short text counts, so a sentence that
+ * merely starts with "zu" does not.
+ */
+const SHORT_DIRECTION =
+  /^(?:bitte\s+)?(?:zurueck\s+)?(?:zu|zum|zur)\s+(?:\w+\s+){0,2}\w+(?:\s+bitte)?$/;
+const SHORT_DIRECTION_MAX_WORDS = 6;
 
 /**
  * Words that make a message something else: a request for a solution or an
@@ -74,7 +104,7 @@ const CUE_PATTERNS: readonly RegExp[] = [
  * message stays with the pipeline.
  */
 const NOT_A_COMMAND =
-  /\b(?:\w*loesung\w*|\w*antwort\w*|erklaer\w*|was\s+ist|was\s+sind|wie\s+funktioniert|warum|wieso|weshalb|schreib\w*|programmier\w*|code|beispiel\w*|zusammenfass\w*|uebersetz\w*|wie\s?viel\w*|anzahl|status|stand|fortschritt|note|noten|ergebnis\w*|wann|welche[rsmn]?)\b/;
+  /\b(?:\w*loesung\w*|\w*antwort\w*|erklaer\w*|was\s+ist|was\s+sind|wie\s+funktioniert|warum|wieso|weshalb|schreib\w*|programmier\w*|code|beispiel\w*|zusammenfass\w*|uebersetz\w*|wie\s?viel\w*|anzahl|status|stand|fortschritt|note|noten|ergebnis\w*|wann|welche[rsmn]?|fehler|problem\w*|falsch\w*|kaputt|hilfe|hilf\w*)\b/;
 
 /**
  * Keywords of the static targets, in the order of priority: the first target
@@ -91,6 +121,11 @@ const TARGET_PATTERNS: ReadonlyArray<readonly [StaticTargetId, RegExp]> = [
     /\b(?:inhaltsverwaltung|inhalte\s+verwalten|content\s?-?\s?management|kursverwaltung|modulverwaltung)\b/,
   ],
   ['quizzes', /\b(?:quiz|quizze|quizzen|quiz\s?-?\s?verwaltung)\b/],
+  // the menu entry "Lernen" of a trainee: "meine Kurse", "zum Lernen"
+  [
+    'courses',
+    /\b(?:kurse[nrs]?|lernbereich\w*|lernseite|lernstoff|lerninhalte?|lernmodule?|zum\s+lernen)\b/,
+  ],
   ['statistics', /\b(?:statistik\w*|inhaltsstatistik|auswertung\w*)\b/],
   ['calendar', /\b(?:blockkalender|schulkalender|kalender)\b/],
   ['school', /\b(?:berufsschul\w*|schulbereich|schule)\b/],
@@ -99,6 +134,11 @@ const TARGET_PATTERNS: ReadonlyArray<readonly [StaticTargetId, RegExp]> = [
   [
     'activity_reports',
     /\b(?:berichtsheft\w*|taetigkeitsnachweis\w*|ausbildungsnachweis\w*|wochenbericht\w*|berichte[n]?|bericht|nachweise[n]?)\b/,
+  ],
+  // after the reports: "das Feedback zu meinem Bericht" is about the report
+  [
+    'trainer_feedback',
+    /\b(?:(?:ausbilder|trainer)-?\s?feedback|feedback\w*|rueckmeldung\w*)\b/,
   ],
   ['trainees', /\b(?:auszubildende[nr]?|azubis|azubi-?verwaltung|trainees)\b/],
   ['profile', /\b(?:profil\w*)\b/],
@@ -182,6 +222,37 @@ const NAME_STOP = new Set([
 const MAX_NAME_WORDS = 6;
 
 /**
+ * A number said as a word ("Enabler drei"): a speech recognizer often writes
+ * the word and not the digit. Up to twenty, "ein" and "eine" are left out on
+ * purpose (they are articles).
+ */
+const NUMBER_WORDS: Readonly<Record<string, string>> = {
+  eins: '1',
+  zwei: '2',
+  drei: '3',
+  vier: '4',
+  fuenf: '5',
+  sechs: '6',
+  sieben: '7',
+  acht: '8',
+  neun: '9',
+  zehn: '10',
+  elf: '11',
+  zwoelf: '12',
+  dreizehn: '13',
+  vierzehn: '14',
+  fuenfzehn: '15',
+  sechzehn: '16',
+  siebzehn: '17',
+  achtzehn: '18',
+  neunzehn: '19',
+  zwanzig: '20',
+};
+const NUMBER_WORD_PATTERN = Object.keys(NUMBER_WORDS)
+  .sort((a, b) => b.length - a.length)
+  .join('|');
+
+/**
  * The number or the name that follows the word of a content type ("enabler",
  * "use case") in the folded text, or null if the person named neither.
  */
@@ -189,10 +260,17 @@ function referenceAfter(
   text: string,
   keyword: 'enabler' | 'use[ -]?case'
 ): ContentReference | null {
+  // "Enabler 3", "Enabler Nummer 3", "Enabler E3" and the spoken "Enabler e
+  // drei": an optional "nr", "nummer", "no", "#" or "e" in front of the number
   const numberMatch = new RegExp(
-    `\\b${keyword}\\s*(?:nr|nummer|no|#)?\\s*(\\d+[a-z]?(?:\\.\\d+)*)(?![a-z0-9])`
+    `\\b${keyword}\\s*(?:(?:nr|nummer|no|#|ee?)\\s*)?(\\d+[a-z]?(?:\\.\\d+)*)(?![a-z0-9])`
   ).exec(text);
   if (numberMatch) return { number: numberMatch[1] };
+  // a number word must stand alone: "drei" yes, "Drei-Schichten-Modell" no
+  const wordMatch = new RegExp(
+    `\\b${keyword}\\s*(?:(?:nr|nummer|no|ee?)\\s*)?(${NUMBER_WORD_PATTERN})(?![a-z0-9-])`
+  ).exec(text);
+  if (wordMatch) return { number: NUMBER_WORDS[wordMatch[1]] };
 
   const nameMatch = new RegExp(`\\b${keyword}\\s+(.+)$`).exec(text);
   if (!nameMatch) return null;
@@ -211,6 +289,74 @@ function referenceAfter(
   return name.length >= 3 ? { name } : null;
 }
 
+/** "starte das Quiz von Enabler 3": a verb of starting counts for a quiz of an enabler only. */
+function isStartOfEnablerQuiz(text: string): boolean {
+  return (
+    /\bstart\w*/.test(text) &&
+    /\benabler\b/.test(text) &&
+    /\bquiz\w*\b/.test(text)
+  );
+}
+
+function isShortDirection(text: string): boolean {
+  return (
+    text.split(' ').length <= SHORT_DIRECTION_MAX_WORDS &&
+    SHORT_DIRECTION.test(text)
+  );
+}
+
+function hasCue(text: string): boolean {
+  return (
+    CUE_PATTERNS.some(pattern => pattern.test(text)) ||
+    isShortDirection(text) ||
+    isStartOfEnablerQuiz(text)
+  );
+}
+
+/** The question for the way ("wo finde ich", "wie komme ich", "wo geht es weiter"). */
+const WAY_QUESTION =
+  /\b(?:wo|wohin)\s+(?:\w+\s+){0,2}(?:finde|sehe|ist|sind|liegt|liegen|geht|gehts|kann|muss|soll)\b|\bwie\s+(?:komme|geht|gehts|kann|finde|gelange)\b|\bwas\s+(?:soll|sollte|kann|muss|lerne|mache|bearbeite)\b|\bnaechste[nrms]?\s+(?:schritt|enabler|lektion|lerneinheit)\b/;
+
+/** A clear command to go somewhere: the verb says "do it", not "show me" or "where". */
+const DIRECT_PATTERNS: readonly RegExp[] = [
+  /\boeffn\w*/,
+  /\b(?:geh|gehe|gehen|gehst|geht)\s+(?:\w+\s+){0,2}(?:zu|zum|zur|auf|in|ins)\b/,
+  /\b(?:bring|bringe|bringst|fuehr|fuehre|fuehrst|leit|leite|leitest)\s+(?:\w+\s+)?(?:mich|uns)\b/,
+  /\bmich\b(?:\s+\w+){0,5}\s+(?:bringen|fuehren|leiten|weiterleiten|navigieren|schicken|lotsen)\b/,
+  /\b(?:navigier|spring|wechsl|wechsel)\w*/,
+  /\b(?:mach|mache|machst|ruf|rufe|rufst)\b(?:\s+\w+){0,4}\s+auf\b/,
+  /\b(?:aufrufen|aufmachen)\b/,
+  /\b(?:nimm|nehm\w*)\s+(?:\w+\s+)?(?:mich|uns)\s+(?:\w+\s+)?mit\b/,
+  /\blass\s+(?:uns|mich)\b(?:\s+\w+){0,4}\s+(?:gehen|wechseln|oeffnen|springen|navigieren)\b/,
+  /\b(?:moechte|will|moecht)\s+(?:\w+\s+){0,2}(?:zu|zum|zur)\b/,
+  // "weiter lernen", "mit dem Lernen weiter": the command to go on
+  /\bweiter\s?lernen\b/,
+  /\bmit\s+dem\s+lernen\s+weiter\w*/,
+];
+
+/**
+ * Whether the message is a clear command to go somewhere ("Öffne den
+ * Ausbildungsnachweis", "Bring mich zum Dashboard", "Geh zu den Quizzen", "Ich
+ * will zum Kalender", "Ich will weiterlernen") and not a question for the way
+ * ("Wo finde ich ..."), a softer wish ("Zeig mir ...", "Ich möchte ... sehen")
+ * or a bare name. The server opens the page right away for a command and offers
+ * it with a button for the rest.
+ *
+ * Only about HOW it was said: whether the page may be opened at all is decided
+ * by resolve.ts.
+ */
+export function isDirectCommand(message: string): boolean {
+  if (typeof message !== 'string') return false;
+  const text = foldText(message);
+  if (!text || text.length > MAX_LENGTH) return false;
+  if (WAY_QUESTION.test(text)) return false;
+  return (
+    DIRECT_PATTERNS.some(pattern => pattern.test(text)) ||
+    isShortDirection(text) ||
+    isStartOfEnablerQuiz(text)
+  );
+}
+
 /**
  * The navigation request in a message, or null when there is none.
  */
@@ -226,7 +372,7 @@ export function detectNavigationIntent(
   }
 
   if (NOT_A_COMMAND.test(text)) return null;
-  if (!CUE_PATTERNS.some(pattern => pattern.test(text))) return null;
+  if (!hasCue(text)) return null;
 
   const mentionsEnabler = /\benabler\b/.test(text);
   if (mentionsEnabler) {

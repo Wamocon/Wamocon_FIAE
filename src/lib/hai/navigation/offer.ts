@@ -21,6 +21,13 @@ export interface NavigationOffer {
   label: string;
   /** One short reason, why this page (German). */
   reason: string;
+  /**
+   * The person gave a clear command ("Öffne ...", "Bring mich zu ...", "Geh
+   * zu ..."): the interface opens the page right away, the card only reports
+   * it. Without it the card waits for the tap on "Öffnen" (or a spoken "ja").
+   * Set by the server from the command, never by the model.
+   */
+  auto?: boolean;
 }
 
 const MAX_TEXT = 200;
@@ -35,16 +42,21 @@ function cleanText(value: unknown): string | null {
 /**
  * An offer from untrusted input (the answer of the server as the client reads
  * it), or undefined if it is malformed or its path is not on the allow list.
- * Only the three known members are taken over.
+ * Only the four known members are taken over.
  */
 export function toNavigationOffer(raw: unknown): NavigationOffer | undefined {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     return undefined;
   }
-  const { path, label, reason } = raw as Record<string, unknown>;
+  const { path, label, reason, auto } = raw as Record<string, unknown>;
   if (!isAllowedNavigationPath(path)) return undefined;
   const cleanLabel = cleanText(label);
   const cleanReason = cleanText(reason);
   if (!cleanLabel || !cleanReason) return undefined;
-  return { path, label: cleanLabel, reason: cleanReason };
+  return {
+    path,
+    label: cleanLabel,
+    reason: cleanReason,
+    ...(auto === true ? { auto: true } : {}),
+  };
 }
