@@ -723,20 +723,44 @@ export function HaiProvider({
   // NAVIGATION OFFERS (card "Open", spoken "yes")
   // ========================================================================
 
+  /** Go to the page. The open chat panel must not hide it. */
+  const goToOffer = useCallback(
+    (offer: HaiNavigationOffer) => {
+      if (!isAllowedNavigationPath(offer.path)) return false;
+      setViewModeState(prev => (prev === 'full' ? 'widget' : prev));
+      router.push(offer.path);
+      return true;
+    },
+    [router]
+  );
+
   const attachNavigationOffer = useCallback(
     (messageId: string, raw: unknown, spoken: boolean) => {
       // the path must be on the allow list, otherwise there is no card
       const offer = toNavigationOffer(raw);
       if (!offer) return;
+      // A clear command ("Öffne ...", "Bring mich zu ...") is carried out right
+      // away, typed and spoken: the card only reports it. A spoken
+      // conversation goes on (the voice mode keeps listening). The server
+      // decides this from the command, the path is checked once more here.
+      const opened =
+        offer.auto === true && goToOffer({ ...offer, status: 'open', spoken });
       setMessages(prev =>
         prev.map(m =>
           m.id === messageId
-            ? { ...m, navigationOffer: { ...offer, status: 'open', spoken } }
+            ? {
+                ...m,
+                navigationOffer: {
+                  ...offer,
+                  status: opened ? 'opened' : 'open',
+                  spoken,
+                },
+              }
             : m
         )
       );
     },
-    []
+    [goToOffer]
   );
 
   const patchNavigationOffer = useCallback(
@@ -750,17 +774,6 @@ export function HaiProvider({
       );
     },
     []
-  );
-
-  /** Go to the page. The open chat panel must not hide it. */
-  const goToOffer = useCallback(
-    (offer: HaiNavigationOffer) => {
-      if (!isAllowedNavigationPath(offer.path)) return false;
-      setViewModeState(prev => (prev === 'full' ? 'widget' : prev));
-      router.push(offer.path);
-      return true;
-    },
-    [router]
   );
 
   const openNavigation = useCallback(
