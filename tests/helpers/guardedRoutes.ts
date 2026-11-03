@@ -708,6 +708,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['catalogId'],
   },
   {
+    route: 'admin/catalogs/[catalogId]/content-check',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
     route: 'admin/catalogs/[catalogId]/content-targets',
     method: 'PUT',
     guard: 'curriculum',
@@ -722,6 +728,36 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'admin/catalogs/[catalogId]/sequence-rule',
     method: 'PUT',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan',
+    method: 'GET',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan',
+    method: 'PUT',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan',
+    method: 'DELETE',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan/parse',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan/template',
+    method: 'GET',
     guard: 'curriculum',
     params: ['catalogId'],
   },

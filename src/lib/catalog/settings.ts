@@ -4,6 +4,7 @@ import {
   isValidBrandingTitle,
   normalizeBrandingAccent,
 } from '@/lib/catalog/branding';
+import { storedContentPlanSchema } from '@/lib/catalog/content-plan/types';
 import { storedContentTargetsSchema } from '@/lib/catalog/content-targets';
 import { haiSettingsSchema } from '@/lib/catalog/hai-settings';
 
@@ -32,6 +33,14 @@ import { haiSettingsSchema } from '@/lib/catalog/hai-settings';
  *                             whole numbers 0 to 100000, see
  *                             src/lib/catalog/content-targets.ts, which also
  *                             reads it (not part of CatalogSettings)
+ *  - content_plan             optional plan document of the occupation (totals,
+ *                             components, learning fields, relations, notes)
+ *                             with its source (file name, time, number of
+ *                             fields, script or AI), at most 200 KB as JSON.
+ *                             It never replaces content_targets, a manual
+ *                             target wins, see
+ *                             src/lib/catalog/content-plan/effective.ts (not
+ *                             part of CatalogSettings)
  *  - sequence_since           cut-off date (ISO timestamp, UTC) of the order of
  *                             work: a trainee who joined the catalog on or after
  *                             it works through the enablers of a course one
@@ -77,6 +86,7 @@ export const catalogSettingsSchema = z
     branding: brandingSchema,
     hai: haiSettingsSchema,
     content_targets: storedContentTargetsSchema,
+    content_plan: storedContentPlanSchema,
     sequence_since: z.string().datetime(),
   })
   .partial()
