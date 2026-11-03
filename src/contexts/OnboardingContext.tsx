@@ -11,7 +11,9 @@ import {
   TRAINEE_HAI_STEPS,
   TRAINER_MAIN_STEPS,
   TRAINER_HAI_STEPS,
+  QUIZ_MANAGEMENT_ADMIN_TITLE_KEY,
 } from '@/lib/tour-steps';
+import { isSuperAdmin } from '@/lib/auth/roles';
 
 type TourType = 'main' | 'hai';
 
@@ -50,13 +52,24 @@ function clearCompleted(type: TourType): void {
   localStorage.removeItem(STORAGE_KEYS[type]);
 }
 
-function getSteps(role: string, type: TourType): TourStep[] {
+function getSteps(role: string, type: TourType, platformAdmin = false): TourStep[] {
   if (role === 'trainee') return type === 'main' ? TRAINEE_MAIN_STEPS : TRAINEE_HAI_STEPS;
-  return type === 'main' ? TRAINER_MAIN_STEPS : TRAINER_HAI_STEPS;
+  if (type !== 'main') return TRAINER_HAI_STEPS;
+  // The menu entry of the quizzes is named differently for the platform admin
+  return platformAdmin
+    ? TRAINER_MAIN_STEPS.map(step =>
+        step.id === 'quiz-management'
+          ? { ...step, titleKey: QUIZ_MANAGEMENT_ADMIN_TITLE_KEY }
+          : step
+      )
+    : TRAINER_MAIN_STEPS;
 }
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner } = useAuth() as ReturnType<typeof useAuth> & {
+    isPlatformOwner?: boolean;
+  };
+  const platformAdmin = isSuperAdmin({ role: profile?.role, isPlatformOwner });
   // The tour points at the sidebar and the header of the dashboards, which the
   // occupation choice page does not have: it starts after the person left it.
   const onOccupationChoice = usePathname() === OCCUPATION_CHOICE_PATH;
@@ -72,7 +85,8 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     // A step whose target is not on the page for this person is left out
     const tourSteps = getSteps(
       profile.role as 'trainee' | 'trainer',
-      type
+      type,
+      platformAdmin
     ).filter(
       step =>
         !step.optional ||
@@ -83,7 +97,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     setTourType(type);
     setCurrentStepIndex(0);
     setIsActive(true);
-  }, [profile?.role]);
+  }, [profile?.role, platformAdmin]);
 
   const completeTour = useCallback(() => {
     if (tourType) markCompleted(tourType);

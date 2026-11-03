@@ -3,7 +3,7 @@ import { renderWithProviders } from '../../../helpers/renderWithProviders';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCatalog } from '@/contexts/CatalogContext';
-import { TRAINEE_MAIN_STEPS } from '@/lib/tour-steps';
+import { TRAINEE_MAIN_STEPS, TRAINER_MAIN_STEPS } from '@/lib/tour-steps';
 import de from '@/locales/de.json';
 import en from '@/locales/en.json';
 
@@ -158,6 +158,79 @@ describe('The tour of a trainee follows the menu (WMCNL-2967)', () => {
 
   it('every text the tour uses exists in German and in English', () => {
     for (const step of TRAINEE_MAIN_STEPS) {
+      for (const key of [step.titleKey, step.descriptionKey]) {
+        expect((de as Record<string, string>)[key]).toBeTruthy();
+        expect((en as Record<string, string>)[key]).toBeTruthy();
+      }
+    }
+  });
+});
+
+// KFB-1182: the tour of a trainer did not follow the menu either (Inhaltsverwaltung
+// came before Ausbildungsnachweis, Berufsschule and Profil were missing).
+describe('The tour of a trainer follows the menu (KFB-1182)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function renderTrainer() {
+    (useAuth as jest.Mock).mockReturnValue({
+      profile: { id: 'p2', full_name: 'Tom Trainer', role: 'trainer' },
+      signOut: jest.fn(),
+      loading: false,
+      subscriptionPlan: 'LIGHT',
+      isAdmin: false,
+      isPlatformOwner: false,
+    });
+    (useCatalog as jest.Mock).mockReturnValue({ isMultiple: false });
+    return renderWithProviders(
+      <Sidebar
+        currentView="dashboard"
+        isOpen
+        onToggle={() => {}}
+        userRole="trainer"
+      />
+    );
+  }
+
+  const target = (selector: string) =>
+    selector.match(/data-tour="([^"]+)"/)?.[1] ?? '';
+
+  it('goes through the entries of the menu in the order of the menu', () => {
+    renderTrainer();
+    const menu = sidebarEntries().map(e => e.getAttribute('data-tour'));
+    expect(menu).toEqual([
+      'sidebar-dashboard',
+      'sidebar-activityReports',
+      'sidebar-school',
+      'sidebar-contentManagement',
+      'sidebar-quizManagement',
+      'sidebar-trainees',
+      'sidebar-profile',
+    ]);
+    const steps = TRAINER_MAIN_STEPS.map(s => target(s.targetSelector)).filter(
+      t => t.startsWith('sidebar-') && t !== 'sidebar-logo'
+    );
+    expect(steps).toEqual(menu);
+  });
+
+  it('the titles of the tour are exactly the labels of the menu (German page)', () => {
+    renderTrainer();
+    for (const step of TRAINER_MAIN_STEPS) {
+      const t = target(step.targetSelector);
+      if (!t.startsWith('sidebar-') || t === 'sidebar-logo') continue;
+      const link = document.querySelector(`[data-tour="${t}"]`);
+      expect(link).not.toBeNull();
+      expect(link!.textContent).toBe(
+        (de as Record<string, string>)[step.titleKey]
+      );
+    }
+  });
+
+  it('the header steps come last and every text exists in German and English', () => {
+    expect(TRAINER_MAIN_STEPS.slice(-2).map(s => s.id)).toEqual([
+      'notifications',
+      'settings',
+    ]);
+    for (const step of TRAINER_MAIN_STEPS) {
       for (const key of [step.titleKey, step.descriptionKey]) {
         expect((de as Record<string, string>)[key]).toBeTruthy();
         expect((en as Record<string, string>)[key]).toBeTruthy();

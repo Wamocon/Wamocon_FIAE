@@ -2080,6 +2080,7 @@
   "onboarding.activityReports.title": "Evidence of Training",
   "onboarding.trainee.activityReports.desc": "Create and manage your weekly training reports. Submit them for approval.",
   "onboarding.trainer.activityReports.desc": "Review and approve your trainees' weekly Evidence of Training.",
+  "onboarding.trainer.school.desc": "Manage the school blocks, the calendar and the exams of your trainees.",
   "onboarding.trainerFeedback.title": "Trainer Feedback",
   "onboarding.trainerFeedback.desc": "View feedback from your trainer on your submissions and track your learning progress.",
   "onboarding.contentManagement.title": "Content Management",
