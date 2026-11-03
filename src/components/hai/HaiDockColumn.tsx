@@ -33,6 +33,8 @@ export function HaiDockColumn({ sidebarOpen }: { sidebarOpen: boolean }) {
     <div
       ref={registry.slotRef}
       data-testid="hai-dock-column"
+      // the panel itself is no part of "the page of the user" (page context)
+      data-hai-ignore=""
       data-open={dock?.open ? 'true' : 'false'}
       data-docked={dock?.docked ? 'true' : 'false'}
       // the width is the variable (haiDock.ts: --hai-dock-inset, --hai-dock-ms)

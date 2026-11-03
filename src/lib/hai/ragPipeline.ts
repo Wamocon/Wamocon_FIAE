@@ -73,6 +73,12 @@ import {
   getOffTopicResponse,
 } from './prompts';
 import { fetchDataContext } from './dataContext';
+import { documentOptionsFor, isDocumentQuestion } from './documentQuery';
+import { buildPageContextSection } from './pageContext/prompt';
+import {
+  isPageContextEnabled,
+  type ResolvedPageContext,
+} from './pageContext/server';
 import { isDayQuestion } from './dayQuestion';
 import type { UserRole } from './dataContext';
 import { handleActionMessage } from './actionFlow';
@@ -165,6 +171,13 @@ export interface PipelineContext {
    * reason hint to the model (UMFANG), never an access right.
    */
   contextDropped?: boolean;
+  /**
+   * The page the person is on (page context): cleaned, its ids checked against
+   * the access rules. Set by the chat route, only data for "this page" and "this
+   * file", never a right. Only used in the chat and voice path, and only while
+   * the switch HAI_PAGE_CONTEXT is on.
+   */
+  page?: ResolvedPageContext;
 }
 
 /**
@@ -571,6 +584,17 @@ async function timed<T>(
   }
 }
 
+/** What the live data of a turn hands to the retrieval (a file the question named). */
+interface DocumentTurn {
+  documentIds?: string[];
+}
+
+/** The prompt section for the page of the user, or undefined (switch off, no page). */
+function pageSectionFor(context: PipelineContext): string | undefined {
+  if (!context.page || !isPageContextEnabled()) return undefined;
+  return buildPageContextSection(context.page) || undefined;
+}
+
 /**
  * The live data of the person for the system prompt (non-fatal): undefined
  * without a role or when the data could not be read. Never rejects, so it can
@@ -578,7 +602,9 @@ async function timed<T>(
  */
 async function loadLiveDataContext(
   userMessage: string,
-  context: PipelineContext
+  context: PipelineContext,
+  access?: RetrievalAccess | null,
+  turn?: DocumentTurn
 ): Promise<string | undefined> {
   if (!context.userRole) return undefined;
   try {
@@ -589,8 +615,21 @@ async function loadLiveDataContext(
       {
         preferredCatalogCode: context.preferredCatalogCode,
         trainingScope: context.trainingScope,
+        // a question about files: what the person may read and the records of
+        // the page (the database decides, not the page). Other turns get the
+        // options as before.
+        ...(isDocumentQuestion(userMessage)
+          ? documentOptionsFor(
+              access,
+              context.trainingScope,
+              context.page && isPageContextEnabled()
+                ? context.page.entities
+                : []
+            )
+          : {}),
       }
     );
+    if (turn && dataCtx?.documentIds) turn.documentIds = dataCtx.documentIds;
     return dataCtx ? dataCtx.summary : undefined;
   } catch (dataError) {
     console.warn('HAI.ai: DataContext fetch failed (non-fatal):', dataError);
@@ -663,7 +702,8 @@ const TRAINER_SOLUTION_NOTE =
 export async function retrieveContext(
   userMessage: string,
   context: PipelineContext,
-  resolvedAccess?: RetrievalAccess | null
+  resolvedAccess?: RetrievalAccess | null,
+  retrieval: { documentIds?: string[] } = {}
 ): Promise<RetrievedContext> {
   // The pipelines resolve the access once per turn and pass it on
   const access =
@@ -773,6 +813,7 @@ export async function retrieveContext(
         catalogIds: access.catalogIds,
         audience: access.audience,
         organizationId: access.organizationId,
+        documentIds: retrieval.documentIds,
       }
     );
     if (pageIndexResult.pdfContext) {
@@ -997,17 +1038,26 @@ export async function processMessage(
 
     // Step 3b: live data context (non-fatal). It runs next to the retrieval,
     // the two do not depend on each other.
-    const liveDataPromise = loadLiveDataContext(userMessage, context);
+    const documentTurn: DocumentTurn = {};
+    const liveDataPromise = loadLiveDataContext(
+      userMessage,
+      context,
+      access,
+      documentTurn
+    );
     // Step 3b2: the memory of the person in the occupation of this turn (never
     // rejects, empty without the switch HAI_MEMORY), runs next to the retrieval
     const memoryScope = memoryScopeFor(access, persona);
     const memoryPromise = loadMemoryForPrompt(memoryScope);
 
     if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
+      // A question about files: the file it names comes from the database (the
+      // live data), so the retrieval waits for it and loads its pages
+      if (isDocumentQuestion(userMessage)) await liveDataPromise;
       // Vector search and PageIndex, limited to the occupation, audience and
       // organization of the user (one function for both pipelines)
       ({ searchResults, retrievedContext, usedTrainerSolutions } =
-        await retrieveContext(userMessage, context, access));
+        await retrieveContext(userMessage, context, access, documentTurn));
     }
 
     // If web search is enabled, switch to general mode to allow external knowledge
@@ -1053,6 +1103,7 @@ export async function processMessage(
       navigation: true,
       accessReasons,
       dayBriefing,
+      pageContext: pageSectionFor(context),
       ...(memory ? { memory } : {}),
     });
 
@@ -1275,8 +1326,9 @@ export async function processMessageStream(
     let usedTrainerSolutions: boolean | undefined;
 
     const searchStartedAt = Date.now();
+    const documentTurn: DocumentTurn = {};
     const liveDataPromise = timed(context, 'data', () =>
-      loadLiveDataContext(userMessage, context)
+      loadLiveDataContext(userMessage, context, access, documentTurn)
     );
     // the memory of the person in the occupation of this turn (never rejects,
     // empty without the switch HAI_MEMORY)
@@ -1286,8 +1338,11 @@ export async function processMessageStream(
       // Same retrieval as processMessage: scoped to the user
       onStage?.('search');
       const retrievalStartedAt = Date.now();
+      // A question about files: the file it names comes from the database (the
+      // live data), so the retrieval waits for it and loads its pages
+      if (isDocumentQuestion(userMessage)) await liveDataPromise;
       ({ searchResults, retrievedContext, usedTrainerSolutions } =
-        await retrieveContext(userMessage, context, access));
+        await retrieveContext(userMessage, context, access, documentTurn));
       if (context.timings) {
         context.timings.retrieval = Date.now() - retrievalStartedAt;
       }
@@ -1337,6 +1392,7 @@ export async function processMessageStream(
       navigation: true,
       accessReasons,
       dayBriefing,
+      pageContext: pageSectionFor(context),
       ...(memory ? { memory } : {}),
     });
 
