@@ -726,6 +726,36 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['catalogId'],
   },
   {
+    route: 'admin/catalogs/[catalogId]/content-plan',
+    method: 'GET',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan',
+    method: 'PUT',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan',
+    method: 'DELETE',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan/parse',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan/template',
+    method: 'GET',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
     route: 'admin/organizations/[orgId]/catalogs',
     method: 'GET',
     guard: 'admin',
