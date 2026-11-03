@@ -19,6 +19,15 @@
 //        file after file with LibreOffice, stores the PDF and, per component, writes the rows in one
 //        transaction. A second run finds the rows pointing to the new paths and does nothing.
 //
+// Besides the files, the run keeps two more things in line with the delivery folder (both written to the
+// report with their old values, both turned back by rollback):
+//   - the order of the enablers: the number of an enabler folder (04_Peer 2 Peer ...) is the order_index
+//     of the enabler, a Preview enabler that stands elsewhere (Peer 2 Peer on 13 instead of 04) is moved,
+//   - the title of a scenario part: the row of "Part 7" keeps its file replaced, the title must follow, or
+//     a part shows under the title of another topic (K4 enabler 3: "Part 7: Vertiefte Programmierkonzepte"
+//     over the file Software-Entwicklungsmodelle). The topic comes from the file: the first paragraph of
+//     the Word file, else the file name.
+//
 // Connection: DB_CONNECTION_STRING (role app_preview_migrator), storage: NEXT_PUBLIC_SUPABASE_URL and
 // SUPABASE_SECRET_KEY, all from the environment. The script prints no key, no connection string and no
 // content of a file.
@@ -56,6 +65,7 @@ import {
   resolveComponentTokens,
 } from './fiae-component-folder.mjs';
 import { describeCopy, findBaseCopies } from './fiae-copy-check.mjs';
+import { docxLines } from './fiae-quiz-parse.mjs';
 
 const CONTENT_BUCKET = 'content';
 const SOLUTIONS_BUCKET = 'content-solutions';
@@ -244,6 +254,105 @@ export function matchEnablers(folderEnablers, dbEnablers) {
   return byFolder;
 }
 
+// ---------------------------------------------------------------- enabler order and scenario titles
+
+const TITLE_NOISE = /\b(?:korrigiert|korr|bearbeitet|neu|review\d*|rev\d*|passt)\b/gi;
+
+/** The topic of a scenario: heading marks, "Enabler Scenario:", underscores and file status words removed. */
+export function topicOf(text) {
+  return String(text ?? '')
+    .replace(/^\s*#+\s*/, '')
+    .replace(/^\s*Enabler Scenario:\s*/i, '')
+    .replace(/_/g, ' ')
+    .replace(TITLE_NOISE, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** The title of a scenario file: its first paragraph, unless that is only the heading "Behandelte Themen". */
+export function docTitleOf(lines) {
+  const first = topicOf(lines?.[0] ?? '');
+  if (!first || /^behandelte\s+themen/i.test(first) || first.length > 120)
+    return null;
+  return first;
+}
+
+/** Two titles name the same topic: one holds the other (a shortened file name, a longer heading) or they are alike. */
+export function sameTopic(a, b) {
+  const x = letters(a);
+  const y = letters(b);
+  if (!x || !y) return false;
+  return x.includes(y) || y.includes(x) || similarity(a, b) >= 0.6;
+}
+
+const topicOfTitle = title =>
+  String(title ?? '')
+    .replace(/^\s*Szenario:\s*/i, '')
+    .replace(/^\s*Part\s*\d+[a-z]?\s*:?\s*/i, '')
+    .trim();
+
+/**
+ * The title for a scenario part that has no row yet: the full heading of the Word file when the file name
+ * is a shortened form of it (or says nothing), else the file name.
+ */
+export function newScenarioTitle({ number, suffix, slug, docTitle }) {
+  const fromName = topicOf(slug);
+  const topic =
+    docTitle && (!fromName || sameTopic(fromName, docTitle))
+      ? docTitle
+      : fromName || docTitle || '';
+  return `Szenario: Part ${number}${suffix}: ${topic}`.replace(/:\s*$/, '').slice(0, 160);
+}
+
+/**
+ * Does the title of an existing row still fit its file? Returns null when it does (or when the file gives no
+ * topic to compare), else the title the row should carry. Pass docTitle undefined for the cheap check on the
+ * file name alone: a result of 'READ_FILE' says that the first paragraph of the Word file is needed to decide.
+ */
+export function scenarioTitleFix({ current, number, suffix, slug, docTitle }) {
+  const have = topicOfTitle(current);
+  const fromName = topicOf(slug);
+  if (fromName && sameTopic(have, fromName)) return null;
+  if (docTitle === undefined) return 'READ_FILE';
+  if (docTitle && sameTopic(have, docTitle)) return null;
+  const topic = docTitle && (!fromName || sameTopic(fromName, docTitle)) ? docTitle : fromName || docTitle;
+  if (!topic) return null;
+  return `Szenario: Part ${number}${suffix}: ${topic}`.slice(0, 160);
+}
+
+/**
+ * The enablers of a course that stand on another order_index than their folder number. A folder number is
+ * the position of the enabler (04_Peer 2 Peer). Nothing is moved when two folders of the component carry
+ * one number, or when the new order would give two enablers of the course the same index.
+ * @returns {{ clear: boolean, why: string | null, fixes: { enabler: any, from: number, to: number, folder: string }[] }}
+ */
+export function planEnablerOrder(folderEnablers, matched, dbEnablers) {
+  const numbers = folderEnablers.map(f => f.nr);
+  if (numbers.some(n => !(n > 0)) || new Set(numbers).size !== numbers.length)
+    return { clear: false, why: 'the folder numbers are not unique', fixes: [] };
+  const fixes = [];
+  folderEnablers.forEach((fe, i) => {
+    const hit = matched.get(i);
+    if (hit && hit.e.order_index !== fe.nr)
+      fixes.push({
+        enabler: hit.e,
+        from: hit.e.order_index,
+        to: fe.nr,
+        folder: fe.folder,
+      });
+  });
+  if (fixes.length === 0) return { clear: true, why: null, fixes };
+  const moved = new Map(fixes.map(f => [f.enabler.id, f.to]));
+  const finals = dbEnablers.map(e => moved.get(e.id) ?? e.order_index);
+  if (new Set(finals).size !== finals.length)
+    return {
+      clear: false,
+      why: 'the new order would give two enablers one index',
+      fixes: [],
+    };
+  return { clear: true, why: null, fixes };
+}
+
 export const ascii = s =>
   String(s)
     .normalize('NFKD')
@@ -277,7 +386,6 @@ function ucItem(file, name) {
 
 /** A task version must not carry a solution part: a paragraph that starts with Musterlösung or Lösung. */
 export async function hasSolutionPart(file) {
-  const { docxLines } = await import('./fiae-quiz-parse.mjs');
   const lines = await docxLines(readFileSync(file));
   return lines.some(l => /^(Muster-?l[öo]sung|L[öo]sungsvorschlag|L[öo]sung)/i.test(l));
 }
@@ -431,8 +539,10 @@ async function rollback(args, client) {
   const log = JSON.parse(readFileSync(args.source, 'utf8'));
   const updated = log.updated ?? [];
   const inserted = log.inserted ?? [];
+  const retitled = log.retitled ?? [];
+  const reordered = log.reordered ?? [];
   console.log(
-    `Report: ${updated.length} replaced rows to restore, ${inserted.length} added rows to remove.`
+    `Report: ${updated.length} replaced rows to restore, ${inserted.length} added rows to remove, ${retitled.length} titles and ${reordered.length} enabler orders to restore.`
   );
   if (!args.apply) {
     console.log('Dry run: nothing was changed.');
@@ -452,6 +562,18 @@ async function rollback(args, client) {
           u.old.storage_path,
           u.old.page_count,
         ]
+      );
+    }
+    for (const r of retitled) {
+      await client.query(
+        'update public_preview.content_documents set title = $2, updated_at = now() where id = $1',
+        [r.id, r.old_title]
+      );
+    }
+    for (const r of reordered) {
+      await client.query(
+        'update public_preview.enablers set order_index = $2, updated_at = now() where id = $1',
+        [r.id, r.old]
       );
     }
     if (inserted.length > 0) {
@@ -511,7 +633,21 @@ async function execute(args, client, origin, env) {
   );
 
   const work = [];
+  const retitle = [];
+  const reorder = [];
+  const docTitles = new Map();
+  const docTitleOfFile = async file => {
+    if (!docTitles.has(file)) {
+      try {
+        docTitles.set(file, docTitleOf(await docxLines(readFileSync(file))));
+      } catch {
+        docTitles.set(file, null);
+      }
+    }
+    return docTitles.get(file);
+  };
   const gaps = {
+    orderNotClear: [],
     noEnabler: [],
     noUseCase: [],
     noMain: [],
@@ -528,11 +664,15 @@ async function execute(args, client, origin, env) {
     const course = map.get(comp.nr);
     const enablers = dbEnablers.filter(e => e.course_id === course.id);
     const matched = matchEnablers(comp.enablers, enablers);
-    comp.enablers.forEach((fe, i) => {
+    const order = planEnablerOrder(comp.enablers, matched, enablers);
+    if (!order.clear)
+      gaps.orderNotClear.push(`${comp.name}: ${order.why}`);
+    order.fixes.forEach(f => reorder.push({ comp, ...f }));
+    for (const [i, fe] of comp.enablers.entries()) {
       const hit = matched.get(i);
       if (!hit) {
         gaps.noEnabler.push(`${comp.name} / ${fe.folder}`);
-        return;
+        continue;
       }
       const e = hit.e;
       const base = `${PREFIX}k${comp.key}/e${fe.key}_${ascii(fe.title)}`;
@@ -565,12 +705,24 @@ async function execute(args, client, origin, env) {
                 : new RegExp(`Part\\s*${part.n}${part.sfx}\\b`, 'i')
               ).test(d.title)
           ) ?? null;
-        const title =
-          row?.title ??
-          `Szenario: Part ${part.n}${part.sfx}: ${part.slug.replace(/_/g, ' ').trim()}`.slice(
-            0,
-            160
-          );
+        const ids = { number: part.n, suffix: part.sfx, slug: part.slug };
+        let title = row?.title;
+        if (row) {
+          // the title must follow the file: the row of "Part 7" keeps its title when the file is replaced
+          let fix = scenarioTitleFix({ current: row.title, ...ids });
+          if (fix === 'READ_FILE')
+            fix = scenarioTitleFix({
+              current: row.title,
+              ...ids,
+              docTitle: await docTitleOfFile(part.file),
+            });
+          if (fix) retitle.push({ comp, row, part, newTitle: fix, label: `${comp.name} / ${fe.key} Part ${part.n}${part.sfx}` });
+        } else {
+          title = newScenarioTitle({
+            ...ids,
+            docTitle: await docTitleOfFile(part.file),
+          });
+        }
         work.push({
           comp,
           kind: 'EXERCISE',
@@ -584,7 +736,7 @@ async function execute(args, client, origin, env) {
           order: part.n,
         });
       }
-    });
+    }
     // use case files -> use cases of the course (number and letter of the file name, or the letter alone
     // when only one use case of the course has it). Two files for one use case: none is taken.
     const matchUseCase = uc => {
@@ -689,6 +841,16 @@ async function execute(args, client, origin, env) {
   console.log(
     `No enabler in the Preview: ${gaps.noEnabler.length}; no use case: ${gaps.noUseCase.length}; without main file: ${gaps.noMain.length}; task versions with a solution part (not uploaded): ${gaps.taskWithSolution.length}`
   );
+  console.log(
+    `Enabler order to fix: ${reorder.length}; scenario titles to fix: ${retitle.length}; components with an unclear order: ${gaps.orderNotClear.length}`
+  );
+  reorder.forEach(r =>
+    console.log(`  - order: ${r.comp.name} / ${r.folder}: ${r.from} -> ${r.to}`)
+  );
+  retitle.forEach(r =>
+    console.log(`  - title: ${r.label}: "${r.row.title}" -> "${r.newTitle}"`)
+  );
+  gaps.orderNotClear.forEach(x => console.log(`  - order not clear: ${x}`));
   gaps.noEnabler.forEach(x => console.log(`  - no enabler: ${x}`));
   gaps.noUseCase.forEach(x => console.log(`  - no use case: ${x}`));
   gaps.taskWithSolution.forEach(x => console.log(`  - task version with a solution part: ${x}`));
@@ -707,7 +869,29 @@ async function execute(args, client, origin, env) {
     if (args.out)
       writeFileSync(
         args.out,
-        JSON.stringify({ gaps, summary: count(limited) }, null, 1)
+        JSON.stringify(
+          {
+            gaps,
+            summary: count(limited),
+            pending: limited.map(w => ({
+              label: w.label,
+              kind: w.kind,
+              replace: Boolean(w.row),
+            })),
+            reorder: reorder.map(r => ({
+              label: `${r.comp.name} / ${r.folder}`,
+              from: r.from,
+              to: r.to,
+            })),
+            retitle: retitle.map(r => ({
+              label: r.label,
+              old: r.row.title,
+              new: r.newTitle,
+            })),
+          },
+          null,
+          1
+        )
       );
     return 0;
   }
@@ -728,9 +912,42 @@ async function execute(args, client, origin, env) {
     timeoutMs: 240000,
   });
   process.once('SIGINT', () => converter.abort());
-  const log = { updated: [], inserted: [], stored: [], failed: [], gaps };
+  const log = {
+    updated: [],
+    inserted: [],
+    retitled: [],
+    reordered: [],
+    stored: [],
+    failed: [],
+    gaps,
+  };
   let seq = 0;
   try {
+    if (reorder.length > 0) {
+      // the order of the enablers: one transaction, the old index goes to the report first
+      await client.query('begin');
+      try {
+        for (const r of reorder) {
+          await client.query(
+            'update public_preview.enablers set order_index = $2, updated_at = now() where id = $1',
+            [r.enabler.id, r.to]
+          );
+          log.reordered.push({
+            id: r.enabler.id,
+            label: `${r.comp.name} / ${r.folder}`,
+            old: r.from,
+            new: r.to,
+          });
+        }
+        await client.query('commit');
+      } catch (error) {
+        await client.query('rollback');
+        log.reordered = [];
+        throw error;
+      }
+      console.log(`Enabler order: ${log.reordered.length} moved.`);
+      if (args.out) writeFileSync(args.out, JSON.stringify(log, null, 1));
+    }
     const byComp = new Map();
     limited.forEach(w =>
       byComp.set(w.comp.key, [...(byComp.get(w.comp.key) ?? []), w])
@@ -848,12 +1065,36 @@ async function execute(args, client, origin, env) {
       // the report after every component: a stopped run still leaves the old values for the rollback
       if (args.out) writeFileSync(args.out, JSON.stringify(log, null, 1));
     }
+    if (retitle.length > 0) {
+      // the titles of the scenario parts follow their files (also for rows whose file is already current)
+      await client.query('begin');
+      try {
+        for (const r of retitle) {
+          await client.query(
+            'update public_preview.content_documents set title = $2, updated_at = now() where id = $1',
+            [r.row.id, r.newTitle]
+          );
+          log.retitled.push({
+            id: r.row.id,
+            label: r.label,
+            old_title: r.row.title,
+            new_title: r.newTitle,
+          });
+        }
+        await client.query('commit');
+      } catch (error) {
+        await client.query('rollback');
+        log.retitled = [];
+        throw error;
+      }
+      console.log(`Scenario titles: ${log.retitled.length} changed.`);
+    }
   } finally {
     workspace.cleanup();
     if (args.out) writeFileSync(args.out, JSON.stringify(log, null, 1));
   }
   console.log(
-    `Done: ${log.updated.length} replaced, ${log.inserted.length} added, ${log.failed.length} failed.`
+    `Done: ${log.updated.length} replaced, ${log.inserted.length} added, ${log.retitled.length} titles changed, ${log.reordered.length} enablers moved, ${log.failed.length} failed.`
   );
   log.failed
     .slice(0, 20)
