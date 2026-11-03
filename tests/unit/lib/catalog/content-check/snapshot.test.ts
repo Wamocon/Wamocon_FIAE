@@ -149,6 +149,7 @@ describe('loadContentSnapshot', () => {
           has_text: true,
           file_size: null,
           page_count: '7',
+          content_sha256: 'A'.repeat(64),
         },
       ],
       components: [
@@ -183,6 +184,8 @@ describe('loadContentSnapshot', () => {
       hasText: true,
       fileSize: null,
       pageCount: 7,
+      // not lower case hex: no checksum
+      contentSha256: null,
     });
     expect(snapshot?.components[0]).toMatchObject({
       totalWeeks: 4.5,

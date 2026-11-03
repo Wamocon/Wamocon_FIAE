@@ -47,6 +47,7 @@ export function doc(
     hasText: false,
     fileSize: null,
     pageCount: null,
+    contentSha256: null,
     ...over,
   };
 }

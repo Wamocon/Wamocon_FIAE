@@ -297,19 +297,62 @@ export function componentWithoutCourse(ix: Index): Finding[] {
   );
 }
 
-/** Enablers without a use case and use cases without an enabler. */
+/**
+ * Share of the objects that must have a link before a missing one is a
+ * warning. FIAE has no 1:1 relation between enablers and use cases (not every
+ * enabler has a use case), KfBM has one (225 of 226 enablers). Below the share
+ * the rule gives one note with the numbers instead of a list, so a catalog
+ * without the relation is not flooded with a warning per object.
+ */
+export const LINK_WARNING_SHARE = 0.8;
+
+/** `linked` of `total` reaches the share (integer arithmetic, no rounding). */
+function reachesShare(linked: number, total: number): boolean {
+  return total > 0 && linked * 5 >= total * 4;
+}
+
+/** One note without a list: the relation does not hold for this catalog. */
+function partialLinkNote(
+  rule: string,
+  summary: string,
+  linked: number,
+  total: number,
+  hint: string
+): Finding {
+  return {
+    rule,
+    severity: 'info',
+    source: 'script',
+    category: 'structure',
+    summary: `${summary} (${linked} von ${total}).`,
+    refs: [],
+    hint,
+  };
+}
+
+/**
+ * Enablers without a use case and use cases without an enabler. Each rule is a
+ * warning with a list only where the training has the 1:1 relation (at least
+ * 80 percent of the objects are linked, the rest is an irregularity), else one
+ * note with the numbers.
+ */
 export function useCaseLinks(ix: Index): Finding[] {
+  const enablerTotal = ix.snap.enablers.length;
   const enablers = ix.snap.enablers
     .filter(e => !(ix.useCasesOfEnabler.get(e.id)?.length ?? 0))
     .map(e => ref('enabler', e.id, ix.enablerLabel(e)));
+  const useCaseTotal = ix.snap.useCases.length;
   const useCases = ix.snap.useCases
     .filter(u => u.enablerId === null)
     .map(u => ref('useCase', u.id, ix.useCaseLabel(u)));
-  return [
-    // No use case at all in the catalog is a decision, not a gap per enabler
-    ...(ix.snap.useCases.length === 0
-      ? []
-      : group(
+  const out: Finding[] = [];
+
+  // No use case at all in the catalog is a decision, not a gap per enabler
+  if (useCaseTotal > 0 && enablers.length > 0) {
+    const withUseCase = enablerTotal - enablers.length;
+    if (reachesShare(withUseCase, enablerTotal)) {
+      out.push(
+        ...group(
           {
             rule: 'enabler.usecase.missing',
             severity: 'warning',
@@ -319,19 +362,50 @@ export function useCaseLinks(ix: Index): Finding[] {
             hint: 'Den Use Case des Enablers anlegen oder importieren.',
           },
           enablers
-        )),
-    ...group(
-      {
-        rule: 'usecase.enabler.missing',
-        severity: 'warning',
-        category: 'structure',
-        summary: n =>
-          `${plural(n, 'Use Case ist', 'Use Cases sind')} keinem Enabler zugeordnet.`,
-        hint: 'Den Use Case einem Enabler desselben Kurses zuordnen.',
-      },
-      useCases
-    ),
-  ];
+        )
+      );
+    } else {
+      out.push(
+        partialLinkNote(
+          'enabler.usecase.missing',
+          'In dieser Ausbildung hat nicht jeder Enabler einen Use Case',
+          withUseCase,
+          enablerTotal,
+          'Kein Handlungsbedarf, wenn die Ausbildung keine 1:1-Beziehung von Enablern und Use Cases kennt.'
+        )
+      );
+    }
+  }
+
+  if (useCases.length > 0) {
+    const withEnabler = useCaseTotal - useCases.length;
+    if (reachesShare(withEnabler, useCaseTotal)) {
+      out.push(
+        ...group(
+          {
+            rule: 'usecase.enabler.missing',
+            severity: 'warning',
+            category: 'structure',
+            summary: n =>
+              `${plural(n, 'Use Case ist', 'Use Cases sind')} keinem Enabler zugeordnet.`,
+            hint: 'Den Use Case einem Enabler desselben Kurses zuordnen.',
+          },
+          useCases
+        )
+      );
+    } else {
+      out.push(
+        partialLinkNote(
+          'usecase.enabler.missing',
+          'In dieser Ausbildung ist nicht jeder Use Case einem Enabler zugeordnet',
+          withEnabler,
+          useCaseTotal,
+          'Die Use Cases einem Enabler desselben Kurses zuordnen, wenn die Ausbildung diese Beziehung vorsieht.'
+        )
+      );
+    }
+  }
+  return out;
 }
 
 /** Values of `order_index` that repeat or skip a number inside one course. */
@@ -822,12 +896,14 @@ export function documentWithoutFile(ix: Index): Finding[] {
 /**
  * Documents of the same type with the same size and page count in different
  * enablers: a possible copy (for example a Vertiefung that repeats the base
- * course). Without a checksum this is a hint, not a proof.
+ * course). Without a checksum this is a hint, not a proof. Documents that have
+ * a checksum are left to `identicalCopies`.
  */
 export function suspectedCopies(ix: Index): Finding[] {
   const bySignature = new Map<string, SnapshotDocument[]>();
   for (const d of ix.snap.documents) {
     if (!d.enablerId || d.useCaseId) continue;
+    if (d.contentSha256 !== null) continue;
     if (d.fileSize === null || d.fileSize < 1000 || d.pageCount === null) {
       continue;
     }
@@ -856,8 +932,60 @@ export function suspectedCopies(ix: Index): Finding[] {
       summary: n =>
         `${plural(n, 'Dokument hat', 'Dokumente haben')} dieselbe Größe und Seitenzahl wie ein Dokument eines anderen Enablers.`,
       detail:
-        'Das ist ein Hinweis auf eine Kopie, kein Beweis (es gibt keine Prüfsumme).',
+        'Das ist ein Hinweis auf eine Kopie, kein Beweis (für diese Dokumente gibt es noch keine Prüfsumme).',
       hint: 'Prüfen, ob in beiden Enablern derselbe Inhalt liegt.',
+    },
+    refs
+  );
+}
+
+/** SHA-256 of an empty file: many empty files are no copies of each other. */
+const EMPTY_SHA256 =
+  'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+/**
+ * Documents with the same checksum (byte-identical files) at different
+ * enablers or use cases: a proof of a copy, for example a Vertiefung that
+ * repeats the base course. Only documents that have a checksum count (the
+ * script scripts/content/hash-documents.ts sets it), the others stay with
+ * `suspectedCopies`. Several copies at the same owner are no finding.
+ */
+export function identicalCopies(ix: Index): Finding[] {
+  const byHash = new Map<string, SnapshotDocument[]>();
+  for (const d of ix.snap.documents) {
+    const owner = d.useCaseId ?? d.enablerId;
+    if (!owner || d.contentSha256 === null) continue;
+    if (d.contentSha256 === EMPTY_SHA256) continue;
+    push(byHash, d.contentSha256, d);
+  }
+  const refs: FindingRef[] = [];
+  for (const docs of byHash.values()) {
+    const owners = new Set(docs.map(d => d.useCaseId ?? d.enablerId));
+    if (owners.size < 2) continue;
+    for (const d of docs.slice(1)) {
+      if (
+        (d.useCaseId ?? d.enablerId) ===
+        (docs[0].useCaseId ?? docs[0].enablerId)
+      ) {
+        continue;
+      }
+      const e = d.enablerId ? ix.enablerById.get(d.enablerId) : undefined;
+      const u = d.useCaseId
+        ? ix.snap.useCases.find(x => x.id === d.useCaseId)
+        : undefined;
+      const where = e ? ix.enablerLabel(e) : u ? ix.useCaseLabel(u) : 'Enabler';
+      refs.push(ref('document', d.id, `${d.title} (${where})`));
+    }
+  }
+  return group(
+    {
+      rule: 'document.copy.identical',
+      severity: 'info',
+      category: 'document',
+      summary: n =>
+        `${plural(n, 'Dokument ist', 'Dokumente sind')} byte-gleich mit einem Dokument eines anderen Enablers oder Use Cases.`,
+      detail: 'Die Prüfsumme (SHA-256) der Dateien ist gleich.',
+      hint: 'Prüfen, ob die Kopie gewollt ist, sonst das richtige Dokument hochladen.',
     },
     refs
   );
@@ -1257,6 +1385,7 @@ export const SCRIPT_RULES: readonly ((ix: Index) => Finding[])[] = [
   useCaseDocuments,
   documentWithoutFile,
   suspectedCopies,
+  identicalCopies,
   titleRules,
   learningFieldMapping,
   componentHours,
