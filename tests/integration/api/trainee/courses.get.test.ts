@@ -260,7 +260,7 @@ describe('API: Trainee Courses', () => {
         { id: 'e2', title: 'E2', attemptNumber: null, status: null, state: 'completed', lockReason: null, lockedBy: null }
       ],
       useCases: [
-        { id: 'u1', title: 'UC1', attemptNumber: null, status: null }
+        { id: 'u1', code: null, title: 'UC1', attemptNumber: null, status: null }
       ],
     });
   });
