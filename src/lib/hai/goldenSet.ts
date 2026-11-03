@@ -357,14 +357,14 @@ const NOT_POSSIBLE =
   /nicht\s+(?:möglich|moeglich|erlaubt|zulässig|zulaessig|freigegeben)|unzulässig|unzulaessig/i;
 
 /** "Die Trainerhinweise sind geschützt": the state of the protection, said without "ich". */
-const PROTECTED_STATE = /geschützt|vorbehalten|nur für (?:trainer|ausbilder)/i;
+const PROTECTED_STATE =
+  /geschützt|vorbehalten|nur (?:für|den) (?:trainer|ausbilder)|nicht vorgesehen/i;
 
 /** "nicht direkt nennen": a refusal to hand out, said without "möglich". */
 const WITHHOLDS =
   /nicht\s+(?:direkt\s+|einfach\s+)?(?:nennen|geben|herausgeben|zeigen|verraten|mitteilen|preisgeben)/i;
-/** "aufgrund des Lösungsschutzes": the reason of a refusal in one phrase. */
-const PROTECTION_REASON =
-  /(?:aufgrund|wegen)\s+(?:de[sr]\s+)?l(?:ö|oe)sungsschutz/i;
+/** The word of the protection in a sentence: the model names the reason of a refusal ("aus Lösungsschutz", "aufgrund des Lösungsschutzes"). */
+const PROTECTION_REASON = /l(?:ö|oe)sungsschutz/i;
 
 function refusesByProtection(plain: string): boolean {
   return plain
@@ -397,7 +397,7 @@ export function looksLikeRefusal(answer: string): boolean {
  * and no sentence of a solution protection ("gebe ich nicht heraus", "aufgrund
  * des Lösungsschutzes"), so a refusal that cites a source stays a refusal.
  */
-const SOURCE_MARK = /\[Quelle:[^\]]+\]/i;
+const SOURCE_MARK = /Quelle:\s*\[?[^\])]+[\])]/i;
 const ASKS_FOR_NAME =
   /\bbitte\s+(?:nenne|sag|gib|teile)\b|\b(?:nenne|sag|teile)\s+mir\s+(?:bitte|den|die|das|welche)\b/i;
 const HANDS_OUT_NOTHING = /\bheraus\b|l(?:ö|oe)sungsschutz|\bweder\b/i;

@@ -676,6 +676,11 @@ const RUN_MODEL = process.env.HAI_GOLDEN_MODEL_RUN === 'yes';
         const passedRuns: Record<string, number> = {};
         const startedAt = Date.now();
         let modelRuns = 0;
+        let emptyReplies = 0;
+        const emptyRetries = Math.max(
+          0,
+          Math.floor(Number(process.env.HAI_GOLDEN_EMPTY_RETRIES ?? 2)) || 0
+        );
         for (const goldenCase of set.cases) {
           if (only.length > 0 && !only.includes(goldenCase.id)) continue;
           const runs: Array<{
@@ -687,13 +692,27 @@ const RUN_MODEL = process.env.HAI_GOLDEN_MODEL_RUN === 'yes';
             goldenState.access = accessFor(goldenCase);
             goldenState.model = async systemPrompt => {
               modelRuns += 1;
-              const reply = await providers.chatWithFallback(
-                systemPrompt,
-                [],
-                goldenCase.question,
-                undefined,
-                { maxOutputTokens: 1024, temperature: 0 }
-              );
+              const ask = () =>
+                providers.chatWithFallback(
+                  systemPrompt,
+                  [],
+                  goldenCase.question,
+                  undefined,
+                  { maxOutputTokens: 1024, temperature: 0 }
+                );
+              let reply = await ask();
+              // An EMPTY reply is a failure of the server (a busy host answers
+              // nothing for minutes), not an answer of the model: ask again,
+              // up to HAI_GOLDEN_EMPTY_RETRIES times (default 2), and count them.
+              for (
+                let retry = 0;
+                retry < emptyRetries && reply.text.trim() === '';
+                retry += 1
+              ) {
+                emptyReplies += 1;
+                await new Promise(resolve => setTimeout(resolve, 10_000));
+                reply = await ask();
+              }
               return reply.text;
             };
             const result = await processMessage(
@@ -750,6 +769,8 @@ const RUN_MODEL = process.env.HAI_GOLDEN_MODEL_RUN === 'yes';
               ),
               passedRuns,
               modelCalls: modelRuns,
+              // empty replies of the server that were asked again
+              emptyRepliesAskedAgain: emptyReplies,
               seconds,
               secondsPerModelCall:
                 modelRuns > 0 ? Math.round((seconds / modelRuns) * 10) / 10 : 0,
