@@ -56,7 +56,7 @@
  * route).
  */
 
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, type SQL } from 'drizzle-orm';
 import db from '@/db';
 import { trainingCatalogs } from '@/db/migrations/schemas/schema';
 import { withDbRetry } from '@/lib/db-retry';
@@ -65,17 +65,44 @@ import {
   listUsableCatalogIds,
   type Executor,
 } from '@/lib/catalog/admin';
+import { effectiveTargets } from '@/lib/catalog/content-plan/effective';
 import {
   CONTENT_METRICS,
   compareToTarget,
-  readContentTargets,
   toStoredContentTargets,
+  type MetricTargetSource,
   type CatalogContentStats,
   type ContentMetric,
   type ContentMetricId,
   type ContentStatsResponse,
   type ContentTargets,
+  readContentTargets,
 } from '@/lib/catalog/content-targets';
+
+/**
+ * The rule "this enabler has a scenario" as a SQL condition on the enabler row
+ * with the given alias (see the counting rules above). The one place of the
+ * rule: the statistics count with it, and the plan check counts the scenarios
+ * per component with it, so both always agree.
+ */
+export function enablerHasScenarioSql(alias: SQL) {
+  return sql`
+            nullif(btrim(${alias}.scenario_pdf_url), '') is not null
+            or exists (
+              select 1 from content_documents d
+              where d.enabler_id = ${alias}.id
+                and d.use_case_id is null
+                and d.organization_id is null
+                and (
+                  d.document_type = 'EXERCISE'
+                  or (
+                    d.document_type in ('TRAINEE_QUESTION', 'TRAINER_SOLUTION')
+                    and starts_with(d.title, 'Szenario ' || ${alias}.code || ': ')
+                  )
+                )
+            )
+  `;
+}
 
 /** What the statistics read from the database: only `execute`. */
 export type StatsExecutor = Pick<typeof db, 'execute'>;
@@ -135,22 +162,7 @@ export async function loadStatsRows(
       )::int as enablers_active,
       (select count(*) from enablers x
         where x.training_catalog_id = c.id
-          and (
-            nullif(btrim(x.scenario_pdf_url), '') is not null
-            or exists (
-              select 1 from content_documents d
-              where d.enabler_id = x.id
-                and d.use_case_id is null
-                and d.organization_id is null
-                and (
-                  d.document_type = 'EXERCISE'
-                  or (
-                    d.document_type in ('TRAINEE_QUESTION', 'TRAINER_SOLUTION')
-                    and starts_with(d.title, 'Szenario ' || x.code || ': ')
-                  )
-                )
-            )
-          )
+          and (${enablerHasScenarioSql(sql`x`)})
       )::int as scenarios,
       (select count(*) from use_cases x
         where x.training_catalog_id = c.id)::int as use_cases,
@@ -215,11 +227,10 @@ export function buildCatalogStats(
     globalQuizzes: num(row.global_quizzes_active),
     learningFields: null,
   };
-  const targets: ContentTargets = withTargets
-    ? readContentTargets(row.settings)
-    : {};
+  // Manual target first, else the plan document, else none
+  const effective = withTargets ? effectiveTargets(row) : {};
   const metrics: ContentMetric[] = CONTENT_METRICS.map(id => {
-    const target = targets[id] ?? null;
+    const target = effective[id]?.value ?? null;
     return {
       id,
       actual: actual[id],
@@ -228,12 +239,18 @@ export function buildCatalogStats(
       ...compareToTarget(actual[id], target),
     };
   });
+  const sources: Partial<Record<ContentMetricId, MetricTargetSource>> = {};
+  for (const id of CONTENT_METRICS) {
+    const e = effective[id];
+    if (e) sources[id] = { origin: e.origin, manual: e.manual, plan: e.plan };
+  }
   return {
     catalogId: String(row.id),
     code: row.code,
     title: row.title,
     isActive: row.is_active === true,
     metrics,
+    ...(withTargets ? { targetSources: sources } : {}),
     questions: num(row.questions),
     mappings: num(row.mappings),
   };
