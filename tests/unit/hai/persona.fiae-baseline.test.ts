@@ -9,6 +9,24 @@ import { createHash } from 'crypto';
 // combination, the intent for every message). If an intended change of the
 // FIAE texts is made, record the baseline again; otherwise this test is the
 // proof that the persona refactoring changed nothing.
+//
+// Recorded again on 03.11.2026 (decision of the owner, Niko: the prompt may be
+// changed for FIAE trainees too, solution protection stays STRICT). What
+// changed in the prompt, and why (golden set measurement with sokrates-fast,
+// docs/hai-golden-set.md section 5):
+//  - The fixed refusal sentence ("Ablehnung (IMMER so, NIEMALS weicher)") is out
+//    of the prompt of a question that passed the gate. The model copied it
+//    where the question was a subject question (Netflix server, hotel for the
+//    business trip, a comparison of two model solutions). The pipeline sends the
+//    refusal text itself. In its place: "Diese Frage wurde bereits als fachlich
+//    geprueft", an everyday word does not make a subject question off topic.
+//  - New section "Rolle der Person" right after the core: the role comes from
+//    the server and is never asked for (the model asked "Trainer oder Azubi?").
+//  - New section "Was geschuetzt ist und was nicht": solutions are protected,
+//    scenarios, tasks, theory and examples are not; a request without a clear
+//    reference gets a short question with a suggestion.
+//  - The sentence on the claimed role ends with "du fragst nie danach".
+// The strict rules for trainees ("Zusatzregeln fuer Grenzfaelle") are the same.
 
 jest.mock('@/lib/hai/providers', () => ({
   chatWithFallback: jest.fn(),
