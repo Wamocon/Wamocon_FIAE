@@ -3066,6 +3066,8 @@
   "emailConfirm.notice.check": "If you have just confirmed your e-mail address, you can sign in now. Otherwise sign in and request a new link if needed.",
   "emailConfirm.changeAddress": "Use another e-mail address",
   "catalog.dashboard.occupation": "Occupation",
+  "catalog.names.FIAE": "IT Specialist for Application Development",
+  "catalog.names.KFBM": "Office Management Clerk",
   "landing.universe.planet.fiae": "IT specialist for application development (FIAE)",
   "landing.universe.planet.fiae.sub": "✦ Click to explore the 12 learning fields",
   "landing.universe.planet.kfbm": "Office management clerk (KfBM)",
