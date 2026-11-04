@@ -25,6 +25,7 @@ import type { RetrievalAccess } from '../retrievalAccess';
 import type { HaiTrainingScope } from '../trainingScope';
 import {
   askWhereToText,
+  contentParentFromHistory,
   detectNavigationFollowUp,
   lastAnswerOfferedPage,
   targetsFromHistory,
@@ -36,7 +37,12 @@ import {
   isWayQuestion,
   type NavigationIntent,
 } from './intent';
+import { recordNavigationOutcome, type NavigationMetric } from './metrics';
 import { toNavigationOffer, type NavigationOffer } from './offer';
+import {
+  isPageContextEnabled,
+  type ResolvedPageContext,
+} from '../pageContext/server';
 import {
   NAVIGATION_UNAVAILABLE_TEXT,
   resolveNavigation,
@@ -59,6 +65,12 @@ export interface NavigationFlowContext {
   quizState?: { active?: boolean };
   /** The role of the turn from the server (data intent of a follow-up question). */
   userRole?: 'TRAINER' | 'TRAINEE';
+  /**
+   * The page the person is on (page context, ids checked against the
+   * occupations). Only used to pick the enabler or use case for "diese Datei",
+   * never a right.
+   */
+  page?: ResolvedPageContext;
 }
 
 /** Fits PipelineResult: an answer with an optional offer, nothing was changed. */
@@ -67,6 +79,10 @@ export interface NavigationFlowResult {
   intent: 'navigation';
   citations: [];
   navigationOffer?: NavigationOffer;
+  /** A question back with the nearest targets as cards (at most three, never auto). */
+  navigationChoices?: NavigationOffer[];
+  /** How the platform answered, one token (for the measuring point, never text). */
+  navigationOutcome?: string;
 }
 
 /** Spoken: the question that asks for the confirmation of the person. */
@@ -128,6 +144,19 @@ export function traineeListOfferFor(
   });
 }
 
+/** The enabler or use case of the page the person is on (data of the browser, ids checked). */
+function contextParentOf(
+  context: NavigationFlowContext
+): { type: 'enabler' | 'use_case'; id: string } | null {
+  if (!context.page || !isPageContextEnabled()) return null;
+  for (const entity of context.page.entities) {
+    if (entity.type === 'enabler' || entity.type === 'use_case') {
+      return { type: entity.type, id: entity.id };
+    }
+  }
+  return null;
+}
+
 /** Resolve a recognized intent for the person (rights, occupation, records). */
 async function resolveFor(
   intent: NavigationIntent,
@@ -148,6 +177,11 @@ async function resolveFor(
       preferredCatalogIds: access.allowedCatalogIds
         ? access.catalogIds
         : undefined,
+      organizationId: access.organizationId,
+      trainingScope: scope,
+      // "diese Datei": the page of the person, then the last turns
+      contextParent: contextParentOf(context),
+      historyParent: contentParentFromHistory(context.previousMessages),
       plan: scope
         ? {
             currentPhase: scope.currentPhase,
@@ -162,15 +196,34 @@ async function resolveFor(
   }
 }
 
+/** What the measuring point learns about a request: tokens only, never text. */
+interface ResultMeta {
+  intent: NavigationMetric['intent'];
+  level: NavigationLevel;
+  voice: boolean;
+}
+
 function resultOf(
   outcome: NavigationOutcome,
-  voice: boolean
+  voice: boolean,
+  meta?: ResultMeta
 ): NavigationFlowResult {
+  if (meta) {
+    recordNavigationOutcome({
+      intent: meta.intent,
+      outcome: outcome.kind,
+      level: meta.level,
+      voice: meta.voice,
+      choices: !!outcome.choices?.length,
+    });
+  }
   return {
     response: withClosing(outcome, voice),
     intent: 'navigation',
     citations: [],
+    navigationOutcome: outcome.kind,
     ...(outcome.offer ? { navigationOffer: outcome.offer } : {}),
+    ...(outcome.choices?.length ? { navigationChoices: outcome.choices } : {}),
   };
 }
 
@@ -208,11 +261,22 @@ async function handleFollowUp(
       context,
       access
     );
-    return resultOf(outcome, voice);
+    return resultOf(outcome, voice, {
+      intent: 'follow_up',
+      level,
+      voice,
+    });
   }
 
   // none or several: ask back, no page, no card
   if (candidates.length === 0 && kind === 'confirm') return null;
+  recordNavigationOutcome({
+    intent: 'follow_up',
+    outcome: 'follow_up_ask',
+    level,
+    voice,
+    choices: false,
+  });
   return {
     response: askWhereToText(candidates, level),
     intent: 'navigation',
@@ -236,6 +300,13 @@ export async function handleNavigationMessage(
   const intent = detectNavigationIntent(userMessage);
   if (!intent) return handleFollowUp(userMessage, context, access);
 
+  // A command that names nothing known may be a follow-up ("du navigierst",
+  // "öffne sie"): the history decides before the platform says "no such page"
+  if (intent.kind === 'unmatched') {
+    const followUp = await handleFollowUp(userMessage, context, access);
+    if (followUp) return followUp;
+  }
+
   // "Zeig mir meine Azubis" asks for the list, not for the page: the pipeline
   // answers it from the live data and puts the card under the answer (an
   // "Öffne ..." and a question for the way stay navigation)
@@ -250,13 +321,18 @@ export async function handleNavigationMessage(
     return null;
   }
 
-  const outcome = await resolveFor(
-    intent,
-    isDirectCommand(userMessage),
-    context,
-    access
-  );
-  return resultOf(outcome, context.voice === true);
+  // A request for a document ("Zeig mir das PDF zu ...", "Lies das Dokument")
+  // is a command to open it, unless it asks for the way ("Wo finde ich ...")
+  const direct =
+    isDirectCommand(userMessage) ||
+    (intent.kind === 'document' && !isWayQuestion(foldText(userMessage)));
+  const outcome = await resolveFor(intent, direct, context, access);
+  const voice = context.voice === true;
+  return resultOf(outcome, voice, {
+    intent: intent.kind,
+    level: navigationLevel(access, context.isAdmin),
+    voice,
+  });
 }
 
 /** The longest name of a page a model proposal may carry. */

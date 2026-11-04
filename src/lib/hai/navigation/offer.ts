@@ -60,3 +60,25 @@ export function toNavigationOffer(raw: unknown): NavigationOffer | undefined {
     ...(auto === true ? { auto: true } : {}),
   };
 }
+
+/** At most this many cards in a question back (the same limit as the server). */
+export const MAX_NAVIGATION_CHOICES = 3;
+
+/**
+ * The cards of a question back from untrusted input: at most three, each one a
+ * valid offer on the allow list. `auto` is never taken over, a card always waits
+ * for a tap.
+ */
+export function toNavigationChoices(raw: unknown): NavigationOffer[] {
+  if (!Array.isArray(raw)) return [];
+  const choices: NavigationOffer[] = [];
+  for (const entry of raw) {
+    const offer = toNavigationOffer(entry);
+    if (!offer) continue;
+    const { auto: _auto, ...card } = offer;
+    void _auto;
+    choices.push(card);
+    if (choices.length >= MAX_NAVIGATION_CHOICES) break;
+  }
+  return choices;
+}

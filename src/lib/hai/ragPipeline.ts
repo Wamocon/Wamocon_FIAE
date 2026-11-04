@@ -229,6 +229,10 @@ export interface PipelineResult {
   pendingAction?: PendingAction;
   /** A page the interface can offer with a card "Öffnen", never a write */
   navigationOffer?: NavigationOffer;
+  /** The nearest targets as cards for a question back (at most three, never auto) */
+  navigationChoices?: NavigationOffer[];
+  /** How the navigation answered (one token, for the measuring point of the client) */
+  navigationOutcome?: string;
   /**
    * A checked form action for the browser (fill, focus, scroll), only with the
    * switch HAI_UI_ACTIONS on. It writes nothing: the browser only sets values in

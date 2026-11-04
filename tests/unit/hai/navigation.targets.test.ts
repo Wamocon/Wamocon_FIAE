@@ -87,6 +87,7 @@ describe('the targets per level', () => {
       // the menu entries "Lernen" and "Ausbilder-Feedback"
       'courses',
       'trainer_feedback',
+      'evaluations',
     ]);
     for (const target of targetsForLevel('TRAINEE')) {
       expect(target.path.startsWith('/trainee/')).toBe(true);
@@ -107,6 +108,8 @@ describe('the targets per level', () => {
       'reviews',
       'content_management',
       'statistics',
+      'evaluations',
+      'certificate',
     ]);
     for (const target of targetsForLevel('TRAINER')) {
       expect(target.path.startsWith('/trainer/')).toBe(true);

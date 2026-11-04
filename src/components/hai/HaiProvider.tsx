@@ -26,6 +26,7 @@ import {
   isOpenDecline,
 } from '@/lib/hai/navigation/confirm';
 import {
+  toNavigationChoices,
   toNavigationOffer,
   type NavigationOffer,
 } from '@/lib/hai/navigation/offer';
@@ -87,6 +88,8 @@ export interface HaiMessage {
   pendingAction?: HaiPendingAction;
   /** A page HAI offers, shown as a card with the button "Open" (never a write) */
   navigationOffer?: HaiNavigationOffer;
+  /** The nearest targets as cards (a question back), each waits for a tap */
+  navigationChoices?: HaiNavigationOffer[];
   /** A question of the memory (yes, no, change), shown as a card */
   memoryProposal?: HaiMemoryProposal;
   /**
@@ -356,6 +359,8 @@ interface HaiProviderState {
   ) => Promise<void>;
   /** Open the page of a navigation offer (tap on "Open" of the card) */
   openNavigation: (messageId: string) => void;
+  /** Open one card of a question back (a tap on the card). */
+  openNavigationChoice: (messageId: string, index: number) => void;
   setActiveVersion: (messageId: string, versionIndex: number) => void;
   loadSession: (sessionId: string) => Promise<void>;
   newSession: () => void;
@@ -847,15 +852,18 @@ export function HaiProvider({
     [patchPendingAction]
   );
 
-  const attachMemoryProposal = useCallback((messageId: string, raw: unknown) => {
-    const proposal = toMemoryProposal(raw);
-    if (!proposal) return;
-    setMessages(prev =>
-      prev.map(m =>
-        m.id === messageId ? { ...m, memoryProposal: proposal } : m
-      )
-    );
-  }, []);
+  const attachMemoryProposal = useCallback(
+    (messageId: string, raw: unknown) => {
+      const proposal = toMemoryProposal(raw);
+      if (!proposal) return;
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId ? { ...m, memoryProposal: proposal } : m
+        )
+      );
+    },
+    []
+  );
 
   const patchMemoryProposal = useCallback(
     (messageId: string, patch: Partial<HaiMemoryProposal>) => {
@@ -941,7 +949,16 @@ export function HaiProvider({
   const goToOffer = useCallback(
     (offer: HaiNavigationOffer) => {
       if (!isAllowedNavigationPath(offer.path)) return false;
-      setViewModeState(prev => (prev === 'full' ? 'widget' : prev));
+      // On a phone the panel is the whole screen and would hide the page that
+      // was just opened, so it steps away (typed, tapped or spoken alike). On a
+      // wide screen the large chat gives way to the panel next to the page.
+      const phone =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(max-width: 767px)').matches;
+      setViewModeState(prev =>
+        phone ? 'hidden' : prev === 'full' ? 'widget' : prev
+      );
       router.push(offer.path);
       return true;
     },
@@ -988,6 +1005,50 @@ export function HaiProvider({
       );
     },
     []
+  );
+
+  /** The cards of a question back: only valid ones, never opened by themselves. */
+  const attachNavigationChoices = useCallback(
+    (messageId: string, raw: unknown) => {
+      const choices = toNavigationChoices(raw);
+      if (choices.length === 0) return;
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId
+            ? {
+                ...m,
+                navigationChoices: choices.map(card => ({
+                  ...card,
+                  status: 'open' as const,
+                  spoken: false,
+                })),
+              }
+            : m
+        )
+      );
+    },
+    []
+  );
+
+  const openNavigationChoice = useCallback(
+    (messageId: string, index: number) => {
+      const choice = messagesRef.current.find(m => m.id === messageId)
+        ?.navigationChoices?.[index];
+      if (!choice || !goToOffer(choice)) return;
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId && m.navigationChoices
+            ? {
+                ...m,
+                navigationChoices: m.navigationChoices.map((c, i) =>
+                  i === index ? { ...c, status: 'opened' as const } : c
+                ),
+              }
+            : m
+        )
+      );
+    },
+    [goToOffer]
   );
 
   const openNavigation = useCallback(
@@ -1203,6 +1264,7 @@ export function HaiProvider({
             citations: [],
             pendingAction: undefined,
             navigationOffer: undefined,
+            navigationChoices: undefined,
             memoryProposal: undefined,
             versions,
             activeVersionIndex: newIndex,
@@ -1367,6 +1429,7 @@ export function HaiProvider({
                     event.navigationOffer,
                     false
                   );
+                  attachNavigationChoices(assistantId, event.navigationChoices);
                   attachUiAction(event.uiAction);
                   startQuizFromSignal(event.quizMode);
                   if (event.sessionId && event.sessionId !== currentSessionId) {
@@ -1423,6 +1486,7 @@ export function HaiProvider({
         } else if (response.ok) {
           const data = await response.json();
           attachNavigationOffer(assistantId, data.navigationOffer, false);
+          attachNavigationChoices(assistantId, data.navigationChoices);
           attachUiAction(data.uiAction);
           attachMemoryProposal(assistantId, data.memoryProposal);
           startQuizFromSignal(data.quizMode);
@@ -1738,6 +1802,7 @@ export function HaiProvider({
                     event.navigationOffer,
                     options?.voice === true
                   );
+                  attachNavigationChoices(assistantId, event.navigationChoices);
                   attachUiAction(event.uiAction);
                   startQuizFromSignal(event.quizMode);
                   // Final event — update with citations and sessionId
@@ -1801,6 +1866,7 @@ export function HaiProvider({
             data.navigationOffer,
             options?.voice === true
           );
+          attachNavigationChoices(assistantId, data.navigationChoices);
           attachUiAction(data.uiAction);
           startQuizFromSignal(data.quizMode);
           attachMemoryProposal(assistantId, data.memoryProposal);
@@ -1992,6 +2058,7 @@ export function HaiProvider({
     cancelPendingAction,
     answerMemoryProposal,
     openNavigation,
+    openNavigationChoice,
     setActiveVersion,
     loadSession,
     newSession,

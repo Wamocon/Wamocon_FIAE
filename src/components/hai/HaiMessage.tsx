@@ -44,6 +44,7 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
     cancelPendingAction,
     answerMemoryProposal,
     openNavigation,
+    openNavigationChoice,
     retryMessage,
     messages,
   } = useHai();
@@ -215,6 +216,25 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
             onOpen={() => openNavigation(message.id)}
           />
         )}
+
+        {/* A question back: the nearest targets as cards (at most three), each waits for a tap */}
+        {!isUser &&
+          !isStreaming &&
+          message.navigationChoices &&
+          message.navigationChoices.length > 0 && (
+            <div
+              data-testid="hai-navigation-choices"
+              className="mt-1 flex w-full flex-col"
+            >
+              {message.navigationChoices.map((choice, index) => (
+                <HaiNavigationCard
+                  key={`${choice.path}-${index}`}
+                  offer={choice}
+                  onOpen={() => openNavigationChoice(message.id, index)}
+                />
+              ))}
+            </div>
+          )}
 
         {/* Edit button & version navigation for user messages */}
         {isUser && !isStreaming && !isEditing && (

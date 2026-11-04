@@ -1944,6 +1944,7 @@
   "enablerPage.scenarioSection": "Scenarios",
   "enablerPage.scenarioParts": "{count} parts",
   "enablerPage.scenarioPartSingular": "1 part",
+  "document.notFound": "The file could not be found.",
   "enablerPage.openScenario": "Open Scenario (PDF)",
   "arbeitszeugnis.title": "Create Work Certificate",
   "arbeitszeugnis.subtitle": "Select a trainee to create a certificate based on approved Evidence of Training.",

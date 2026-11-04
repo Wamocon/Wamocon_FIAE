@@ -493,3 +493,37 @@ Meldung von Niko: "Er hört alle Hintergrundgespräche, auch die sehr leisen, zu
 | S22 | Betrieb | Netzwerk beobachten (Entwicklerwerkzeuge) während S2 | Nichts von dem leisen Gespräch wird an `/api/hai/chat` gesendet. Der Ton geht nur an Soniox (wie bisher, Aufnahme zeigt der Browser an) | |
 
 Pflichtfälle der Gruppe S: S2, S3, S6, S10, S15. S2 und S3 sind die Meldung selbst und dürfen in keinem Raum durchfallen, in dem die zweite Person weiter weg und leiser ist als der Azubi.
+
+## T. Inhalte öffnen: Kurs, Enabler, Use Case, Szenario, Dokument im Reader, Sprachassistent im Chat (Meldungen vom 04.11.2026)
+
+Anlass und Aufbau: `docs/hai-agentenschicht.md`, Abschnitt "Inhalte öffnen". Konten wie im Testplan, dazu ein Azubi mit einem Beruf (FIAE), einer mit KfBM, einer mit beiden, ein Trainer. Die Fälle brauchen Inhalte mit PDF-Dateien (Szenario, Lehrtext, Aufgabe eines Use Cases, Musterlösung).
+
+| Nr | Als | Schritt | Erwartung | P |
+|---|---|---|---|---|
+| T1 | Azubi | "Öffne den Kurs [Titel eines eigenen Kurses]" | Die Seite des Kurses öffnet sofort, keine Modellantwort | P |
+| T2 | Azubi | "Öffne meine Kurse" und "Öffne den Kurs" ohne Namen | Die Seite "Lernen" | |
+| T3 | Azubi | "Öffne den Enabler [Titel]" und "Öffne den Use Case [Titel]" | Die Seite öffnet sofort | P |
+| T4 | Azubi | "Öffne den Enabler [Titel eines gesperrten Enablers]" | Die Seite öffnet, die Antwort sagt: gesperrt, Titel und Material lesbar, Quizze und Abgabe zu. Kein Link auf das Quiz | P |
+| T5 | Azubi | "Öffne das Szenario zu Enabler [Titel]" | Der Reader öffnet das Szenario (ein Teil), bei mehreren Teilen bis zu drei Karten, bei mehr als drei die Seite des Enablers | P |
+| T6 | Azubi | "Zeig mir das PDF zum Enabler [Titel]" und "Öffne den Lehrtext zu Enabler [Nummer]" | Reader mit der Datei, bei mehreren Dateien Karten | |
+| T7 | Azubi | "Öffne das Dokument Szenario_14i" (Dateiname wie in der Datenbank) | Der Reader öffnet die Datei, auch mit Leerzeichen statt Unterstrich | P |
+| T8 | Azubi | Auf der Seite eines Enablers: "Öffne diese Datei", danach "und das PDF dazu" auf einer anderen Seite nach "Öffne den Enabler [Titel]" | Die Datei des Enablers der Seite, beim zweiten Fall die des zuletzt genannten Enablers | |
+| T9 | Azubi | "Öffne das Dokument [Name einer Musterlösung]" und "Öffne das Dokument Gibtsnicht_1" | Beide Male derselbe neutrale Satz "keine passende Datei in deinen freigegebenen Inhalten", kein Hinweis auf Schutz oder Trainer | P |
+| T10 | Azubi | Link `.../trainee/use-cases/<id>?document=<id der Musterlösung>` in die Adresszeile | Keine Datei, die Meldung "Die Datei wurde nicht gefunden.", dieselbe wie für eine erfundene Id | P |
+| T11 | Azubi | Link mit zusätzlichem Parameter oder doppeltem `document` oder Wert, der keine uuid ist | Nichts öffnet sich | |
+| T12 | Azubi mit KfBM | Alle Bitten aus T3, T5, T7 mit Inhalten des FIAE | Neutrale Antwort wie bei Inhalt, den es nicht gibt, kein Name aus FIAE | P |
+| T13 | Azubi mit beiden Berufen | T1, T3, T5 mit Inhalten beider Berufe, im Reiter KfBM und im Reiter FIAE | Der gewählte Beruf zuerst, der andere erreichbar, nie ein Treffer des fremden Berufs bei einem Azubi mit nur einem Beruf | |
+| T14 | Azubi | "Öffne den Enabler SQL" (mehrere Treffer) | Kurze Rückfrage mit bis zu drei Karten, nichts öffnet sich von selbst | |
+| T15 | Azubi | "Öffne die Kantine" (gibt es nicht) | Antwort der Plattform mit den nächsten Seiten als Karten, kein Satz "kann ich nicht" und kein Modelltext | P |
+| T16 | Trainer | "Öffne den Kurs [Titel]", "Öffne den Enabler [Titel]", "Öffne den Use Case [Titel]" | Editor des Kurses, Enabler im Editor, Seite des Use Cases | P |
+| T17 | Trainer | "Öffne das Szenario zu Enabler [Titel]" und "Öffne das Dokument [Name]" | Editor mit geöffnetem Enabler und der Datei im Reader, beim Use Case die Seite mit dem Reader | |
+| T18 | Trainer | "Öffne das Dokument [Name einer Musterlösung]" mit `HAI_TRAINER_SOLUTIONS` aus und an | Aus: neutrale Antwort. An: die Datei öffnet | |
+| T19 | Admin | "Öffne den Inhalts-Import", "Öffne die HAI-Verwaltung", "Öffne das HAI-Gedächtnis" | Die Seite öffnet. Trainer ohne Admin-Ebene: Antwort mit Grund Rolle und Beispielen | |
+| T20 | Azubi | Telefon (390 Pixel), Mikrofon im Chat (ohne "Gespräch"): "Öffne den Use Case [Titel]" | Die Seite ist zu sehen (das Panel tritt zurück), die Figur steht am Rand und hört weiter zu, die HAI sagt "Ich öffne den Use Case ..." | P |
+| T21 | Azubi | Wie T20 mit "Wo finde ich den Enabler [Titel]?" und danach "ja" | Karte und Frage "Soll ich sie öffnen?", nach "ja" öffnet die Seite, Verhalten wie im Gesprächsmodus | P |
+| T22 | Azubi | Breiter Bildschirm: T20 im Chat und im Gesprächsmodus | Beide Male öffnet die Seite, das Panel bleibt neben der Seite | |
+| T23 | Betrieb | Log der Plattform nach T15 | Eine Zeile `hai.navigation` mit `outcome` "not_found" und `gap` true, ohne Text, Titel oder Id | |
+
+Pflichtfälle der Gruppe T: T1, T3, T4, T5, T7, T9, T10, T12, T15, T16, T20, T21.
+
+Nicht geprüft (kein Testfehler): echtes Modell (Sokrates, Gemini), echtes Mikrofon und echte Sprachanbieter, Safari und Geräte. Der lokale Browsertest lief mit gefälschtem Mikrofon und Attrappen für Anmeldung, Speicher und Modell.
