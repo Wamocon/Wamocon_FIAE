@@ -72,13 +72,20 @@ export function HaiWrapper({ children, context }: HaiWrapperProps) {
   return (
     <HaiQuizModeProvider>
       <HaiProvider userId={user.id} initialContext={context}>
-        <HaiVoiceSessionProvider>
-          <HaiDockHost>
+        {/* The dock host sits ABOVE the voice session on purpose: the session
+            renders the voice figure (HaiVoiceModeOverlay, in a portal), and the
+            figure reads the dock (haiLayout.ts, useHaiAnchor) exactly like the
+            HAI symbol, its pond. A portal keeps the context of the place where
+            it is rendered, so the figure must be below the dock provider. Else
+            it would not know the panel width and stand at a fixed offset next
+            to the pond instead of in it. */}
+        <HaiDockHost>
+          <HaiVoiceSessionProvider>
             {children}
             <HaiButton />
             <HaiChat />
-          </HaiDockHost>
-        </HaiVoiceSessionProvider>
+          </HaiVoiceSessionProvider>
+        </HaiDockHost>
       </HaiProvider>
     </HaiQuizModeProvider>
   );
