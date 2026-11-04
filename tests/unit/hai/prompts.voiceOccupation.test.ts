@@ -48,10 +48,9 @@ describe('the spoken prompt holds the same occupation limits as the typed one', 
         expect(prompt).toContain(
           'Hat die Person mehrere Berufe, gehören die Inhalte aller ihrer Berufe dazu.'
         );
-        // the refusal of a question of another occupation stays
-        expect(prompt).toContain(
-          'Gehört der Inhalt einer Frage zu einem anderen Ausbildungsberuf'
-        );
+        // the refusal stays (for several occupations: of an occupation the
+        // person does not have)
+        expect(prompt).toContain('den die Person NICHT hat');
         expect(prompt).toContain(
           'Dazu kann ich dir hier leider nichts sagen, denn das gehört nicht zu deiner Ausbildung.'
         );
@@ -103,5 +102,28 @@ describe('the spoken prompt holds the same occupation limits as the typed one', 
     for (const line of refusing) {
       expect(line).toMatch(/Themenprüfung|Zusatzregeln|Lehne das nicht ab/);
     }
+  });
+
+  it('the voice line also says that a question joining two own occupations, or an own topic without the exact answer in the context, is no refusal', () => {
+    const line = prompts.VOICE_OCCUPATION_LINE;
+    expect(line).toContain(
+      'verbindet (zum Beispiel eine Datenbank für Reisekosten)'
+    );
+    expect(line).toMatch(/keine Frage eines anderen Berufs/);
+    expect(line).toMatch(/Gehört die Frage zu deinen Berufen/);
+    expect(line).toMatch(/keine Ablehnung/);
+  });
+});
+
+describe('the persona of several occupations names them (the topic check uses it)', () => {
+  it('names both, and a single occupation has no list (its prompt stays as it was)', () => {
+    const two = both('TRAINEE');
+    expect(two.occupationNames).toHaveLength(2);
+    const one = resolveHaiPersona({
+      catalogs: [FIAE_CATALOG],
+      otherCatalogs: [KFBM_CATALOG],
+      role: 'TRAINEE',
+    });
+    expect(one.occupationNames).toBeUndefined();
   });
 });

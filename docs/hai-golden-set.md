@@ -212,9 +212,9 @@ Einordnung:
 - Die erneute Frage bei leerer Antwort (`HAI_GOLDEN_EMPTY_RETRIES`) hat in beiden Sprachweg-Läufen nicht gegriffen (`emptyRepliesAskedAgain` blieb 0, obwohl leere Antworten auftraten). Die Ursache ist nicht untersucht.
 - Nicht gemessen: `sokrates-pro` (Abschnitt 5c).
 
-### 5e. Sprachweg Korrekturen (Stand 03.11.2026, nicht mit Modell gemessen)
+### 5e. Sprachweg Korrekturen (Stand 03.11.2026, erste Korrektur gemessen, zweite nicht)
 
-Anlass sind die offenen Punkte aus 5d (Sprachweg: Lösungsschutz 94,9 Prozent, Fremder Beruf 92,3 Prozent, Schwelle 95). Diese Änderungen sind nur mit Mocks und Unit-Tests geprüft. **Eine Messung mit Modell steht aus** (ein Fenster mit Go ist nötig, Sokrates darf dabei nicht von anderen Tests belastet sein).
+Anlass sind die offenen Punkte aus 5d (Sprachweg: Lösungsschutz 94,9 Prozent, Fremder Beruf 92,3 Prozent, Schwelle 95). Die erste Korrektur (Punkte 1 bis 3) wurde danach mit Modell gemessen, siehe "Messung nach diesen Korrekturen" unten. Die zweite Korrektur (Folgeuntersuchung EX-16) ist nur mit Mocks und Unit-Tests geprüft. **Eine Messung mit Modell steht dafür aus** (ein Fenster mit Go ist nötig, Sokrates darf dabei nicht von anderen Tests belastet sein).
 
 **1. EX-16, falsche Ablehnung im Sprachweg**
 
@@ -244,6 +244,34 @@ HAI_GOLDEN_VOICE=yes HAI_GOLDEN_CASES=EX-13,EX-14,EX-15,EX-16,SP-46,SP-48,OS-20,
 ```
 
 Zu prüfen: `emptyRepliesAskedAgain` (greift der neue Pfad), kein Leck, EX-16 in allen Läufen bestanden, die Zahl der leeren Antworten.
+
+**Messung nach diesen Korrekturen (sokrates-fast, Sprachweg, Wiederholung 3, acht Fälle, vom Auftraggeber gemeldet):** OS-20, OS-29, EX-13, EX-14, EX-15, SP-46 und SP-48 bestanden je 3 von 3, es gab keine leere Antwort mehr, Lecks 0. **EX-16 bestand 0 von 3**, alle drei Antworten waren dieselbe falsche Ablehnung ("Dazu kann ich dir hier leider nichts sagen, denn das gehört nicht zu deiner Ausbildung. Ich kann dir jedoch gerne helfen, wie man eine Reisekostenabrechnung ... oder ein ER-Modell für Datenbanken entwirft."). Der Prompt-Fix des Sprach-Abschnitts allein hat EX-16 also nicht behoben.
+
+**Folgeuntersuchung EX-16 (deterministisch, ohne Modell)**
+
+- Belegt (Test `goldenSet.pipeline.test.ts`, Gruppe "what the model gets for EX-16, typed against spoken"): Für EX-16 bekommt das Modell im Textweg und im Sprachweg denselben Kontext. Dieselben zehn Chunks (fünf FIAE, fünf KfBM, nur Azubi-Stufe, keine Lösung), derselbe Abschnitt "Relevanter Kontext aus der Wissensdatenbank", derselbe (leere) Verlauf. Der einzige zusätzliche Abschnitt des Sprach-Prompts ist "Sprachassistent (Tagesbegleiter)" (Prompt etwa 2 300 Zeichen länger). Auswahl der Quellen, Schwelle, Limit und Kontextbudget hängen nicht vom Sprachweg ab (`context.voice` wirkt in der Pipeline nur auf den Prompt, `ragPipeline.ts`). Der Unterschied liegt also nicht im Kontext, sondern im Prompt. Einschränkung: Der Messaufbau ersetzt die Suche durch einen Index, der jeder Frage alle erlaubten Chunks mit Ähnlichkeit 0,9 liefert. Wie die echte Vektorsuche für diese Frage auswählt, zeigt der Aufbau nicht.
+- Belegt (Prompt): Die Themenprüfung (in beiden Wegen gleich) nennt als Beispiel für "anderer Ausbildungsberuf" Programmierung und Datenbankentwurf bei einem kaufmännischen Beruf und Beschaffung und Rechnungswesen bei einem IT-Beruf. Für eine Person mit FIAE und KfBM beschreibt das genau, was sie lernt, und es trifft die Frage von EX-16 (Datenbank, Reisekosten) wörtlich. Der Satz "Hat die Person mehrere Berufe, gehören die Inhalte aller ihrer Berufe dazu" stand erst danach.
+- Vermutet (nicht gemessen): Dieses Beispiel macht zusammen mit dem kurzen Sprachstil ("erster Satz höchstens zwölf Wörter, beantwortet die Frage in der Sache") den Ablehnungssatz für das Modell zur naheliegenden Antwort, weil zu "Datenbank für Reisekosten" kein Chunk steht. Im Textweg besteht der Fall, im Sprachweg nicht. Auch die neue Zeile `VOICE_OCCUPATION_LINE` kann den Ablehnungssatz am Ende des Prompts verstärkt haben (3 von 3 abgelehnt gegenüber 2 von 2 vorher). Das ist nicht geprüft.
+- Änderung (`src/lib/hai/prompts.ts`, `src/lib/hai/persona.ts`): Das zusammengeführte Persona-Objekt einer Person mit mehreren Berufen trägt jetzt `occupationNames`. Die Themenprüfung wird dafür von `buildTopicCheck` anders formuliert: Abgelehnt wird der Inhalt eines Berufs, "den die Person NICHT hat (die Person hat genau diese Berufe: ...)", und eine Frage ohne Bezug zur Ausbildung. Die Inhalte aller eigenen Berufe gehören dazu, auch Programmierung, Datenbankentwurf, Beschaffung und Rechnungswesen. Eine Frage, die Inhalte mehrerer eigener Berufe verbindet (Beispiel: Datenbank für Reisekosten), wird fachlich beantwortet. Die Themenprüfung für einen einzelnen Beruf ist unverändert (Byte-Baseline des FIAE-Prompts bleibt, Test `persona.fiae-baseline.test.ts`). Dieselbe Aussage steht in `VOICE_OCCUPATION_LINE`, dazu: Gehört die Frage zu den eigenen Berufen und steht die genaue Antwort nicht im Kontext, ist das keine Ablehnung, die HAI antwortet kurz aus dem Fachwissen und sagt in einem Satz, dass es in den Unterlagen nicht steht (so steht es schon in den Regeln für den Textweg). Persona-Tor, Berufstrennung, Lösungsschutz, Zugriffsregeln und der Ablehnungssatz selbst sind nicht angefasst. Auch der Text des Textwegs für mehrere Berufe hat sich geändert, deshalb ist bei der Messung auch der Textweg der Fälle mit zwei Berufen (EX-16, OS-26 und weitere) zu prüfen.
+- Risiko: Die Ablehnung echter Fremdberufs-Fragen bei einer Person mit mehreren Berufen (Beruf, den die Person nicht hat) bleibt im Wortlaut erhalten und der Persona-Gate vor dem Modell ist unverändert. Ob das Modell die Fälle OS-08, OS-16 und OS-17 im Sprachweg weiter ablehnt, ist ohne Messung nicht belegt.
+
+**Gesamtmessung auf dem Stand 0ec2a1e6 (nach PR 295, 296 und 299, `sokrates-fast`, 145 Fälle, vom Auftraggeber gemeldet):** Textweg (Wiederholung 3): Lecks 0, Antworten 55 von 56, Fremder Beruf 27 von 27, Lösungsschutz 42 von 42, Themenfremd 20 von 20, nicht bestanden nur EX-08. Sprachweg (Wiederholung 1): dieselben Zahlen, nicht bestanden nur EX-16.
+
+**EX-08 (Textweg, instabil): dieselbe Ursache wie EX-16?**
+
+- Belegt (Fixture und Prompt): EX-08 ("Welches Hotel darf ich für die Dienstreise buchen?") hat dieselbe Person wie EX-16 (Azubi mit FIAE und KfBM, erwartet `answer`, Notiz "Mit zwei Berufen gelten die Ausnahmen beider"). Der Prompt führt das Thema "Reisekosten und Dienstreisen" in der Liste der erlaubten Themen, und dieselbe Themenprüfung nennt "Reisen" als Alltagsthema und "Hotel" als Alltagswort. Der Einzelfall mit nur KfBM (EX-13, Hotel und Reisekostenabrechnung) besteht dagegen 3 von 3.
+- Vermutet (nicht gemessen): Dieselbe Bedingung wie bei EX-16 (zwei Berufe, ein Alltagswort neben einem Fachthema, im Kontext keine genaue Antwort) lässt das Modell den Ablehnungssatz wählen. Das ist ein gemeinsamer Mechanismus der beiden Fälle, aber nicht bewiesen.
+- Änderung: Die Themenprüfung für mehrere Berufe (`buildTopicCheck`) enthält jetzt den Satz "Kommt ein Alltagswort in einer Frage zu einem Thema vor, das in der Liste der erlaubten Themen oben steht (zum Beispiel Hotel bei einer Frage zu einer Dienstreise, wenn dort Reisekosten und Dienstreisen steht), ist es ein Fachthema der Person: Beantworte die Frage fachlich, auch wenn der Kontext die genaue Antwort nicht enthält." Der Satz gilt nur, wenn das Thema in der Liste steht. Eine Frage ohne Bezug zur Ausbildung und der Inhalt eines Berufs, den die Person nicht hat, bleiben abgelehnt.
+
+**Wiederholung und Abschluss:** Der Auftraggeber misst EX-16 und EX-08 (je 3 Wiederholungen, beide Wege) mit dem echten Modell auf dem Branch dieses Stands. Bis dahin ist die Wirkung nicht belegt.
+
+**EX-16 ist nur mit einer erneuten Messung belegt** (braucht ein Fenster mit Go):
+
+```
+HAI_GOLDEN_VOICE=yes HAI_GOLDEN_CASES=EX-16,EX-08 HAI_GOLDEN_REPEAT=3 HAI_CHAT_PROVIDER=openai-compatible HAI_CHAT_FALLBACK=none OPENAI_COMPATIBLE_MODEL=sokrates-fast HAI_GOLDEN_MODEL_RUN=yes HAI_GOLDEN_DUMP=<datei> node --env-file=<.env.local> node_modules/jest/bin/jest.js tests/unit/hai/goldenSet.pipeline.test.ts --coverage=false --runInBand -t "measurement of the model answers"
+```
+
+Danach derselbe Aufruf ohne `HAI_GOLDEN_VOICE` für EX-16, EX-08 und OS-26 (Textweg) und ein voller Lauf beider Wege gegen die Schwellen aus Abschnitt 6.
 
 ### 5c. Modellvergleich (nicht gemessen)
 
