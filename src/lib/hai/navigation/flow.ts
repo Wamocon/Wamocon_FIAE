@@ -258,3 +258,51 @@ export async function handleNavigationMessage(
   );
   return resultOf(outcome, context.voice === true);
 }
+
+/** The longest name of a page a model proposal may carry. */
+export const PROPOSED_PAGE_NAME_MAX = 60;
+
+export type ProposedPage =
+  | { ok: true; offer: NavigationOffer; text: string }
+  | { ok: false; text: string };
+
+/**
+ * A page the MODEL proposes by name (tool `open_page` of the UI tools, see
+ * uiActions/tools.ts). The name goes through the same recognition and the same
+ * resolution as a request of the person (allow list, level, occupation,
+ * release), so the model never chooses a path. It is always an offer for the
+ * card with the button "Öffnen" (`direct` false, `auto` never set): a clear
+ * command of the person is handled before the model by handleNavigationMessage.
+ * Returns the answer text of the resolution when nothing can be offered, so the
+ * person hears the real reason (role, unknown page, release).
+ */
+export async function proposePageByName(
+  name: unknown,
+  context: NavigationFlowContext,
+  access: RetrievalAccess | null
+): Promise<ProposedPage> {
+  const unknown: ProposedPage = {
+    ok: false,
+    text: 'Diese Seite kenne ich nicht. Nenne mir bitte den Namen des Menüpunkts.',
+  };
+  if (!access || typeof name !== 'string') return unknown;
+  const clean = name.replace(/\s+/g, ' ').trim();
+  if (
+    clean.length < 2 ||
+    clean.length > PROPOSED_PAGE_NAME_MAX ||
+    !/^[\p{L}\p{N} \-]+$/u.test(clean)
+  ) {
+    return unknown;
+  }
+  // "zeig mir" is a soft request: an offer, never an automatic change
+  const intent = detectNavigationIntent(`zeig mir ${clean}`);
+  if (!intent || intent.kind === 'unknown_page') return unknown;
+  const outcome = await resolveFor(intent, false, context, access);
+  if (outcome.kind !== 'offer' || !outcome.offer) {
+    return { ok: false, text: outcome.text };
+  }
+  // the server decides `auto` from the command of the person, never here
+  const { auto: _auto, ...offer } = outcome.offer;
+  void _auto;
+  return { ok: true, offer, text: outcome.text };
+}

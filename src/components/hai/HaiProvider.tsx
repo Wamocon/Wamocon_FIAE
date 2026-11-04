@@ -35,6 +35,13 @@ import { toQuizStartScope } from '@/lib/hai/quizMode/session';
 import { decideMemory } from '@/lib/hai/memory/client';
 import { useHaiQuizMode } from './HaiQuizMode';
 import { currentPageContext } from '@/lib/hai/pageContext/collect';
+import {
+  confirmPendingUiAction,
+  discardPendingUiAction,
+  hasPendingUiAction,
+  runUiAction,
+} from './uiActionExecutor';
+import { HaiUiActionBar } from './HaiUiActionBar';
 
 // ============================================================================
 // TYPES
@@ -1040,6 +1047,57 @@ export function HaiProvider({
     [goToOffer, patchNavigationOffer]
   );
 
+  /**
+   * A checked form action of the server (switch HAI_UI_ACTIONS): the executor
+   * checks it again and sets the values in the form of the page, or, in a spoken
+   * turn, only shows them and waits for the person. It never clicks and never
+   * sends. A full screen chat steps aside so the page with the marked fields is
+   * visible (like for a navigation).
+   */
+  const attachUiAction = useCallback((raw: unknown) => {
+    if (raw === undefined || raw === null) return;
+    const outcome = runUiAction(raw);
+    if (outcome.status !== 'rejected') {
+      setViewModeState(prev => (prev === 'full' ? 'widget' : prev));
+    }
+  }, []);
+
+  /**
+   * The typed reply to a pending entry of a spoken turn: "ja" enters it, "nein"
+   * drops it, any other message drops it too (so a later "ja" enters nothing).
+   * Only typed text counts, a spoken "ja" never enters anything. Answered here
+   * without a call to the server. Returns true when the reply was handled.
+   */
+  const answerUiActionConfirmation = useCallback((text: string): boolean => {
+    if (!hasPendingUiAction()) return false;
+    const yes = isOpenConfirmation(text);
+    const no = !yes && isOpenDecline(text);
+    if (!yes && !no) {
+      discardPendingUiAction();
+      return false;
+    }
+    if (yes) confirmPendingUiAction();
+    else discardPendingUiAction();
+    const now = new Date().toISOString();
+    const stamp = Date.now();
+    const userId = `temp-${stamp}`;
+    setMessages(prev => [
+      ...prev,
+      { id: userId, role: 'user', content: text, createdAt: now },
+      {
+        id: `msg-${stamp}`,
+        role: 'assistant',
+        content: yes
+          ? 'Ich habe die Eingabe eingetragen. Gespeichert ist noch nichts, bitte prüfe sie und speichere selbst.'
+          : 'In Ordnung, ich trage nichts ein.',
+        createdAt: now,
+        baseUserMessageId: userId,
+      },
+    ]);
+    if (yes) setViewModeState(prev => (prev === 'full' ? 'widget' : prev));
+    return true;
+  }, []);
+
   const regenerateFromEdit = useCallback(
     async (messageId: string, newContent: string) => {
       if (!newContent.trim() || !currentSessionId) return;
@@ -1309,6 +1367,7 @@ export function HaiProvider({
                     event.navigationOffer,
                     false
                   );
+                  attachUiAction(event.uiAction);
                   startQuizFromSignal(event.quizMode);
                   if (event.sessionId && event.sessionId !== currentSessionId) {
                     setCurrentSessionId(event.sessionId);
@@ -1364,6 +1423,7 @@ export function HaiProvider({
         } else if (response.ok) {
           const data = await response.json();
           attachNavigationOffer(assistantId, data.navigationOffer, false);
+          attachUiAction(data.uiAction);
           attachMemoryProposal(assistantId, data.memoryProposal);
           startQuizFromSignal(data.quizMode);
 
@@ -1468,6 +1528,7 @@ export function HaiProvider({
       t,
       attachPendingAction,
       attachNavigationOffer,
+      attachUiAction,
       startQuizFromSignal,
     ]
   );
@@ -1478,6 +1539,10 @@ export function HaiProvider({
 
       // The spoken "yes" to "Soll ich sie öffnen?" opens the page, no call
       if (options?.voice === true && answerSpokenNavigation(message)) return;
+
+      // The typed reply to a pending entry of a spoken turn ("ja" enters it)
+      if (options?.voice !== true && answerUiActionConfirmation(message))
+        return;
 
       // Abort any previous in-flight stream
       if (abortControllerRef.current) {
@@ -1673,6 +1738,7 @@ export function HaiProvider({
                     event.navigationOffer,
                     options?.voice === true
                   );
+                  attachUiAction(event.uiAction);
                   startQuizFromSignal(event.quizMode);
                   // Final event — update with citations and sessionId
                   if (event.sessionId && event.sessionId !== currentSessionId) {
@@ -1735,6 +1801,7 @@ export function HaiProvider({
             data.navigationOffer,
             options?.voice === true
           );
+          attachUiAction(data.uiAction);
           startQuizFromSignal(data.quizMode);
           attachMemoryProposal(assistantId, data.memoryProposal);
 
@@ -1843,7 +1910,9 @@ export function HaiProvider({
       t,
       attachPendingAction,
       attachNavigationOffer,
+      attachUiAction,
       answerSpokenNavigation,
+      answerUiActionConfirmation,
       startQuizFromSignal,
     ]
   );
@@ -1932,7 +2001,12 @@ export function HaiProvider({
     searchSessions,
   };
 
-  return <HaiContext.Provider value={value}>{children}</HaiContext.Provider>;
+  return (
+    <HaiContext.Provider value={value}>
+      {children}
+      <HaiUiActionBar />
+    </HaiContext.Provider>
+  );
 }
 
 export default HaiProvider;
