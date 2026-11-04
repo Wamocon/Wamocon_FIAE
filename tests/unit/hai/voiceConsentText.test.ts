@@ -46,7 +46,9 @@ describe('consent text', () => {
     expect(live).toContain('unterbrechen');
     expect(live).toContain('laufend an Soniox gesendet');
     expect(live).toContain('Esc');
-    expect(live).toContain('Stopp');
+    expect(live).toContain('Gespräch beenden');
+    // and the way out of the open microphone: push to talk
+    expect(live).toContain('Drücken zum Sprechen');
     expect(live).toContain('von selbst ab');
     // the sentence comes after the one that names Soniox as the recipient
     expect(paragraphs.indexOf(live!)).toBeGreaterThan(

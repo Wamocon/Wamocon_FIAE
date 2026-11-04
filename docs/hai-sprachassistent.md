@@ -173,7 +173,7 @@ Anlass: Im Test der Preview hörte die HAI beim Gespräch nichts, und die Stimme
 
 ### Dauerzuhören (Live-Modus) und Datenschutz
 
-Mit Soniox als Anbieter der Erkennung bleibt die Erkennung über das ganze Gespräch offen, **und das Mikrofon bleibt geöffnet, solange der Sprachmodus läuft, auch während die HAI antwortet.** Der Ton wird in dieser Zeit laufend an Soniox gesendet (Soniox rechnet die volle Streamdauer ab). Der Browser zeigt die Aufnahme dauerhaft an. Das gilt nur innerhalb des laufenden Sprachmodus und endet sofort bei "Stopp" oder "Sprachmodus beenden", Esc, dem Kreuz, "Mikrofon ausschalten", dem Verlassen der Seite und nach drei stillen Runden (dreimal 8 Sekunden ohne Wort im Zustand "hört zu", die Zeit, in der die HAI denkt oder spricht, zählt nicht).
+Mit Soniox als Anbieter der Erkennung bleibt die Erkennung über das ganze Gespräch offen, **und das Mikrofon bleibt geöffnet, solange der Sprachmodus läuft, auch während die HAI antwortet.** Der Ton wird in dieser Zeit laufend an Soniox gesendet (Soniox rechnet die volle Streamdauer ab). Der Browser zeigt die Aufnahme dauerhaft an. Das gilt nur innerhalb des laufenden Sprachmodus und endet sofort bei "Gespräch beenden" oder "Sprachmodus beenden" ("Stopp" hält die HAI nur an, siehe `docs/hai-sprachmodus.md` Abschnitt 14), Esc, dem Kreuz, "Mikrofon ausschalten", dem Verlassen der Seite und nach drei stillen Runden (dreimal 8 Sekunden ohne Wort im Zustand "hört zu", die Zeit, in der die HAI denkt oder spricht, zählt nicht).
 
 Der Einwilligungstext sagt das ausdrücklich (`hai.voice.consent.live`, nur wenn Soniox in der Kette ist). Wer vor dieser Änderung für Soniox eingewilligt hat, wird **erneut gefragt**: Die Einwilligung für das offene Mikrofon ist eine Marke `live` in der Liste der Einwilligung (`hai-voice-consent-v2:<Benutzer>`). Ohne die Marke gilt die Einwilligung nicht, sobald Soniox in der Kette ist und der Live-Modus an ist. Der Widerruf löscht die Marke mit.
 
@@ -185,8 +185,8 @@ Technik: `SonioxRecognition` mit `continuous = true`. Jedes Ende einer Äußerun
 
 Spricht die Person, während die HAI denkt oder spricht, stoppt die Wiedergabe sofort, die laufende Chat-Antwort wird abgebrochen (`stopGeneration`, der `AbortController` des Chats, der Strom wird nicht weitergelesen, was danach noch ankommt, wird nicht vorgelesen) und die neue Äußerung wird als nächste Frage verarbeitet. Damit die HAI sich nicht selbst hört:
 
-1. **Echounterdrückung an** (Profil `live` in `micConstraints`): Ohne sie würde die HAI ihre eigene Stimme hören und sich ständig unterbrechen. Die **Rauschunterdrückung bleibt aus**, weil sie nach dem offiziellen Soniox-SDK und nach den Erfahrungen von damicon Silbenanfänge und leise Laute abschneidet. Automatische Pegelregelung an (leise Sprecher). Das ist eine Begründung aus Quellen, keine eigene Messung: Der Befund am Gerät steht aus (Testplan E31).
-2. **Schwelle:** Eine Unterbrechung zählt erst bei mindestens zwei erkannten Wörtern, oder bei einem Wort und einer Mindestlautstärke der Aufnahme (`BARGE_IN_LEVEL` 0,2). Rauschen liefert kein Wort und löst nichts aus.
+1. **Echounterdrückung an** (Profil `live` in `micConstraints`): Ohne sie würde die HAI ihre eigene Stimme hören und sich ständig unterbrechen. Die **Rauschunterdrückung bleibt aus**, weil sie nach dem offiziellen Soniox-SDK und nach den Erfahrungen von damicon Silbenanfänge und leise Laute abschneidet. Die automatische Pegelregelung ist seit dem 04.11.2026 **aus** (gemessen: mit ihr wird eine leise Stimme allein im Raum um etwa 16 Dezibel auf den Pegel der Person am Mikrofon angehoben, sodass Hintergrundgespräche genauso zählen, Messwerte in `docs/hai-sprachmodus-recherche.md` Abschnitt 10). Die Rauschunterdrückung bleibt aus (sie senkt nur gleichmäßiges Rauschen, nicht eine leise Stimme). Der Befund am Gerät für die Echounterdrückung steht weiter aus (Testplan E31).
+2. **Schwelle:** Eine Unterbrechung zählt erst bei mindestens zwei erkannten Wörtern, oder bei einem Wort und einer Mindestlautstärke der Aufnahme (`BARGE_IN_LEVEL` 0,2), oder bei einem Signalwort ("Stopp", "Warte", ...). Dazu muss die Stimme laut genug sein (Pegel-Tor, `docs/hai-sprachmodus.md` Abschnitt 14): eine leise Stimme im Raum unterbricht nicht. Rauschen liefert kein Wort und löst nichts aus.
 3. **Eigene Stimme filtern:** Besteht die erkannte Äußerung nur aus Wörtern, die die HAI in dieser Antwort selbst gesagt hat (auch dem Wartesatz), ist es ihr Echo und keine Unterbrechung. Dasselbe gilt für Äußerungen in den 2,5 Sekunden nach dem Ende der Stimme (`ECHO_WINDOW_MS`).
 4. Eine Äußerung während der Antwort, die diese Schwelle nicht erreicht, wird verworfen und nicht als Frage gesendet.
 
@@ -236,7 +236,7 @@ Schalter: `localStorage.setItem('hai-voice-trace', '1')` und die Seite neu laden
 | H | `tts.ws.start` bis `tts.ws.open` | Sprach-Websocket (nahe 0, wenn vorgewärmt) |
 | I | `piece.first` bis `tts.audio.first` | erster Satz bis erstes Audio von Soniox |
 
-Weitere Marken: `start`, `audio.unlock` (Zustand des AudioContext), `stt.mic.ready` (tatsächliche Einstellungen des Mikrofons: Abtastrate, Echo, Rauschen, Pegelregelung, `muted`, `readyState`, Zustand des AudioContext), `stt.recorder.start` und `stt.audio.first` (Container, Codec, Größe), `stt.ws.open` (wie viele Stücke warteten), `stt.end` (**gesendete Stücke und Bytes, Spitzenpegel**: Beweis, dass Ton gesendet wird, `sentChunks` 0 bei gesprochener Frage wäre der Fehler), `stt.restart`, `stt.utterance`, `barge-in`, `utterance.ignored`, `listen.silent`, `play.gap`, `wait.phrase`, `server.warm`.
+Weitere Marken: `start`, `audio.unlock` (Zustand des AudioContext), `stt.mic.ready` (tatsächliche Einstellungen des Mikrofons: Abtastrate, Echo, Rauschen, Pegelregelung, `muted`, `readyState`, Zustand des AudioContext), `stt.recorder.start` und `stt.audio.first` (Container, Codec, Größe), `stt.ws.open` (wie viele Stücke warteten), `stt.end` (**gesendete Stücke und Bytes, Spitzenpegel**: Beweis, dass Ton gesendet wird, `sentChunks` 0 bei gesprochener Frage wäre der Fehler), `stt.restart`, `stt.utterance`, `barge-in`, `utterance.ignored`, `listen.silent`, `play.gap`, `wait.phrase`, `server.warm`. Seit dem 04.11.2026 zusätzlich (Schutz vor Hintergrundstimmen, `docs/hai-sprachmodus.md` Abschnitt 14, nie mit Text): `utterance.discarded` (`why` gleich `quiet` oder `confidence`, dazu `mean`, `peak`, `thr`, `conf` als Zahlen), `signal.halt` (`via` gleich `interim` oder `final`), `signal.end`, `signal.micoff`, `ptt.press`, `ptt.release`; `utterance.ignored` kennt jetzt auch `why` gleich `signal`.
 
 **Rückfallgründe** stehen in der Marke `fallback` (Funktion, von, nach, Kategorie, Code): `key-refused` (Schlüssel abgelehnt, 401 oder 400), `organization` (403 oder 402), `limit` (429, Kontolimit), `region` (Region passt nicht), `not-configured` (kein Schlüssel auf dem Server), `timeout`, `network`, `unavailable`. Dazu `stt.fail` und `stt.error` mit Code und Typ von Soniox. Die Route `soniox-token` reicht ihren Grund (`NO_KEY`, `BAD_REGION`, `UPSTREAM_REFUSED`) im Code des Fehlers weiter (`token-503-upstream_refused`).
 
@@ -271,6 +271,10 @@ Aufruf `--webm`: kodiert die Sprachprobe mit `ffmpeg` zu webm/opus (fehlt ffmpeg
 | `hai-voice-live` | `off` | keine Dauererkennung, Runden wie bisher |
 | `hai-voice-mic` | `raw`, `live`, `processed` | Profil des Mikrofons der Erkennung auf Soniox |
 | `hai-voice-lead` | Millisekunden oder `off` | Grundwert des Vorlaufs der Wiedergabe |
+| `hai-voice-sensitivity` | `normal` (Standard), `strict` | wie streng nur die laute und nahe Stimme zählt (Einstellung im Panel) |
+| `hai-voice-ptt` | `on`, `off` (Standard) | Drücken zum Sprechen: das Mikrofon nimmt nur beim Halten auf |
+| `hai-voice-signals` | `off` | schaltet alle Signalwörter aus (Standard an) |
+| `hai-voice-signal-hint-seen` | `yes` | der erste Hinweis "Sag Stopp, wenn ich aufhören soll." wurde gezeigt |
 
 ### Nicht umgesetzt
 

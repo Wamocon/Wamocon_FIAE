@@ -43,6 +43,7 @@ import {
   ProviderUnavailableError,
   type RecognitionEventLike,
   type RecognitionLike,
+  type UtteranceInfo,
 } from './types';
 
 // ============================================================================
@@ -125,6 +126,14 @@ export function handshakeProtocols(apiKey: string): string[] {
   return ['soniox-api-key', apiKey];
 }
 
+/** What a final word piece tells beside its text (final pieces never change). */
+export interface FinalToken {
+  startMs?: number;
+  endMs?: number;
+  /** 0 to 1, how sure the recognition is of this piece. */
+  confidence?: number;
+}
+
 export interface TranscriptUpdate {
   /** Tokens that became final with this answer (they never change again). */
   finalText: string;
@@ -132,6 +141,8 @@ export interface TranscriptUpdate {
   liveText: string;
   /** The speaker finished: endpoint detection saw the end of the utterance. */
   endpoint: boolean;
+  /** Time and confidence of the tokens that became final with this answer (never their text). */
+  finalTokens: FinalToken[];
   /** The stream is complete. */
   finished: boolean;
   /** Soniox reported an error (the code is the HTTP status). */
@@ -140,12 +151,16 @@ export interface TranscriptUpdate {
 
 const CONTROL_TOKENS = new Set(['<end>', '<fin>']);
 
+const isNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
 /** Reads one answer of the recognition websocket. Unknown shapes give an empty update. */
 export function readTranscriptMessage(raw: unknown): TranscriptUpdate {
   const update: TranscriptUpdate = {
     finalText: '',
     liveText: '',
     endpoint: false,
+    finalTokens: [],
     finished: false,
     error: null,
   };
@@ -172,8 +187,14 @@ export function readTranscriptMessage(raw: unknown): TranscriptUpdate {
         if (text === '<end>') update.endpoint = true;
         continue;
       }
-      if (token?.is_final === true) update.finalText += text;
-      else update.liveText += text;
+      if (token?.is_final === true) {
+        update.finalText += text;
+        const info: FinalToken = {};
+        if (isNumber(token.start_ms)) info.startMs = token.start_ms;
+        if (isNumber(token.end_ms)) info.endMs = token.end_ms;
+        if (isNumber(token.confidence)) info.confidence = token.confidence;
+        update.finalTokens.push(info);
+      } else update.liveText += text;
     }
   }
   if (message.finished === true) update.finished = true;
@@ -367,6 +388,15 @@ export class SonioxRecognition implements RecognitionLike {
   private sentBytes = 0;
   private seenInterim = false;
   private seenMessage = false;
+  // when the recorder of the current session started (Date.now): the time of a word is
+  // this plus its start_ms, so the loop can look up the loudness of that moment
+  private audioOrigin = 0;
+  // what the running utterance is made of: time window and confidence of its words
+  private uttFirstMs: number | null = null;
+  private uttLastMs: number | null = null;
+  private uttFirstSeenAt: number | null = null;
+  private uttConfSum = 0;
+  private uttConfCount = 0;
 
   constructor(private readonly deps: SonioxDeps) {}
 
@@ -454,6 +484,7 @@ export class SonioxRecognition implements RecognitionLike {
       recorder.ondataavailable = event => this.onAudio(event.data);
       recorder.start(RECORDER_SLICE_MS);
       this.recorder = recorder;
+      this.audioOrigin = Date.now();
       mark('stt.recorder.start', mimeInfo(recorder.mimeType));
       return true;
     } catch {
@@ -649,6 +680,7 @@ export class SonioxRecognition implements RecognitionLike {
       this.heard = true;
       this.restarts = 0;
       this.utterance += update.finalText;
+      this.noteTokens(update);
       if (!this.seenInterim) {
         this.seenInterim = true;
         mark('stt.interim.first');
@@ -669,6 +701,68 @@ export class SonioxRecognition implements RecognitionLike {
     if (update.finished) this.endRound();
   }
 
+  /** Keeps the time window and the confidence of the words of the running utterance. */
+  private noteTokens(update: TranscriptUpdate): void {
+    if (this.uttFirstSeenAt === null) this.uttFirstSeenAt = Date.now();
+    for (const token of update.finalTokens) {
+      if (token.startMs !== undefined) {
+        this.uttFirstMs = Math.min(
+          this.uttFirstMs ?? token.startMs,
+          token.startMs
+        );
+      }
+      if (token.endMs !== undefined) {
+        this.uttLastMs = Math.max(this.uttLastMs ?? token.endMs, token.endMs);
+      }
+      if (token.confidence !== undefined) {
+        this.uttConfSum += token.confidence;
+        this.uttConfCount += 1;
+      }
+    }
+  }
+
+  /**
+   * The time window (clock time) and the confidence of the utterance that just ended.
+   * A window that does not fit the clock (a stream that restarted its time, words in
+   * the future) is replaced by the time the words arrived in.
+   */
+  private takeUtteranceInfo(): UtteranceInfo {
+    const now = Date.now();
+    let startAt: number | undefined;
+    let endAt: number | undefined;
+    if (
+      this.uttFirstMs !== null &&
+      this.uttLastMs !== null &&
+      this.audioOrigin > 0
+    ) {
+      startAt = this.audioOrigin + this.uttFirstMs;
+      endAt = this.audioOrigin + this.uttLastMs;
+      const fits =
+        endAt <= now + 1_000 && startAt <= endAt && endAt - startAt <= 120_000;
+      if (!fits) startAt = endAt = undefined;
+    }
+    if (startAt === undefined && this.uttFirstSeenAt !== null) {
+      startAt = this.uttFirstSeenAt - 600;
+      endAt = now;
+    }
+    const confidence =
+      this.uttConfCount > 0 ? this.uttConfSum / this.uttConfCount : undefined;
+    this.resetUtteranceInfo();
+    return {
+      ...(startAt !== undefined ? { startAt } : {}),
+      ...(endAt !== undefined ? { endAt } : {}),
+      ...(confidence !== undefined ? { confidence } : {}),
+    };
+  }
+
+  private resetUtteranceInfo(): void {
+    this.uttFirstMs = null;
+    this.uttLastMs = null;
+    this.uttFirstSeenAt = null;
+    this.uttConfSum = 0;
+    this.uttConfCount = 0;
+  }
+
   /** No new word for a while although the speaker did not stop: end the round. */
   private armIdle(): void {
     if (this.continuous) return;
@@ -686,7 +780,8 @@ export class SonioxRecognition implements RecognitionLike {
     this.heard = false;
     this.seenInterim = false;
     mark('stt.utterance', { words: text ? text.split(/\s+/).length : 0 });
-    if (text) this.onutterance?.(text);
+    const info = this.takeUtteranceInfo();
+    if (text) this.onutterance?.(text, info);
   }
 
   /**
@@ -740,6 +835,7 @@ export class SonioxRecognition implements RecognitionLike {
     this.socketReady = false;
     this.pending = [];
     this.utterance = '';
+    this.resetUtteranceInfo();
   }
 
   /** Tell Soniox that the audio ends (an empty text frame), then wait for its last answer. */

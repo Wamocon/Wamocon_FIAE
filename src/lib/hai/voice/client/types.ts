@@ -18,6 +18,18 @@ import type { SimpleStorage } from '../speech';
 
 export type { VoiceFunction, VoiceProviderId };
 
+/**
+ * What a live recognition knows about one finished utterance, beside its text:
+ * the clock time (Date.now) of its first and last word and how sure the
+ * recognition is (mean confidence of its words, 0 to 1). The loop judges the
+ * utterance by it (loudness gate, confidence). Never the text of anybody.
+ */
+export interface UtteranceInfo {
+  startAt?: number;
+  endAt?: number;
+  confidence?: number;
+}
+
 export interface RecognitionEventLike {
   resultIndex: number;
   results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }>;
@@ -56,7 +68,7 @@ export interface RecognitionLike {
    * utterances. Every time the speaker finishes one (endpoint detection) this is
    * called with its text, the microphone stays open and `onend` does NOT come.
    */
-  onutterance?: ((text: string) => void) | null;
+  onutterance?: ((text: string, info?: UtteranceInfo) => void) | null;
   /** True while this recognition works in live mode (the provider can, and `continuous` was set). */
   readonly live?: boolean;
   start(): void;

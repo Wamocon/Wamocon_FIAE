@@ -191,8 +191,8 @@ class ChainedRecognition implements RecognitionLike {
       rec.onlevel = value => {
         if (generation === this.generation) this.onlevel?.(value);
       };
-      rec.onutterance = text => {
-        if (generation === this.generation) this.onutterance?.(text);
+      rec.onutterance = (text, info) => {
+        if (generation === this.generation) this.onutterance?.(text, info);
       };
       rec.onerror = event => {
         if (generation !== this.generation) return;

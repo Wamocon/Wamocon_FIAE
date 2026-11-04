@@ -85,6 +85,7 @@ describe('Soniox protocol', () => {
         finalText: '',
         liveText: '',
         endpoint: false,
+        finalTokens: [],
         finished: false,
         error: null,
       });
