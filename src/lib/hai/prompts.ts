@@ -164,6 +164,46 @@ function buildNeutralPrompt(persona: HaiPersona): string {
 - Antworte IMMER nur mit diesem Text: "${persona.refusalPrompt}"`;
 }
 
+/**
+ * The topic check of the core prompt (one paragraph). For ONE occupation it is
+ * the text the FIAE baseline holds, byte for byte. For SEVERAL occupations it
+ * names them: the examples of "another occupation" (programming and database
+ * design at a commercial occupation, purchasing and accounting at an IT
+ * occupation) describe exactly what such a person learns, and a question that
+ * joins two of the occupations (golden set EX-16, "Welche Datenbank speichert die
+ * Reisekosten und die Hotelbuchungen?") or holds an everyday word next to a topic
+ * of the list (EX-08, "Welches Hotel darf ich für die Dienstreise buchen?", the topic
+ * "Reisekosten und Dienstreisen" is on the list, "Reisen" is on the list of
+ * everyday topics) was refused by the model with "gehört nicht zu deiner
+ * Ausbildung" (EX-16 spoken, 3 of 3 runs; EX-08 typed, the only case that was not
+ * stable in the typed measurement of 03.11.2026). The refusal stays for
+ * an occupation the person does not have and for a question without a link to the
+ * training.
+ */
+function buildTopicCheck(persona: HaiPersona): string {
+  const names = persona.occupationNames;
+  const head =
+    '**Themenprüfung:** Die Plattform prüft jede Frage VOR dir auf Alltagsthemen (Unterhaltung, Wetter, Essen, Reisen und Ähnliches) und lehnt eindeutig themenfremde Fragen selbst ab. Diese Frage wurde bereits als fachlich geprüft, wie jede Frage, die bei dir ankommt. Ein Alltagswort in einer Fachfrage (Netflix als Beispiel für einen Server, Hotel oder Restaurant in einem Use Case, Sport in einer Statistikaufgabe, ein Rezept als Beispiel für eine Datenbank) macht die Frage nicht themenfremd: Antworte dann fachlich und verwende keinen Ablehnungssatz über dein Fachgebiet. Das hebt die Liste der erlaubten Themen oben nicht auf. ';
+  const tail =
+    ' gilt nie für Lösungen, Bewertungsschlüssel, Quizantworten oder Trainerhinweise: Dafür gilt der Lösungsschutz und du nennst ihn als Grund.';
+  if (!names || names.length < 2) {
+    return (
+      head +
+      'Gehört der Inhalt einer Frage zu einem anderen Ausbildungsberuf (zum Beispiel Programmierung und Datenbankentwurf bei einem kaufmännischen Beruf, Beschaffung und Rechnungswesen bei einem IT-Beruf) und steht dazu nichts in deinem Kontext, oder hat sie eindeutig nichts mit der Ausbildung zu tun (zum Beispiel Politik), beantworte sie nicht. Sage dann "Dazu kann ich dir hier leider nichts sagen, denn das gehört nicht zu deiner Ausbildung." und biete Hilfe zu ihrem Beruf an. Hat die Person mehrere Berufe, gehören die Inhalte aller ihrer Berufe dazu. Dieser Satz' +
+      tail
+    );
+  }
+  const own =
+    names.length === 2
+      ? names.join(' und ')
+      : `${names.slice(0, -1).join(', ')} und ${names[names.length - 1]}`;
+  return (
+    head +
+    `Kommt ein Alltagswort in einer Frage zu einem Thema vor, das in der Liste der erlaubten Themen oben steht (zum Beispiel Hotel bei einer Frage zu einer Dienstreise, wenn dort Reisekosten und Dienstreisen steht), ist es ein Fachthema der Person: Beantworte die Frage fachlich, auch wenn der Kontext die genaue Antwort nicht enthält. Gehört der Inhalt einer Frage zu einem Ausbildungsberuf, den die Person NICHT hat (die Person hat genau diese Berufe: ${own}), und steht dazu nichts in deinem Kontext, oder hat sie eindeutig nichts mit der Ausbildung zu tun (zum Beispiel Politik), beantworte sie nicht. Sage dann "Dazu kann ich dir hier leider nichts sagen, denn das gehört nicht zu deiner Ausbildung." und biete Hilfe zu ihren Berufen an. Die Inhalte aller dieser Berufe gehören dazu, auch solche, die sonst zu einem anderen Beruf passen würden (Programmierung und Datenbankentwurf, Beschaffung und Rechnungswesen), soweit einer ihrer Berufe sie abdeckt. Eine Frage, die Inhalte mehrerer ihrer Berufe verbindet (zum Beispiel eine Datenbank für Reisekosten), ist keine Frage eines anderen Berufs: Beantworte sie fachlich und sage nicht, sie gehöre nicht zur Ausbildung. Hat die Person mehrere Berufe, gehören die Inhalte aller ihrer Berufe dazu. Dieser Satz` +
+    tail
+  );
+}
+
 function buildCorePersonality(persona: HaiPersona): string {
   return `Du bist **HAI.ai** 🦈 — der digitale Lernbegleiter ${persona.intro}.
 Praezise, freundlich, motivierend, paedagogisch. Kein Blabla — klare Antworten auf den Punkt.
@@ -179,7 +219,7 @@ ${renderTopics(persona)}
 
 ${persona.forbiddenLine}
 
-**Themenprüfung:** Die Plattform prüft jede Frage VOR dir auf Alltagsthemen (Unterhaltung, Wetter, Essen, Reisen und Ähnliches) und lehnt eindeutig themenfremde Fragen selbst ab. Diese Frage wurde bereits als fachlich geprüft, wie jede Frage, die bei dir ankommt. Ein Alltagswort in einer Fachfrage (Netflix als Beispiel für einen Server, Hotel oder Restaurant in einem Use Case, Sport in einer Statistikaufgabe, ein Rezept als Beispiel für eine Datenbank) macht die Frage nicht themenfremd: Antworte dann fachlich und verwende keinen Ablehnungssatz über dein Fachgebiet. Das hebt die Liste der erlaubten Themen oben nicht auf. Gehört der Inhalt einer Frage zu einem anderen Ausbildungsberuf (zum Beispiel Programmierung und Datenbankentwurf bei einem kaufmännischen Beruf, Beschaffung und Rechnungswesen bei einem IT-Beruf) und steht dazu nichts in deinem Kontext, oder hat sie eindeutig nichts mit der Ausbildung zu tun (zum Beispiel Politik), beantworte sie nicht. Sage dann "Dazu kann ich dir hier leider nichts sagen, denn das gehört nicht zu deiner Ausbildung." und biete Hilfe zu ihrem Beruf an. Hat die Person mehrere Berufe, gehören die Inhalte aller ihrer Berufe dazu. Dieser Satz gilt nie für Lösungen, Bewertungsschlüssel, Quizantworten oder Trainerhinweise: Dafür gilt der Lösungsschutz und du nennst ihn als Grund.
+${buildTopicCheck(persona)}
 
 ## Regeln
 - IMMER Deutsch
@@ -217,6 +257,19 @@ export const VOICE_OCCUPATION_LINE =
   '- Für die Berufe gilt gesprochen genau die Themenprüfung im Abschnitt "Erlaubte Themen", wie getippt: Eine Fachfrage zu einem deiner Berufe beantwortest du auch gesprochen fachlich, auch mit einem Alltagswort darin, und hat die Person mehrere Berufe, gehören die Inhalte aller ihrer Berufe dazu. Gehört der Inhalt zu einem anderen Ausbildungsberuf oder hat die Frage keinen Bezug zur Ausbildung, antwortest du mit dem Satz aus der Themenprüfung und bietest Hilfe zu ihrem Beruf an. Eine Rückfrage "Meinst du ...?" nennt nur Einträge, die in deinem Kontext stehen, nie den Eintrag eines anderen Berufs.';
 
 /**
+ * Only for a person with SEVERAL occupations (persona.occupationNames): a question
+ * that joins the content of two of them, or an own topic without the exact answer
+ * in the context, is no refusal (golden set EX-16 spoken, EX-08 typed). It is a
+ * separate line on purpose: for ONE occupation the voice section stays byte for
+ * byte as it was in PR 295, because the sentence "answer from the knowledge when
+ * the context has no exact answer" made a trainer with one occupation ask back
+ * "Meinst du den Use Case ...?" with a title of the other occupation instead of
+ * the refusal (OS-20 2 of 6 and OS-29 4 of 6 spoken, against 6 of 6 before).
+ */
+export const VOICE_MULTI_OCCUPATION_LINE =
+  '- Eine Frage, die Inhalte mehrerer deiner Berufe verbindet (zum Beispiel eine Datenbank für Reisekosten), ist keine Frage eines anderen Berufs: Der erste Satz ist die fachliche Antwort. Gehört die Frage zu deinen Berufen und steht die genaue Antwort nicht im Kontext, ist das keine Ablehnung: Antworte kurz aus dem Fachwissen und sage in einem Satz, dass es in den Unterlagen nicht steht, wie in den Regeln oben.';
+
+/**
  * The voice assistant and day companion (WMCNL-2907): the answer is read aloud,
  * so it is short, free of markup and ends in at most one question. Content rules
  * (occupation separation, solution protection, learning technique limits) do not
@@ -224,7 +277,10 @@ export const VOICE_OCCUPATION_LINE =
  * Modelled on the speech mode of damicon (format rules) and the day companion
  * there (at most three points, one question at the end).
  */
-export function buildVoiceRules(userRole?: PromptContext['userRole']): string {
+export function buildVoiceRules(
+  userRole?: PromptContext['userRole'],
+  multipleOccupations = false
+): string {
   // the sentence on solutions depends on the role: a trainer never reads the sentence of a trainee
   const solutionLine =
     userRole === 'TRAINER'
@@ -239,6 +295,7 @@ export function buildVoiceRules(userRole?: PromptContext['userRole']): string {
     '- Zahlen, Fristen und Zeiten so, wie man sie spricht ("bis Freitag", "um halb neun", "zwölf von dreißig").',
     solutionLine,
     VOICE_OCCUPATION_LINE,
+    ...(multipleOccupations ? [VOICE_MULTI_OCCUPATION_LINE] : []),
     '- Antworte zuerst auf die Frage, auch kurz. Frage nur zurück, wenn ohne die Angabe keine sinnvolle Antwort möglich ist.',
     '- Tagesbegleiter: Fragt der Nutzer, was heute ansteht, bittet er um einen Plan oder begrüßt er dich am Tagesbeginn, nutze nur die Daten im Abschnitt "Aktuelle Plattform-Daten". Nenne höchstens drei Punkte, das Dringendste zuerst (Frist, Prüfung, Rückmeldung zu einer Abgabe), begründe den ersten kurz und schließe mit genau einer Frage, womit er beginnen will. Erfinde keine Termine, Fristen oder Noten. Fehlt ein Bereich, benenne konkret und kurz, was fehlt, und verweise nicht auf die Plattform für das, was du selbst kennst.',
     '- Höchstens eine Frage je Antwort, nie dieselbe zweimal. Nach einer reinen Auskunft endet die Antwort ohne Frage.',
@@ -608,7 +665,12 @@ Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, a
     parts.push(buildDayBriefingRules(context.userRole));
   }
   if (context.voice) {
-    parts.push(buildVoiceRules(context.userRole));
+    parts.push(
+      buildVoiceRules(
+        context.userRole,
+        (persona.occupationNames?.length ?? 0) > 1
+      )
+    );
   }
   if (context.navigation) {
     parts.push(buildNavigationRules(context.userRole));

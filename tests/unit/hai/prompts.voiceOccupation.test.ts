@@ -4,6 +4,7 @@
 import { resolveHaiPersona } from '@/lib/hai/persona';
 import * as prompts from '@/lib/hai/prompts';
 import { FIAE_CATALOG, KFBM_CATALOG } from './fixtures/kfbmPersona';
+import voiceSectionPr295 from './fixtures/voice-section-pr295.json';
 
 // The spoken way against the typed way (docs/hai-golden-set.md, 5e). The golden
 // set measured EX-16 (a trainee with two occupations asks which database stores
@@ -34,9 +35,11 @@ describe('the spoken prompt holds the same occupation limits as the typed one', 
     role => {
       const spoken = build(true, role);
       const typed = build(false, role);
-      expect(spoken.replace(`${prompts.buildVoiceRules(role)}\n\n`, '')).toBe(
-        typed
-      );
+      // the persona of this test has two occupations: the voice section has the
+      // line for several occupations
+      expect(
+        spoken.replace(`${prompts.buildVoiceRules(role, true)}\n\n`, '')
+      ).toBe(typed);
     }
   );
 
@@ -48,10 +51,9 @@ describe('the spoken prompt holds the same occupation limits as the typed one', 
         expect(prompt).toContain(
           'Hat die Person mehrere Berufe, gehören die Inhalte aller ihrer Berufe dazu.'
         );
-        // the refusal of a question of another occupation stays
-        expect(prompt).toContain(
-          'Gehört der Inhalt einer Frage zu einem anderen Ausbildungsberuf'
-        );
+        // the refusal stays (for several occupations: of an occupation the
+        // person does not have)
+        expect(prompt).toContain('den die Person NICHT hat');
         expect(prompt).toContain(
           'Dazu kann ich dir hier leider nichts sagen, denn das gehört nicht zu deiner Ausbildung.'
         );
@@ -103,5 +105,97 @@ describe('the spoken prompt holds the same occupation limits as the typed one', 
     for (const line of refusing) {
       expect(line).toMatch(/Themenprüfung|Zusatzregeln|Lehne das nicht ab/);
     }
+  });
+
+  it('the line for several occupations says that a question joining two own occupations, or an own topic without the exact answer in the context, is no refusal', () => {
+    const line = prompts.VOICE_MULTI_OCCUPATION_LINE;
+    expect(line).toContain(
+      'verbindet (zum Beispiel eine Datenbank für Reisekosten)'
+    );
+    expect(line).toMatch(/keine Frage eines anderen Berufs/);
+    expect(line).toMatch(/Gehört die Frage zu deinen Berufen/);
+    expect(line).toMatch(/keine Ablehnung/);
+  });
+});
+
+describe('the persona of several occupations names them (the topic check uses it)', () => {
+  it('names both, and a single occupation has no list (its prompt stays as it was)', () => {
+    const two = both('TRAINEE');
+    expect(two.occupationNames).toHaveLength(2);
+    const one = resolveHaiPersona({
+      catalogs: [FIAE_CATALOG],
+      otherCatalogs: [KFBM_CATALOG],
+      role: 'TRAINEE',
+    });
+    expect(one.occupationNames).toBeUndefined();
+  });
+});
+
+// The sentence "answer from the knowledge when the context has no exact answer"
+// belongs to persons with SEVERAL occupations only. Measured against preview
+// 0ec2a1e6 with 6 runs each (spoken): OS-20 6 of 6 before, 2 of 6 with the
+// sentence for everybody, OS-29 6 of 6 before, 4 of 6. Both are a trainer with ONE
+// occupation who asks for a title of the other one and got a counter question
+// "Meinst du den Use Case ...?" instead of the refusal. The voice section of one
+// occupation stays byte for byte as it was in PR 295 (fixture, taken from the code
+// of preview 0ec2a1e6).
+describe('the voice section of ONE occupation is the one of PR 295, byte for byte', () => {
+  it.each([
+    ['TRAINEE', 'TRAINEE'],
+    ['TRAINER', 'TRAINER'],
+    [undefined, 'NONE'],
+  ] as const)('buildVoiceRules(%s)', (role, key) => {
+    expect(prompts.buildVoiceRules(role)).toBe(voiceSectionPr295[key]);
+    expect(prompts.buildVoiceRules(role, false)).toBe(voiceSectionPr295[key]);
+  });
+
+  it.each(['TRAINEE', 'TRAINER'] as const)(
+    'the spoken prompt of one occupation (FIAE and KfBM) holds exactly that section (%s)',
+    role => {
+      for (const catalog of [FIAE_CATALOG, KFBM_CATALOG]) {
+        const persona = resolveHaiPersona({
+          catalogs: [catalog],
+          otherCatalogs: [],
+          role,
+        });
+        expect(persona.occupationNames).toBeUndefined();
+        const spoken = prompts.buildSystemPrompt({
+          mode: 'general',
+          persona,
+          userRole: role,
+          voice: true,
+        });
+        expect(spoken).toContain(voiceSectionPr295[role]);
+        expect(spoken).not.toContain(prompts.VOICE_MULTI_OCCUPATION_LINE);
+      }
+    }
+  );
+
+  it.each(['TRAINEE', 'TRAINER'] as const)(
+    'several occupations get the same section plus the one line for them (%s)',
+    role => {
+      const withLine = prompts.buildVoiceRules(role, true);
+      expect(withLine).toContain(prompts.VOICE_MULTI_OCCUPATION_LINE);
+      expect(
+        withLine.replace(`${prompts.VOICE_MULTI_OCCUPATION_LINE}\n`, '')
+      ).toBe(voiceSectionPr295[role]);
+      const spoken = prompts.buildSystemPrompt({
+        mode: 'general',
+        persona: both(role),
+        userRole: role,
+        voice: true,
+      });
+      expect(spoken).toContain(prompts.VOICE_MULTI_OCCUPATION_LINE);
+    }
+  );
+
+  it('the section of one occupation names a title only as an entry of the context and never offers an entry of another occupation', () => {
+    // (the finding on counter questions: the base line already forbids it, the
+    // question "Meinst du ...?" itself comes from the solution scope rules that
+    // hold for both ways and are not changed here)
+    const line = prompts.VOICE_OCCUPATION_LINE;
+    expect(line).toContain('nennt nur Einträge, die in deinem Kontext stehen');
+    expect(line).toContain('nie den Eintrag eines anderen Berufs');
+    expect(line).not.toContain('Antworte kurz aus dem Fachwissen');
   });
 });

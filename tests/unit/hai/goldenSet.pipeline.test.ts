@@ -606,6 +606,92 @@ describe('persona and prompt of the cases', () => {
 });
 
 // ============================================================================
+// What the model gets for a case, typed and spoken (EX-16, docs/hai-golden-set.md 5e)
+// ============================================================================
+
+describe('what the model gets for EX-16, typed against spoken (no model)', () => {
+  const ex16 = set.cases.find(c => c.id === 'EX-16') as GoldenCase;
+  const sections = (prompt: string) =>
+    prompt.split(/\n\n(?=## )/).map(part => part.split('\n')[0]);
+  const section = (prompt: string, heading: string) => {
+    const start = prompt.indexOf(heading);
+    const end = prompt.indexOf('\n\n## ', start);
+    return prompt.slice(start, end === -1 ? undefined : end);
+  };
+  async function promptOf(voice: boolean) {
+    goldenState.reset();
+    goldenState.access = accessFor(ex16);
+    const ids: string[] = [];
+    await processMessage(ex16.question, contextFor(ex16, voice));
+    ids.push(...goldenState.returnedIds);
+    return { prompt: goldenState.systemPrompts[0], ids };
+  }
+
+  it('gets the same chunks, the same context section and the same history: the context is not the difference', async () => {
+    const typed = await promptOf(false);
+    const spoken = await promptOf(true);
+    // both occupations of the person, ten chunks of the trainee level, no solution
+    expect(typed.ids.length).toBeGreaterThan(0);
+    expect(spoken.ids).toEqual(typed.ids);
+    expect(typed.ids.some(id => id.startsWith('fiae-'))).toBe(true);
+    expect(typed.ids.some(id => id.startsWith('kfbm-'))).toBe(true);
+    const heading = '## Relevanter Kontext aus der Wissensdatenbank';
+    expect(section(spoken.prompt, heading)).toBe(
+      section(typed.prompt, heading)
+    );
+    // the only section that the spoken prompt has more is the voice section
+    const extra = sections(spoken.prompt).filter(
+      h => !sections(typed.prompt).includes(h)
+    );
+    expect(extra).toEqual(['## Sprachassistent (Tagesbegleiter)']);
+  });
+
+  it('names both occupations in the topic check and does not call their content "another occupation"', async () => {
+    for (const voice of [false, true]) {
+      const { prompt } = await promptOf(voice);
+      const check = section(prompt, '**Themenprüfung:**');
+      expect(check).toContain('die Person hat genau diese Berufe');
+      expect(check).toContain('Fachinformatik');
+      expect(check).toContain('Büromanagement');
+      // the old example that matched the question of EX-16 word for word is gone
+      expect(check).not.toContain(
+        'Programmierung und Datenbankentwurf bei einem kaufmännischen Beruf'
+      );
+      expect(check).toContain('verbindet');
+      // an everyday word next to a topic of the list (EX-08: Hotel, Dienstreise)
+      expect(check).toContain(
+        'ist es ein Fachthema der Person: Beantworte die Frage fachlich'
+      );
+      expect(check).toContain('Beantworte sie fachlich');
+      // the refusal stays: for an occupation the person does not have, and for
+      // a question without a link to the training
+      expect(check).toContain('den die Person NICHT hat');
+      expect(check).toContain('eindeutig nichts mit der Ausbildung zu tun');
+      expect(check).toContain(
+        'Dazu kann ich dir hier leider nichts sagen, denn das gehört nicht zu deiner Ausbildung.'
+      );
+    }
+  });
+
+  it('keeps the topic check of one occupation as it was (the FIAE baseline)', async () => {
+    const fiaeOnly = set.cases.find(
+      c =>
+        c.occupations.length === 1 &&
+        c.occupations[0] === 'FIAE' &&
+        c.expected.behavior === 'answer'
+    ) as GoldenCase;
+    goldenState.reset();
+    goldenState.access = accessFor(fiaeOnly);
+    await processMessage(fiaeOnly.question, contextFor(fiaeOnly, false));
+    const check = section(goldenState.systemPrompts[0], '**Themenprüfung:**');
+    expect(check).toContain(
+      'Gehört der Inhalt einer Frage zu einem anderen Ausbildungsberuf (zum Beispiel Programmierung und Datenbankentwurf bei einem kaufmännischen Beruf'
+    );
+    expect(check).not.toContain('die Person hat genau diese Berufe');
+  });
+});
+
+// ============================================================================
 // The leak the scoring must catch: a model that gives the solution away
 // ============================================================================
 
