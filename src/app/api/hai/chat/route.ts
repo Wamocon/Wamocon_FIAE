@@ -62,6 +62,7 @@ import {
 } from '@/lib/hai/chatHistoryAccess';
 import { hasTrainerKnowledge } from '@/lib/hai/trainerSolutions';
 import { resolvePageContext } from '@/lib/hai/pageContext/server';
+import { uiActionMeta } from '@/lib/hai/uiActions/event';
 
 // ============================================================================
 // TYPES
@@ -1163,6 +1164,10 @@ export async function POST(req: NextRequest) {
               ...(result.memoryProposal
                 ? { memoryProposalId: result.memoryProposal.id }
                 : {}),
+              // identifiers of a UI action (tool, form, field ids), never a value
+              ...(result.uiAction
+                ? { uiAction: uiActionMeta(result.uiAction) }
+                : {}),
             };
             if (result.usedTrainerSolutions) {
               await markSessionTrainerKnowledge(sessionId);
@@ -1249,6 +1254,8 @@ export async function POST(req: NextRequest) {
                   intent: result.intent,
                   pendingAction: result.pendingAction,
                   navigationOffer: result.navigationOffer,
+                  // a checked form action for the browser (switch HAI_UI_ACTIONS)
+                  uiAction: result.uiAction,
                   quizMode: result.quizMode,
                   // the question of the memory (card with yes, no, change)
                   memoryProposal: result.memoryProposal,
@@ -1351,6 +1358,8 @@ export async function POST(req: NextRequest) {
       ...(result.memoryProposal
         ? { memoryProposalId: result.memoryProposal.id }
         : {}),
+      // identifiers of a UI action (tool, form, field ids), never a value
+      ...(result.uiAction ? { uiAction: uiActionMeta(result.uiAction) } : {}),
     };
     if (result.usedTrainerSolutions) {
       await markSessionTrainerKnowledge(sessionId);
@@ -1431,6 +1440,7 @@ export async function POST(req: NextRequest) {
       quizState: result.quizState,
       pendingAction: result.pendingAction,
       navigationOffer: result.navigationOffer,
+      uiAction: result.uiAction,
       quizMode: result.quizMode,
       memoryProposal: result.memoryProposal,
     });

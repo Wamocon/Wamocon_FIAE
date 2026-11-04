@@ -82,6 +82,14 @@ import {
 import { isDayQuestion } from './dayQuestion';
 import type { UserRole } from './dataContext';
 import { handleActionMessage } from './actionFlow';
+import type { UiActionEvent } from './uiActions/event';
+import {
+  applyUiTools,
+  uiStreamSink,
+  uiToolsPromptFor,
+  withUiNote,
+  type UiToolsTurn,
+} from './uiActions/flow';
 import type { PendingAction } from './actionPolicy';
 import {
   handleNavigationMessage,
@@ -221,6 +229,12 @@ export interface PipelineResult {
   pendingAction?: PendingAction;
   /** A page the interface can offer with a card "Öffnen", never a write */
   navigationOffer?: NavigationOffer;
+  /**
+   * A checked form action for the browser (fill, focus, scroll), only with the
+   * switch HAI_UI_ACTIONS on. It writes nothing: the browser only sets values in
+   * the form of the current page, the person saves (docs/hai-ui-aktionen.md).
+   */
+  uiAction?: UiActionEvent;
   /**
    * A question of the memory (yes, no, change): the browser shows the card. The
    * entry is stored as `proposed` and has no effect before the person says yes
@@ -624,6 +638,25 @@ interface DocumentTurn {
 function pageSectionFor(context: PipelineContext): string | undefined {
   if (!context.page || !isPageContextEnabled()) return undefined;
   return buildPageContextSection(context.page) || undefined;
+}
+
+/**
+ * The turn as the UI tools see it (docs/hai-ui-aktionen.md): the message of the
+ * person, the audience from the database access and the path of the CHECKED page
+ * context (the page context has to be on for a form tool).
+ */
+function uiTurnOf(
+  userMessage: string,
+  context: PipelineContext,
+  access: RetrievalAccess | null
+): UiToolsTurn {
+  return {
+    userId: context.userId,
+    userMessage,
+    access,
+    pagePath: context.page && isPageContextEnabled() ? context.page.path : null,
+    voice: context.voice === true,
+  };
 }
 
 /**
@@ -1173,6 +1206,7 @@ export async function processMessage(
       accessReasons,
       dayBriefing,
       pageContext: pageSectionFor(context),
+      uiTools: uiToolsPromptFor(uiTurnOf(userMessage, context, access)),
       ...(memory ? { memory } : {}),
     });
 
@@ -1202,6 +1236,15 @@ export async function processMessage(
       userMessage,
       undefined, // no streaming
       options
+    );
+
+    // UI tools (switch HAI_UI_ACTIONS): the block of the model is cut out of the
+    // answer and checked on the server. Without the switch the text is as it was.
+    const uiOutcome = await applyUiTools(
+      responseData.text,
+      uiTurnOf(userMessage, context, access),
+      context,
+      access
     );
 
     // Step 7: Build citations from search results (local RAG)
@@ -1272,14 +1315,16 @@ export async function processMessage(
     // page "Auszubildende" (the server builds it, never the model)
     const listOffer = traineeListOfferFor(userMessage, context, access);
 
+    const offer = listOffer ?? uiOutcome.navigationOffer;
     return {
-      response: responseData.text,
+      response: withUiNote(uiOutcome),
       intent,
       citations,
       quizState: newQuizState,
       ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
       ...(memoryProposal ? { memoryProposal } : {}),
-      ...(listOffer ? { navigationOffer: listOffer } : {}),
+      ...(offer ? { navigationOffer: offer } : {}),
+      ...(uiOutcome.uiAction ? { uiAction: uiOutcome.uiAction } : {}),
     };
   } catch (error) {
     if (isChatUnavailableError(error)) return chatUnavailableResult(error);
@@ -1482,6 +1527,7 @@ export async function processMessageStream(
       accessReasons,
       dayBriefing,
       pageContext: pageSectionFor(context),
+      uiTools: uiToolsPromptFor(uiTurnOf(userMessage, context, access)),
       ...(memory ? { memory } : {}),
     });
 
@@ -1503,15 +1549,30 @@ export async function processMessageStream(
       enableWebSearch,
     };
 
+    // With the switch HAI_UI_ACTIONS on, a filter keeps the block of the UI
+    // tools off the stream, without it the sink is onChunk itself
+    const uiSink = uiStreamSink(onChunk);
     const response = await chatProviderFor(
       !!usedTrainerSolutions || !!context.holdsTrainerKnowledge
     )(
       systemPrompt,
       providerMessages,
       userMessage,
-      onChunk, // streaming callback
+      uiSink.push, // streaming callback
       options
     );
+    uiSink.flush();
+    const uiOutcome = await applyUiTools(
+      response.text,
+      uiTurnOf(userMessage, context, access),
+      context,
+      access
+    );
+    // the fixed sentence of the server (what was filled, or why not) follows
+    // the streamed text, so the stream and the stored answer are the same
+    if (uiOutcome.note) {
+      onChunk(withUiNote(uiOutcome).slice(uiOutcome.text.length));
+    }
 
     // Process local RAG citations
     const citations: Citation[] = searchResults
@@ -1563,13 +1624,15 @@ export async function processMessageStream(
     // own trainees, like in processMessage
     const listOffer = traineeListOfferFor(userMessage, context, access);
 
+    const offer = listOffer ?? uiOutcome.navigationOffer;
     return {
-      response: response.text,
+      response: withUiNote(uiOutcome),
       intent,
       citations,
       ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
       ...(memoryProposal ? { memoryProposal } : {}),
-      ...(listOffer ? { navigationOffer: listOffer } : {}),
+      ...(offer ? { navigationOffer: offer } : {}),
+      ...(uiOutcome.uiAction ? { uiAction: uiOutcome.uiAction } : {}),
     };
   } catch (error) {
     if (isChatUnavailableError(error)) return chatUnavailableResult(error);
