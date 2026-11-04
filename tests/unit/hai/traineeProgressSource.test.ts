@@ -121,9 +121,12 @@ describe('fetchTraineeProgress', () => {
     (loadTraineeCourseFigures as jest.Mock).mockResolvedValue([figure()]);
     await fetchTraineeProgress(USER);
     expect(loadTraineeCourseFigures).toHaveBeenCalledWith(USER, [KFBM]);
-    // the quiz score is read for these courses and this person only
+    // the quiz score is read for the occupations and the person only, at the
+    // same time as the figures (it does not wait for them)
     expect(executed).toHaveLength(1);
-    expect(executed[0].params).toEqual(expect.arrayContaining([USER, 'c1']));
+    expect(executed[0].params).toEqual(expect.arrayContaining([USER, KFBM]));
+    expect(executed[0].sql).toContain('e.training_catalog_id IN');
+    expect(executed[0].sql).toContain('course_members cm WHERE cm.user_id');
     expect(executed[0].params).not.toContain(FIAE);
   });
 
@@ -177,7 +180,6 @@ describe('fetchTraineeProgress', () => {
     expect(loadTraineeCourseFigures).not.toHaveBeenCalled();
     (loadTraineeCourseFigures as jest.Mock).mockResolvedValue([]);
     await expect(fetchTraineeProgress(USER)).resolves.toEqual([]);
-    expect(executed).toHaveLength(0);
   });
 
   it('a failed read is logged and gives an empty list, as before', async () => {

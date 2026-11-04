@@ -98,58 +98,98 @@ export async function loadCourseProgressions(
   const ids = unique(courseIds.map(String));
   if (ids.length === 0) return result;
 
-  const courseRows = await db
-    .select({ id: courses.id, trainingCatalogId: courses.trainingCatalogId })
-    .from(courses)
-    .where(inArray(courses.id, ids));
+  // The queries are started as early as their input is known: the courses, the
+  // enablers and the profile need nothing from each other, the catalogs and the
+  // enrollments wait for the courses, the links and the exceptions for the
+  // enablers. Only the order of the calls changed, never a query or its result
+  // (three rounds to the database instead of four). The early promises get a
+  // handler of their own so that a failure of one of them is never an unhandled
+  // rejection while another one is awaited; the failure itself is thrown at the
+  // await below, as before.
+  // A query builder runs once per then() or catch(): it is turned into a real
+  // promise first, so that every query is sent exactly once.
+  const early = <T>(query: PromiseLike<T>): Promise<T> => {
+    const promise = Promise.resolve(query);
+    promise.catch(() => undefined);
+    return promise;
+  };
+  const courseRowsPromise = early(
+    db
+      .select({ id: courses.id, trainingCatalogId: courses.trainingCatalogId })
+      .from(courses)
+      .where(inArray(courses.id, ids))
+  );
+  const enablerRowsPromise = early(
+    db
+      .select({
+        id: enablers.id,
+        title: enablers.title,
+        courseId: enablers.courseId,
+        orderIndex: enablers.orderIndex,
+        isActive: enablers.isActive,
+      })
+      .from(enablers)
+      .where(inArray(enablers.courseId, ids))
+  );
+  const profileRowsPromise = early(
+    db
+      .select({ createdAt: profiles.createdAt })
+      .from(profiles)
+      .where(eq(profiles.id, traineeId))
+  );
+
+  const courseRows = await courseRowsPromise;
   const catalogIds = unique(
     courseRows
       .map(c => (c.trainingCatalogId ? String(c.trainingCatalogId) : null))
       .filter((v): v is string => v !== null)
   );
-
-  const [catalogRows, enrollmentRows, profileRows, enablerRows] =
-    await Promise.all([
-      catalogIds.length
-        ? db
-            .select({
-              id: trainingCatalogs.id,
-              settings: trainingCatalogs.settings,
-            })
-            .from(trainingCatalogs)
-            .where(inArray(trainingCatalogs.id, catalogIds))
-        : Promise.resolve([]),
-      catalogIds.length
-        ? db
-            .select({
-              trainingCatalogId: traineeEnrollments.trainingCatalogId,
-              createdAt: traineeEnrollments.createdAt,
-            })
-            .from(traineeEnrollments)
-            .where(
-              and(
-                eq(traineeEnrollments.traineeId, traineeId),
-                inArray(traineeEnrollments.trainingCatalogId, catalogIds)
-              )
+  const catalogRowsPromise = early(
+    catalogIds.length
+      ? db
+          .select({
+            id: trainingCatalogs.id,
+            settings: trainingCatalogs.settings,
+          })
+          .from(trainingCatalogs)
+          .where(inArray(trainingCatalogs.id, catalogIds))
+      : Promise.resolve([])
+  );
+  const enrollmentRowsPromise = early(
+    catalogIds.length
+      ? db
+          .select({
+            trainingCatalogId: traineeEnrollments.trainingCatalogId,
+            createdAt: traineeEnrollments.createdAt,
+          })
+          .from(traineeEnrollments)
+          .where(
+            and(
+              eq(traineeEnrollments.traineeId, traineeId),
+              inArray(traineeEnrollments.trainingCatalogId, catalogIds)
             )
-        : Promise.resolve([]),
-      db
-        .select({ createdAt: profiles.createdAt })
-        .from(profiles)
-        .where(eq(profiles.id, traineeId)),
-      db
-        .select({
-          id: enablers.id,
-          title: enablers.title,
-          courseId: enablers.courseId,
-          orderIndex: enablers.orderIndex,
-          isActive: enablers.isActive,
-        })
-        .from(enablers)
-        .where(inArray(enablers.courseId, ids)),
-    ]);
+          )
+      : Promise.resolve([])
+  );
 
+  const enablerRows = await enablerRowsPromise;
   const enablerIds = enablerRows.map(e => String(e.id));
+  const overrideRowsPromise = early(
+    enablerIds.length
+      ? db
+          .select({
+            enablerId: traineeEnablerOverrides.enablerId,
+            isActive: traineeEnablerOverrides.isActive,
+          })
+          .from(traineeEnablerOverrides)
+          .where(
+            and(
+              eq(traineeEnablerOverrides.traineeId, traineeId),
+              inArray(traineeEnablerOverrides.enablerId, enablerIds)
+            )
+          )
+      : Promise.resolve([])
+  );
   const linkRows = enablerIds.length
     ? await db
         .select({
@@ -161,43 +201,35 @@ export async function loadCourseProgressions(
         .where(inArray(enablerQuizLinks.enablerId, enablerIds))
     : [];
   const quizIds = unique(linkRows.map(l => String(l.quizId)));
-  const [quizRows, gradableQuizIds, attemptRows, overrideRows] =
+  const [quizRows, gradableQuizIds, attemptRows] = await Promise.all([
+    quizIds.length
+      ? db
+          .select({ id: quizzes.id, isActive: quizzes.isActive })
+          .from(quizzes)
+          .where(inArray(quizzes.id, quizIds))
+      : Promise.resolve([]),
+    loadGradableQuizIds(quizIds),
+    quizIds.length
+      ? db
+          .select({
+            quizId: quizSubmissions.quizId,
+            score: quizSubmissions.score,
+          })
+          .from(quizSubmissions)
+          .where(
+            and(
+              eq(quizSubmissions.traineeId, traineeId),
+              inArray(quizSubmissions.quizId, quizIds)
+            )
+          )
+      : Promise.resolve([]),
+  ]);
+  const [catalogRows, enrollmentRows, profileRows, overrideRows] =
     await Promise.all([
-      quizIds.length
-        ? db
-            .select({ id: quizzes.id, isActive: quizzes.isActive })
-            .from(quizzes)
-            .where(inArray(quizzes.id, quizIds))
-        : Promise.resolve([]),
-      loadGradableQuizIds(quizIds),
-      quizIds.length
-        ? db
-            .select({
-              quizId: quizSubmissions.quizId,
-              score: quizSubmissions.score,
-            })
-            .from(quizSubmissions)
-            .where(
-              and(
-                eq(quizSubmissions.traineeId, traineeId),
-                inArray(quizSubmissions.quizId, quizIds)
-              )
-            )
-        : Promise.resolve([]),
-      enablerIds.length
-        ? db
-            .select({
-              enablerId: traineeEnablerOverrides.enablerId,
-              isActive: traineeEnablerOverrides.isActive,
-            })
-            .from(traineeEnablerOverrides)
-            .where(
-              and(
-                eq(traineeEnablerOverrides.traineeId, traineeId),
-                inArray(traineeEnablerOverrides.enablerId, enablerIds)
-              )
-            )
-        : Promise.resolve([]),
+      catalogRowsPromise,
+      enrollmentRowsPromise,
+      profileRowsPromise,
+      overrideRowsPromise,
     ]);
 
   const quizActive = new Map(quizRows.map(q => [String(q.id), !!q.isActive]));
