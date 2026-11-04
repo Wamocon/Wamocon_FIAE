@@ -22,10 +22,12 @@
  *   reference  the level of the person: set by the calibration at the start
  *              ("Hallo HAI", `calibrate`) and then the upper median of the means
  *              of the last utterances that were accepted
- *   threshold  ambient + share * (reference - ambient), at least a small multiple
- *              of the room level, at most `referenceCap` of the reference (the
- *              person who speaks a little softer than at the calibration still
- *              passes), then clamped to [min, max].
+ *   threshold  ambient + share * (reference - ambient), at least three times the
+ *              room level (the protection in a loud room, as measured for the
+ *              first gate), but at most `referenceCap` (75 percent) of the
+ *              reference: the room factor can never put the threshold above the
+ *              voice of the calibrated person, so a quiet microphone or a loud room
+ *              alone never locks the person out. Then clamped to [min, max].
  * Without a reference (the calibration was skipped or failed, nothing accepted
  * yet) only a very low safety limit counts (`min`, RMS 0.0024) and the room
  * level times a small factor. A microphone with a low gain (the automatic gain
@@ -101,8 +103,8 @@ export const GATE_PROFILES: Readonly<Record<Sensitivity, GateProfile>> =
       max: 0.2,
       share: 0.2,
       ambientFactor: 2,
-      roomFactor: 1.5,
-      referenceCap: 0.6,
+      roomFactor: 3,
+      referenceCap: 0.75,
       peakFactor: 1.5,
       interimPeakFactor: 2.5,
       confidenceMin: 0.6,
@@ -113,8 +115,8 @@ export const GATE_PROFILES: Readonly<Record<Sensitivity, GateProfile>> =
       max: 0.2,
       share: 0.2,
       ambientFactor: 2,
-      roomFactor: 1.5,
-      referenceCap: 0.6,
+      roomFactor: 3,
+      referenceCap: 0.75,
       peakFactor: 1.5,
       interimPeakFactor: 2.5,
       confidenceMin: 0.6,
@@ -125,8 +127,8 @@ export const GATE_PROFILES: Readonly<Record<Sensitivity, GateProfile>> =
       max: 0.3,
       share: 0.45,
       ambientFactor: 3,
-      roomFactor: 2,
-      referenceCap: 0.8,
+      roomFactor: 4,
+      referenceCap: 0.9,
       peakFactor: 1.5,
       interimPeakFactor: 2.5,
       confidenceMin: 0.75,

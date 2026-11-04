@@ -92,7 +92,7 @@ describe('LevelGate: the threshold', () => {
     expect(gate.threshold()).toBe(GATE_PROFILES.normal.min);
     // a loud room raises it, up to the upper bound
     feed(gate, T0, 5_000, 0.05);
-    expect(gate.threshold()).toBeCloseTo(0.15, 5);
+    expect(gate.threshold()).toBeCloseTo(0.1, 5);
     gate.reset();
     feed(gate, T0, 5_000, 0.5);
     expect(gate.threshold()).toBe(GATE_PROFILES.normal.max);
@@ -120,10 +120,10 @@ describe('LevelGate: the threshold', () => {
     expect(loud.threshold()).toBe(GATE_PROFILES.normal.max);
     const quiet = new LevelGate('normal');
     quiet.confirm(0.02);
-    expect(quiet.threshold()).toBe(GATE_PROFILES.normal.min);
+    expect(quiet.threshold()).toBe(GATE_PROFILES.normal.minWithReference);
     const strictQuiet = new LevelGate('strict');
     strictQuiet.confirm(0.02);
-    expect(strictQuiet.threshold()).toBe(GATE_PROFILES.strict.min);
+    expect(strictQuiet.threshold()).toBe(GATE_PROFILES.strict.minWithReference);
     const strictLoud = new LevelGate('strict');
     strictLoud.confirm(1);
     expect(strictLoud.threshold()).toBe(GATE_PROFILES.strict.max);
@@ -182,7 +182,8 @@ describe('LevelGate: finished utterances (synthetic level curves)', () => {
     const room = gate.evaluate({ startAt: roomStart, endAt: at }, at);
     expect(room.ok).toBe(false);
     if (!room.ok) {
-      expect(room.why).toBe('quiet');
+      // clearly above the room, under the person: another voice
+      expect(room.why).toBe('background');
       expect(room.peak).toBeLessThan(room.threshold * 1.5 + 1);
     }
   });

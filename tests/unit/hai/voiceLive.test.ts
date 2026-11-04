@@ -36,6 +36,11 @@ import type {
   UtteranceLike,
   VoiceEnv,
 } from '@/lib/hai/voice/client/types';
+import {
+  buildDiagnosis,
+  resetDiagnosticsForTests,
+} from '@/lib/hai/voice/client/diagnostics';
+import { LevelGate } from '@/lib/hai/voice/levelGate';
 import { FakeAudioContext, makeDeps, pcmBase64 } from './voiceClient.helpers';
 
 // Step 1 to 5, 7 and the live mode of the voice assistant in the browser: the
@@ -238,6 +243,33 @@ describe('SonioxRecognition: microphone, level, proof of audio', () => {
       readyState: 'live',
       ctx: 'running',
     });
+  });
+
+  it('keeps what the browser delivers and the name of the device for the diagnosis (numbers and tokens, no audio)', async () => {
+    resetDiagnosticsForTests();
+    const t = setup();
+    t.rec.start();
+    await jest.advanceTimersByTimeAsync(0);
+    const doc = buildDiagnosis({
+      gate: new LevelGate().snapshot(),
+      pushToTalk: false,
+      signalWords: true,
+      calibration: 'idle',
+      calibrationReason: null,
+      provider: 'soniox',
+      live: false,
+    });
+    expect(['raw', 'live']).toContain(doc.microphone.profile);
+    expect(doc.microphone.delivered).toMatchObject({
+      sampleRate: 48_000,
+      channelCount: 1,
+      autoGainControl: true,
+      muted: false,
+      readyState: 'live',
+      ctx: 'running',
+    });
+    expect(doc.microphone.device).toBe('Test-Mikrofon (Headset)');
+    resetDiagnosticsForTests();
   });
 
   it('counts the chunks that went to Soniox: the proof that the browser sends audio', async () => {

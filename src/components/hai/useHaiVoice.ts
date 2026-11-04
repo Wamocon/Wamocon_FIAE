@@ -755,8 +755,10 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       setError(reason);
       setInterim('');
       setPhase('error');
+      // the conversation is over: no question to the person stays open
+      cancelCalibration();
     },
-    [cancelSpeech, dropRecognition, endHold, setPhase]
+    [cancelCalibration, cancelSpeech, dropRecognition, endHold, setPhase]
   );
 
   const stop = useCallback(() => {
@@ -771,7 +773,16 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     setLevel(null);
     setError(null);
     setPhase('idle');
-  }, [cancelSpeech, dropRecognition, endHold, setPhase]);
+    cancelCalibration();
+    setCalibration('idle');
+  }, [
+    cancelCalibration,
+    cancelSpeech,
+    dropRecognition,
+    endHold,
+    setCalibration,
+    setPhase,
+  ]);
 
   // After the answer: listen again. Live mode: the microphone is still open, the
   // loop only gets the word back. A round: the microphone opens anew, a moment
@@ -910,6 +921,12 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     silenceTimerRef.current = setTimeout(() => {
       silenceTimerRef.current = null;
       if (stoppedRef.current || phaseRef.current !== 'listening') return;
+      // a question to the person is open (calibration failed, way out): the
+      // conversation waits for the answer, that is no silent round
+      if (promptRef.current !== null) {
+        armSilence();
+        return;
+      }
       silentRoundsRef.current += 1;
       mark('listen.silent', { n: silentRoundsRef.current });
       if (silentRoundsRef.current >= MAX_SILENT_ROUNDS) {
@@ -1096,6 +1113,12 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       setCalibration('failed', reason);
       setPrompt('calibration-failed');
       silentRoundsRef.current = 0;
+      // the question stays for a while, then the conversation goes on without it
+      if (choiceTimerRef.current) clearTimeout(choiceTimerRef.current);
+      choiceTimerRef.current = setTimeout(() => {
+        choiceTimerRef.current = null;
+        if (promptRef.current === 'calibration-failed') setPrompt(null);
+      }, CHOICE_MS);
     },
     [setCalibration, setPrompt]
   );
@@ -1377,13 +1400,11 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       }
       // too quiet to be the person (the gate): not shown, not counted as speech.
       // The text of a voice in the room never reaches the display.
-      if (
-        recRef.current?.live &&
-        calibrationRef.current !== 'listening' &&
-        !loudEnoughNow()
-      ) {
+      // during the calibration nothing is shown (it could be a voice of the room)
+      if (recRef.current?.live && calibrationRef.current === 'listening') {
         return;
       }
+      if (recRef.current?.live && !loudEnoughNow()) return;
       setInterim(text);
       if (text && recRef.current?.live) {
         silentRoundsRef.current = 0;

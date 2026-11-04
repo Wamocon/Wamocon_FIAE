@@ -145,6 +145,7 @@ function makeEnv(
   };
   return {
     env,
+    calibrate: false,
     recognitions,
     log,
     store,
@@ -163,6 +164,7 @@ function setup(env: VoiceEnv, extra: Record<string, unknown> = {}) {
     stopGeneration: jest.fn(),
     placeholderText: 'Denkt nach...',
     env,
+    calibrate: false,
     ...extra,
   };
   const hook = renderHook((p: typeof props) => useHaiVoice(p as never), {
@@ -326,8 +328,9 @@ describe('only the voice of the person counts: loudness gate and confidence', ()
     utter(rec, 'Geheimes Hintergrundgespräch über den Chef', 1_500, 0.97);
     const marks = traceEntries().filter(e => e.name === 'utterance.discarded');
     expect(marks).toHaveLength(1);
-    expect(marks[0].data.why).toBe('quiet');
-    for (const key of ['mean', 'peak', 'thr', 'conf']) {
+    // a voice clearly above the room, under the threshold of the person: another voice
+    expect(marks[0].data.why).toBe('background');
+    for (const key of ['mean', 'peak', 'thr', 'conf', 'amb', 'ref']) {
       expect(typeof marks[0].data[key]).toBe('number');
     }
     expect(marks[0].data.conf).toBeCloseTo(0.97, 2);
@@ -338,9 +341,10 @@ describe('only the voice of the person counts: loudness gate and confidence', ()
 
   it('after several quiet utterances in a row the note asks to speak louder or closer, the person being heard again clears it', async () => {
     const { s, rec } = await withReference();
+    // real silence at the microphone: only a murmur far under the room
     for (let i = 0; i < QUIET_STREAK; i += 1) {
-      await level(rec, ROOM / 10, 500);
-      await level(rec, ROOM, 1_000);
+      await level(rec, 0.003, 500);
+      await level(rec, 0.006, 1_000);
       utter(rec, `Gemurmel ${i}`, 1_000);
     }
     expect(s.hook.result.current.filterNote).toBe('too-quiet');
@@ -365,13 +369,14 @@ describe('only the voice of the person counts: loudness gate and confidence', ()
     window.localStorage.setItem(TRACE_STORAGE_KEY, '1');
     jest.spyOn(console, 'info').mockImplementation(() => undefined);
     const { s, rec } = await withReference();
-    await level(rec, OWN, 1_500);
+    // a normal level (above the threshold, far from shouting): not understood
+    await level(rec, OWN / 3, 1_500);
     utter(rec, 'Mmh hmm äh', 1_500, 0.4);
     expect(s.props.sendMessage).not.toHaveBeenCalled();
     const marks = traceEntries().filter(e => e.name === 'utterance.discarded');
     expect(marks[0].data.why).toBe('confidence');
     // not a quiet one: the "speak louder" note never comes from low confidence
-    expect(s.hook.result.current.filterNote).toBe('only-you');
+    expect(s.hook.result.current.filterNote).toBe('unclear');
     await level(rec, OWN, 1_500);
     utter(rec, 'Was ist ein Join', 1_500, 0.95);
     expect(s.props.sendMessage).toHaveBeenCalledTimes(1);
