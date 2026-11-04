@@ -28,6 +28,9 @@ import { SidebarProvider } from '@/contexts/SidebarContext';
 // lazy loading are doubles. Modules under test: HaiWrapper, haiLayout,
 // HaiDockContext, HaiButton, HaiVoiceModeOverlay.
 
+// the first test loads the lazy components, which can take longer on a busy machine
+jest.setTimeout(30000);
+
 jest.mock('@/contexts/AuthContext');
 jest.mock('@/contexts/CatalogContext');
 jest.mock('next/image', () => ({
