@@ -28,6 +28,9 @@
  *              reference: the room factor can never put the threshold above the
  *              voice of the calibrated person, so a quiet microphone or a loud room
  *              alone never locks the person out. Then clamped to [min, max].
+ *              After a calibration the reference never falls under 70 percent of the
+ *              calibrated one (quiet fragments of a talk in the room that got
+ *              through would otherwise pull it down).
  * Without a reference (the calibration was skipped or failed, nothing accepted
  * yet) only a very low safety limit counts (`min`, RMS 0.0024) and the room
  * level times a small factor. A microphone with a low gain (the automatic gain
@@ -145,6 +148,14 @@ export const AMBIENT_PERCENTILE = 0.2;
 export const REFERENCE_UTTERANCES = 7;
 /** The reference is the upper median: this part of the sorted means. */
 export const REFERENCE_QUANTILE = 0.6;
+/**
+ * After a calibration the reference never falls under this part of the calibrated one.
+ * Without it every quiet fragment that got through (a word of a conversation in the room
+ * counts as accepted) pulls the reference down, the threshold follows, and the room
+ * gets in more and more (measured 05.11.2026, docs/hai-sprachmodus-recherche.md,
+ * section 11). It can still rise, and a new calibration resets it.
+ */
+export const REFERENCE_FLOOR = 0.7;
 /** The window of an utterance gets this much room on both sides (clock skew). */
 export const WINDOW_PADDING_MS = 150;
 /** The window reaches this much past the last word (the recording lags the words). */
@@ -159,6 +170,14 @@ export const SHORT_PEAK_FACTOR = 3;
 export const SHORT_PEAK_OF_REFERENCE = 1.6;
 /** ... and never more than this level (a shout reaches it, a normal voice does too). */
 export const PEAK_CEILING = 0.9;
+/**
+ * A room whose level reaches this part of the reference is "loud": the person is hardly
+ * louder than the talk around. There a single word keeps the full requirement (three
+ * times the threshold). The word of a talk in the room would pass the lower one (measured
+ * 05.11.2026: up to 17 sentences of a talk 4 dB under the person reached the chat). The
+ * person who is held back by it gets the way out after two utterances.
+ */
+export const LOUD_ROOM_SHARE = 0.25;
 /** An utterance without a time window is judged on this much of the recent past. */
 export const FALLBACK_WINDOW_MS = 2_500;
 /** A provisional text is judged on this much of the recent past. */
@@ -180,12 +199,14 @@ export const CALIBRATION_RATIO = 1.8;
 /** Calibration: samples of the words at or above this part of the peak are "speech". */
 export const CALIBRATION_ACTIVE_PART = 0.35;
 /**
- * Calibration: the reference is the mean of the speech frames times this. The
- * mean of a finished utterance includes its pauses and the lag of the window
- * (about 0.75 of the speech level for a longer question, measured 05.11.2026
- * in docs/hai-sprachmodus-recherche.md, section 11).
+ * Calibration: the reference is the mean of the speech frames of the short phrase
+ * times this. The phrase is one loud word pair, a longer question has pauses and
+ * the lag of the window in its mean. Measured 05.11.2026 (docs/hai-sprachmodus-
+ * recherche.md, section 11): with 0.75 the reference came out about 1.3 times the
+ * mean of the person's later questions (1.1 to 1.6) and a short question was
+ * dropped in "strict". 0.6 puts it at about the mean of a question.
  */
-export const CALIBRATION_REFERENCE_FACTOR = 0.75;
+export const CALIBRATION_REFERENCE_FACTOR = 0.6;
 
 export interface UtteranceWindow {
   /** Clock time (ms) of the first word, if the provider knows it. */
@@ -270,6 +291,7 @@ export class LevelGate {
   private accepted: number[] = [];
   private calibrated = false;
   private calibratedAmbient: number | null = null;
+  private calibratedReference: number | null = null;
 
   constructor(public sensitivity: Sensitivity = 'normal') {}
 
@@ -292,6 +314,7 @@ export class LevelGate {
     this.accepted = [];
     this.calibrated = false;
     this.calibratedAmbient = null;
+    this.calibratedReference = null;
   }
 
   /** The reference and the room level of a calibration are forgotten (a new one follows). */
@@ -299,6 +322,7 @@ export class LevelGate {
     this.accepted = [];
     this.calibrated = false;
     this.calibratedAmbient = null;
+    this.calibratedReference = null;
   }
 
   /** The reference of the person was set by a calibration (and nothing reset it since). */
@@ -331,7 +355,8 @@ export class LevelGate {
   reference(): number | null {
     if (this.accepted.length === 0) return null;
     const sorted = [...this.accepted].sort((a, b) => a - b);
-    return sorted[Math.ceil((sorted.length - 1) * REFERENCE_QUANTILE)];
+    const median = sorted[Math.ceil((sorted.length - 1) * REFERENCE_QUANTILE)];
+    return Math.max(median, (this.calibratedReference ?? 0) * REFERENCE_FLOOR);
   }
 
   /**
@@ -373,8 +398,12 @@ export class LevelGate {
   /** The peak a single word has to reach (never out of reach of a voice). */
   private shortPeakNeed(threshold: number): number {
     const reference = this.reference();
+    const loudRoom =
+      reference !== null && this.ambient() >= reference * LOUD_ROOM_SHARE;
     const byReference =
-      reference === null ? Infinity : reference * SHORT_PEAK_OF_REFERENCE;
+      reference === null || loudRoom
+        ? Infinity
+        : reference * SHORT_PEAK_OF_REFERENCE;
     return Math.max(
       threshold * this.profile.peakFactor,
       Math.min(threshold * SHORT_PEAK_FACTOR, byReference, PEAK_CEILING)
@@ -483,6 +512,7 @@ export class LevelGate {
     this.accepted = [reference];
     this.calibrated = true;
     this.calibratedAmbient = ambient;
+    this.calibratedReference = reference;
     return { ok: true, reference, ...result };
   }
 

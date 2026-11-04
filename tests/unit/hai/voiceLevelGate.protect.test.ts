@@ -4,7 +4,9 @@ import {
   CLIPPED_PEAK,
   GATE_PROFILES,
   LevelGate,
+  LOUD_ROOM_SHARE,
   MIN_AMBIENT_SAMPLES,
+  REFERENCE_FLOOR,
 } from '@/lib/hai/voice/levelGate';
 import { isCalibrationPhrase } from '@/lib/hai/voice/signalWords';
 
@@ -125,6 +127,22 @@ describe('LevelGate: calibration', () => {
     if (!zeros.ok) expect(zeros.why).toBe('nolevel');
   });
 
+  it('quiet fragments that got through cannot pull the reference down far (floor of 70 percent)', () => {
+    const gate = new LevelGate('normal');
+    const { result } = calibrated(gate, 0.5);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    for (let i = 0; i < 20; i += 1) gate.confirm(0.01);
+    expect(gate.reference()).toBeCloseTo(result.reference * REFERENCE_FLOOR, 6);
+    // and it still rises with a louder person
+    for (let i = 0; i < 10; i += 1) gate.confirm(result.reference * 2);
+    expect(gate.reference()).toBeGreaterThan(result.reference * 1.5);
+    // without a calibration there is no floor
+    const plain = new LevelGate('normal');
+    for (let i = 0; i < 10; i += 1) plain.confirm(0.01);
+    expect(plain.reference()).toBeCloseTo(0.01, 6);
+  });
+
   it('a new calibration forgets the old one', () => {
     const gate = new LevelGate('normal');
     calibrated(gate, 0.5);
@@ -196,9 +214,38 @@ describe('LevelGate: the threshold is relative', () => {
     }
   });
 
+  it('in a loud room a single word keeps the full requirement, in a quiet one it is never out of reach of the reference', () => {
+    const word = (room: number) => {
+      const gate = new LevelGate('normal');
+      const { at } = calibrated(gate, 0.3, room);
+      const start = at;
+      // a word with a peak of 0.45 times the reference range
+      gate.push(0.2, start);
+      gate.push(0.22, start + 100);
+      gate.push(0.2, start + 200);
+      return {
+        gate,
+        verdict: gate.evaluate(
+          { startAt: start, endAt: start + 300 },
+          start + 700
+        ),
+      };
+    };
+    const quiet = word(0.004);
+    expect(quiet.verdict.ok).toBe(true);
+    // the room is as loud as a third of the person: three times the threshold is the need
+    const loud = word(0.07);
+    expect(loud.gate.ambient()).toBeGreaterThanOrEqual(
+      (loud.gate.reference() as number) * LOUD_ROOM_SHARE
+    );
+    const need = loud.gate.threshold() * 3;
+    expect(loud.verdict.peak).toBeLessThan(need);
+    expect(loud.verdict.ok).toBe(false);
+  });
+
   it('a single word is judged by its peak, which is never out of reach of the reference', () => {
     const gate = new LevelGate('normal');
-    const { at } = calibrated(gate, 0.3, 0.05);
+    const { at } = calibrated(gate, 0.3, 0.01);
     // one word at the peak of the calibration speech
     const start = at;
     gate.push(0.25, start);
