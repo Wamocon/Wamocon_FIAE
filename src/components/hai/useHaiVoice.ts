@@ -34,6 +34,15 @@
  * three silent rounds. Off with localStorage['hai-voice-live'] = 'off': then the
  * microphone is off while the assistant speaks (a round per question), as before.
  *
+ * Only the voice of the person counts (04.11.2026): an utterance is judged by the
+ * loudness of the recording over its words (adaptive gate, lib/hai/voice/levelGate.ts)
+ * and by the confidence of the recognition, and dropped (not sent, not stored, not
+ * shown) when it is too quiet or too uncertain. Signal words at the start of an
+ * utterance ("Stopp", "Warte", ...) stop the assistant at once, "Gespräch beenden"
+ * ends the mode (lib/hai/voice/signalWords.ts). A signal word passes the same gate
+ * and echo filter as any utterance. Push to talk (setting): the microphone records
+ * only while a button or the space bar is held, nothing else is ever heard.
+ *
  * @module components/hai/useHaiVoice
  */
 
@@ -42,12 +51,31 @@ import {
   berlinHour,
   dayStartDue,
   dayStartMessage,
-  isStopCommand,
   markDayStart,
   nextSpeechPieces,
   voiceSupport,
   type SimpleStorage,
 } from '@/lib/hai/voice/speech';
+import {
+  PUSH_TO_TALK_KEY,
+  SENSITIVITY_KEY,
+  SIGNAL_HINT_KEY,
+  SIGNAL_WORDS_KEY,
+  readFilterSettings,
+  signalHintSeen,
+  writeFilterSetting,
+} from '@/lib/hai/voice/filterSettings';
+import {
+  LevelGate,
+  type GateVerdict,
+  type Sensitivity,
+} from '@/lib/hai/voice/levelGate';
+import {
+  classifySignal,
+  haltAtStart,
+  speechWords,
+  type SignalLanguage,
+} from '@/lib/hai/voice/signalWords';
 import { createBrowserSpeaker } from '@/lib/hai/voice/client/browserSpeech';
 import type { ProviderFallback } from '@/lib/hai/voice/client/fallback';
 import { mark } from '@/lib/hai/voice/client/trace';
@@ -61,6 +89,7 @@ import type {
   RecognitionLike,
   SpeakerLike,
   SynthLike,
+  UtteranceInfo,
   UtteranceLike,
   VoiceConfig,
   VoiceEnv,
@@ -73,6 +102,7 @@ export type {
   RecognitionLike,
   SpeakerLike,
   SynthLike,
+  UtteranceInfo,
   UtteranceLike,
   VoiceConfig,
   VoiceEnv,
@@ -188,6 +218,11 @@ export interface UseHaiVoiceOptions {
   voiceConfig?: VoiceConfig | null;
   /** Replaces the browser and the chain of providers, for tests. */
   env?: VoiceEnv | null;
+  /**
+   * The person said "Mikrofon aus": switch the microphone off until the button
+   * is pressed (the voice mode keeps its state). Left out: the loop just stops.
+   */
+  onMicOff?: () => void;
 }
 
 // Consent of the person, in the browser only. v1 is the consent to the browser as
@@ -210,6 +245,17 @@ export const LIVE_SILENCE_MS = 8_000;
 export const BARGE_IN_LEVEL = 0.2;
 /** After the voice ended, an utterance made of the assistant's own words is an echo. */
 export const ECHO_WINDOW_MS = 2_500;
+/** The languages of the signal words that count (the recognition runs with German). */
+const SIGNAL_LANGUAGES: readonly SignalLanguage[] = ['de'];
+/** How long the note "only you" stays in the display. */
+export const FILTER_NOTE_MS = 6_000;
+/** This many quiet utterances in a row make the note "speak louder or closer". */
+export const QUIET_STREAK = 3;
+/** How long the first hint ("Sag Stopp ...") stays in the display. */
+export const SIGNAL_HINT_MS = 7_000;
+
+/** What the display says about utterances that were left out (never their text). */
+export type FilterNote = 'only-you' | 'too-quiet' | null;
 
 interface SpokenState {
   id: string | null;
@@ -243,13 +289,7 @@ function liveEnabled(storage: SimpleStorage | null): boolean {
 }
 
 /** Words of a text that count for the barge-in: letters and digits, at least two. */
-function wordsOf(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/\s+/)
-    .map(word => word.replace(/[^\p{L}\p{N}]/gu, ''))
-    .filter(word => word.length >= 2);
-}
+const wordsOf = speechWords;
 
 /** Every word was just said by the assistant itself: it is its own voice coming back in. */
 function isEcho(words: string[], spokenText: string): boolean {
@@ -315,7 +355,9 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     waitPhrase,
   } = options;
 
-  const { voiceConfig, env: testEnv } = options;
+  const { voiceConfig, env: testEnv, onMicOff } = options;
+  const onMicOffRef = useRef(onMicOff);
+  onMicOffRef.current = onMicOff;
 
   // what this browser can do: the browser's own speech, and the cloud parts
   const support = useMemo(() => {
@@ -380,9 +422,25 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     });
   }, [testEnv, chain, chains]);
 
-  // the open microphone of the live mode is part of the consent (only Soniox does it)
+  // the protection against background voices: settings of this device
+  const [sensitivity, setSensitivityState] = useState<Sensitivity>('normal');
+  const [pushToTalk, setPushToTalkState] = useState(false);
+  const [signalWords, setSignalWordsState] = useState(true);
+  useEffect(() => {
+    if (!env) return;
+    const saved = readFilterSettings(env.storage);
+    setSensitivityState(saved.sensitivity);
+    setPushToTalkState(saved.pushToTalk);
+    setSignalWordsState(saved.signalWords);
+  }, [env]);
+
+  // the open microphone of the live mode is part of the consent (only Soniox does
+  // it). With push to talk the microphone is open only while the button is held.
   const needLive =
-    !!env?.live && chain.includes('soniox') && liveEnabled(env.storage);
+    !!env?.live &&
+    chain.includes('soniox') &&
+    liveEnabled(env.storage) &&
+    !pushToTalk;
 
   const [phase, setPhaseState] = useState<VoicePhase>('idle');
   const [interim, setInterim] = useState('');
@@ -400,6 +458,27 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
   const [micOpen, setMicOpen] = useState(false);
   // the recognition stays open over the whole conversation (live mode)
   const [live, setLive] = useState(false);
+  // what the display says about utterances that were left out, and the first hint
+  const [filterNote, setFilterNote] = useState<FilterNote>(null);
+  const [signalHint, setSignalHint] = useState(false);
+  // push to talk: the button or the space bar is held right now
+  const [holding, setHolding] = useState(false);
+
+  // the loudness gate: levels of the recording, the reference of the person's voice
+  const gate = useMemo(() => new LevelGate(), []);
+  gate.setSensitivity(sensitivity);
+  const pttRef = useRef(false);
+  pttRef.current = pushToTalk;
+  const signalsRef = useRef(true);
+  signalsRef.current = signalWords;
+  const holdingRef = useRef(false);
+  // pressToTalk asks the next listen() for a session that lasts as long as the button
+  const holdRequestRef = useRef(false);
+  // utterances said while the button is held, said together when it is released
+  const holdBufferRef = useRef<string[]>([]);
+  const quietStreakRef = useRef(0);
+  const noteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const phaseRef = useRef<VoicePhase>('idle');
   const stoppedRef = useRef(true);
@@ -505,6 +584,25 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     [userId, env]
   );
 
+  const setSensitivity = useCallback(
+    (value: Sensitivity) => {
+      setSensitivityState(value);
+      writeFilterSetting(env?.storage ?? null, SENSITIVITY_KEY, value);
+    },
+    [env]
+  );
+  const setSignalWords = useCallback(
+    (on: boolean) => {
+      setSignalWordsState(on);
+      writeFilterSetting(
+        env?.storage ?? null,
+        SIGNAL_WORDS_KEY,
+        on ? 'on' : 'off'
+      );
+    },
+    [env]
+  );
+
   const cancelSpeech = useCallback(() => {
     const state = spokenRef.current;
     try {
@@ -547,20 +645,30 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     }
   }, [clearSilence]);
 
+  /** The button of push to talk is not held any more (the microphone is closed elsewhere). */
+  const endHold = useCallback(() => {
+    holdingRef.current = false;
+    holdRequestRef.current = false;
+    holdBufferRef.current = [];
+    setHolding(false);
+  }, []);
+
   const fail = useCallback(
     (reason: Exclude<VoiceError, null>) => {
       stoppedRef.current = true;
+      endHold();
       dropRecognition();
       cancelSpeech();
       setError(reason);
       setInterim('');
       setPhase('error');
     },
-    [cancelSpeech, dropRecognition, setPhase]
+    [cancelSpeech, dropRecognition, endHold, setPhase]
   );
 
   const stop = useCallback(() => {
     stoppedRef.current = true;
+    endHold();
     dropRecognition();
     cancelSpeech();
     ignoreIdRef.current = spokenRef.current.id;
@@ -570,7 +678,7 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     setLevel(null);
     setError(null);
     setPhase('idle');
-  }, [cancelSpeech, dropRecognition, setPhase]);
+  }, [cancelSpeech, dropRecognition, endHold, setPhase]);
 
   // After the answer: listen again. Live mode: the microphone is still open, the
   // loop only gets the word back. A round: the microphone opens anew, a moment
@@ -579,6 +687,11 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     if (stoppedRef.current) return;
     // the way to the own server is warmed up for the next question (a ping, no content)
     envRef.current?.prefetch?.('server');
+    // push to talk: nothing opens by itself, the loop only waits for the button
+    if (pttRef.current && !recRef.current) {
+      listenRef.current();
+      return;
+    }
     if (recRef.current?.live) {
       listenRef.current();
       return;
@@ -647,16 +760,41 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       // of the speech output are there when the first sentence is
       if (env?.createSpeaker) ensureSpeaker(spokenRef.current)?.warm?.();
       // the next round (not needed when the recognition stays open) has its key
-      if (!recRef.current?.live) env?.prefetch?.('stt');
+      if (!recRef.current?.live) {
+        env?.prefetch?.(pttRef.current && env.live ? 'stt-live' : 'stt');
+      }
       void sendMessage(text, { voice: true });
     },
     [messages, sendMessage, setPhase, clearSilence, env, ensureSpeaker]
   );
 
+  /**
+   * What the person said, in a finished form. A signal word does not go to the
+   * chat as a question: "Gespräch beenden" ends the mode, "Mikrofon aus" switches
+   * the microphone off, a bare halt word ("Stopp") only stops, there is nothing
+   * to ask. Everything else is the next question.
+   */
   const handleFinal = useCallback(
     (text: string) => {
-      if (isStopCommand(text)) {
+      const signal = signalsRef.current
+        ? classifySignal(text, SIGNAL_LANGUAGES)
+        : null;
+      if (signal?.kind === 'end') {
+        mark('signal.end');
         stop();
+        return;
+      }
+      if (signal?.kind === 'micOff') {
+        mark('signal.micoff');
+        if (onMicOffRef.current) onMicOffRef.current();
+        else stop();
+        return;
+      }
+      if (signal?.kind === 'halt' && signal.pure) {
+        // a bare "Stopp": nothing to say to the chat, listen again
+        mark('utterance.ignored', { why: 'signal' });
+        setInterim('');
+        if (!stoppedRef.current) setTimeout(() => listenRef.current(), 250);
         return;
       }
       silentRoundsRef.current = 0;
@@ -673,6 +811,8 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
    */
   const armSilence = useCallback(() => {
     clearSilence();
+    // push to talk: waiting for the button is no silent round
+    if (pttRef.current) return;
     if (!recRef.current?.live || phaseRef.current !== 'listening') return;
     silenceTimerRef.current = setTimeout(() => {
       silenceTimerRef.current = null;
@@ -714,43 +854,146 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     [cancelSpeech, stopGeneration, setPhase, armSilence]
   );
 
+  /** Is somebody speaking loud enough right now? (a provisional text, no push to talk) */
+  const loudEnoughNow = useCallback(
+    () => pttRef.current || gate.passesNow(Date.now()),
+    [gate]
+  );
+
   /**
    * Is this a person speaking, or the assistant hearing itself or the room? Words
    * that the assistant just said itself never count (its own voice coming back in),
-   * and noise gives no word. One word counts only with a minimum loudness.
+   * and noise gives no word. It has to be loud enough (the gate: a quiet voice in
+   * the room does not interrupt). Two words interrupt; one word only with a minimum
+   * loudness, or when it is a signal word ("Stopp", "Warte", ...): a signal word
+   * needs no second word and no minimum loudness of its own, but it never
+   * bypasses the gate and the echo filter.
    */
   const considerBargeIn = useCallback(
     (text: string) => {
       const words = wordsOf(text);
       if (words.length === 0) return;
       if (isEcho(words, spokenTextsRef.current.join(' '))) return;
+      if (!loudEnoughNow()) return;
+      const signal = signalsRef.current
+        ? haltAtStart(text, SIGNAL_LANGUAGES)
+        : null;
+      if (signal) {
+        mark('signal.halt', { via: 'interim' });
+        bargeIn('signal');
+        return;
+      }
       if (words.length >= 2 || levelRef.current >= BARGE_IN_LEVEL) {
         bargeIn('voice');
       }
     },
-    [bargeIn]
+    [bargeIn, loudEnoughNow]
   );
 
-  /** Live mode: the speaker finished an utterance. */
+  /**
+   * An utterance that the gate or the confidence left out. Only numbers go to the
+   * measuring points, the text is gone: not stored, not sent, not shown. The
+   * display gets a short note ("only you"), after several quiet ones in a row the
+   * hint to speak louder or closer.
+   */
+  const discard = useCallback(
+    (verdict: Extract<GateVerdict, { ok: false }>) => {
+      mark('utterance.discarded', {
+        why: verdict.why,
+        mean: verdict.mean,
+        peak: verdict.peak,
+        thr: verdict.threshold,
+        conf: verdict.confidence ?? -1,
+      });
+      setInterim('');
+      quietStreakRef.current =
+        verdict.why === 'quiet' ? quietStreakRef.current + 1 : 0;
+      setFilterNote(
+        quietStreakRef.current >= QUIET_STREAK ? 'too-quiet' : 'only-you'
+      );
+      if (noteTimerRef.current) clearTimeout(noteTimerRef.current);
+      noteTimerRef.current = setTimeout(() => {
+        noteTimerRef.current = null;
+        setFilterNote(null);
+      }, FILTER_NOTE_MS);
+    },
+    []
+  );
+
+  const clearFilterNote = useCallback(() => {
+    quietStreakRef.current = 0;
+    if (noteTimerRef.current) clearTimeout(noteTimerRef.current);
+    noteTimerRef.current = null;
+    setFilterNote(null);
+  }, []);
+
+  /**
+   * Live mode: the speaker finished an utterance. Order: what is judged first is
+   * the person's voice (gate, confidence), then what the utterance is (a signal
+   * word, an echo of the assistant, a question). A signal word passes the same
+   * gate and the same echo filter, so a background talk that says "stopp" stops
+   * nobody.
+   */
   const handleUtterance = useCallback(
-    (text: string) => {
+    (text: string, info?: UtteranceInfo) => {
       if (stoppedRef.current) return;
-      const phase = phaseRef.current;
+      const answeringAtStart =
+        phaseRef.current === 'thinking' || phaseRef.current === 'speaking';
       const words = wordsOf(text);
+      const spokenText = spokenTextsRef.current.join(' ');
+      const echoed = isEcho(words, spokenText);
+      const echo =
+        echoed &&
+        (answeringAtStart ||
+          Date.now() - lastSpeechEndRef.current < ECHO_WINDOW_MS);
+      // push to talk: the person held the button, nothing to judge
+      const verdict = pttRef.current
+        ? null
+        : gate.evaluate(info ?? {}, Date.now());
+      const passes = !verdict || verdict.ok;
+
+      const signal =
+        signalsRef.current && passes && !echo
+          ? classifySignal(text, SIGNAL_LANGUAGES)
+          : null;
+      if (signal) {
+        if (signal.kind === 'end' || signal.kind === 'micOff') {
+          bargedRef.current = false;
+          setInterim('');
+          handleFinal(text.trim());
+          return;
+        }
+        // a halt word: the assistant stops (if it was not stopped by the
+        // provisional text already)
+        if (answeringAtStart) {
+          mark('signal.halt', { via: 'final' });
+          bargeIn('signal');
+        }
+        bargedRef.current = false;
+        if (signal.pure) {
+          mark('utterance.ignored', { why: 'signal' });
+          setInterim('');
+          return;
+        }
+        // "Moment mal, was ist ein JOIN?": the assistant stopped, the question goes on
+      }
+
       if (
-        (phase === 'thinking' || phase === 'speaking') &&
+        (phaseRef.current === 'thinking' || phaseRef.current === 'speaking') &&
         !bargedRef.current
       ) {
         // too little to count as an interruption: noise or the own voice
         mark('utterance.ignored', { why: 'while-answering' });
         return;
       }
-      if (
-        Date.now() - lastSpeechEndRef.current < ECHO_WINDOW_MS &&
-        isEcho(words, spokenTextsRef.current.join(' '))
-      ) {
+      if (Date.now() - lastSpeechEndRef.current < ECHO_WINDOW_MS && echoed) {
         mark('utterance.ignored', { why: 'echo' });
         setInterim('');
+        return;
+      }
+      if (verdict && !verdict.ok) {
+        bargedRef.current = false;
+        discard(verdict);
         return;
       }
       bargedRef.current = false;
@@ -758,13 +1001,30 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
         setInterim('');
         return;
       }
+      // it counted: the level of this voice is the reference of the person
+      if (verdict && verdict.judged && words.length >= 2) {
+        gate.confirm(verdict.mean);
+      }
+      clearFilterNote();
       handleFinal(text.trim());
     },
-    [handleFinal]
+    [bargeIn, clearFilterNote, discard, gate, handleFinal]
   );
 
   const listen = useCallback(async () => {
     if (stoppedRef.current || !env) return;
+    // push to talk: pressToTalk asks for a held session (the button is down)
+    const hold = holdRequestRef.current;
+    holdRequestRef.current = false;
+    // push to talk: the microphone opens only while the button is held. Without
+    // it the loop waits ("listening" without an open microphone).
+    if (pttRef.current && !hold) {
+      if (holdingRef.current && recRef.current) return;
+      setError(null);
+      setInterim('');
+      setPhase('listening');
+      return;
+    }
     // live mode: the recognition is still open, the person only gets the word again
     if (recRef.current?.live) {
       setError(null);
@@ -781,11 +1041,14 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       fail('unsupported');
       return;
     }
+    // the button was released while the recognition was made: nothing is recorded
+    if (hold && !holdingRef.current) return;
     const { rec, local } = made;
     setLocalRecognition(local);
     rec.lang = LANG;
-    // live: Soniox stays open over the conversation, the other providers do rounds
-    rec.continuous = !!env.live && liveEnabled(env.storage);
+    // live: Soniox stays open over the conversation, the other providers do rounds.
+    // Held to talk: one session that lasts as long as the button is held.
+    rec.continuous = hold || (!!env.live && liveEnabled(env.storage));
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     let finalText = '';
@@ -803,6 +1066,9 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
         if (!bargedRef.current) considerBargeIn(text);
         if (!bargedRef.current) return;
       }
+      // too quiet to be the person (the gate): not shown, not counted as speech.
+      // The text of a voice in the room never reaches the display.
+      if (recRef.current?.live && !loudEnoughNow()) return;
       setInterim(text);
       if (text && recRef.current?.live) {
         silentRoundsRef.current = 0;
@@ -815,16 +1081,22 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       setLive(rec.live === true);
       armSilence();
     };
-    rec.onutterance = text => {
+    rec.onutterance = (text, info) => {
       if (recRef.current !== rec) return;
       finalText = '';
-      handleUtterance(text);
+      if (hold) {
+        // held to talk: what was said so far waits for the release
+        holdBufferRef.current.push(text);
+        return;
+      }
+      handleUtterance(text, info);
     };
     // Optional: a provider that measures the recording reports its loudness (0 to 1)
     rec.onlevel = value => {
       if (typeof value !== 'number' || !Number.isFinite(value)) return;
       const clamped = Math.min(1, Math.max(0, value));
       levelRef.current = clamped;
+      gate.push(clamped, Date.now());
       // the measure is shown while the person is to speak (the voice mode draws it then)
       if (phaseRef.current === 'listening') setLevel(clamped);
     };
@@ -851,9 +1123,22 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       // a live session that ended while the assistant answers: the next round
       // starts after the answer (afterAnswer), not under its voice
       if (phase === 'thinking' || phase === 'speaking') return;
-      const heard = finalText.trim();
+      const heard = (hold ? [...holdBufferRef.current, finalText] : [finalText])
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (hold) {
+        holdBufferRef.current = [];
+        holdingRef.current = false;
+        setHolding(false);
+      }
       if (heard) {
         handleFinal(heard);
+        return;
+      }
+      // held to talk and nothing said: wait for the next press, no silent round
+      if (hold || pttRef.current) {
+        setTimeout(() => listenRef.current(), 0);
         return;
       }
       // silence: the browser ends the round after a while, listen again a few times
@@ -881,8 +1166,10 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     dropRecognition,
     env,
     fail,
+    gate,
     handleFinal,
     handleUtterance,
+    loudEnoughNow,
     setPhase,
   ]);
 
@@ -903,9 +1190,16 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     env.resetFallback?.();
     setActiveProvider(chain[0] ?? 'browser');
     // the keys of the cloud providers are fetched while the person starts to speak
-    env.prefetch?.(env.live && liveEnabled(env.storage) ? 'stt-live' : 'stt');
+    env.prefetch?.(
+      env.live && (liveEnabled(env.storage) || pttRef.current)
+        ? 'stt-live'
+        : 'stt'
+    );
     env.prefetch?.('tts');
     env.prefetch?.('server');
+    // a new conversation: the levels of the room and the person's reference start anew
+    gate.reset();
+    clearFilterNote();
     const now = env.now();
     if (dayStartEnabled && dayStartDue(env.storage, userId, now)) {
       markDayStart(env.storage, userId, now);
@@ -915,15 +1209,85 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     void listen();
   }, [
     chain,
+    clearFilterNote,
     consented,
     dayStartEnabled,
     enabled,
     env,
+    gate,
     listen,
     submit,
     usable,
     userId,
   ]);
+
+  /**
+   * Push to talk, the button or the space bar went down: be quiet (a running
+   * answer is stopped and aborted like an interruption) and record, as long as
+   * the button is held. Nothing is recorded before and after, so nothing of the
+   * room is ever heard.
+   */
+  const pressToTalk = useCallback(() => {
+    if (stoppedRef.current || !pttRef.current || holdingRef.current) return;
+    const phase = phaseRef.current;
+    if (phase === 'speaking' || phase === 'thinking') {
+      cancelSpeech();
+      const state = spokenRef.current;
+      ignoreIdRef.current = state.id;
+      state.finished = true;
+      state.done = true;
+      const lastAssistant = [...messagesRef.current]
+        .reverse()
+        .find(m => m.role === 'assistant');
+      baselineIdRef.current = lastAssistant?.id ?? null;
+      stopGeneration();
+    }
+    mark('ptt.press', { phase });
+    holdingRef.current = true;
+    holdBufferRef.current = [];
+    holdRequestRef.current = true;
+    setHolding(true);
+    void listen();
+  }, [cancelSpeech, listen, stopGeneration]);
+
+  /** The button was released: the microphone closes at once, what was said is sent. */
+  const releaseToTalk = useCallback(() => {
+    if (!holdingRef.current) return;
+    mark('ptt.release');
+    holdingRef.current = false;
+    setHolding(false);
+    // the next press has its key ready (one key per connection)
+    envRef.current?.prefetch?.(envRef.current.live ? 'stt-live' : 'stt');
+    const rec = recRef.current;
+    if (!rec) return;
+    try {
+      // ends the recording at once and delivers what was said (onend)
+      rec.stop();
+    } catch {
+      dropRecognition();
+    }
+  }, [dropRecognition]);
+
+  /** Push to talk on or off, also in the middle of a conversation. */
+  const setPushToTalk = useCallback(
+    (on: boolean) => {
+      setPushToTalkState(on);
+      pttRef.current = on;
+      writeFilterSetting(
+        env?.storage ?? null,
+        PUSH_TO_TALK_KEY,
+        on ? 'on' : 'off'
+      );
+      if (stoppedRef.current) return;
+      // a microphone that was open for the live mode closes, or opens, with the choice
+      endHold();
+      dropRecognition();
+      if (phaseRef.current === 'listening' || phaseRef.current === 'error') {
+        void listenRef.current();
+      }
+    },
+    [dropRecognition, endHold, env]
+  );
 
   /** A tap while the assistant speaks or thinks: be quiet and listen. */
   const interrupt = useCallback(() => {
@@ -1016,6 +1380,31 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     return () => clearTimeout(timer);
   }, [phase, waitPhrase, env, ensureSpeaker]);
 
+  // The first time the assistant speaks with an open microphone: a short hint that
+  // a word stops it. Once per device, only where a word can be heard while it speaks.
+  useEffect(() => {
+    if (phase !== 'speaking' || !signalWords || pushToTalk) return;
+    if (!recRef.current?.live) return;
+    const storage = env?.storage ?? null;
+    if (signalHintSeen(storage)) return;
+    writeFilterSetting(storage, SIGNAL_HINT_KEY, 'yes');
+    setSignalHint(true);
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = setTimeout(() => {
+      hintTimerRef.current = null;
+      setSignalHint(false);
+    }, SIGNAL_HINT_MS);
+  }, [phase, signalWords, pushToTalk, env]);
+
+  // timers of the display never outlive the hook
+  useEffect(
+    () => () => {
+      if (noteTimerRef.current) clearTimeout(noteTimerRef.current);
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    },
+    []
+  );
+
   // leaving the page ends everything
   useEffect(() => stop, [stop]);
 
@@ -1060,5 +1449,22 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     start,
     stop,
     interrupt,
+    /** How strictly only the person's own voice counts: 'normal' or 'strict'. */
+    sensitivity,
+    setSensitivity,
+    /** Push to talk: the microphone records only while the button is held. */
+    pushToTalk,
+    setPushToTalk,
+    /** The button (or the space bar) of push to talk is held right now. */
+    holding,
+    pressToTalk,
+    releaseToTalk,
+    /** Signal words ("Stopp", "Gespräch beenden", ...) are on. */
+    signalWords,
+    setSignalWords,
+    /** The display's short note about utterances left out ("only you", "speak louder"). */
+    filterNote,
+    /** The first-time hint "Sag Stopp, wenn ich aufhören soll." is to be shown. */
+    signalHint,
   };
 }

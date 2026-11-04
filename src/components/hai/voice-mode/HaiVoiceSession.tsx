@@ -90,6 +90,9 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
   // who listens and speaks: the providers in charge, read from the server
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
 
+  // the spoken "Mikrofon aus": the same as the button (defined below, after the loop)
+  const micOffRef = useRef<() => void>(() => undefined);
+
   const voice = useHaiVoice({
     userId: user?.id,
     enabled: orgEnabled,
@@ -102,6 +105,7 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
     // said once when the answer takes longer than three seconds, never in the chat
     waitPhrase: t('hai.voice.wait'),
     env,
+    onMicOff: () => micOffRef.current(),
   });
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
@@ -188,6 +192,10 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
       current.stop();
     }
   }, []);
+
+  micOffRef.current = () => {
+    if (!mutedRef.current) toggleMic();
+  };
 
   const acceptConsent = useCallback(() => {
     voiceRef.current.giveConsent();

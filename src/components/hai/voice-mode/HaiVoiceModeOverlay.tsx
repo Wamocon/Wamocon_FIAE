@@ -40,6 +40,7 @@ import { useHaiAnchor } from '../haiLayout';
 import { HaiCharacter, type CharacterState } from './HaiCharacter';
 import { providerStatement } from './providerStatement';
 import { usePondState } from './usePondState';
+import { usePushToTalkKeys } from './usePushToTalkKeys';
 import { useHaiVoiceSession } from './voiceSessionContext';
 
 function stateOf(
@@ -194,13 +195,24 @@ function LiveFigure() {
 
   const state = stateOf(voice.phase, voice.error, muted);
   const activity = useRecentChange(voice.interim, 800);
+  // push to talk: the microphone is open only while the button is held
+  const pttOn = voice.pushToTalk && !needsConsent && !muted;
+  usePushToTalkKeys({
+    enabled: pttOn,
+    onDown: voice.pressToTalk,
+    onUp: voice.releaseToTalk,
+  });
+  const waitingForButton = pttOn && state === 'listening' && !voice.holding;
   // listening is only announced when the microphone is really open
-  const preparing = !muted && state === 'listening' && !voice.micOpen;
+  const preparing =
+    !muted && !waitingForButton && state === 'listening' && !voice.micOpen;
   const status = muted
     ? t('hai.voiceMode.state.muted')
-    : preparing
-      ? t('hai.voice.phase.preparing')
-      : t(STATE_KEY[state]);
+    : waitingForButton
+      ? t('hai.voiceMode.ptt.waiting')
+      : preparing
+        ? t('hai.voice.phase.preparing')
+        : t(STATE_KEY[state]);
   // live mode: the microphone stays open while the HAI thinks and speaks (interrupting by voice)
   const micOpenWhileAnswering =
     !muted && voice.micOpen && (state === 'thinking' || state === 'speaking');
@@ -370,6 +382,7 @@ function LiveFigure() {
             >
               <p>{t('hai.voiceMode.hint')}</p>
               {voice.live && <p>{t('hai.voice.liveHint')}</p>}
+              <p>{t('hai.voiceMode.signalsInfo')}</p>
               <p>{providerStatement(voice, t)}</p>
             </div>
           )}
@@ -389,6 +402,30 @@ function LiveFigure() {
                 className="rounded-full bg-[#06183a]/90 px-2.5 py-1 text-xs text-cyan-100 shadow"
               >
                 {t('hai.voice.micOpen')}
+              </p>
+            )}
+            {/* what was left out: only a short note, never the text of anybody */}
+            {voice.filterNote && !muted && (
+              <p
+                role="status"
+                data-testid="hai-voice-filter-note"
+                data-note={voice.filterNote}
+                className="rounded-full bg-[#06183a]/90 px-2.5 py-1 text-xs text-cyan-100 shadow"
+              >
+                {t(
+                  voice.filterNote === 'too-quiet'
+                    ? 'hai.voice.filter.tooQuiet'
+                    : 'hai.voice.filter.onlyYou'
+                )}
+              </p>
+            )}
+            {/* the first time: a word stops the HAI */}
+            {voice.signalHint && !muted && (
+              <p
+                data-testid="hai-voice-signal-hint"
+                className="rounded-full bg-[#06183a]/90 px-2.5 py-1 text-xs text-cyan-100 shadow"
+              >
+                {t('hai.voice.signalHint')}
               </p>
             )}
             {/* a function that runs on another provider than planned, and why */}
@@ -433,6 +470,34 @@ function LiveFigure() {
                   <Mic className="h-5 w-5" aria-hidden="true" />
                 )}
               </button>
+              {pttOn && (
+                <button
+                  type="button"
+                  data-ptt-button=""
+                  data-testid="hai-voice-ptt"
+                  data-holding={voice.holding ? 'true' : 'false'}
+                  aria-pressed={voice.holding}
+                  aria-label={t('hai.voiceMode.ptt.hold')}
+                  title={t('hai.voiceMode.ptt.hold')}
+                  onPointerDown={event => {
+                    event.preventDefault();
+                    try {
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    } catch {
+                      // no capture: the release still comes from pointerup or leave
+                    }
+                    voice.pressToTalk();
+                  }}
+                  onPointerUp={() => voice.releaseToTalk()}
+                  onPointerCancel={() => voice.releaseToTalk()}
+                  onLostPointerCapture={() => voice.releaseToTalk()}
+                  onContextMenu={event => event.preventDefault()}
+                  style={{ touchAction: 'none' }}
+                  className={`${BUTTON} select-none ${voice.holding ? BUTTON_ON : BUTTON_OFF} ${voice.holding ? 'animate-pulse' : ''}`}
+                >
+                  <Mic className="h-5 w-5" aria-hidden="true" />
+                </button>
+              )}
               {canInterrupt && (
                 <button
                   type="button"

@@ -463,6 +463,37 @@ Anlass: Meldung "Das HAI-Maskottchen bleibt auf einer Stelle stehen, auch wenn m
 
 Pflichtfälle der Gruppe R: R1, R5. R1 darf in keinem Konto durchfallen (die Figur steht bei jeder Panelbreite im Becken).
 
+## S. Nur die Stimme des Nutzers zählt, Signalwörter, Drücken zum Sprechen (Meldung vom 04.11.2026)
+
+Meldung von Niko: "Er hört alle Hintergrundgespräche, auch die sehr leisen, zu und nimmt das in das Gespräch auf. Er soll dem User zuhören und nicht den anderen im Hintergrund. Und wir brauchen Signalwörter, wo der HAI anhält." Technik und Messwerte stehen in `docs/hai-sprachmodus.md` (Abschnitt 14) und `docs/hai-sprachmodus-recherche.md` (Abschnitt 10). Automatisch geprüft sind die Logik (Pegel-Tor, Konfidenz, Signalwörter, Drücken zum Sprechen, Einstellungen, Messpunkte ohne Text) und der Ablauf in einem echten Chrome mit gefälschtem Mikrofon und echtem Soniox (laute Stimme gegen leise Stimme im Hintergrund). **Nur am echten Gerät prüfbar** sind Mikrofone, Raum, Abstand, Lautsprecher und Echo. Die Fälle unten sind dafür da. Konto mit HAI und Sprachassistent mit Soniox, Sprachmodus über "Gespräch", Einstellungen unter "Einstellungen zum Sprachassistenten" im Panel.
+
+| Nr | Als | Schritt | Erwartung | P |
+|---|---|---|---|---|
+| S1 | Azubi | Laptop-Mikrofon, normaler Abstand (etwa 50 Zentimeter). "Gespräch" starten, eine Frage in normaler Lautstärke stellen | Die Frage geht an die HAI, die Antwort wird vorgelesen. Keine Notiz "Ich habe nur dich gehört" | |
+| S2 | Azubi | Wie S1, aber eine zweite Person spricht 3 bis 4 Meter entfernt leise ein Gespräch, während der Azubi nichts sagt | Die HAI reagiert nicht. Nichts erscheint als Frage im Chat, nichts in den Untertiteln. Kurz erscheint "Ich habe nur dich gehört." | |
+| S3 | Azubi | Die HAI spricht, die zweite Person redet leise weiter (4 Meter, normale Gesprächslautstärke) | Die HAI spricht ohne Unterbrechung zu Ende. Messpunkte: `utterance.ignored` oder `utterance.discarded`, kein `barge-in` | |
+| S4 | Azubi | Die zweite Person kommt auf 1 Meter heran und spricht laut | Je nach Lautstärke kann die Stimme zählen. Das ist die Grenze des Pegels (Abschnitt 14 des Sprachmodus), kein Fehler. Mit "Streng" zählt sie weniger oft | |
+| S5 | Azubi | Die zweite Person ruft laut und nah "Stopp" | Die HAI hält an (die Stimme ist nah und laut genug). Leise und weit weg: sie hält nicht an | |
+| S6 | Azubi | Die HAI spricht, der Azubi sagt "Stopp" | Die HAI hört sofort auf zu sprechen (unter einer Sekunde), der laufende Abruf wird abgebrochen, der Sprachmodus bleibt offen und hört weiter zu. "Stopp" geht nicht als Frage an die HAI | |
+| S7 | Azubi | Dasselbe mit "Stop", "Halt", "Warte", "Moment", "Ruhe", "Hör auf", "Abbrechen", "Pause" | Jedes Wort hält die HAI an, mit und ohne Satzzeichen | |
+| S8 | Azubi | Die HAI spricht, der Azubi sagt "Das war nicht der Stopp" und "Wir halten das fest" | Das Wort mitten im Satz löst kein Anhalten durch ein Signalwort aus. Der Satz mit zwei oder mehr lauten Wörtern unterbricht wie bisher als normales Unterbrechen und wird die nächste Frage | |
+| S9 | Azubi | "Moment mal, was ist ein Fremdschlüssel?" während die HAI spricht | Die HAI hält an und die ganze Äußerung ist die nächste Frage | |
+| S10 | Azubi | "Gespräch beenden", dann ein zweites Mal "Tschüss", "Auf Wiedersehen", "Beenden" | Der Sprachmodus endet wie mit dem Knopf Schließen, die Figur taucht ein. Nichts geht als Frage an die HAI. "Beenden wir das Kapitel?" beendet nichts | |
+| S11 | Azubi | "Mikrofon aus" | Das Mikrofon geht aus, die Figur zeigt "Mikrofon ist aus", bis der Knopf gedrückt wird | |
+| S12 | Azubi | Einstellung "Signalwörter" ausschalten, dann "Stopp" und "Tschüss" sagen | Kein Wort ist ein Befehl, beide gehen als Frage an die HAI. Einschalten: wie S6 und S10 | |
+| S13 | Azubi | Beim ersten Gespräch auf dem Gerät: die HAI antwortet zum ersten Mal | Kurz erscheint "Sag Stopp, wenn ich aufhören soll." Beim zweiten Gespräch auf demselben Gerät nicht mehr | |
+| S14 | Azubi | Einstellung "Streng, nur meine Stimme (laute und nahe Stimme)" einschalten, die zweite Person redet in 2 Metern normal laut | Die zweite Person wird nicht gehört. Der Azubi bei normalem Abstand wird weiter gehört. Leise Sprechen oder weit weg: nach drei Aussortierungen erscheint "Ich höre dich nicht deutlich. Sprich lauter oder näher am Mikrofon." | |
+| S15 | Azubi | Einstellung "Drücken zum Sprechen" einschalten, "Gespräch" starten | Das Mikrofon ist aus (kein Aufnahmesymbol im Browser). Die Figur zeigt "Knopf oder Leertaste halten, um zu sprechen". Auch minutenlanges Reden im Raum erreicht die HAI nicht | |
+| S16 | Azubi | Den Knopf halten und sprechen, loslassen. Dasselbe mit der Leertaste | Während des Haltens nimmt das Mikrofon auf, beim Loslassen schließt es sofort, die Frage geht an die HAI | |
+| S17 | Azubi | Die Leertaste drücken, während der Cursor in einem Textfeld steht (Chat-Eingabe) | Es wird nichts aufgenommen, das Leerzeichen wird getippt | |
+| S18 | Azubi | Die HAI spricht, den Knopf oder die Leertaste halten | Die HAI wird sofort still (wie beim Unterbrechen), das Mikrofon nimmt auf | |
+| S19 | Azubi | Mit Headset, mit und ohne zweite Person im Raum, "Normal" | Auch eine nahe zweite Person wird besser ausgeschlossen als am Laptop, weil die Stimme des Azubi viel lauter am Mikrofon ist. Das ist der beste Schutz neben "Drücken zum Sprechen" | |
+| S20 | Azubi | Handy (Chrome auf Android, Safari auf iOS): S1, S2, S6, S15 mit dem Finger auf dem Halteknopf | Wie am Laptop. Safari und iOS sind nicht automatisch geprüft. Beim Halten mit dem Finger öffnet sich kein Kontextmenü | |
+| S21 | Betrieb | `localStorage.setItem('hai-voice-trace','1')`, ein Gespräch mit Hintergrundstimme führen, `haiVoiceTrace()` in der Konsole lesen | Aussortierte Äußerungen stehen als `utterance.discarded` mit `why` (`quiet` oder `confidence`) und nur Zahlen (`mean`, `peak`, `thr`, `conf`). Nirgends steht ein Text. Signalwörter als `signal.halt`, `signal.end` ohne Text | |
+| S22 | Betrieb | Netzwerk beobachten (Entwicklerwerkzeuge) während S2 | Nichts von dem leisen Gespräch wird an `/api/hai/chat` gesendet. Der Ton geht nur an Soniox (wie bisher, Aufnahme zeigt der Browser an) | |
+
+Pflichtfälle der Gruppe S: S2, S3, S6, S10, S15. S2 und S3 sind die Meldung selbst und dürfen in keinem Raum durchfallen, in dem die zweite Person weiter weg und leiser ist als der Azubi.
+
 ## T. Inhalte öffnen: Kurs, Enabler, Use Case, Szenario, Dokument im Reader, Sprachassistent im Chat (Meldungen vom 04.11.2026)
 
 Anlass und Aufbau: `docs/hai-agentenschicht.md`, Abschnitt "Inhalte öffnen". Konten wie im Testplan, dazu ein Azubi mit einem Beruf (FIAE), einer mit KfBM, einer mit beiden, ein Trainer. Die Fälle brauchen Inhalte mit PDF-Dateien (Szenario, Lehrtext, Aufgabe eines Use Cases, Musterlösung).

@@ -103,12 +103,16 @@ describe('micConstraints', () => {
     expect(micConstraints('raw').sampleRate).toEqual({ ideal: 16_000 });
   });
 
-  it('live: the echo cancellation is on (the assistant must not hear itself), the noise suppression stays off', () => {
+  it('live: the echo cancellation is on (the assistant must not hear itself), noise suppression and automatic gain are off (a quiet voice stays quiet)', () => {
     expect(micConstraints('live')).toMatchObject({
       echoCancellation: true,
       noiseSuppression: false,
-      autoGainControl: true,
+      autoGainControl: false,
     });
+    // the rounds keep the gain (nobody else speaks while the microphone is open)
+    expect(micConstraints('raw').autoGainControl).toBe(true);
+    // the device override 'live' takes the same profile
+    expect(micConstraints('raw', 'live').autoGainControl).toBe(false);
   });
 
   it('processed: echo and noise suppression (Sokrates)', () => {

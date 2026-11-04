@@ -272,3 +272,81 @@ Vor dem Merge jedes Schritts: gezielte Tests (`tests/unit/hai/*`, `tests/unit/co
 - **Nicht gefunden oder nur Verzeichnisseiten:** Deepgram Voice Agent (keine Latenzangaben), Vapi, OpenAI Realtime zu Audiostreaming. WebSearch liefert nur US-Treffer.
 - **Nicht möglich ohne Gerät oder echten Dienst:** Zeiten der Zeitkette, Verhalten auf iOS und Safari, Mikrofonpegel, ob der Soniox-Schlüssel mehrere Verbindungen zulässt, der Fehlercode für das Kontolimit, Hörqualität.
 - **Nicht geprüft:** ob Vercel in der Preview eigene Antwortheader ergänzt, ob in der Preview ein EU-Schlüssel für Soniox hinterlegt ist (der Stand vom 02.11.2026 abends sagt: ja, `project-kfbm-aktuell`, nicht in Vercel gelesen), ob WAMO und Damicon dasselbe Soniox-Konto nutzen (Vermutung).
+
+## 10. Hintergrundstimmen: Befunde und Messwerte (04.11.2026)
+
+Auftrag: Im Gesprächsmodus soll nur die Stimme des Nutzers zählen, leise Hintergrundgespräche und fremde Sprecher dürfen nicht in das Gespräch kommen, und es braucht Signalwörter, bei denen die HAI anhält. Die Umsetzung steht in `docs/hai-sprachmodus.md` (Abschnitt 14), die Prüffälle im Testplan (Gruppe S). Hier stehen die Belege.
+
+### (a) Befund im Code vor der Änderung
+
+- `micConstraints('live')`: Echo-Unterdrückung an, Rauschunterdrückung aus, **automatische Pegelregelung an**.
+- Beim Zuhören zählte alles, was Soniox als Äußerung lieferte. Es gab keine Prüfung der Lautstärke, der Sicherheit (Konfidenz) oder des Sprechers. Die Lautstärkeschwelle `BARGE_IN_LEVEL` galt nur für ein einzelnes Wort beim Unterbrechen, zwei erkannte Wörter reichten immer.
+- Es gab keine Anhaltwörter: "Stopp" beendete das ganze Gespräch (`isStopCommand`).
+
+### (b) Was Soniox laut offizieller Dokumentation liefert (Abruf 04.11.2026)
+
+- **Wörter (Tokens)** der Echtzeit-Schnittstelle (`docs.soniox.com/stt/api-reference/websocket-api`): `text`, `start_ms`, `end_ms`, `confidence` ("Confidence score 0.0 to 1.0"), `is_final`, `speaker` ("Speaker label (if diarization enabled)"). Die Konfidenz kommt ohne weiteren Schalter.
+- **Sprechertrennung in Echtzeit** (`docs.soniox.com/stt/concepts/speaker-diarization`): möglich mit `enable_speaker_diarization: true`, je Wort ein Feld `speaker` (Zeichenkette, "1", "2", ...), bis 15 Sprecher je Sitzung. Aber: Echtzeit sei "anspruchsvoller wegen der Latenz", mit höheren Fehlern als im Nachhinein, vorübergehende Sprecherwechsel, die sich mit mehr Kontext stabilisieren. Und: Endpunkterkennung und manuelles Finalisieren erzwingen früheres Finalisieren und senken die Genauigkeit. Für die höchste Genauigkeit rät die Dokumentation, keine Endpunkterkennung zu verwenden (`docs.soniox.com/stt/rt/endpoint-detection` sagt dasselbe: "If speaker diarization is enabled, endpoint detection reduces diarization accuracy because it forces earlier finalization"). Zu kurzen Sitzungen sagt die Dokumentation nichts. Der Token `<end>` trägt nur `text` und `is_final`.
+
+### (c) Messung: Konfidenz und Sprecher (synthetische Sprache)
+
+Die Sprache kommt von Soniox selbst (Sprachausgabe `tts-rt-v2`, Stimmen Daniel und Lena), wird auf Pegel gebracht und an die Erkennung `stt-rt-v5` (Region EU, die echte Konfiguration der App, zusätzlich mit `enable_speaker_diarization`) geschickt. Kein Chatmodell. Skript im Scratchpad, nicht im Repository. Die Stimme "A" ist die Person (Daniel, Effektivwert 0,078), "B" die Stimme im Raum (Lena).
+
+| Fall | Erkannt | Konfidenz Mittel, kleinster Wert | Sprecher |
+|---|---|---|---|
+| A allein | vollständig richtig | 0,998, 0,98 | 1 |
+| B allein, minus 10 dB (Effektivwert 0,026) | vollständig richtig | 0,998, 0,94 | 1 |
+| B allein, minus 20 dB (0,008) | vollständig richtig | 0,998, 0,95 | 1 |
+| B allein, minus 30 dB (0,0025) | vollständig richtig | 0,997, 0,93 | 1 |
+| B allein, minus 40 dB (0,0008, etwa minus 62 dBFS) | richtig, zwei Äußerungen | 0,999, 0,99 | **1 und 2** (dieselbe Stimme) |
+| A laut, B minus 20 dB gleichzeitig | nur A | 0,999, 0,99 | 1 |
+| A, danach B gleich laut | beide richtig | 0,986, 0,59 (B) | 1 und 2 (richtig) |
+| A, danach B minus 15 dB | beide richtig | 0,983, 0,50 (B) | 1 und 2 (richtig) |
+| B minus 15 dB **zuerst**, danach A | beide richtig | 0,997, 0,92 | B ist **Sprecher 1**, A Sprecher 2 |
+
+Schlüsse:
+
+1. **Die Konfidenz trennt nah von fern nicht.** Eine Stimme 40 Dezibel unter der Person wird mit 0,999 erkannt. Die Konfidenz fängt nur Genuschel (einzelne Wörter bei 0,5 bis 0,6). Deshalb ist sie nur eine Zusatzstufe mit niedriger Schwelle (0,6, streng 0,75).
+2. **Soniox kennt kein "zu leise".** Die Erkennung schreibt auch Sprache mit, die weit unter der Person liegt. Ohne Pegelprüfung im Client kommt sie in das Gespräch. Das ist die Ursache der Meldung.
+3. **Laut gegen leise zugleich:** Die leise Stimme verschwindet unter der lauten (nur A erkannt), nacheinander wird sie vollständig erkannt.
+4. **Sprechertrennung ist für unseren Fall nicht tragfähig.** Sie trennt nacheinander gesprochene Stimmen richtig, aber (a) dieselbe leise Stimme wurde in zwei Äußerungen als zwei Sprecher geführt (die Endpunkterkennung finalisiert früh, so schreibt es die Dokumentation) und (b) spricht zuerst jemand im Hintergrund, ist der "erste Sprecher der Sitzung" der Hintergrund. Beides würde den Nutzer aussperren. Nicht gebaut.
+
+### (d) Messung: Pegelregelung und Rauschunterdrückung im Browser
+
+Chrome 157 (Windows, headless) mit gefälschtem Mikrofon (`--use-fake-device-for-media-stream`, `--use-file-for-fake-audio-capture=<wav>`). Die Datei: dreimal abwechselnd die laute Stimme A und die leise Stimme B (minus 20 dB), dazu Raumrauschen bei etwa minus 58 dBFS. Die Seite fordert das Mikrofon mit den Einschränkungen der Variante an (`channelCount: 1`, Echo-Unterdrückung an) und liest den Pegel (Effektivwert über 1024 Werte alle 100 ms) aus einem `AnalyserNode`. Zahlen: Mittelwert des Effektivwerts je Sprechabschnitt (drei Abschnitte je Stimme, Bereich), und der Rauschboden (20. Perzentil des Effektivwerts der Aufnahme).
+
+| Variante | Rauschboden | A laut (Effektivwert) | B leise, nach A | B leise **allein im Raum** |
+|---|---|---|---|---|
+| Echo + Pegelregelung (bisheriges Profil `live`) | 0,0020 | 0,117 bis 0,162 | 0,016 bis 0,019 | Mittel der ganzen Aufnahme 0,030, Rauschboden 0,0039 (ein einziger Abschnitt, Rauschen mit angehoben) |
+| Echo, **ohne** Pegelregelung (neu) | 0,00065 | 0,064 bis 0,071 | 0,0080 bis 0,0093 | 0,0076 bis 0,0093 |
+| Echo + Rauschunterdrückung, ohne Pegelregelung | 0,00009 | 0,064 bis 0,070 | 0,0075 bis 0,0099 | 0,0081 bis 0,0094 |
+| Echo + Rauschunterdrückung + Pegelregelung | 0,00034 | 0,124 bis 0,173 | 0,016 bis 0,022 | **0,053 bis 0,068** |
+
+Schlüsse:
+
+1. **Die Pegelregelung hebt eine leise Stimme allein im Raum um etwa 16 Dezibel an** (0,009 auf 0,053 bis 0,068) auf den Pegel der Person am Mikrofon ohne Regelung (0,064 bis 0,071). Mit ihr ist das Hintergrundgespräch für jedes Pegel-Tor so laut wie der Nutzer. Sie hebt auch das Rauschen an (Rauschboden 0,00065 auf 0,0020). Entscheidung: **aus** im Profil `live`.
+2. **Die Rauschunterdrückung senkt nur gleichmäßiges Rauschen** (0,00065 auf 0,00009), eine leise Stimme lässt sie unverändert (0,0093 gegen 0,0099, die Erkennung der Stimme B ist in allen vier Varianten vollständig). Sie hilft gegen Hintergrundstimmen nicht. Entscheidung: **bleibt aus** (der Grund aus dem offiziellen SDK, dass sie Silbenanfänge abschneidet, bleibt unberührt).
+3. **Die Wirkung auf die Erkennung** wurde mit den vier aufgezeichneten Dateien (`MediaRecorder`, webm/opus) an Soniox geschickt: beide Stimmen wurden in allen vier Varianten erkannt. Die kleinste Wortkonfidenz lag mit dem bisherigen Profil (Echo und Pegelregelung) bei 0,60 und 0,73, in den drei anderen Varianten über 0,85. Ein Nachteil der abgeschalteten Regelung zeigte sich nicht.
+4. **Nicht gemessen** (nur am echten Gerät): Mikrofone mit sehr niedrigem Pegel ohne Regelung, die Echo-Unterdrückung gegen echte Lautsprecher. Hier greift die adaptive Schwelle und, als Ausweg, "Drücken zum Sprechen".
+
+### (e) Messung im Browser mit echter Schleife und echtem Soniox
+
+Aufbau: Chrome 157 mit gefälschtem Mikrofon (`--use-fake-device-for-media-stream`, `--use-file-for-fake-audio-capture`), eine kleine Seite mit der echten `useHaiVoice`-Schleife und dem echten Soniox-Client (Erkennung und Sprachausgabe, Region EU, Schlüssel von einem lokalen Hilfsserver wie von der Route der App). Nur der Chat ist eine Attrappe (antwortet mit einem festen Text von etwa 20 Sekunden Vorlesedauer und merkt sich, was ihn erreichte). Kein Chatmodell. Die Mikrofondatei: die Person (Daniel) fragt, danach redet während der Antwort eine Stimme im Raum (Lena, 4 Sätze, einer davon "Stopp"), dann sagt die Person "Stopp.", fragt noch einmal und sagt "Gespräch beenden.". Pegelregelung aus, Echo-Unterdrückung an. Skripte im Scratchpad, nicht im Repository.
+
+| Stimme im Raum | Einstellung | Sätze der Stimme im Raum, die an den Chat gingen | Unterbrechungen der HAI durch den Raum | Stopp aus dem Raum hält die HAI an | "Stopp" der Person hält an | "Gespräch beenden" |
+|---|---|---|---|---|---|---|
+| minus 20 dB | **Tor aus** (Vergleich) | 4 von 4 | 4 | ja | ja | ja |
+| minus 20 dB | Normal | 0 | 0 | nein | ja (etwa 0,7 s nach Wortbeginn) | ja |
+| minus 14 dB | Normal | 0 | 0 | nein | ja | ja |
+| minus 10 dB | Normal | 2 von 4 | 3 | nein | ja | ja |
+| minus 10 dB | Streng | 0 | 0 | nein | ja | ja |
+| minus 6 dB | Normal | 2 von 4 | 2 | ja | ja | ja |
+| minus 6 dB | Streng | 2 von 4 | 2 | ja | ja | ja |
+
+Kaltstart (Stimme im Raum zuerst, minus 20 dB, danach die Person): die Stimme im Raum wurde schon vor jeder Referenz aussortiert (Mittel 0,030 unter der Untergrenze 0,04), die Frage der Person ging an die HAI. Nur Stimmen im Raum, nichts von der Person: kein Satz an den Chat, nach drei stillen Runden (24 Sekunden) Pause der HAI. Drücken zum Sprechen ohne Halten: Mikrofon wurde nie geöffnet, nichts gesendet. Mit Halten (6,5 Sekunden): nur das Gehaltene ging an die HAI (die Frage der Person, bei einer Datei nur mit Stimme im Raum deren Satz: im Halten wird nicht gefiltert). Mit ausgeschalteten Signalwörtern gingen "Gespräch beenden." und alles andere als Frage an die HAI.
+
+Befunde, die den Code geändert haben:
+
+1. Mit nur dem Spitzenwert (Faktor 1,5) für den vorläufigen Text unterbrach schon eine Stimme minus 14 Dezibel die HAI (ein Spitzenwert einer Silbe). Seitdem: Mittelwert der letzten 1,2 Sekunden und Spitzenwert das 2,5fache der Schwelle.
+2. Der Zeitraum der Wörter von Soniox ist nur ein grober Anhaltspunkt: Der laute Teil der Aufnahme beginnt 100 bis 350 Millisekunden nach `start_ms`, und ein einzelnes Wort kommt mit einem Zeitraum von 60 bis 120 Millisekunden. Ein "Stopp" der Person wurde deshalb in einem von vier Läufen als zu leise aussortiert. Seitdem reicht das Fenster mindestens 1,2 Sekunden und 450 Millisekunden über das letzte Wort hinaus, und bei einem Zeitraum unter 0,8 Sekunden entscheidet der Spitzenwert (das Dreifache der Schwelle).
+3. Die Grenze des Pegels: Stimmen etwa 14 Dezibel (Normal) beziehungsweise 10 Dezibel (Streng) unter der Person werden ausgeschlossen, 6 Dezibel darunter nicht mehr.
