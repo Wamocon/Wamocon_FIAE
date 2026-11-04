@@ -403,3 +403,19 @@ Anlass: Ein Trainer fragte in der Preview "Welche Azubis habe ich?", dann "Welch
 | O16 | Betrieb | Die Abfrage der Übersicht zum Scheitern bringen (nur auf einer Testdatenbank) und "Welche Azubis habe ich?" fragen | Die HAI sagt, dass die Liste gerade nicht geladen werden konnte (technische Störung), und nennt weder eine Zahl noch Namen. Sie sagt nicht, es fehle eine Berechtigung | |
 
 Pflichtfälle der Gruppe O: O1, O2, O5, O6, O9, O11, O12, O13. O13 darf in keinem Konto durchfallen (Rollentrennung der Navigation).
+
+## P. Fortschrittszahlen der HAI stimmen mit der Plattform überein (Befund vom 04.11.2026)
+
+Anlass: Auf der echten Preview nannte die HAI bei jedem Azubi 0 Prozent und immer das erste Enabler als nächstes, die Plattform zeigte 46 bis 88 Prozent. Ursache: Die HAI zählte Zeilen von `enabler_completions`, die das quizbasierte Abschließen nicht schreibt. Jetzt kommen alle Zahlen aus denselben Quellen wie die Seiten (`src/lib/hai/progressFigures.ts`: Fortschritt je Kurs wie auf der Kurskarte, nächstes Enabler wie im Dashboard, Gesamtfortschritt und Trainerhinweis wie auf den Trainerseiten). Die Fälle brauchen einen Azubi mit bestandenen Quizzen.
+
+| Nr | Als | Schritt | Erwartung | P |
+|---|---|---|---|---|
+| P1 | Azubi | "Wie weit bin ich in meinen Kursen?" im Reiter des Berufs | Je Kurs "x/y Enabler (z%)" wie auf der Kurskarte, nie durchgehend 0 Prozent | P |
+| P2 | Azubi | "Was ist mein nächstes Enabler?" | Das Enabler, das auch das Dashboard als nächstes nennt (nicht abgeschlossen, nicht gesperrt), nicht das erste der Liste | P |
+| P3 | Azubi in zwei Berufen | P1 im Reiter KfBM, dann im Reiter FIAE | Nur Kurse des jeweiligen Berufs mit den Zahlen der Kurskarten dieses Reiters | P |
+| P4 | Azubi mit wenig Fortschritt | HAI-Hinweise öffnen | "Niedriger Fortschritt" nennt den Prozentwert der Kurskarte und nur Kurse mit mehr als 5 Enablern unter 30 Prozent. Ein Azubi mit hohem Fortschritt bekommt den Hinweis nicht | |
+| P5 | Trainer | "Wer sind meine Azubis?" und die Seite "Auszubildende" daneben | Dieselbe Prozentzahl je Azubi | P |
+| P6 | Trainer | HAI-Hinweise öffnen | "Azubis brauchen Unterstützung" nennt nur Azubis, die in der Trainerliste unter 30 Prozent stehen, im Reiter nur im gewählten Beruf | |
+| P7 | Betrieb | Zwei Nachrichten kurz hintereinander, dazwischen ein Quiz bestehen | Der Gesamtfortschritt im Kopf der HAI ist bis zu 30 Sekunden alt, die Fortschrittsfrage (P1) zeigt sofort den neuen Stand | |
+
+Bekannte Abweichung der Plattform selbst: Die Trainerseiten zählen auch Kurse mit `is_active = false` (zwei Kurse bei einem Preview-Azubi: 164 von 188 statt 163 von 186 Enablern), die Azubiseiten nicht. Die HAI folgt je Rolle der jeweiligen Seite.
