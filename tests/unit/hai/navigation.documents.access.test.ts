@@ -257,3 +257,40 @@ describe('the metrics hold tokens only', () => {
     ).toBe('course|offer|TRAINER|text|nocards');
   });
 });
+
+describe('pickByKeys: a shorter piece of the name never opens another file', () => {
+  const task: OpenableDocument = {
+    id: ID(1),
+    title: 'Aufgabe Bestellsystem',
+    fileName: 'UC_1b_Bestellsystem.pdf',
+    documentType: 'TRAINEE_QUESTION',
+    parentType: 'use_case',
+    parentId: ID(8),
+    parentTitle: 'U',
+    courseId: null,
+  };
+
+  it('"UC_1b_Bestellsystem_Musterloesung" does not open the task file UC_1b_Bestellsystem', () => {
+    expect(
+      pickByKeys(
+        [task],
+        [
+          { key: 'uc 1b bestellsystem musterloesung', partial: true },
+          { key: 'uc 1b bestellsystem', partial: false },
+        ]
+      )
+    ).toEqual([]);
+  });
+
+  it('the file with exactly the longest name is still found', () => {
+    expect(
+      pickByKeys(
+        [task],
+        [
+          { key: 'uc 1b bestellsystem', partial: true },
+          { key: 'bestellsystem', partial: false },
+        ]
+      ).map(d => d.id)
+    ).toEqual([ID(1)]);
+  });
+});

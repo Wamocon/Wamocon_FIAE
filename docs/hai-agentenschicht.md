@@ -162,3 +162,58 @@ Anlass war die Meldung eines Trainers aus der Preview: "Welche Azubis habe ich?"
 - `tests/unit/hai/trainerTrainees.test.ts`: Folgefrage und fehlgeschlagene Liste in `fetchDataContext`.
 - `tests/unit/hai/prompts.navigation.test.ts`: kein Satz "keine Berechtigung" mehr, echte Menüpunkte je Rolle, Schutzregeln unverändert, getippt und gesprochen.
 - Test in der Preview: `docs/hai-testplan.md`, Abschnitt H und Abschnitt O.
+
+## Inhalte öffnen: Kurs, Enabler, Use Case, Szenario, Dokument im Reader (Meldungen vom 04.11.2026)
+
+Anlass: "Er konnte auch nicht ein Dokument für mich öffnen, wie einen Enabler, PDFs im Reader oder ein Use Case oder ein Szenario", "er kann die Seite nicht öffnen und es war einfach nur ein Kurs" und "navigiert nur im Gesprächsmodus richtig".
+
+### Ursachen
+
+- Belegt (lokaler Browsertest vor der Änderung): Eine Bitte um einen Kurs ("Öffne den Kurs Netzwerke und Sicherheit") war kein Ziel. Sie ging an das Modell, das frei antwortete. Ebenso "Öffne das Dokument Szenario_14i". Ein Trainer bekam bei Enabler und Use Case nur die Karte "Inhaltsverwaltung". Ein Szenario oder PDF zu einem Enabler öffnete nur die Seite des Enablers, nie das Dokument. Es gab keinen Link, der ein Dokument im Reader öffnet.
+- Belegt (Code): Eine Navigationsbitte ohne Treffer ging ungeprüft an das Modell, das dann behaupten konnte, es könne die Seite nicht öffnen. Ein gesperrter Enabler öffnete nichts, obwohl die Seite Titel und Material zeigt.
+- Belegt (Browsertest mit gefälschtem Mikrofon, 390 Pixel breit): Im Sprachassistenten des normalen Chats öffnete die Plattform die Seite, aber das Panel (auf dem Telefon die ganze Breite) verdeckte sie. Im Gesprächsmodus räumt die Sprachsitzung das Panel weg, die Figur bleibt am Rand. Die Navigationslogik im Client ist für beide Wege dieselbe (`HaiProvider.sendMessage` mit `voice: true`), der Unterschied lag nur im Platz für die Seite. Auf einem breiten Bildschirm (1440 Pixel) verhalten sich beide Wege gleich.
+- Vermutet: Nikos Eindruck "nur im Gesprächsmodus" kommt von diesem verdeckten Seitenwechsel auf dem Telefon oder in schmalen Fenstern. Mit einem echten Mikrofon und echten Anbietern (Soniox, Sokrates) wurde nicht geprüft.
+
+### Was die Plattform jetzt tut
+
+- **Neue Ziele** (`src/lib/hai/navigation/intent.ts`, `resolve.ts`, `contentData.ts`): Kurs nach Titel, Code oder Nummer, Enabler und Use Case nach Nummer, Code oder Titel (auch "Themenkreis", "Anwendungsfall"), Szenario, Aufgabe, Lehrtext, Unterlage, Material, PDF und Dokument eines Enablers oder Use Cases, Dokument nach Dateiname (`Szenario_14i`, `Szenario K14-i`), "diese Datei" (Enabler oder Use Case der offenen Seite aus dem Seitenkontext, sonst der Verlauf: "das PDF dazu", "dann öffne das Szenario"). Dazu die Seiten Wochenbewertung, Azubi-Arbeitszeugnis, Inhalts-Import, HAI-Verwaltung und HAI-Gedächtnis.
+- **Ziel je Rolle:** Azubi: Seite des Enablers, des Use Cases oder des Kurses (`/trainee/modules/<id>`). Trainer und Admin: Enabler im Editor des Kurses (`/trainer/content-management/<kurs>/edit?enabler=<id>`), Use Case auf seiner Seite (`/trainer/use-cases/<id>`), Kurs im Editor. Der Pfad kommt aus der Datenbank (Berufstrennung, Kursmitgliedschaft des Azubis, Katalog des Trainers), nie vom Modell und nie aus dem Text.
+- **Reihenfolge der Arbeit:** Ein gesperrter Enabler öffnet die Seite (Titel und Material, die Seite sagt selbst, dass Quizze und Abgabe gesperrt sind), die Antwort nennt das. Das Quiz eines gesperrten Enablers bleibt zu.
+- **Dokument im Reader:** Der Link hat die Form `<Seite>?document=<uuid>`, auf der Trainerseite `...edit?enabler=<uuid>&document=<uuid>`. `isAllowedNavigationPath` lässt nur diese Formen zu (ein bekannter Parametername, eine uuid, nichts sonst, Pfade mit Host, Fremdparametern, doppeltem Parameter oder Anhang werden abgelehnt). Die Seite öffnet das Dokument nur, wenn es in der Liste steht, die sie der Person ohnehin zeigt (die Routen der Listen wenden die Regeln der Dokument-Routen an). Sonst steht dieselbe neutrale Meldung "Die Datei wurde nicht gefunden." da, ohne Unterschied zwischen "gibt es nicht" und "darfst du nicht". Der Reader holt die Bytes weiter über `/api/trainee/documents/[id]/content`, das den Zugriff noch einmal prüft. Das Einzel-PDF eines Enablers ohne eigene Zeile (`scenario_pdf_url`) öffnet über `?document=<enabler-id>`.
+- **Musterlösungen:** Ein Azubi bekommt nie einen Link auf TRAINER_SOLUTION oder TRAINER_ONLY, auch nicht über den Namen (SQL und Code filtern, `traineeReadableIds` prüft die Regeln der Content-Route noch einmal). Ein Trainer bekommt einen Link auf eine Musterlösung nur, solange der Schalter `HAI_TRAINER_SOLUTIONS` an ist, wie im Index. Das Dokument eines anderen Berufs ist für beide nicht auffindbar. Bei einem Dateinamen zählt nur der längste genannte Name: "UC_1b_Bestellsystem_Musterloesung" öffnet nicht die Aufgabe "UC_1b_Bestellsystem".
+- **Mehrdeutigkeit:** Passen mehrere Einträge oder Dateien, fragt die Plattform kurz zurück und zeigt bis zu drei Karten (`navigationChoices`, nie `auto`, jede Karte wartet auf einen Tipp). Mehr als drei Dateien eines Enablers öffnen die Seite des Enablers, die alle zeigt.
+- **Nie ohne Antwort ans Modell:** Ein Befehl zum Öffnen ohne Ziel ("Öffne die Kantine") ergibt die Antwort der Plattform mit den nächsten Seiten nach Namensähnlichkeit als Karten (`suggest.ts`), nie einen Modelltext. Ein Eintrag, der nicht gefunden wird, zeigt die ähnlichsten Einträge der Person (nur eigene Berufe). Anschlussbitten ("öffne sie", "du navigierst") laufen weiter zuerst über den Verlauf. Pfade und Adressen im Text werden nie zum Ziel.
+- **Zähler:** `src/lib/hai/navigation/metrics.ts` zählt jede Navigationsbitte mit Art, Ergebnis, Ebene, gesprochen oder getippt und ob Karten dabei waren, und schreibt eine JSON-Zeile `hai.navigation` mit dem Feld `gap` (true, wenn keine Seite erreicht wurde). Nie ein Text, ein Titel oder eine Id. Das Schlussereignis trägt `navigationOutcome` (ein Token).
+- **Sprachassistent im Chat wie der Gesprächsmodus:** Der Client hat einen Weg (`HaiProvider.goToOffer`). Auf einem Telefon (unter 768 Pixel) tritt das Panel bei jedem Seitenwechsel zurück (getippt, auf die Karte getippt oder gesprochen). Läuft dabei die Sprachschleife ohne Gesprächsmodus, öffnet `HaiVoiceSession` den Gesprächsmodus (Figur am Rand, die Schleife hört weiter zu).
+- **Prompt:** Der Abschnitt "Führung durch die Plattform" nennt Kurs, Enabler, Use Case, Szenario und Dokument im Reader, verbietet "ich kann das nicht" und ändert keine Schutzregel.
+
+### Seiten gegen Ziele (`src/lib/hai/navigation/pageInventory.ts`)
+
+Jede Seite von `src/app` steht im Inventar, entweder mit ihrem Ziel oder mit dem Grund, warum sie keines ist. Der Test `tests/unit/hai/navigation.matrix.test.ts` liest die echten Routen und schlägt an, wenn eine Seite fehlt oder dazukommt.
+
+| Seite | Ziel |
+|---|---|
+| Azubi: Dashboard, Ausbildungsnachweis, Berufsschule (und Blockkalender), Lernen, Ausbilder-Feedback, Quizze, Profil, Wochenbewertung | statisches Ziel |
+| Azubi: Enabler, Use Case, Kurs (`/trainee/modules/<id>`) | Ziel nach Nummer, Code oder Titel, mit `?document=` auch das Dokument |
+| Trainer: Dashboard, Ausbildungsnachweise, Azubi-Arbeitszeugnis, Berufsschule, Kalender, Quiz-Übersicht, Inhaltsverwaltung, Auszubildende, Offene Bewertungen, Wochenbewertungen, Profil | statisches Ziel |
+| Trainer: Kurs (Editor), Enabler (im Editor), Use Case | Ziel nach Nummer, Code oder Titel, mit Dokument |
+| Admin: Inhaltsstatistik, Organisationen, Benutzerverwaltung, Inhalts-Import, HAI-Verwaltung, HAI-Gedächtnis | statisches Ziel (nur Admin-Ebene) |
+
+Bewusst kein Ziel (Ausnahmeliste, der Grund steht im Inventar):
+
+- Öffentliche Seiten (Start, Anmeldung, Registrierung, Passwort, Prüfseite, Berufswahl, Ausbildung, alle `demo/...`).
+- Durchführung und Editor eines Quiz (`/trainee/enablers/<id>/quiz`, `/trainee/quizzes/<id>`, `/trainer/enablers/<id>/quiz...`, `/trainer/quiz-management/<id>`): Der Weg führt über den Enabler (Reihenfolge der Arbeit, Lösungsschutz).
+- Schreibseiten (`/trainer/content-management/new`, `/trainer/quiz-management/new-quiz`, `/trainer/enablers/<id>/quizzes/new`, `/trainer/admin/content-upload/new`): Eine Navigation schreibt nie.
+- Seiten zu einer Person oder Abgabe (`/trainer/trainees/<id>`, `/trainer/reviews/quizzes/<id>`): Der Weg führt über die Liste (Zuständigkeit, Datenschutz).
+- Detail eines Importlaufs (`/trainer/admin/content-upload/<run>`).
+- Lernfeld-Detailseiten (`/trainee/lernfelder/<id>`, `/trainer/lernfelder/<id>`): erreichbar über die Berufsschule, noch kein Ziel nach Titel (offene Entscheidung).
+- Die Benachrichtigungen sind die Glocke, keine Seite.
+
+### Tests
+
+- `tests/unit/hai/navigation.content.intent.test.ts`: Dokumente, Dateinamen, "diese Datei", Kurse, Befehle ohne Ziel, neue Seiten, mit und ohne Umlaute und Satzzeichen (60 Fälle).
+- `tests/unit/hai/navigation.matrix.test.ts`: Inventar gegen `src/app`, jedes statische Ziel je Ebene mit drei Formulierungen, Inhalte je Rolle und Beruf, Dokumente.
+- `tests/unit/hai/navigation.documents.access.test.ts`: Zugriff, Zulassungsliste mit Einschleusung im Parameter, Zähler ohne Text.
+- `tests/unit/hai/ragPipeline.navigationContent.test.ts`: beide Pipelines mit Attrappe als Modell, nie ein Modellaufruf.
+- `tests/unit/app/document-param.pages.test.tsx`: Seiten mit `?document=` (gelistet, nicht gelistet, Lösung, falscher Wert, Zusatzparameter, Trainer).
+- `tests/unit/components/hai/HaiNavigationChoices.test.tsx`: Karten, getippt und gesprochen derselbe Weg, Telefon.

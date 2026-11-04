@@ -326,7 +326,13 @@ export function pickByKeys(
   documents: readonly OpenableDocument[],
   keys: readonly FileNameKey[]
 ): OpenableDocument[] {
-  for (const { key, partial } of keys) {
+  // Only the longest name the person said counts. A shorter piece of it ("UC 1b
+  // Bestellsystem" of "UC_1b_Bestellsystem_Musterloesung") must not open another
+  // file that happens to carry exactly that name: the answer is "not found" then.
+  const longest = Math.max(0, ...keys.map(entry => entry.key.length));
+  for (const { key, partial } of keys.filter(
+    entry => entry.key.length === longest
+  )) {
     const names = (doc: OpenableDocument) => [
       normalizeFileKey(doc.fileName),
       normalizeFileKey(doc.title),
