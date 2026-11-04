@@ -1254,6 +1254,8 @@ export async function POST(req: NextRequest) {
                   intent: result.intent,
                   pendingAction: result.pendingAction,
                   navigationOffer: result.navigationOffer,
+                  navigationChoices: result.navigationChoices,
+                  navigationOutcome: result.navigationOutcome,
                   // a checked form action for the browser (switch HAI_UI_ACTIONS)
                   uiAction: result.uiAction,
                   quizMode: result.quizMode,
@@ -1440,6 +1442,8 @@ export async function POST(req: NextRequest) {
       quizState: result.quizState,
       pendingAction: result.pendingAction,
       navigationOffer: result.navigationOffer,
+      navigationChoices: result.navigationChoices,
+      navigationOutcome: result.navigationOutcome,
       uiAction: result.uiAction,
       quizMode: result.quizMode,
       memoryProposal: result.memoryProposal,

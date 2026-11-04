@@ -54,6 +54,18 @@ function matchesNumber(candidate: ContentCandidate, number: string): boolean {
   return pattern.test(title);
 }
 
+/** Letters and digits only: "K14-i", "k14 i" and "K14i" are one code. */
+function compact(value: string): string {
+  return foldText(value).replace(/[^a-z0-9]/g, '');
+}
+
+/** The name is the stable code of the record (at least three characters). */
+function matchesCode(candidate: ContentCandidate, name: string): boolean {
+  if (!candidate.code) return false;
+  const wanted = compact(name);
+  return wanted.length >= 3 && compact(candidate.code) === wanted;
+}
+
 /** The name (folded words) is part of the title, or equals it. */
 function matchesName(
   candidate: ContentCandidate,
@@ -89,7 +101,10 @@ export function matchContent(
     const exact: ContentCandidate[] = [];
     const part: ContentCandidate[] = [];
     for (const candidate of candidates) {
-      const kind = matchesName(candidate, name);
+      // the code of the record said as a name ("K14-i", "HB C1") is exact
+      const kind = matchesCode(candidate, name)
+        ? 'exact'
+        : matchesName(candidate, name);
       if (kind === 'exact') exact.push(candidate);
       else if (kind === 'part') part.push(candidate);
     }

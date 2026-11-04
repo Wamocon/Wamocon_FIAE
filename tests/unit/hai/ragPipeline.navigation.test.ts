@@ -247,18 +247,22 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
     expect(result.navigationOffer?.path).toBe(`/trainee/enablers/${E1}`);
   });
 
-  it('gives a locked enabler title and hint, no offer', async () => {
+  it('opens a locked enabler like its page shows it: title and material, never the quiz', async () => {
     mockLock.mockResolvedValue({
       locked: true,
       lockedByTitle: 'Enabler 2: Datenmodell',
       hasActiveQuiz: true,
     });
     const result = await run('öffne Enabler 3', ctx());
-    expect(result.navigationOffer).toBeUndefined();
-    expect(result.response).toBe(
-      'Der Enabler Enabler 3: SQL Grundlagen ist noch gesperrt, weil in der Reihenfolge der Arbeit zuerst Enabler 2: Datenmodell abgeschlossen sein muss. Schließe Enabler 2: Datenmodell ab, dann wird er frei, und bis dahin helfe ich dir gern bei Enabler 2: Datenmodell.'
-    );
+    expect(result.navigationOffer?.path).toBe(`/trainee/enablers/${E1}`);
+    expect(result.navigationOffer?.path).not.toContain('quiz');
+    expect(result.response).toContain('Titel und Material kannst du lesen');
+    expect(result.response).toContain('Quizze und Abgabe sind noch zu');
     expect(mockChat).not.toHaveBeenCalled();
+    // the quiz of a locked enabler stays closed: title, reason, no link
+    const quiz = await run('bring mich zum Quiz von Enabler 3', ctx());
+    expect(quiz.navigationOffer).toBeUndefined();
+    expect(quiz.response).toContain('gesperrt');
   });
 
   it('computes "Weiter lernen" with the plan of the person', async () => {
@@ -319,13 +323,13 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
     expect(result.response).toContain('Das ist dein nächster freigeschalteter');
   });
 
-  it('never carries out a page that was refused: a command to a locked enabler or a trainer page gives no offer', async () => {
+  it('never carries out a page that was refused: a command to the quiz of a locked enabler or a trainer page gives no offer', async () => {
     mockLock.mockResolvedValue({
       locked: true,
       lockedByTitle: null,
       hasActiveQuiz: true,
     });
-    const locked = await run('öffne Enabler 3', ctx());
+    const locked = await run('öffne das Quiz von Enabler 3', ctx());
     expect(locked.navigationOffer).toBeUndefined();
     const trainerPage = await run('öffne die Auszubildenden', ctx());
     expect(trainerPage.navigationOffer).toBeUndefined();

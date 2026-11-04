@@ -35,8 +35,12 @@
       "occupation": "FIAE",
       "question": "Öffne Enabler 3.",
       "lock": { "locked": true, "lockedByTitle": "Enabler 2: Datenmodell" },
-      "expected": { "kind": "locked" },
-      "forbiddenWords": ["/trainee/enablers"]
+      "expected": {
+        "kind": "offer",
+        "path": "/trainee/enablers/20000000-0000-4000-8000-000000000001",
+        "direct": true
+      },
+      "forbiddenWords": ["quiz"]
     },
     {
       "id": "NG-05",

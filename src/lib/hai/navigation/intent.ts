@@ -27,6 +27,11 @@
  */
 
 import { foldText } from './fold';
+import {
+  extractFileNameKeys,
+  normalizeFileKey,
+  type FileNameKey,
+} from '../documentNames';
 import type { StaticTargetId } from './targets';
 
 /** What the person said about an enabler or a use case: a number or a name. */
@@ -37,8 +42,38 @@ export interface ContentReference {
   name?: string;
 }
 
+/** A record that holds documents: an enabler or a use case. */
+export type ContentType = 'enabler' | 'use_case';
+
+/** Which documents a word asks for: any file, a teaching text, a scenario, a task. */
+export type DocKind = 'any' | 'theory' | 'scenario' | 'task';
+
+/** The enabler or use case a document request names. */
+export interface ContentParent {
+  type: ContentType;
+  ref: ContentReference;
+}
+
 export type NavigationIntent =
   | { kind: 'static'; target: StaticTargetId }
+  /** A course by number or name ("den Kurs Datenbanken"), without a name the page "Lernen". */
+  | { kind: 'course'; ref: ContentReference }
+  /**
+   * A document: of a named enabler or use case (parent), by its file name, or
+   * "this one" (demonstrative: the page the person is on, or the last turns).
+   */
+  | {
+      kind: 'document';
+      docKind: DocKind;
+      parent: ContentParent | null;
+      fileKeys: FileNameKey[];
+      demonstrative: boolean;
+    }
+  /**
+   * A clear command to open something that matches no page: answered by the
+   * platform with the nearest pages as cards, never by the model.
+   */
+  | { kind: 'unmatched'; query: string }
   | { kind: 'continue' }
   | { kind: 'enabler'; ref: ContentReference }
   | { kind: 'use_case'; ref: ContentReference }
@@ -104,7 +139,7 @@ const SHORT_DIRECTION_MAX_WORDS = 6;
  * message stays with the pipeline.
  */
 const NOT_A_COMMAND =
-  /\b(?:\w*loesung\w*|\w*antwort\w*|erklaer\w*|was\s+ist|was\s+sind|wie\s+funktioniert|warum|wieso|weshalb|schreib\w*|programmier\w*|code|beispiel\w*|zusammenfass\w*|uebersetz\w*|wie\s?viel\w*|anzahl|status|stand|fortschritt|note|noten|ergebnis\w*|wann|welche[rsmn]?|fehler|problem\w*|falsch\w*|kaputt|hilfe|hilf\w*)\b/;
+  /\b(?:wie\s+oeffne|\w*loesung\w*|\w*antwort\w*|erklaer\w*|was\s+ist|was\s+sind|wie\s+funktioniert|warum|wieso|weshalb|schreib\w*|programmier\w*|code|beispiel\w*|zusammenfass\w*|uebersetz\w*|wie\s?viel\w*|anzahl|status|stand|fortschritt|note|noten|ergebnis\w*|wann|welche[rsmn]?|fehler|problem\w*|falsch\w*|kaputt|hilfe|hilf\w*)\b/;
 
 /**
  * Keywords of the static targets, in the order of priority: the first target
@@ -263,21 +298,21 @@ const NUMBER_WORD_PATTERN = Object.keys(NUMBER_WORDS)
  */
 function referenceAfter(
   text: string,
-  keyword: 'enabler' | 'use[ -]?case'
+  keyword: string
 ): ContentReference | null {
   // "Enabler 3", "Enabler Nummer 3", "Enabler E3" and the spoken "Enabler e
   // drei": an optional "nr", "nummer", "no", "#" or "e" in front of the number
   const numberMatch = new RegExp(
-    `\\b${keyword}\\s*(?:(?:nr|nummer|no|#|ee?)\\s*)?(\\d+[a-z]?(?:\\.\\d+)*)(?![a-z0-9])`
+    `\\b(?:${keyword})\\s*(?:(?:nr|nummer|no|#|ee?)\\s*)?(\\d+[a-z]?(?:\\.\\d+)*)(?![a-z0-9])`
   ).exec(text);
   if (numberMatch) return { number: numberMatch[1] };
   // a number word must stand alone: "drei" yes, "Drei-Schichten-Modell" no
   const wordMatch = new RegExp(
-    `\\b${keyword}\\s*(?:(?:nr|nummer|no|ee?)\\s*)?(${NUMBER_WORD_PATTERN})(?![a-z0-9-])`
+    `\\b(?:${keyword})\\s*(?:(?:nr|nummer|no|ee?)\\s*)?(${NUMBER_WORD_PATTERN})(?![a-z0-9-])`
   ).exec(text);
   if (wordMatch) return { number: NUMBER_WORDS[wordMatch[1]] };
 
-  const nameMatch = new RegExp(`\\b${keyword}\\s+(.+)$`).exec(text);
+  const nameMatch = new RegExp(`\\b(?:${keyword})\\s+(.+)$`).exec(text);
   if (!nameMatch) return null;
   // "mit dem Namen X" and "namens X" name the record on purpose
   const rest = nameMatch[1].replace(/^(?:mit\s+dem\s+namen|namens)\s+/, '');
@@ -356,6 +391,8 @@ const DIRECT_PATTERNS: readonly RegExp[] = [
   // "weiter lernen", "mit dem Lernen weiter": the command to go on
   /\bweiter\s?lernen\b/,
   /\bmit\s+dem\s+lernen\s+weiter\w*/,
+  // "lies das Dokument X": reading is a command next to a document word
+  /\blies\b(?!.*\bvor\b)/,
 ];
 
 /**
@@ -381,6 +418,230 @@ export function isDirectCommand(message: string): boolean {
   );
 }
 
+// ============================================================================
+// DOCUMENTS, COURSES AND UNMATCHED COMMANDS
+// ============================================================================
+
+/** The words for a record that holds documents, with the pattern the reference follows. */
+const ENABLER_WORDS = 'enabler|themenkreis(?:e|en)?';
+const USE_CASE_WORDS =
+  'use[ -]?cases?|usecases?|anwendungsfall|anwendungsfaelle';
+const COURSE_WORDS = 'kurs|modul';
+
+/**
+ * The words for documents, in the order of priority (a scenario beats a plain
+ * "PDF"). Folded text. "Dokumentation" is not a document word.
+ */
+const DOC_NOUNS: ReadonlyArray<readonly [DocKind, string]> = [
+  ['scenario', 'szenari(?:o|en|os|um)'],
+  [
+    'task',
+    'aufgabe|aufgaben|aufgabenstellung(?:en)?|uebung(?:en|sblatt|sblaetter)?',
+  ],
+  [
+    'theory',
+    'lehrtext\\w*|lerntext\\w*|theorie(?:text|dokument|unterlage\\w*)?|skript\\w*|unterlage|unterlagen|material|materialien|handout\\w*|lernunterlage\\w*',
+  ],
+  [
+    'any',
+    'dokument(?:e|en|s)?|datei(?:en|name|namen)?|pdfs?|anhang|anhaenge\\w*',
+  ],
+];
+const ALL_DOC_NOUNS = DOC_NOUNS.map(([, source]) => source).join('|');
+
+/**
+ * The document words in the singular. "diese Datei" points at one file, a plural
+ * ("die Szenarien", "die Dokumente") asks for a list, which the file questions
+ * of the pipeline answer.
+ */
+const SINGULAR_DOC_NOUNS =
+  'szenario|aufgabe|aufgabenstellung|uebung|uebungsblatt|lehrtext|lerntext|theorietext|skript|unterlage|material|handout|lernunterlage|dokument|datei|pdf|anhang';
+
+/** "Lies das Dokument X": reading is a cue next to a document word (not "lies mir vor"). */
+const READ_CUE = /\b(?:lies|lese|lesen)\b(?!.*\bvor\b)/;
+
+/**
+ * "diese Datei", "das PDF", "das Szenario dazu", "meine Unterlage hier": a
+ * document word that ends the sentence (ignoring small filler words), with an
+ * article or "dieses" before it. Without a named record or file this means "the
+ * one of the page, or of the last turns".
+ */
+const DEMONSTRATIVE = new RegExp(
+  `\\b(?:diese[rnms]?|dies|das|die|der|den|dem|mein\\w*)\\s+(?:\\w+\\s+)?(?:${SINGULAR_DOC_NOUNS})(?:\\s+(?:hier|dazu|davon|dort|bitte|mal|jetzt|sofort|auf|an|noch\\s?mal|nochmal|auch|bitte))*$`
+);
+
+/**
+ * A short follow-up about the record of the last turns without a verb: "und das
+ * PDF dazu", "das Szenario dazu bitte". Only a document word and "dazu" (or
+ * "davon", "hierzu", "dort") count, nothing longer.
+ */
+const FOLLOW_DOCUMENT = new RegExp(
+  `^(?:(?:und|dann|bitte|noch|auch|jetzt|mal)\\s+)*(?:das|die|den)\\s+(?:${SINGULAR_DOC_NOUNS})\\s+(?:dazu|davon|hierzu|dort)(?:\\s+(?:bitte|mal|jetzt|noch))*$`
+);
+
+function firstDocKind(text: string): DocKind | null {
+  for (const [kind, source] of DOC_NOUNS) {
+    if (new RegExp(`\\b(?:${source})\\b`).test(text)) return kind;
+  }
+  return null;
+}
+
+function firstIndexOf(text: string, source: string): number {
+  const found = new RegExp(`\\b(?:${source})\\b`).exec(text);
+  return found ? found.index : -1;
+}
+
+/**
+ * The file name in a document request. A message that names an enabler or use
+ * case holds a file name only with an extension or an underscore ("zu Enabler 3
+ * die Datei Skript_3.pdf"), else the words of its title would count as a file
+ * name. A scenario code ("Szenario K14-i", "Szenario 14i") is a name too.
+ */
+function fileKeysOf(
+  message: string,
+  text: string,
+  hasParent: boolean
+): FileNameKey[] {
+  const keys: FileNameKey[] = [];
+  const explicit = /\.[a-z0-9]{2,5}\b|_/i.test(message);
+  if (!hasParent || explicit) keys.push(...extractFileNameKeys(message));
+  const code =
+    /\bszenari(?:o|en|os)\s+(k?\d+[a-z]?(?:\s?-\s?[a-z])?)(?![a-z0-9])/.exec(
+      text
+    );
+  if (code) {
+    const key = normalizeFileKey(`szenario ${code[1]}`);
+    if (key && !keys.some(existing => existing.key === key)) {
+      keys.push({ key, partial: true });
+    }
+  }
+  return keys.slice(0, 12);
+}
+
+/**
+ * A document request: of an enabler or use case ("das Szenario zu Enabler 3",
+ * "PDF zum Use Case Bestellsystem"), by file name ("das Dokument
+ * Szenario_14i"), or "this one" ("diese Datei", "das PDF dazu").
+ *
+ * An enabler whose TITLE holds a document word ("Enabler Szenario Planung") is
+ * still an enabler: a document word after the name of the record is part of the
+ * name, only a number may be followed by it ("Enabler 3 Szenario").
+ */
+function detectDocumentIntent(
+  text: string,
+  message: string
+): NavigationIntent | null {
+  const docKind = firstDocKind(text);
+  if (!docKind) return null;
+  const docIndex = firstIndexOf(text, ALL_DOC_NOUNS);
+
+  let parent: ContentParent | null = null;
+  const enablerAt = firstIndexOf(text, ENABLER_WORDS);
+  const useCaseAt = firstIndexOf(text, USE_CASE_WORDS);
+  const kind: ContentType | null =
+    enablerAt >= 0 && (useCaseAt < 0 || enablerAt < useCaseAt)
+      ? 'enabler'
+      : useCaseAt >= 0
+        ? 'use_case'
+        : null;
+  if (kind) {
+    const ref = referenceAfter(
+      text,
+      kind === 'enabler' ? ENABLER_WORDS : USE_CASE_WORDS
+    );
+    const keywordAt = kind === 'enabler' ? enablerAt : useCaseAt;
+    // the document word after the keyword is part of a title, not a request for
+    // a document, unless the reference is a number
+    if (ref && docIndex > keywordAt && !ref.number) return null;
+    if (ref) parent = { type: kind, ref };
+  }
+
+  const fileKeys = fileKeysOf(message, text, parent !== null);
+  const demonstrative =
+    !parent && fileKeys.length === 0 && DEMONSTRATIVE.test(text);
+  if (!parent && fileKeys.length === 0 && !demonstrative) return null;
+  return { kind: 'document', docKind, parent, fileKeys, demonstrative };
+}
+
+/** The verbs of an unmatched command (a command, never a question or a wish). */
+const UNMATCHED_CUE =
+  /\boeffn\w*|\b(?:geh|gehe|gehen)\s+(?:\w+\s+){0,2}(?:zu|zum|zur|auf|in|ins)\b|\b(?:bring|bringe|fuehr|fuehre|leit|leite)\s+(?:\w+\s+)?(?:mich|uns)\s+(?:\w+\s+)?(?:zu|zum|zur|in|ins|auf)\b|\bnavigier\w*|\b(?:mach|mache|ruf|rufe)\b(?:\s+\w+){0,4}\s+auf\b|\baufrufen\b/;
+
+/**
+ * Words that carry no target: an article, a pronoun, "Seite", a verb of going, a
+ * filler. A command with only these ("öffne die Seite", "bring mich dahin") is a
+ * follow-up that the history resolves, not an unknown page.
+ */
+const EMPTY_OBJECT_WORDS = new Set([
+  ...LEADING_FILLER,
+  'seite',
+  'sie',
+  'es',
+  'dort',
+  'dahin',
+  'dorthin',
+  'hin',
+  'mich',
+  'uns',
+  'mir',
+  'doch',
+  'jetzt',
+  'dann',
+  'sofort',
+  'noch',
+  'ein',
+  'eine',
+  'einen',
+  'zum',
+  'zur',
+  'auf',
+  'ins',
+  'du',
+  'kannst',
+  'oeffne',
+  'oeffnen',
+  'geh',
+  'gehe',
+  'gehen',
+  'bring',
+  'bringe',
+  'fuehr',
+  'fuehre',
+  'leit',
+  'leite',
+  'navigier',
+  'navigiere',
+  'mach',
+  'mache',
+  'ruf',
+  'rufe',
+  'aufrufen',
+  'bitte',
+]);
+
+/**
+ * Whether a command to open something names something: at least one word that is
+ * no filler, no idiom ("geh auf meine Frage ein") and no path or address (a made
+ * up path never becomes a request, it stays with the pipeline).
+ */
+function namesSomething(text: string): boolean {
+  if (/[/\\]|:\/\/|\bwww\b/.test(text)) return false;
+  if (/\bgeh\w*\b.*\bein\b/.test(text)) return false;
+  if (/\b(?:frage|fragen)\b/.test(text)) return false;
+  return text
+    .split(' ')
+    .some(word => word.length >= 3 && !EMPTY_OBJECT_WORDS.has(word));
+}
+
+/** What stands after the keyword is no name (empty or a filler): "Öffne den Enabler". */
+function isBareKeyword(text: string, keyword: string): boolean {
+  const rest = new RegExp(`\\b(?:${keyword})\\s*(.*)$`).exec(text)?.[1] ?? '';
+  const words = rest
+    .split(' ')
+    .filter(word => word && !LEADING_FILLER.has(word) && !NAME_STOP.has(word));
+  return words.length === 0;
+}
+
 /**
  * The navigation request in a message, or null when there is none.
  */
@@ -396,20 +657,43 @@ export function detectNavigationIntent(
   }
 
   if (NOT_A_COMMAND.test(text)) return null;
-  if (!hasCue(text)) return null;
+  if (
+    !hasCue(text) &&
+    !(READ_CUE.test(text) && firstDocKind(text)) &&
+    !FOLLOW_DOCUMENT.test(text)
+  ) {
+    return null;
+  }
 
-  const mentionsEnabler = /\benabler\b/.test(text);
-  if (mentionsEnabler) {
-    const ref = referenceAfter(text, 'enabler');
-    if (!ref) return null;
+  // documents first: "das Szenario zu Enabler 3" is a document of the enabler
+  const document = detectDocumentIntent(text, message);
+  if (document) return document;
+
+  if (new RegExp(`\\b(?:${ENABLER_WORDS})\\b`).test(text)) {
+    const ref = referenceAfter(text, ENABLER_WORDS);
+    if (!ref) {
+      // "Öffne den Enabler" without a name: the platform asks, no model call
+      return UNMATCHED_CUE.test(text) && isBareKeyword(text, ENABLER_WORDS)
+        ? { kind: 'unmatched', query: text }
+        : null;
+    }
     return /\bquiz\w*\b/.test(text)
       ? { kind: 'enabler_quiz', ref }
       : { kind: 'enabler', ref };
   }
 
-  if (/\buse[ -]?case\b/.test(text)) {
-    const ref = referenceAfter(text, 'use[ -]?case');
-    return ref ? { kind: 'use_case', ref } : null;
+  if (new RegExp(`\\b(?:${USE_CASE_WORDS})\\b`).test(text)) {
+    const ref = referenceAfter(text, USE_CASE_WORDS);
+    if (ref) return { kind: 'use_case', ref };
+    return UNMATCHED_CUE.test(text) && isBareKeyword(text, USE_CASE_WORDS)
+      ? { kind: 'unmatched', query: text }
+      : null;
+  }
+
+  // a course by number or name ("den Kurs Datenbanken", "zum Modul 2"); the
+  // plural ("meine Kurse") and a course without a name are the page "Lernen"
+  if (new RegExp(`\\b(?:${COURSE_WORDS})\\b`).test(text)) {
+    return { kind: 'course', ref: referenceAfter(text, COURSE_WORDS) ?? {} };
   }
 
   for (const [target, pattern] of TARGET_PATTERNS) {
@@ -422,6 +706,17 @@ export function detectNavigationIntent(
   // verb, and not a page number ("Seite 5").
   if (text.length <= UNKNOWN_PAGE_MAX_LENGTH && UNKNOWN_PAGE.test(text)) {
     return { kind: 'unknown_page' };
+  }
+
+  // Any other clear command to open something ("Öffne den Kalender der
+  // Kantine"): the platform answers with the nearest pages as cards. A
+  // recognized request never goes to the model without an answer of the platform.
+  if (
+    text.length <= UNKNOWN_PAGE_MAX_LENGTH &&
+    UNMATCHED_CUE.test(text) &&
+    namesSomething(text)
+  ) {
+    return { kind: 'unmatched', query: text };
   }
   return null;
 }

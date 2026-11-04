@@ -153,8 +153,13 @@ describe('detectNavigationIntent: enablers and use cases by number or name', () 
     ).toBeNull();
   });
 
-  it('needs a number or a name: "den Use Case" alone is no request', () => {
-    expect(detectNavigationIntent('öffne den Use Case')).toBeNull();
+  it('needs a number or a name: "den Use Case" alone is a command without a target', () => {
+    // a command to open it is answered by the platform (nearest pages), never by the model
+    expect(detectNavigationIntent('öffne den Use Case')).toEqual({
+      kind: 'unmatched',
+      query: 'oeffne den use case',
+    });
+    // a soft wish without a name stays with the pipeline
     expect(detectNavigationIntent('zeig mir den Enabler')).toBeNull();
   });
 });

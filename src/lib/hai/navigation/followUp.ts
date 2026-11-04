@@ -26,7 +26,11 @@ import {
   type HistoryTurnMessage,
 } from '../dataIntent';
 import { foldText } from './fold';
-import { detectNavigationIntent, mentionedTargets } from './intent';
+import {
+  detectNavigationIntent,
+  mentionedTargets,
+  type ContentParent,
+} from './intent';
 import {
   staticTargetFor,
   type NavigationLevel,
@@ -188,4 +192,30 @@ export function askWhereToText(
   const labels =
     fromHistory.length >= 2 ? fromHistory : labelList(EXAMPLES[level], level);
   return `Gern, wohin soll ich dich führen? Zum Beispiel zu ${joinOr(labels)}. Sage mir den Namen des Menüpunkts, dann öffnet die Plattform die Seite sofort.`;
+}
+
+/**
+ * The enabler or use case the last turns were about, for "das PDF dazu" and
+ * "dann öffne das Szenario": the newest of the last three questions of the
+ * person that named one by number or title (an open request or a request for a
+ * document of it). The history only picks the record, the access rules of the
+ * resolution (occupation, course, release) still decide.
+ */
+export function contentParentFromHistory(
+  history: readonly HistoryTurnMessage[] | undefined
+): ContentParent | null {
+  if (!history || history.length === 0) return null;
+  const questions = history.filter(message => message.role === 'user');
+  for (const message of questions.slice(-HISTORY_TURNS).reverse()) {
+    const intent = detectNavigationIntent(historyText(message));
+    if (!intent) continue;
+    if (intent.kind === 'enabler' || intent.kind === 'enabler_quiz') {
+      return { type: 'enabler', ref: intent.ref };
+    }
+    if (intent.kind === 'use_case') {
+      return { type: 'use_case', ref: intent.ref };
+    }
+    if (intent.kind === 'document' && intent.parent) return intent.parent;
+  }
+  return null;
 }
