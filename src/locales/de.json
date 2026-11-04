@@ -1932,6 +1932,7 @@
   "enablerPage.scenarioSection": "Szenarien",
   "enablerPage.scenarioParts": "{count} Teile",
   "enablerPage.scenarioPartSingular": "1 Teil",
+  "document.notFound": "Die Datei wurde nicht gefunden.",
   "enablerPage.openScenario": "Szenario öffnen (PDF)",
   "arbeitszeugnis.title": "Arbeitszeugnis erstellen",
   "arbeitszeugnis.subtitle": "Wähle einen Auszubildenden aus, um basierend auf den genehmigten Ausbildungsnachweisen ein Zeugnis zu erstellen.",

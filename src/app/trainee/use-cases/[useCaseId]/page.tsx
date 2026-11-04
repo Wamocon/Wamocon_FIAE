@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -29,6 +29,7 @@ import {
 import { sameText } from '@/lib/display-text';
 import { traineeDocumentPath } from '@/lib/documentContentPath';
 import { viewerSubtitle } from '@/lib/documentTypeLabel';
+import { useDocumentParam } from '@/lib/hai/navigation/useDocumentParam';
 
 // Loaded when a document is opened: the reading view draws the pages itself
 // (pdf.js), so no other page carries it
@@ -92,7 +93,8 @@ export default function TraineeUseCaseDetailPage() {
     isLoading: loading,
     error: queryError,
   } = useApiQuery<UseCaseResponse>(ucUrl);
-  const { data: docsData } = useApiQuery<DocsResponse>(docsUrl);
+  const { data: docsData, error: docsError } =
+    useApiQuery<DocsResponse>(docsUrl);
   // The file of the hand-in (same query as the file field, so it is shared)
   const fileUrl = useCaseId
     ? `/api/trainee/use-cases/${useCaseId}/submission-file`
@@ -124,6 +126,32 @@ export default function TraineeUseCaseDetailPage() {
     title: string;
     documentType: string;
   } | null>(null);
+
+  // A link of the HAI (?document=<id>) opens that document in the reader, but
+  // only when it is one of the documents this page lists for the person (the
+  // route of the list applies the rules of the document routes). Anything else,
+  // a document that does not exist and one the person may not see alike, gets the
+  // same neutral note. The reader asks the content route again for the bytes.
+  const documentParam = useDocumentParam();
+  const handledDocument = useRef<string | null>(null);
+  const [documentNote, setDocumentNote] = useState(false);
+  useEffect(() => {
+    if (!documentParam || handledDocument.current === documentParam) return;
+    if (!ucData?.useCase || (!docsData && !docsError)) return;
+    handledDocument.current = documentParam;
+    const listed = (docsData?.documents ?? []).find(
+      d => d.id === documentParam
+    );
+    if (listed) {
+      setSelectedPdf({
+        id: listed.id,
+        title: listed.title,
+        documentType: listed.documentType,
+      });
+      return;
+    }
+    setDocumentNote(true);
+  }, [documentParam, ucData, docsData, docsError]);
 
   // Sync form fields when server data loads/changes
   useEffect(() => {
@@ -229,6 +257,15 @@ export default function TraineeUseCaseDetailPage() {
           </p>
         )}
         <h1 className="text-foreground text-2xl font-bold">{useCase.title}</h1>
+        {documentNote && (
+          <p
+            role="status"
+            data-testid="document-not-found"
+            className="text-muted-foreground mt-2 text-sm"
+          >
+            {t('document.notFound')}
+          </p>
+        )}
         {/* A description that only repeats the title is not shown twice */}
         {hasText(useCase.descriptionText) &&
           !sameText(useCase.descriptionText, useCase.title) && (

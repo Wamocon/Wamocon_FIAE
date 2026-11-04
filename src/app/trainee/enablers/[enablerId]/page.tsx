@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -41,6 +41,7 @@ import {
   traineeScenarioPath,
 } from '@/lib/documentContentPath';
 import { viewerSubtitle } from '@/lib/documentTypeLabel';
+import { useDocumentParam } from '@/lib/hai/navigation/useDocumentParam';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -142,7 +143,8 @@ export default function TraineeEnablerPage() {
     error: enablerError,
   } = useApiQuery<EnablerResponse>(enablerUrl);
   const { data: quizzesData } = useApiQuery<QuizzesResponse>(quizzesUrl);
-  const { data: docsData } = useApiQuery<DocsResponse>(docsUrl);
+  const { data: docsData, error: docsError } =
+    useApiQuery<DocsResponse>(docsUrl);
 
   const enabler = enablerData?.enabler || null;
   // Order of work: a locked enabler shows its title and material, the
@@ -587,6 +589,48 @@ export default function TraineeEnablerPage() {
     return { part: null, label: cleaned };
   };
 
+  // A link of the HAI (?document=<id>) opens that document in the reader, but
+  // only when it is one of the documents this page lists for the person (the
+  // route of the list applies the rules of the document routes). Anything else,
+  // a document that does not exist and one the person may not see alike, gets the
+  // same neutral note. The reader asks the content route again for the bytes.
+  const documentParam = useDocumentParam();
+  const handledDocument = useRef<string | null>(null);
+  const [documentNote, setDocumentNote] = useState(false);
+  useEffect(() => {
+    if (!documentParam || handledDocument.current === documentParam) return;
+    if (!enabler || (!docsData && !docsError)) return;
+    handledDocument.current = documentParam;
+    const listed = [...theoryDocs, ...scenarioDocs].find(
+      d => d.id === documentParam
+    );
+    if (listed) {
+      flipbook.openPdf(
+        listed.documentType === 'EXERCISE'
+          ? formatScenarioLabel(listed.title).label
+          : listed.title,
+        traineeDocumentPath(listed.id),
+        viewerSubtitle(listed.documentType, t)
+      );
+      return;
+    }
+    // the single scenario PDF of the enabler itself (no row of its own)
+    if (
+      documentParam === String(enabler.id ?? enablerId).toLowerCase() &&
+      enabler.hasScenarioPdf &&
+      scenarioDocs.length === 0
+    ) {
+      flipbook.openPdf(
+        t('trainer.content.scenarios'),
+        traineeScenarioPath(String(enabler.id ?? enablerId)),
+        viewerSubtitle('EXERCISE', t)
+      );
+      return;
+    }
+    setDocumentNote(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentParam, enabler, docsData, docsError, theoryDocs, scenarioDocs]);
+
   if (!profile)
     return <div className="p-6">{t('enablerPage.pleaseLogin')}</div>;
   if (loading) return <PageLoader />;
@@ -603,6 +647,15 @@ export default function TraineeEnablerPage() {
         <h1 className="text-foreground text-2xl font-bold">
           {capitalizeFirst(enabler.title)}
         </h1>
+        {documentNote && (
+          <p
+            role="status"
+            data-testid="document-not-found"
+            className="text-muted-foreground mt-2 text-sm"
+          >
+            {t('document.notFound')}
+          </p>
+        )}
         {enabler.isActive && enabler.durationValue && enabler.activatedAt && (
           <div className="mt-3 text-sm">
             {(() => {
