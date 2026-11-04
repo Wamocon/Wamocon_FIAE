@@ -11,8 +11,9 @@
  *
  * The definition is the one of the trainee area (src/lib/catalog/progression.ts):
  * an enabler is completed when every required lesson quiz is passed. The
- * enablers counted are the active enablers of the courses the trainee is a
- * member of, inside the catalog scope of the request (the chosen tab), so a
+ * enablers counted are the active enablers of the active courses the trainee is
+ * a member of (an inactive course counts nowhere, like on the pages of the
+ * trainee), inside the catalog scope of the request (the chosen tab), so a
  * trainee in two trainings has one figure per training.
  *
  * The computation is pure (summarizeTraineeProgress), the loader only feeds it.
@@ -255,6 +256,9 @@ export async function loadTraineeProgress(
       and(
         inArray(courseMembers.userId, ids as any),
         eq(courseMembers.role, 'TRAINEE'),
+        // an inactive course counts nowhere: the course list of the trainee
+        // leaves it out, so the figure of a trainee must be the same here
+        eq(courses.isActive, true),
         scope ? catalogCondition(courses.trainingCatalogId, scope) : undefined
       )
     );
