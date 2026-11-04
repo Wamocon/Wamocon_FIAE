@@ -232,12 +232,30 @@ export function HaiVoiceSessionProvider({ children, env }: ProviderProps) {
     m => m.navigationOffer?.status === 'opened'
   ).length;
   const previousOpened = useRef(openedCount);
+  // The same holds for the voice assistant of the normal chat (the microphone
+  // in the input field, no button "Gespräch"): on a phone the panel is the whole
+  // screen and would hide the page the HAI just opened, and with the panel the
+  // person would lose sight of the running conversation. So a page opened while
+  // the voice loop runs takes the same road: the panel steps away and the figure
+  // stays at the edge, listening. One behavior for both ways.
+  const voicePhase = voice.phase;
   useEffect(() => {
-    if (openedCount > previousOpened.current && view === 'open') {
-      if (viewMode !== 'hidden') setViewMode('hidden');
+    if (openedCount > previousOpened.current) {
+      if (view === 'open') {
+        if (viewMode !== 'hidden') setViewMode('hidden');
+      } else if (
+        available &&
+        voicePhase !== 'idle' &&
+        voicePhase !== 'error' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(max-width: 767px)').matches
+      ) {
+        setView('open');
+        if (viewMode !== 'hidden') setViewMode('hidden');
+      }
     }
     previousOpened.current = openedCount;
-  }, [openedCount, view, viewMode, setViewMode]);
+  }, [openedCount, view, viewMode, setViewMode, voicePhase, available]);
 
   // the page of the last answer, as long as the person has not answered
   const offer = useMemo<OpenNavigationOffer | null>(() => {
