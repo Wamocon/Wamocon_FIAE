@@ -101,6 +101,14 @@ export interface PromptContext {
    */
   pageContext?: string;
   /**
+   * The finished section "Werkzeuge (Oberfläche)" (uiActions/promptSection.ts):
+   * the UI tools of this turn and the forms of the current page. Only with the
+   * switch HAI_UI_ACTIONS on and a request for an input or a page in the
+   * message. Added behind the boundary rules and the page context, so it
+   * weakens none of them. Without it the prompt is unchanged (byte for byte).
+   */
+  uiTools?: string;
+  /**
    * The memory of this turn (src/lib/hai/memory): the confirmed entries of the
    * user in the ONE occupation of the turn and the approved shared entries. Adds
    * the section "Gedächtnis" as the LAST part, after the occupation gate and
@@ -676,6 +684,11 @@ Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, a
   // The page of the user (data of the browser), behind the protection rules
   if (context.pageContext) {
     parts.push(context.pageContext);
+  }
+
+  // The UI tools, behind the protection rules and the page context
+  if (context.uiTools) {
+    parts.push(context.uiTools);
   }
 
   // Learning technique section (package B): limits and rules for tips on

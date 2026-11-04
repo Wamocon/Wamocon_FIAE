@@ -1249,3 +1249,16 @@ body::-webkit-scrollbar {
     transition: none !important;
   }
 }
+
+/*
+ * Fields the HAI filled in (UI tools, docs/hai-ui-aktionen.md): marked until the
+ * person edits them or closes the bar. The mark is only a display.
+ */
+[data-hai-filled='true'] {
+  outline: 2px solid rgb(139 92 246 / 0.85);
+  outline-offset: 2px;
+  background-image: linear-gradient(
+    rgb(139 92 246 / 0.08),
+    rgb(139 92 246 / 0.08)
+  );
+}

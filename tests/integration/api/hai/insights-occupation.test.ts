@@ -18,6 +18,10 @@ import {
 // mock. The mock ignores where(), so the proof is the rendered condition of
 // each read: it carries the id of the chosen occupation and never the id of the
 // other one. The numbers in the messages come from the rows of the doubles.
+// The progress figures are NOT read from the table mock: they come from the
+// loaders of the platform (loadTraineeCourseFigures for a trainee, the course
+// list and dashboard figure; loadTraineeProgress for a trainer, the figure of
+// the trainer pages). Their doubles record the occupation they were asked for.
 
 const FIAE = '00000000-0000-4000-8000-000000000001';
 const KFBM = '00000000-0000-4000-8000-000000000002';
@@ -51,9 +55,14 @@ async function load(
   options: {
     role?: 'TRAINEE' | 'TRAINER';
     tables?: Rows;
+    /** Course figures of the platform for a trainee (the double of loadTraineeCourseFigures). */
+    figures?: any[];
+    /** Progress of the trainees per occupation id: { catalogId: { traineeId: [pct, total] } }. */
+    trainerProgress?: Record<string, Record<string, [number, number]>>;
   } = {}
 ) {
-  const { role = 'TRAINEE', tables = {} } = options;
+  const { role = 'TRAINEE', tables = {}, figures = [], trainerProgress = {} } =
+    options;
   jest.resetModules();
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
   mockSession(
@@ -75,6 +84,26 @@ async function load(
     ...tables,
   });
   jest.doMock('@/db', () => ({ __esModule: true, default: rec.db }));
+  const loadFigures = jest.fn(async (_userId: string, _catalogs: string[]) => figures);
+  jest.doMock('@/lib/hai/progressFigures', () => ({
+    __esModule: true,
+    ...(jest.requireActual('@/lib/hai/progressFigures') as object),
+    loadTraineeCourseFigures: loadFigures,
+  }));
+  const loadProgress = jest.fn(
+    async (_ids: string[], scope: { activeCatalogId: string }) => ({
+      byTrainee: new Map(
+        Object.entries(trainerProgress[scope.activeCatalogId] ?? {}).map(
+          ([id, [pct, total]]) => [id, { pct, total, completed: 0 }]
+        )
+      ),
+      courses: new Map(),
+    })
+  );
+  jest.doMock('@/lib/trainer/trainee-progress', () => ({
+    __esModule: true,
+    loadTraineeProgress: loadProgress,
+  }));
   jest.doMock('@/lib/auth-helpers', () => ({
     __esModule: true,
     ...(jest.requireActual('@/lib/auth-helpers') as object),
@@ -82,7 +111,7 @@ async function load(
     getUserOrgIdStrict: async () => ORG,
   }));
   const mod = (await import('@/app/api/hai/insights/route')) as any;
-  return { mod, rec };
+  return { mod, rec, loadFigures, loadProgress };
 }
 
 function get(catalog?: string, query = '') {
@@ -109,12 +138,24 @@ function allParams(rec: ReturnType<typeof createTableDb>, tables: string[]) {
   return [...fromTables, ...fromSql];
 }
 
-// courses of the person: more than 5 enablers, 1 done: below 30 percent
-const progressRows = {
-  courseMembers: [{ courseId: 'c1', courseTitle: 'Kurs des Berufs' }],
-  enablers: [{ count: 10 }],
-  enablerCompletions: [{ count: 1 }],
+// courses of the person: more than 5 enablers, 1 done: below 30 percent (the
+// figure of the course card), and the first enabler that may be worked on
+const lowFigure = {
+  courseId: 'c1',
+  title: 'Kurs des Berufs',
+  catalogId: FIAE,
+  enablerTotal: 10,
+  enablerDone: 1,
+  useCaseTotal: 0,
+  useCaseDone: 0,
+  percent: 10,
+  enablers: [
+    { id: 'e1', title: 'Fertig', completed: true, locked: false },
+    { id: 'e2', title: 'Gesperrt', completed: false, locked: true },
+    { id: 'e3', title: 'Als Nächstes', completed: false, locked: false },
+  ],
 };
+const progressRows = { figures: [lowFigure] };
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -125,15 +166,24 @@ describe('insights of a trainee in two occupations', () => {
   ])(
     'tab %s: every occupation bound read carries this occupation only',
     async (code, chosen, other) => {
-      const { mod, rec } = await load({ tables: progressRows });
+      const { mod, rec, loadFigures } = await load(progressRows);
       const res = await mod.GET(get(code));
       expect(res.status).toBe(200);
-      const { titles: found } = await titles(res);
+      const { body, titles: found } = await titles(res);
       expect(found).toEqual(
         expect.arrayContaining([
           'Fehlender Tätigkeitsnachweis',
           'Niedriger Fortschritt',
         ])
+      );
+      // the figures of the platform: 10 percent, and the next step is the
+      // first enabler that is not completed and not locked (not the locked one)
+      const messages = body.insights.map(i => i.message);
+      expect(messages).toContain(
+        'Dein Fortschritt in "Kurs des Berufs" ist nur 10%. Zeit, am Ball zu bleiben!'
+      );
+      expect(messages).toContain(
+        'Bereit für den nächsten Enabler? "Als Nächstes" wartet auf dich!'
       );
 
       // report of the week (and the week before)
@@ -143,46 +193,38 @@ describe('insights of a trainee in two occupations', () => {
       );
       expect(reports.params).toContain(chosen);
       expect(reports.params).not.toContain(other);
-      // progress in the courses
-      const courses = rec.filters('select', 'course_members');
-      expect(courses.sql).toContain('"courses"."training_catalog_id" = $');
-      expect(courses.params).toContain(chosen);
-      expect(courses.params).not.toContain(other);
-      // next step (raw sql)
-      const next = renderCondition(
-        (rec.db.execute as jest.Mock).mock.calls[0][0]
-      );
-      expect(next.sql).toContain('c.training_catalog_id = $');
-      expect(next.params).toContain(chosen);
-      expect(next.params).not.toContain(other);
+      // progress in the courses and the next step: ONE read, asked for this
+      // occupation only
+      expect(loadFigures).toHaveBeenCalledTimes(1);
+      expect(loadFigures).toHaveBeenCalledWith(ME, [chosen]);
+      expect(JSON.stringify(loadFigures.mock.calls)).not.toContain(other);
     }
   );
 
   it('the person is the session: a userId in the query changes nothing', async () => {
-    const { mod, rec } = await load({ tables: progressRows });
+    const { mod, rec, loadFigures } = await load(progressRows);
     const res = await mod.GET(get('KFBM', `?userId=${VICTIM}`));
     expect(res.status).toBe(200);
-    const params = allParams(rec, [
-      'activity_reports',
-      'course_members',
-      'ausbildung_blocks',
-    ]);
+    const params = allParams(rec, ['activity_reports', 'ausbildung_blocks']);
     expect(params).toContain(ME);
     expect(params).not.toContain(VICTIM);
+    expect(loadFigures.mock.calls.map(c => c[0])).toEqual([ME]);
   });
 
   it('without a choice the default occupation (first enrollment) counts, as before', async () => {
-    const { mod, rec } = await load({ tables: progressRows });
+    const { mod, rec, loadFigures } = await load(progressRows);
     const res = await mod.GET(get());
     expect(res.status).toBe(200);
-    const params = allParams(rec, ['activity_reports', 'course_members']);
+    const params = allParams(rec, ['activity_reports']);
     expect(params).toContain(FIAE);
     expect(params).not.toContain(KFBM);
+    expect(loadFigures).toHaveBeenCalledWith(ME, [FIAE]);
   });
 
   it('an occupation the person does not have: answered like without a choice, nothing of it is read', async () => {
-    const { mod, rec } = await load({
-      tables: { ...progressRows, traineeEnrollments: [enrollFiae] },
+    const { mod, rec, loadFigures } = await load({
+      ...progressRows,
+      tables: { traineeEnrollments: [enrollFiae] },
     });
     const res = await mod.GET(get('KFBM'));
     // the scope refuses the occupation (403), the route does not widen it and
@@ -190,15 +232,16 @@ describe('insights of a trainee in two occupations', () => {
     expect(res.status).toBe(200);
     const { titles: found } = await titles(res);
     expect(found).toContain('Fehlender Tätigkeitsnachweis');
-    const params = allParams(rec, ['activity_reports', 'course_members']);
+    const params = allParams(rec, ['activity_reports']);
     expect(params).toContain(FIAE);
     expect(params).not.toContain(KFBM);
+    expect(JSON.stringify(loadFigures.mock.calls)).not.toContain(KFBM);
   });
 
   it('a trainee with one occupation is unchanged: FIAE, no enrollment row needed', async () => {
-    const { mod, rec } = await load({
+    const { mod, rec, loadFigures } = await load({
+      ...progressRows,
       tables: {
-        ...progressRows,
         traineeEnrollments: [],
         organizationCatalogs: orgFiae,
       },
@@ -213,19 +256,21 @@ describe('insights of a trainee in two occupations', () => {
       ])
     );
     expect(body.count).toBe(body.insights.length);
-    const params = allParams(rec, ['activity_reports', 'course_members']);
+    const params = allParams(rec, ['activity_reports']);
     expect(params).toContain(FIAE);
     expect(params).not.toContain(KFBM);
+    expect(loadFigures).toHaveBeenCalledWith(ME, [FIAE]);
   });
 
   it('no occupation can be determined: nothing that belongs to one is asked', async () => {
-    const { mod, rec } = await load({
-      tables: { ...progressRows, trainingCatalogs: [] },
+    const { mod, rec, loadFigures } = await load({
+      ...progressRows,
+      tables: { trainingCatalogs: [] },
     });
     const res = await mod.GET(get());
     expect(res.status).toBe(200);
     expect(rec.calls.filter(c => c.table === 'activity_reports')).toEqual([]);
-    expect(rec.calls.filter(c => c.table === 'course_members')).toEqual([]);
+    expect(loadFigures).not.toHaveBeenCalled();
     expect(rec.db.execute).not.toHaveBeenCalled();
   });
 });
@@ -266,7 +311,7 @@ describe('insights of a trainer', () => {
       // the organization of the trainer stays the first limit
       expect(submissions.params).toContain(ORG);
       expect(reports.params).toContain(ORG);
-      // a trainer gets no trainee reminders
+      // a trainer gets no trainee reminders (no course figures of a trainee)
       expect(rec.calls.filter(c => c.table === 'course_members')).toEqual([]);
     }
   );
@@ -295,87 +340,185 @@ describe('insights of a trainer', () => {
 });
 
 describe('progress of the assigned trainees, per occupation', () => {
-  const lowRows = [
-    { id: 'a', full_name: 'Anna Beispiel', catalog_code: 'KFBM', progress: 10 },
-    { id: 'b', full_name: 'Ben Beispiel', catalog_code: 'FIAE', progress: 20 },
+  // The trainees of the trainer (the table mock ignores where(), the rendered
+  // condition is checked) and the figure of the trainer pages per occupation.
+  const trainees = [
+    { id: 'a', role: 'TRAINEE', fullName: 'Anna Beispiel' },
+    { id: 'b', role: 'TRAINEE', fullName: 'Ben Beispiel' },
+    { id: 'c', role: 'TRAINEE', fullName: 'Cora Beispiel' },
   ];
-
-  /** The raw query of the progress check (the one that names assigned_trainer_id). */
-  function progressQuery(rec: ReturnType<typeof createTableDb>) {
-    const calls = (rec.db.execute as jest.Mock).mock.calls.map((c: any[]) =>
-      renderCondition(c[0])
-    );
-    const found = calls.find(c => c.sql.includes('assigned_trainer_id'));
-    expect(found).toBeDefined();
-    return found as { sql: string; params: unknown[] };
-  }
+  const trainerProfiles = [
+    { id: ME, role: 'TRAINER', organizationId: ORG, fullName: 'Test Person' },
+    ...trainees,
+  ];
+  // Anna is low in KFBM, Ben is low in FIAE, Cora is fine in both
+  const progress = {
+    [KFBM]: { a: [10, 20], b: [80, 20], c: [90, 20] },
+    [FIAE]: { a: [75, 40], b: [20, 40], c: [60, 40] },
+  } as Record<string, Record<string, [number, number]>>;
 
   it.each([
-    ['KFBM', KFBM, FIAE],
-    ['FIAE', FIAE, KFBM],
+    ['KFBM', KFBM, FIAE, 'Anna Beispiel'],
+    ['FIAE', FIAE, KFBM, 'Ben Beispiel'],
   ])(
-    'tab %s: the share is counted in the courses of this occupation only',
-    async (code, chosen, other) => {
-      const { mod, rec } = await load({ role: 'TRAINER' });
-      (rec.db.execute as jest.Mock).mockImplementationOnce(async () => [
-        lowRows[0],
+    'tab %s: the share is the figure of the trainer pages, counted in this occupation only',
+    async (code, chosen, other, expectedName) => {
+      const { mod, rec, loadProgress } = await load({
+        role: 'TRAINER',
+        tables: { profiles: trainerProfiles },
+        trainerProgress: progress,
+      });
+      (rec.db.execute as jest.Mock).mockImplementation(async () => [
+        { id: chosen, code },
       ]);
       const res = await mod.GET(get(code));
       expect(res.status).toBe(200);
-      const query = progressQuery(rec);
-      expect(query.sql).toContain('c.training_catalog_id = $');
-      expect(query.params).toContain(chosen);
-      expect(query.params).not.toContain(other);
-      // never the progress of the person as a whole
-      expect(query.sql).not.toContain('overall_progress');
-      // the trainer is the first limit
-      expect(query.params).toContain(ME);
+      // asked for this occupation only, narrowed to it
+      expect(loadProgress).toHaveBeenCalledTimes(1);
+      const [ids, scope] = loadProgress.mock.calls[0] as any[];
+      expect(ids).toEqual(expect.arrayContaining(['a', 'b', 'c']));
+      expect(scope).toEqual({
+        allowedCatalogIds: [chosen],
+        activeCatalogId: chosen,
+        selected: true,
+      });
+      expect(JSON.stringify(loadProgress.mock.calls)).not.toContain(other);
+      // the trainer is the first limit on the trainees, active ones only
+      const trainee = rec.filters('select', 'profiles');
+      expect(trainee.sql).toContain('"profiles"."assigned_trainer_id" = $');
+      expect(trainee.sql).toContain('"profiles"."is_active" = $');
+      expect(trainee.params).toContain(ME);
       const { body } = await titles(res);
       const hint = body.insights.find(
         i => i.title === 'Azubis brauchen Unterstützung'
       );
-      // inside one tab the occupation is clear, the name stands alone
-      expect(hint?.message).toContain('Anna Beispiel');
-      expect(hint?.message).not.toContain('(KFBM)');
+      // inside one tab the occupation is clear, the name stands alone, and only
+      // the trainee who is low in THIS occupation is named
+      expect(hint?.message).toContain(expectedName);
+      expect(hint?.message).not.toContain('Cora');
+      expect(hint?.message).not.toContain(`(${code})`);
     }
   );
 
-  it('without a choice every occupation is checked and the name carries the code', async () => {
-    const { mod, rec } = await load({ role: 'TRAINER' });
-    (rec.db.execute as jest.Mock).mockImplementationOnce(async () => lowRows);
+  it('without a choice every occupation is checked and the name carries the code, lowest first, at most three', async () => {
+    const { mod, rec, loadProgress } = await load({
+      role: 'TRAINER',
+      tables: { profiles: trainerProfiles },
+      trainerProgress: progress,
+    });
+    (rec.db.execute as jest.Mock).mockImplementation(async () => [
+      { id: KFBM, code: 'KFBM' },
+      { id: FIAE, code: 'FIAE' },
+    ]);
     const res = await mod.GET(get());
     expect(res.status).toBe(200);
-    const query = progressQuery(rec);
-    expect(query.sql).not.toContain('c.training_catalog_id = $');
+    expect(
+      loadProgress.mock.calls.map((c: any[]) => c[1].activeCatalogId).sort()
+    ).toEqual([FIAE, KFBM].sort());
     const { body } = await titles(res);
     const hint = body.insights.find(
       i => i.title === 'Azubis brauchen Unterstützung'
     );
-    expect(hint?.message).toContain(
-      'Anna Beispiel (KFBM), Ben Beispiel (FIAE)'
-    );
+    expect(hint?.message).toContain('Anna Beispiel (KFBM), Ben Beispiel (FIAE)');
   });
 
-  it('no trainee with low progress: no hint', async () => {
-    const { mod } = await load({ role: 'TRAINER' });
+  it('a trainee without an enabler in the occupation is not "low" (0 of 0)', async () => {
+    const { mod, rec } = await load({
+      role: 'TRAINER',
+      tables: { profiles: trainerProfiles },
+      trainerProgress: { [FIAE]: { a: [0, 0] } },
+    });
+    (rec.db.execute as jest.Mock).mockImplementation(async () => [
+      { id: FIAE, code: 'FIAE' },
+    ]);
     const res = await mod.GET(get('FIAE'));
     const { titles: found } = await titles(res);
     expect(found).not.toContain('Azubis brauchen Unterstützung');
   });
-});
 
-describe('the raw queries use the real columns of enabler_completions', () => {
-  it('the next step of a trainee joins on trainee_id and enabler_id (there is no user_id or id)', async () => {
-    const { mod, rec } = await load({ tables: progressRows });
+  it('no trainee with low progress: no hint', async () => {
+    const { mod, rec } = await load({
+      role: 'TRAINER',
+      tables: { profiles: trainerProfiles },
+      trainerProgress: { [FIAE]: { a: [80, 10], b: [90, 10] } },
+    });
+    (rec.db.execute as jest.Mock).mockImplementation(async () => [
+      { id: FIAE, code: 'FIAE' },
+    ]);
+    const res = await mod.GET(get('FIAE'));
+    const { titles: found } = await titles(res);
+    expect(found).not.toContain('Azubis brauchen Unterstützung');
+  });
+
+  it('the rows of enabler_completions are no source of the hint', async () => {
+    const { mod, rec } = await load({
+      role: 'TRAINER',
+      tables: { profiles: trainerProfiles },
+      trainerProgress: { [FIAE]: { a: [80, 10] } },
+    });
+    (rec.db.execute as jest.Mock).mockImplementation(async () => [
+      { id: FIAE, code: 'FIAE' },
+    ]);
     await mod.GET(get('FIAE'));
     const sqls = (rec.db.execute as jest.Mock).mock.calls.map(
       (c: any[]) => renderCondition(c[0]).sql
     );
-    const next = sqls.find(s => s.includes('LEFT JOIN enabler_completions'));
-    expect(next).toBeDefined();
-    expect(next).toContain('ec.trainee_id = $');
-    expect(next).toContain('ec.enabler_id IS NULL');
-    expect(next).not.toContain('ec.user_id');
-    expect(next).not.toContain('ec.id ');
+    expect(sqls.join('\n')).not.toContain('enabler_completions');
+    expect(rec.calls.filter(c => c.table === 'enabler_completions')).toEqual([]);
+  });
+});
+
+describe('the trainee reminders do not read enabler_completions', () => {
+  it('progress and next step come from the figures of the platform', async () => {
+    const { mod, rec } = await load(progressRows);
+    await mod.GET(get('FIAE'));
+    const sqls = (rec.db.execute as jest.Mock).mock.calls.map(
+      (c: any[]) => renderCondition(c[0]).sql
+    );
+    expect(sqls.join('\n')).not.toContain('enabler_completions');
+    expect(rec.calls.filter(c => c.table === 'enabler_completions')).toEqual([]);
+  });
+
+  it('a course at 30 percent or more, or with 5 enablers or fewer, is no reminder', async () => {
+    const { mod } = await load({
+      figures: [
+        { ...lowFigure, percent: 30 },
+        { ...lowFigure, courseId: 'c2', enablerTotal: 5, percent: 0 },
+      ],
+    });
+    const res = await mod.GET(get('FIAE'));
+    const { titles: found } = await titles(res);
+    expect(found).not.toContain('Niedriger Fortschritt');
+    // the next step is still offered
+    expect(found).toContain('Nächster Schritt');
+  });
+
+  it('every enabler completed or locked: no next step', async () => {
+    const { mod } = await load({
+      figures: [
+        {
+          ...lowFigure,
+          percent: 100,
+          enablers: [
+            { id: 'e1', title: 'Fertig', completed: true, locked: false },
+            { id: 'e2', title: 'Gesperrt', completed: false, locked: true },
+          ],
+        },
+      ],
+    });
+    const res = await mod.GET(get('FIAE'));
+    const { titles: found } = await titles(res);
+    expect(found).not.toContain('Nächster Schritt');
+    expect(found).not.toContain('Niedriger Fortschritt');
+  });
+
+  it('a failed read of the figures is no insight and no error for the person', async () => {
+    const { mod, loadFigures } = await load(progressRows);
+    loadFigures.mockRejectedValueOnce(new Error('db down'));
+    const res = await mod.GET(get('FIAE'));
+    expect(res.status).toBe(200);
+    const { titles: found } = await titles(res);
+    expect(found).not.toContain('Niedriger Fortschritt');
+    expect(found).not.toContain('Nächster Schritt');
   });
 });
