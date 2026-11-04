@@ -331,4 +331,22 @@ Schlüsse:
 
 ### (e) Messung im Browser mit echter Schleife und echtem Soniox
 
-Wird nachgetragen (Laborlauf mit Chrome, gefälschtem Mikrofon, echter Schleife und echter Erkennung).
+Aufbau: Chrome 157 mit gefälschtem Mikrofon (`--use-fake-device-for-media-stream`, `--use-file-for-fake-audio-capture`), eine kleine Seite mit der echten `useHaiVoice`-Schleife und dem echten Soniox-Client (Erkennung und Sprachausgabe, Region EU, Schlüssel von einem lokalen Hilfsserver wie von der Route der App). Nur der Chat ist eine Attrappe (antwortet mit einem festen Text von etwa 20 Sekunden Vorlesedauer und merkt sich, was ihn erreichte). Kein Chatmodell. Die Mikrofondatei: die Person (Daniel) fragt, danach redet während der Antwort eine Stimme im Raum (Lena, 4 Sätze, einer davon "Stopp"), dann sagt die Person "Stopp.", fragt noch einmal und sagt "Gespräch beenden.". Pegelregelung aus, Echo-Unterdrückung an. Skripte im Scratchpad, nicht im Repository.
+
+| Stimme im Raum | Einstellung | Sätze der Stimme im Raum, die an den Chat gingen | Unterbrechungen der HAI durch den Raum | Stopp aus dem Raum hält die HAI an | "Stopp" der Person hält an | "Gespräch beenden" |
+|---|---|---|---|---|---|---|
+| minus 20 dB | **Tor aus** (Vergleich) | 4 von 4 | 4 | ja | ja | ja |
+| minus 20 dB | Normal | 0 | 0 | nein | ja (etwa 0,7 s nach Wortbeginn) | ja |
+| minus 14 dB | Normal | 0 | 0 | nein | ja | ja |
+| minus 10 dB | Normal | 2 von 4 | 3 | nein | ja | ja |
+| minus 10 dB | Streng | 0 | 0 | nein | ja | ja |
+| minus 6 dB | Normal | 2 von 4 | 2 | ja | ja | ja |
+| minus 6 dB | Streng | 2 von 4 | 2 | ja | ja | ja |
+
+Kaltstart (Stimme im Raum zuerst, minus 20 dB, danach die Person): die Stimme im Raum wurde schon vor jeder Referenz aussortiert (Mittel 0,030 unter der Untergrenze 0,04), die Frage der Person ging an die HAI. Nur Stimmen im Raum, nichts von der Person: kein Satz an den Chat, nach drei stillen Runden (24 Sekunden) Pause der HAI. Drücken zum Sprechen ohne Halten: Mikrofon wurde nie geöffnet, nichts gesendet. Mit Halten (6,5 Sekunden): nur das Gehaltene ging an die HAI (die Frage der Person, bei einer Datei nur mit Stimme im Raum deren Satz: im Halten wird nicht gefiltert). Mit ausgeschalteten Signalwörtern gingen "Gespräch beenden." und alles andere als Frage an die HAI.
+
+Befunde, die den Code geändert haben:
+
+1. Mit nur dem Spitzenwert (Faktor 1,5) für den vorläufigen Text unterbrach schon eine Stimme minus 14 Dezibel die HAI (ein Spitzenwert einer Silbe). Seitdem: Mittelwert der letzten 1,2 Sekunden und Spitzenwert das 2,5fache der Schwelle.
+2. Der Zeitraum der Wörter von Soniox ist nur ein grober Anhaltspunkt: Der laute Teil der Aufnahme beginnt 100 bis 350 Millisekunden nach `start_ms`, und ein einzelnes Wort kommt mit einem Zeitraum von 60 bis 120 Millisekunden. Ein "Stopp" der Person wurde deshalb in einem von vier Läufen als zu leise aussortiert. Seitdem reicht das Fenster mindestens 1,2 Sekunden und 450 Millisekunden über das letzte Wort hinaus, und bei einem Zeitraum unter 0,8 Sekunden entscheidet der Spitzenwert (das Dreifache der Schwelle).
+3. Die Grenze des Pegels: Stimmen etwa 14 Dezibel (Normal) beziehungsweise 10 Dezibel (Streng) unter der Person werden ausgeschlossen, 6 Dezibel darunter nicht mehr.
