@@ -246,7 +246,20 @@ ${buildTopicCheck(persona)}
  * with a counter question about an entry of that occupation.
  */
 export const VOICE_OCCUPATION_LINE =
-  '- Für die Berufe gilt gesprochen genau die Themenprüfung im Abschnitt "Erlaubte Themen", wie getippt: Eine Fachfrage zu einem deiner Berufe beantwortest du auch gesprochen fachlich, auch mit einem Alltagswort darin, und hat die Person mehrere Berufe, gehören die Inhalte aller ihrer Berufe dazu. Gehört der Inhalt zu einem anderen Ausbildungsberuf oder hat die Frage keinen Bezug zur Ausbildung, antwortest du mit dem Satz aus der Themenprüfung und bietest Hilfe zu ihrem Beruf an. Eine Rückfrage "Meinst du ...?" nennt nur Einträge, die in deinem Kontext stehen, nie den Eintrag eines anderen Berufs. Eine Frage, die Inhalte mehrerer deiner Berufe verbindet (zum Beispiel eine Datenbank für Reisekosten), ist keine Frage eines anderen Berufs: Der erste Satz ist die fachliche Antwort. Gehört die Frage zu deinen Berufen und steht die genaue Antwort nicht im Kontext, ist das keine Ablehnung: Antworte kurz aus dem Fachwissen und sage in einem Satz, dass es in den Unterlagen nicht steht, wie in den Regeln oben.';
+  '- Für die Berufe gilt gesprochen genau die Themenprüfung im Abschnitt "Erlaubte Themen", wie getippt: Eine Fachfrage zu einem deiner Berufe beantwortest du auch gesprochen fachlich, auch mit einem Alltagswort darin, und hat die Person mehrere Berufe, gehören die Inhalte aller ihrer Berufe dazu. Gehört der Inhalt zu einem anderen Ausbildungsberuf oder hat die Frage keinen Bezug zur Ausbildung, antwortest du mit dem Satz aus der Themenprüfung und bietest Hilfe zu ihrem Beruf an. Eine Rückfrage "Meinst du ...?" nennt nur Einträge, die in deinem Kontext stehen, nie den Eintrag eines anderen Berufs.';
+
+/**
+ * Only for a person with SEVERAL occupations (persona.occupationNames): a question
+ * that joins the content of two of them, or an own topic without the exact answer
+ * in the context, is no refusal (golden set EX-16 spoken, EX-08 typed). It is a
+ * separate line on purpose: for ONE occupation the voice section stays byte for
+ * byte as it was in PR 295, because the sentence "answer from the knowledge when
+ * the context has no exact answer" made a trainer with one occupation ask back
+ * "Meinst du den Use Case ...?" with a title of the other occupation instead of
+ * the refusal (OS-20 2 of 6 and OS-29 4 of 6 spoken, against 6 of 6 before).
+ */
+export const VOICE_MULTI_OCCUPATION_LINE =
+  '- Eine Frage, die Inhalte mehrerer deiner Berufe verbindet (zum Beispiel eine Datenbank für Reisekosten), ist keine Frage eines anderen Berufs: Der erste Satz ist die fachliche Antwort. Gehört die Frage zu deinen Berufen und steht die genaue Antwort nicht im Kontext, ist das keine Ablehnung: Antworte kurz aus dem Fachwissen und sage in einem Satz, dass es in den Unterlagen nicht steht, wie in den Regeln oben.';
 
 /**
  * The voice assistant and day companion (WMCNL-2907): the answer is read aloud,
@@ -256,7 +269,10 @@ export const VOICE_OCCUPATION_LINE =
  * Modelled on the speech mode of damicon (format rules) and the day companion
  * there (at most three points, one question at the end).
  */
-export function buildVoiceRules(userRole?: PromptContext['userRole']): string {
+export function buildVoiceRules(
+  userRole?: PromptContext['userRole'],
+  multipleOccupations = false
+): string {
   // the sentence on solutions depends on the role: a trainer never reads the sentence of a trainee
   const solutionLine =
     userRole === 'TRAINER'
@@ -271,6 +287,7 @@ export function buildVoiceRules(userRole?: PromptContext['userRole']): string {
     '- Zahlen, Fristen und Zeiten so, wie man sie spricht ("bis Freitag", "um halb neun", "zwölf von dreißig").',
     solutionLine,
     VOICE_OCCUPATION_LINE,
+    ...(multipleOccupations ? [VOICE_MULTI_OCCUPATION_LINE] : []),
     '- Antworte zuerst auf die Frage, auch kurz. Frage nur zurück, wenn ohne die Angabe keine sinnvolle Antwort möglich ist.',
     '- Tagesbegleiter: Fragt der Nutzer, was heute ansteht, bittet er um einen Plan oder begrüßt er dich am Tagesbeginn, nutze nur die Daten im Abschnitt "Aktuelle Plattform-Daten". Nenne höchstens drei Punkte, das Dringendste zuerst (Frist, Prüfung, Rückmeldung zu einer Abgabe), begründe den ersten kurz und schließe mit genau einer Frage, womit er beginnen will. Erfinde keine Termine, Fristen oder Noten. Fehlt ein Bereich, benenne konkret und kurz, was fehlt, und verweise nicht auf die Plattform für das, was du selbst kennst.',
     '- Höchstens eine Frage je Antwort, nie dieselbe zweimal. Nach einer reinen Auskunft endet die Antwort ohne Frage.',
@@ -640,7 +657,12 @@ Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, a
     parts.push(buildDayBriefingRules(context.userRole));
   }
   if (context.voice) {
-    parts.push(buildVoiceRules(context.userRole));
+    parts.push(
+      buildVoiceRules(
+        context.userRole,
+        (persona.occupationNames?.length ?? 0) > 1
+      )
+    );
   }
   if (context.navigation) {
     parts.push(buildNavigationRules(context.userRole));
