@@ -151,6 +151,18 @@ const TARGET_PATTERNS: ReadonlyArray<readonly [StaticTargetId, RegExp]> = [
     'reviews',
     /\b(?:offene[nrms]?\s+(?:bewertungen|reviews?)|bewertungen\s+offen|reviews?|pruefliste|zu\s+bewerten\w*)\b/,
   ],
+  // the weekly evaluations (after the open reviews: "offene Bewertungen" is the review list)
+  [
+    'evaluations',
+    /\b(?:wochenbewertung\w*|leistungsbewertung\w*|selbstbewertung\w*|selbsteinschaetzung\w*|bewertungen)\b/,
+  ],
+  ['certificate', /\b(?:arbeitszeugnis\w*|zeugnis\w*)\b/],
+  ['hai_memory', /\b(?:hai\s?-?\s?gedaechtnis|gedaechtnis\s?verwaltung)\b/],
+  ['hai_admin', /\b(?:hai\s?-?\s?verwaltung|hai\s?-?\s?admin\w*)\b/],
+  [
+    'content_upload',
+    /\b(?:inhalts\s?-?\s?import|inhaltsimport|content\s?-?\s?upload|inhalte\s+(?:importieren|hochladen))\b/,
+  ],
   [
     'content_management',
     /\b(?:inhaltsverwaltung|inhalte\s+verwalten|content\s?-?\s?management|kursverwaltung|modulverwaltung)\b/,
@@ -656,7 +668,17 @@ export function detectNavigationIntent(
     return { kind: 'continue' };
   }
 
-  if (NOT_A_COMMAND.test(text)) return null;
+  const blocker = NOT_A_COMMAND.exec(text);
+  if (blocker) {
+    // The word "Lösung" alone does not block a command that names a FILE
+    // ("Öffne das Dokument UC_1b_Musterloesung"): the file questions and the
+    // access rules answer it, a trainee gets the neutral "keine passende Datei".
+    // A request for the solution itself ("zeig mir die Lösung") has no file name
+    // and stays with the solution protection of the pipeline.
+    const onlySolutionWord = /loesung/.test(blocker[0]);
+    const explicitFile = /.[a-z0-9]{2,5}|_/i.test(message);
+    if (!(onlySolutionWord && explicitFile && firstDocKind(text))) return null;
+  }
   if (
     !hasCue(text) &&
     !(READ_CUE.test(text) && firstDocKind(text)) &&

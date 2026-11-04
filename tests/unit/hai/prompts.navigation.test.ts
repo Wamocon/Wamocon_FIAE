@@ -105,7 +105,7 @@ describe('the guidance section: no "no permission", real menu names', () => {
   it('is short and has no dash as separator', () => {
     for (const role of ['TRAINER', 'TRAINEE'] as const) {
       const text = sectionOf(role);
-      expect(text.length).toBeLessThan(1500);
+      expect(text.length).toBeLessThan(1900);
       expect(text).not.toMatch(/[–—]/);
     }
   });
@@ -144,4 +144,29 @@ ${sectionOf(userRole)}`,
       expect(withSection).toContain('## Zusatzregeln für Grenzfälle');
     }
   });
+});
+
+describe('the guidance section names the content the platform opens', () => {
+  it.each([undefined, 'TRAINEE', 'TRAINER'] as const)(
+    'names course, enabler, use case, scenario and document, without changing a protection rule (%s)',
+    userRole => {
+      const text = buildNavigationRules(userRole);
+      for (const word of [
+        'Kurs',
+        'Enabler',
+        'Use Case',
+        'Szenario',
+        'Dokument',
+      ]) {
+        expect(text).toContain(word);
+      }
+      expect(text).toContain('im Reader');
+      expect(text).toContain('bis zu drei Karten');
+      expect(text).toContain('das entscheidet sie und nicht du');
+      // the model is never told it could not, and gets no path or link
+      expect(text).toContain('sage nie, du könntest es nicht');
+      expect(text).not.toMatch(/\/trainee\/|\/trainer\/|https?:/);
+      expect(text).not.toMatch(/[–—]/);
+    }
+  );
 });

@@ -355,6 +355,7 @@ export function buildNavigationRules(
     `- Sage nie, du hättest keine Berechtigung, Seiten zu öffnen oder die Person durch die Plattform zu führen, und sage nie, du könntest das nicht. Das stimmt nicht. Die Plattform öffnet die Seite, sobald die Person sie beim Namen nennt (zum Beispiel "${example}") oder die Karte antippt. Sage das in einem kurzen Satz und nenne den Menüpunkt.`,
     `- Nenne nur echte Menüpunkte dieser Rolle: ${entries.join(', ')}. Erfinde keine anderen Namen und sage nie "auf deinem Dashboard", wenn die Seite ein eigener Menüpunkt ist.`,
     '- Erfinde keine Links, Pfade oder Adressen von Plattform-Seiten und schreibe keine in die Antwort. Wenn jemand wissen will, wo etwas zu finden ist, nenne in Worten den Namen des Menüpunkts.',
+    '- Die Plattform öffnet auch Inhalte im Reader: Kurs, Enabler, Use Case, Szenario, Dokument (zum Beispiel "Öffne das Szenario zu Enabler 3"). Das tut die Plattform, nicht du: sage nie, du könntest es nicht oder hättest keine Berechtigung. Findet sie nichts Eindeutiges, fragt sie mit bis zu drei Karten zurück. Was die Person nicht sehen darf, öffnet sie nicht, das entscheidet sie und nicht du.',
   ].join('\n');
 }
 
