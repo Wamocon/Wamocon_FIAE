@@ -1264,6 +1264,7 @@ function CreateReportModal({
                 return (
                   <div
                     key={entry.useCaseId}
+                    data-hai-form="activity_report_entry"
                     className={`rounded-lg border p-4 ${isOverbooked ? 'border-yellow-500/50 bg-yellow-500/10' : 'border-border bg-muted/30'}`}
                   >
                     <div className="mb-3 flex items-start justify-between">
@@ -1348,6 +1349,7 @@ function CreateReportModal({
                         </label>
                         <input
                           id={`hours-${entry.useCaseId}`}
+                          data-hai-field="hours"
                           type="number"
                           min={0}
                           step={0.5}
@@ -1378,6 +1380,7 @@ function CreateReportModal({
                         </label>
                         <textarea
                           id={`notes-${entry.useCaseId}`}
+                          data-hai-field="notes"
                           value={entry.notes}
                           onChange={e =>
                             updateEntry(

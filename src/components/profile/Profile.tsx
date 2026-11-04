@@ -437,6 +437,8 @@ export function Profile() {
             {isEditing ? (
               <input
                 id="fullName"
+                data-hai-form="profile_name"
+                data-hai-field="fullName"
                 type="text"
                 value={editedProfile.full_name}
                 onChange={e =>

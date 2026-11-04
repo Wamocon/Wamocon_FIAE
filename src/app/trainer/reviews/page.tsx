@@ -963,6 +963,8 @@ export default function TrainerReviewsPage() {
               <>
                 <span>{t('trainer.reviews.filter')}</span>
                 <select
+                  data-hai-form="reviews_filter"
+                  data-hai-field="status"
                   value={statusFilter}
                   onChange={e => setStatusFilter(e.target.value as any)}
                   className="border-accent/30 bg-background/50 rounded-xl border px-2 py-1"
@@ -1029,6 +1031,8 @@ export default function TrainerReviewsPage() {
                     </select>
                     <input
                       type="search"
+                      data-hai-form="reviews_search"
+                      data-hai-field="query"
                       value={searchInput}
                       onChange={e => setSearchInput(e.target.value)}
                       placeholder={t('trainer.reviews.searchPlaceholder')}
@@ -1270,6 +1274,8 @@ export default function TrainerReviewsPage() {
                           {t('trainer.reviews.feedback')}
                         </label>
                         <textarea
+                          data-hai-form="review_feedback"
+                          data-hai-field="feedback"
                           className="border-accent/30 bg-muted/50 w-full rounded-xl border px-3 py-2 disabled:opacity-80"
                           rows={3}
                           disabled={
@@ -1298,6 +1304,8 @@ export default function TrainerReviewsPage() {
                       {t('trainer.reviews.feedback')}
                     </label>
                     <textarea
+                      data-hai-form="review_feedback"
+                      data-hai-field="feedback"
                       className="border-accent/30 bg-muted/50 w-full rounded-xl border px-3 py-2 disabled:opacity-80"
                       rows={3}
                       disabled={

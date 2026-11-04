@@ -262,6 +262,8 @@ export default function TrainerTraineesPage() {
         </label>
         <input
           id="trainee-search"
+          data-hai-form="trainees_search"
+          data-hai-field="query"
           type="search"
           value={search}
           onChange={e => setSearch(e.target.value)}
