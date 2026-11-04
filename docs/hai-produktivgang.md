@@ -57,6 +57,8 @@ Nein. Der Index ist Datenbankinhalt, kein Code. `hai_embeddings` liegt in Produc
 
 Eine Abkürzung gibt es nur teilweise. Das Neuindexierungsskript überspringt jede Quelle, deren Textstücke (Quelle, Nummer, `content_hash`) und Modellmarke schon stimmen. Würde man die Zeilen der Preview vorher nach Production kopieren, liefe H3 danach nur noch für die Unterschiede. Das trägt aber nur, wo die Quell-Ids in beiden Schemas gleich sind. Das gilt für den FIAE-Inhalt (Übertragung per Id). Der KfBM-Inhalt kommt per Inhaltsabgleich mit eigenen Ids, dort würden kopierte Zeilen auf falsche Quellen zeigen. Empfehlung: nicht kopieren, H3 vollständig mit Sokrates laufen lassen (rund drei Stunden, wiederaufnehmbar). Eine Kopie nur für FIAE wäre eine spätere Optimierung mit eigener Prüfung.
 
+Persönliche Lernfortschritts-Dokumente: Das Dokument "Lernfortschritt" eines Azubis entsteht nicht in H3 (das Neuindexierungsskript `reindex-gemini.ts` schreibt keine Daten von Nutzern), sondern beim Abgleich über `/api/hai/sync` (`traineeDataIndexer.ts`). Es nimmt seit dem 04.11.2026 dieselben Zahlen wie die Plattform (`progressFigures.ts`, Quiz-Definition, je Beruf) statt der Zeilen von `enabler_completions`. Das war vorher 0 Prozent. Wird der Abgleich nach der Neuindexierung (H3) gestartet, entsteht das Dokument mit den richtigen Zahlen. Bereits indexierte alte Dokumente bleiben bis zum nächsten Abgleich falsch. In diesem Stand wurde weder neu indexiert noch `/api/hai/sync` aufgerufen.
+
 ## 5. Rückweg
 
 - **Vor H3:** nichts zu tun, Production ist unverändert.

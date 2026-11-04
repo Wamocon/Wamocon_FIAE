@@ -274,3 +274,9 @@ Bewusst geändert (vorhandene Tests): `tests/unit/hai/vectorSearch.scope.test.ts
 - Ein Neuversuch speichert die Frage ein zweites Mal in der Datenbank (10.2).
 - Die Erkennung kurzer Datenfragen ist eine Heuristik (10.4), die der Tageslage ein Satzmuster: eine ähnliche Formulierung kann noch durch die Suche laufen. Neue Formulierungen kommen in `DAY_QUESTIONS` des Tests und in `dayQuestion.ts`.
 - Das Limit der Vercel-Funktion (10.3) ist nicht geprüft.
+
+## Laufzeit der Fortschrittszahlen (04.11.2026)
+
+Gemessen gegen die echte Preview von einer Entwicklungsmaschine (sieben bis elf Läufe je Funktion, Fremdverbindung über den Pooler): Die Datenbankzeit aller Abfragen einer Funktion zusammen liegt bei 3 bis 11 ms (`EXPLAIN ANALYZE`), die Gesamtzeit bei 0,6 bis 2 s und schwankt mit der Verbindung um den Faktor 2 bis 5. Die Zeit besteht also aus Wegen zur Datenbank (Runden hintereinander), nicht aus Rechenzeit. Deshalb zählt die Zahl der Runden: `loadCourseProgressions` braucht jetzt drei statt vier Runden (die Kurse, Enabler und das Profil laufen zusammen, Links und Ausnahmen warten nur auf die Enabler), `loadDayProgress` liest die Berufe nebeneinander, `fetchTraineeProgress` liest den Quizwert gleichzeitig mit den Kursen. Die Abfragen selbst und ihre Ergebnisse sind unverändert (Ausgaben vorher und nachher gleich). Im Betrieb mit kurzem Weg zur Datenbank kostet eine Runde wenige Millisekunden.
+
+Nicht gebündelt: `loadNextStepEntries` liest erst die Kurse der Person und braucht ihre Ids für den Lader (eine Runde, die bleibt), und `loadTraineeProgress` hat vier abhängige Runden (Mitgliedschaft, Enabler, Links, Quizversuche). Ein Zusammenfassen wäre nur mit neuem SQL für die gemeinsame Quiz-Definition möglich und brächte das Risiko zweier Definitionen von "abgeschlossen".

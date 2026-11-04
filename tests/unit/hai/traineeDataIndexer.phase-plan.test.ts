@@ -112,7 +112,9 @@ describe('HAI trainee profile text: current phase', () => {
 
   it('reads the phase plan from the HAI database, not from the main database', async () => {
     const { main } = await profileTextOf('KFBM', 3);
-    expect(main.calls).toHaveLength(0);
+    // Only the course figures use the main connection (the helpers of the
+    // platform: course list and dashboard), the phase plan never does
+    expect(main.calls.filter(c => c.table !== 'course_members')).toHaveLength(0);
   });
 
   it('names no phase and asks for no plan without a start date', async () => {

@@ -40,6 +40,8 @@ export interface EnablerFigure {
 export interface CourseFigure {
   courseId: string;
   title: string;
+  /** Year of training of the course (as the course list shows it), null if unknown. */
+  year: number | null;
   catalogId: string;
   enablerTotal: number;
   enablerDone: number;
@@ -79,6 +81,7 @@ export async function loadTraineeCourseFigures(
     .select({
       id: courses.id,
       title: courses.title,
+      year: courses.year,
       chapter: courses.chapter,
       code: courses.code,
       catalogId: courses.trainingCatalogId,
@@ -167,6 +170,7 @@ export async function loadTraineeCourseFigures(
     figures.push({
       courseId: id,
       title: String(course.title ?? ''),
+      year: course.year ?? null,
       catalogId: String(course.catalogId),
       enablerTotal,
       enablerDone,

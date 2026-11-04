@@ -378,22 +378,31 @@ export async function fetchTraineeProgress(userId: string): Promise<CourseProgre
         // (not completed, not locked). Not the rows of enabler_completions: the
         // quiz based completion does not write them (0 % and always the first
         // enabler as "next").
-        const figures = await loadTraineeCourseFigures(
-            userId,
-            catalogScope.allowedCatalogIds
+        // The latest quiz score per course is read at the same time (it needs the
+        // courses of the person, not the figures): a superset of the courses of
+        // the figures, only those are looked up below.
+        const catalogList = sql.join(
+            catalogScope.allowedCatalogIds.map(id => sql`${id}::uuid`),
+            sql`, `
         );
+        const [figures, latestRows] = (await Promise.all([
+            loadTraineeCourseFigures(userId, catalogScope.allowedCatalogIds),
+            db.execute(sql`
+                SELECT DISTINCT ON (e.course_id) e.course_id AS course_id, qs.score AS score
+                FROM quiz_submissions qs
+                JOIN enabler_quiz_links eql ON eql.quiz_id = qs.quiz_id
+                JOIN enablers e ON e.id = eql.enabler_id
+                WHERE qs.trainee_id = ${userId}
+                  AND e.training_catalog_id IN (${catalogList})
+                  AND e.course_id IN (SELECT cm.course_id FROM course_members cm WHERE cm.user_id = ${userId})
+                ORDER BY e.course_id, qs.submitted_at DESC
+            `),
+        ])) as unknown as [
+            Awaited<ReturnType<typeof loadTraineeCourseFigures>>,
+            Array<{ course_id: string; score: number | string | null }>,
+        ];
         if (figures.length === 0) return [];
 
-        // Latest quiz score per course, one query for all courses
-        const latestRows = (await db.execute(sql`
-            SELECT DISTINCT ON (e.course_id) e.course_id AS course_id, qs.score AS score
-            FROM quiz_submissions qs
-            JOIN enabler_quiz_links eql ON eql.quiz_id = qs.quiz_id
-            JOIN enablers e ON e.id = eql.enabler_id
-            WHERE qs.trainee_id = ${userId}
-              AND e.course_id IN (${sql.join(figures.map(f => sql`${f.courseId}`), sql`, `)})
-            ORDER BY e.course_id, qs.submitted_at DESC
-        `)) as unknown as Array<{ course_id: string; score: number | string | null }>;
         const latestScoreOf = new Map<string, number | null>();
         for (const row of latestRows) {
             latestScoreOf.set(
