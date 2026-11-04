@@ -429,3 +429,20 @@ Anlass: Auftrag "Die HAI muss selber durch die UI navigieren können mit Tools, 
 | P17 | Betrieb | Nach P1 den Chat neu laden und den Verlauf ansehen | Der Text der Antwort steht da, ohne Block. Der Name steht weder im Verlauf noch in den Nachrichtendaten (nur Werkzeug, Formular und Feld-Id) | |
 
 Pflichtfälle der Gruppe P: P1, P3, P5, P6, P7, P8, P11, P12, P13, P15. P5 bis P8, P11 und P13 dürfen in keinem Konto durchfallen (die HAI klickt nie, Ausschlüsse, Rolle vom Server, Eingabe im Sprachmodus nur nach getipptem Ja).
+
+## Q. Figur steht im Schwimmbecken bei jeder Panelbreite (Meldung vom 04.11.2026)
+
+Anlass: Meldung "Das HAI-Maskottchen bleibt auf einer Stelle stehen, auch wenn man das Seitenpanel breiter zieht, so dass er dann nicht mehr über dem Schwimmbecken steht, sondern daneben." Ursache: Die Sprachsitzung (und mit ihr die Figur) lag im Provider-Baum über dem Dock. Die Figur kannte die Panelbreite nicht und stand mit festem Versatz von 420 Pixeln, das Becken (das gewachsene HAI-Symbol) folgte dem Panel. Behoben in `HaiWrapper.tsx` (Dock außen, Sprachsitzung innen). Automatisch geprüft in `tests/unit/components/hai/HaiPond.test.tsx` (echter `HaiWrapper`, Variablen und Klassen an beiden Ankern) und `tests/e2e/hai-pond.spec.ts` (echter Browser, Mitte von Becken und Wasserlinie der Figur, Toleranz 2 Pixel). Hier die Sicht der Person, Desktop 1440 mal 900, Konto mit HAI und Sprachassistent, Panel angedockt.
+
+| Nr | Als | Schritt | Erwartung | P |
+|---|---|---|---|---|
+| Q1 | Azubi | Panel öffnen, "Gespräch" starten, das Panel an der linken Kante auf etwa 720 Pixel breit ziehen, dann auf etwa 320 Pixel schmal | Das runde Becken liegt immer direkt links neben dem Panel, die Figur steht mit ihrer Wasserlinie in der Mitte des Beckens. Sie wandert beim Ziehen sofort mit, ohne Nachlaufen und ohne Versatz | P |
+| Q2 | Azubi | Wie Q1 mit der Tastatur: Tab auf den Griff, Pfeil links und rechts, Umschalt plus Pfeil, Pos1, Ende, dann Doppelklick auf den Griff | Nach jedem Schritt steht die Figur im Becken. Der Doppelklick setzt die Breite auf 420 Pixel zurück, die Figur steht weiter im Becken | |
+| Q3 | Azubi | Bei offener Figur das Panel über das Symbol (das Becken) schließen und wieder öffnen, bei einem breit gezogenen Panel | Beim Aus- und Einfahren gleiten Becken und Figur gemeinsam, die Figur steht in jedem Moment im Becken. Bei geschlossenem Panel liegt das Becken am rechten Rand, die Figur darin | |
+| Q4 | Azubi | Bei offener Figur und breitem Panel die Fenstergröße ändern (zum Beispiel von 1440 auf 1100 Pixel und zurück) | Das Panel wird bei Bedarf schmaler (die Seite behält 480 Pixel), das Becken folgt, die Figur bleibt im Becken | |
+| Q5 | Azubi | Die Figur sprechen lassen (Frage stellen) und zuhören lassen, dabei das Panel breiter und schmaler ziehen | Der Zustand der Figur ändert die Lage nicht: Sprechblase, Knöpfe und Figur wandern mit, die Figur bleibt im Becken | P |
+| Q6 | Azubi | Sprachmodus beenden, während das Panel sehr breit ist | Die Figur taucht im Becken ein (nicht daneben), das Becken schrumpft zum Symbol zurück | |
+| Q7 | Azubi | Handy oder Fenster unter 768 Pixel: Gespräch starten | Die Figur steht im Becken am rechten unteren Rand, wie bisher | |
+| Q8 | Betrieb | `npx playwright test tests/e2e/hai-pond.spec.ts` gegen eine laufende Instanz mit gespeicherter Anmeldung (`playwright/.auth/trainer.json`, siehe `auth.setup.ts`) | Alle Fälle grün: Abweichung von Becken und Figur höchstens 2 Pixel bei mindestens fünf Breiten, beim Ziehen mit gedrückter Maus, beim Ein- und Ausfahren, beim Eintauchen, im Handy-Modus | |
+
+Pflichtfälle der Gruppe Q: Q1, Q5. Q1 darf in keinem Konto durchfallen (die Figur steht bei jeder Panelbreite im Becken).
