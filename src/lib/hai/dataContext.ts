@@ -39,8 +39,9 @@ import {
 import { toHaiRole } from '@/lib/auth-helpers';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { buildHaiTrainingScope } from './trainingScope';
-import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
+import { getCatalogScopeForUserId, type CatalogScope } from '@/lib/catalog/scope';
 import { loadTraineeProgress } from '@/lib/trainer/trainee-progress';
+import { loadTraineeCourseFigures } from './progressFigures';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 import { traineeSearchNotFoundLine } from './denial';
 import { formatDayProgress, loadDayProgress } from './dayProgress';
@@ -224,6 +225,37 @@ export interface TrainerTraineeInfo {
 // ALWAYS-ON: USER SNAPSHOT
 // ============================================================================
 
+/** How long the overall progress of the snapshot is kept (a quiz passed shows up within this time). */
+export const OVERALL_PROGRESS_TTL_MS = 30_000;
+const OVERALL_PROGRESS_CACHE_MAX = 500;
+const overallProgressCache = new Map<string, { at: number; pct: number }>();
+
+export function clearOverallProgressCache(): void {
+    overallProgressCache.clear();
+}
+
+/**
+ * The overall progress of one person over the occupations of the scope: the
+ * figure of the trainer pages (loadTraineeProgress), kept for a short time. A
+ * failed calculation is thrown and never kept.
+ */
+async function loadOverallProgressPercent(
+    userId: string,
+    scope: CatalogScope
+): Promise<number> {
+    const key = `${userId}|${scope.allowedCatalogIds.join(',')}|${scope.selected ? scope.activeCatalogId : ''}`;
+    const now = Date.now();
+    const hit = overallProgressCache.get(key);
+    if (hit && now - hit.at < OVERALL_PROGRESS_TTL_MS) return hit.pct;
+    const loaded = await loadTraineeProgress([userId], scope);
+    const pct = loaded.byTrainee.get(userId)?.pct ?? 0;
+    if (overallProgressCache.size >= OVERALL_PROGRESS_CACHE_MAX) {
+        overallProgressCache.delete(overallProgressCache.keys().next().value as string);
+    }
+    overallProgressCache.set(key, { at: now, pct });
+    return pct;
+}
+
 /**
  * Fetch a compact snapshot of the user (~100-150 tokens).
  * Always included in the system prompt to give HAI basic awareness.
@@ -267,27 +299,18 @@ export async function fetchUserSnapshot(userId: string): Promise<UserSnapshot | 
             phaseOneMonths: phasePlan?.phaseMonths[0],
         });
 
-        const snapshotCatalogIds = sql.join(
-            (catalogScope?.allowedCatalogIds ?? []).map(id => sql`${id}::uuid`),
-            sql`, `
-        );
-
-        // Get overall progress (completed enablers / total active enablers across enrolled courses)
-        const progressResult = catalogScope ? await db.execute(sql`
-            SELECT
-                COUNT(DISTINCT ec.enabler_id) AS completed,
-                COUNT(DISTINCT e.id) AS total
-            FROM course_members cm
-            JOIN enablers e ON e.course_id = cm.course_id AND e.is_active = true
-                AND e.training_catalog_id IN (${snapshotCatalogIds})
-            LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = ${userId}
-            WHERE cm.user_id = ${userId}
-        `) : [];
-
-        const row = (progressResult as any[])[0] || { completed: 0, total: 0 };
-        const completed = Number(row.completed) || 0;
-        const total = Number(row.total) || 0;
-        const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+        // Overall progress: the one figure of the platform (an enabler counts when
+        // its required quizzes are passed), over the occupations of the person.
+        // Not the rows of enabler_completions (the quiz based completion does not
+        // write them, so this was 0 % for everybody). Started now, read after the
+        // two small queries below, so it adds no waiting of its own. The figure is
+        // kept for a short time (the snapshot is read with every message, the
+        // calculation reads the quiz attempts of the person).
+        const overallProgress = catalogScope
+            ? loadOverallProgressPercent(String(userId), catalogScope)
+            : Promise.resolve(null);
+        // a failed lookup is no 0 %: the snapshot goes on without the figure
+        overallProgress.catch(() => undefined);
 
         // Get unread notification count
         const unreadResult = await db
@@ -312,6 +335,13 @@ export async function fetchUserSnapshot(userId: string): Promise<UserSnapshot | 
             .limit(1);
 
         const currentBlock = currentWeekBlocks.length > 0 ? currentWeekBlocks[0].blockType : null;
+
+        let progressPercent = 0;
+        try {
+            progressPercent = (await overallProgress) ?? 0;
+        } catch (error) {
+            console.error('HAI.ai DataContext: Error fetching overall progress:', error);
+        }
 
         return {
             fullName: displayName,
@@ -342,90 +372,47 @@ export async function fetchTraineeProgress(userId: string): Promise<CourseProgre
         const catalogScope = await getCatalogScopeForUserId(userId);
         if (!catalogScope) return [];
 
-        // Get all courses the trainee is enrolled in
-        const enrolledCourses = await db
-            .select({
-                courseId: courseMembers.courseId,
-                courseTitle: courses.title,
-            })
-            .from(courseMembers)
-            .innerJoin(courses, eq(courses.id, courseMembers.courseId))
-            .where(and(
-                eq(courseMembers.userId, userId),
-                eq(courses.isActive, true),
-                inArray(courses.trainingCatalogId, catalogScope.allowedCatalogIds),
-            ));
+        // The courses and the figures of the platform (course list and dashboard
+        // of the trainee): completed enablers by the quiz definition, the
+        // percentage of the course card, the next enabler the trainee may work on
+        // (not completed, not locked). Not the rows of enabler_completions: the
+        // quiz based completion does not write them (0 % and always the first
+        // enabler as "next").
+        const figures = await loadTraineeCourseFigures(
+            userId,
+            catalogScope.allowedCatalogIds
+        );
+        if (figures.length === 0) return [];
 
-        if (enrolledCourses.length === 0) return [];
-
-        const results: CourseProgress[] = [];
-
-        for (const course of enrolledCourses) {
-            // Get all active enablers in this course
-            const courseEnablers = await db
-                .select({
-                    id: enablers.id,
-                    title: enablers.title,
-                    orderIndex: enablers.orderIndex,
-                })
-                .from(enablers)
-                .where(and(
-                    eq(enablers.courseId, course.courseId),
-                    eq(enablers.isActive, true),
-                ))
-                .orderBy(enablers.orderIndex);
-
-            if (courseEnablers.length === 0) continue;
-
-            const enablerIds = courseEnablers.map(e => e.id);
-
-            // Count completed enablers
-            const completedResult = await db
-                .select({ cnt: count() })
-                .from(enablerCompletions)
-                .where(and(
-                    eq(enablerCompletions.traineeId, userId),
-                    inArray(enablerCompletions.enablerId, enablerIds),
-                ));
-            const completedCount = Number(completedResult[0]?.cnt) || 0;
-
-            // Get latest quiz score for this course
-            const latestQuiz = await db.execute(sql`
-                SELECT qs.score
-                FROM quiz_submissions qs
-                JOIN enabler_quiz_links eql ON eql.quiz_id = qs.quiz_id
-                JOIN enablers e ON e.id = eql.enabler_id AND e.course_id = ${course.courseId}
-                WHERE qs.trainee_id = ${userId}
-                ORDER BY qs.submitted_at DESC
-                LIMIT 1
-            `);
-
-            const latestScore = (latestQuiz as any[]).length > 0
-                ? ((latestQuiz as any[])[0].score === null
-                    ? null
-                    : Number((latestQuiz as any[])[0].score))
-                : null;
-
-            // Find next incomplete enabler
-            const completedIds = await db
-                .select({ enablerId: enablerCompletions.enablerId })
-                .from(enablerCompletions)
-                .where(and(
-                    eq(enablerCompletions.traineeId, userId),
-                    inArray(enablerCompletions.enablerId, enablerIds),
-                ));
-            const completedSet = new Set(completedIds.map(c => c.enablerId));
-            const nextEnabler = courseEnablers.find(e => !completedSet.has(e.id));
-
-            results.push({
-                courseTitle: course.courseTitle,
-                totalEnablers: courseEnablers.length,
-                completedEnablers: completedCount,
-                progressPercent: Math.round((completedCount / courseEnablers.length) * 100),
-                latestQuizScore: latestScore,
-                nextEnablerTitle: nextEnabler?.title || null,
-            });
+        // Latest quiz score per course, one query for all courses
+        const latestRows = (await db.execute(sql`
+            SELECT DISTINCT ON (e.course_id) e.course_id AS course_id, qs.score AS score
+            FROM quiz_submissions qs
+            JOIN enabler_quiz_links eql ON eql.quiz_id = qs.quiz_id
+            JOIN enablers e ON e.id = eql.enabler_id
+            WHERE qs.trainee_id = ${userId}
+              AND e.course_id IN (${sql.join(figures.map(f => sql`${f.courseId}`), sql`, `)})
+            ORDER BY e.course_id, qs.submitted_at DESC
+        `)) as unknown as Array<{ course_id: string; score: number | string | null }>;
+        const latestScoreOf = new Map<string, number | null>();
+        for (const row of latestRows) {
+            latestScoreOf.set(
+                String(row.course_id),
+                row.score === null || row.score === undefined ? null : Number(row.score)
+            );
         }
+
+        const results: CourseProgress[] = figures.map(figure => {
+            const next = figure.enablers.find(e => !e.completed && !e.locked);
+            return {
+                courseTitle: figure.title,
+                totalEnablers: figure.enablerTotal,
+                completedEnablers: figure.enablerDone,
+                progressPercent: figure.percent,
+                latestQuizScore: latestScoreOf.get(figure.courseId) ?? null,
+                nextEnablerTitle: next?.title || null,
+            };
+        });
 
         return results;
     } catch (error) {
