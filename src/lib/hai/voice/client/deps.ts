@@ -112,7 +112,14 @@ export const MIC_PROFILE_KEY = 'hai-voice-mic';
  *  - `live`: for the microphone that stays open while the assistant speaks
  *    (interrupting by voice). The echo cancellation MUST be on, otherwise the
  *    assistant hears itself and interrupts itself. The noise suppression stays
- *    off (it is what cuts syllables), the automatic gain on.
+ *    off (it is what cuts syllables, and measured 04.11.2026 it does not touch a
+ *    quiet VOICE in the room, only steady noise). The automatic gain is OFF
+ *    (04.11.2026): with it a quiet voice alone in the room is lifted by about
+ *    16 dB to the level of a person at the microphone (RMS 0.009 became 0.053
+ *    to 0.068 against 0.066 of the near voice), so the room talk would count as
+ *    much as the person. Without it quiet stays quiet and the loudness gate
+ *    (levelGate.ts) can tell near from far. The measurement is in
+ *    docs/hai-sprachmodus-recherche.md.
  *  - `processed`: the browser's own treatment, echo and noise (Sokrates).
  *
  * `override` is the value of localStorage['hai-voice-mic'] ('raw', 'live' or
@@ -136,7 +143,8 @@ export function micConstraints(
     sampleRate: { ideal: 16_000 },
     echoCancellation: wanted === 'live',
     noiseSuppression: false,
-    autoGainControl: true,
+    // only the open microphone of the live mode keeps the level honest
+    autoGainControl: wanted !== 'live',
   };
 }
 

@@ -370,11 +370,11 @@ describe('useHaiVoice in live mode', () => {
 
     it('one word counts only with the minimum loudness', async () => {
       const { t, s, rec } = await speaking();
-      act(() => rec.hear('Stopp'));
+      act(() => rec.hear('Genau'));
       expect(s.props.stopGeneration).not.toHaveBeenCalled();
       expect(t.log).not.toContain('cancel');
       act(() => rec.onlevel?.(BARGE_IN_LEVEL + 0.1));
-      act(() => rec.hear('Stopp'));
+      act(() => rec.hear('Genau'));
       expect(s.props.stopGeneration).toHaveBeenCalledTimes(1);
       expect(t.log).toContain('cancel');
     });

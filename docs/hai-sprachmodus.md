@@ -18,7 +18,7 @@ Der Sprachmodus ändert nichts an dem, was die HAI darf oder weiß. Berufstrennu
   - Untertitel an oder aus (Schalter, `role="switch"`).
   - Hinweise zum Sprachmodus (klappt eine kleine Karte auf: wie man beendet, wohin der Ton gerade geht).
   - Sprachmodus beenden.
-- **Beenden:** Esc (außer eine andere Stelle der Seite hat Esc schon benutzt), der Knopf mit dem Kreuz oder der Sprachbefehl "Sprachmodus beenden" (auch "Stopp", "Tschüss", "Das war es", die Liste steht in `isStopCommand`). Das Beenden schaltet das Mikrofon aus und bricht das Vorlesen ab. Die Figur taucht danach wieder ins Wasser ein (etwa 0,8 Sekunden), dabei sind Bedienelemente und Zustandstext schon weg. Der Fokus geht an den Knopf zurück, der den Sprachmodus geöffnet hat.
+- **Beenden:** Esc (außer eine andere Stelle der Seite hat Esc schon benutzt), der Knopf mit dem Kreuz oder der Sprachbefehl "Gespräch beenden" oder "Sprachmodus beenden" (auch "Tschüss", "Auf Wiedersehen", "Das war es", die Wörter stehen an einer Stelle, `src/lib/hai/voice/signalWords.ts`, Abschnitt 14). "Stopp" beendet nicht mehr, es hält die HAI nur an. Das Beenden schaltet das Mikrofon aus und bricht das Vorlesen ab. Die Figur taucht danach wieder ins Wasser ein (etwa 0,8 Sekunden), dabei sind Bedienelemente und Zustandstext schon weg. Der Fokus geht an den Knopf zurück, der den Sprachmodus geöffnet hat.
 - **Die Figur antippen:** Während die HAI spricht oder nachdenkt, unterbricht der Klick auf die Figur, und die HAI hört zu. Nach einer Pause oder einem Fehler startet er das Zuhören neu. Per Tastatur gibt es dafür den Knopf in der Leiste.
 - **Untertitel:** Eine Sprechblase neben dem Kopf (mit Zipfel zum Kopf, dunkle Schrift auf weißem Grund, in beiden Themes lesbar). Oben steht die Frage des Azubi (erst als Zwischenergebnis, dann so, wie sie an die HAI ging), darunter die Antwort Satz für Satz, so wie sie vorgelesen wird, der letzte Satz fett, die früheren gedimmt. Die Wahl bleibt im Browser (`hai-voice-mode-captions`). Ohne Untertitel (oder solange nichts zu zeigen ist) gibt es keine Blase.
 - **Tagesbegleiter:** Beim ersten Gespräch des Tages stellt die HAI die Eröffnungsfrage selbst ("Guten Morgen, was steht heute an?", nach Tageszeit, Berliner Zeit). Das ist die erste gesprochene Äußerung der Figur, sie erscheint als Untertitel. Abschaltbar in den Einstellungen des Mikrofons wie bisher.
@@ -50,7 +50,7 @@ Der Sprachmodus benutzt denselben Chat, nicht einen zweiten:
 
 - Eine **Sprachsitzung** (`HaiVoiceSessionProvider`, `src/components/hai/voice-mode/HaiVoiceSession.tsx`) liegt im `HaiWrapper` innerhalb des `HaiProvider`, über allen Seiten. Sie besitzt die eine Gesprächsschleife (`useHaiVoice`). Das Mikrofon im Chat (`HaiVoiceControl`) und der Sprachmodus lesen dieselbe Schleife, es gibt nie zwei.
 - Die Schleife ruft `sendMessage(text, { voice: true })` des `HaiProvider`. Jede gesprochene Frage ist damit eine Nutzernachricht, jede Antwort eine Antwort der HAI in derselben Sitzung. Nach dem Gespräch steht alles im Chat zum Nachlesen. Es gibt keinen neuen Server-Pfad: `/api/hai/chat` mit `voice: true`, die Prüfung des Schalters der Organisation und der Anbieterkette (Soniox, Sokrates, Browser) bleiben, wie sie waren.
-- Der Ablauf bleibt der des Hooks: Zuhören, Antwort Satz für Satz vorlesen (Mikrofon dabei aus), wieder zuhören, Unterbrechen, Stopp per Sprachbefehl, nach drei stillen Runden Pause.
+- Der Ablauf bleibt der des Hooks: Zuhören, Antwort Satz für Satz vorlesen (Mikrofon dabei aus), wieder zuhören, Unterbrechen, Anhalten per Signalwort, Beenden per Sprachbefehl, nach drei stillen Runden Pause.
 
 Was der Hook dafür nach außen gibt (rückwärtskompatibel, alles zusätzlich): `heard` (die zuletzt verstandene Frage), `spoken` (die Stücke der Antwort, die an die Stimme gegeben wurden), `level` (Lautstärke der Aufnahme von 0 bis 1, wenn der Anbieter sie meldet, sonst `null`).
 
@@ -184,3 +184,83 @@ Dazu kommt Bernstein (`#f59e0b`) als Warnfarbe für "Pause" und "Fehler", die ni
 **Das Becken ist das Symbol.** Die Figur zeichnet kein eigenes Becken mehr (keine Glaswand, kein Rand), sondern nur das Wasser darin (dünne Ringe, Wellen, Ringe beim Hören und Sprechen, Schaum an den Beinen). Das Becken selbst ist der runde Knopf: Beim Start des Sprachmodus wächst er auf einmal (nur `transform: scale`, von der Ecke unten rechts aus, `origin-bottom-right`: Faktor 2 auf dem Handy, 2,8 ab sm, also 8 und 14 rem Durchmesser), Rand und Leuchten wachsen mit, der Pixel-Hai blendet aus, und die Figur steigt aus dem Wasser in seiner Mitte auf. Beim Beenden taucht sie ein, danach schrumpft der Knopf zurück (`usePondState`). Das Symbol bleibt der eine Knopf, der auch jetzt das Chatpanel öffnet und schließt.
 
 **Chatpanel.** Der Text-Chat ist ein Seitenpanel von rechts, siehe `docs/hai-chat-panel.md`.
+
+## 14. Nur die Stimme des Nutzers zählt, Signalwörter, Drücken zum Sprechen (04.11.2026)
+
+Meldung von Niko: Die HAI hört im Gesprächsmodus alle Hintergrundgespräche zu, auch sehr leise, und nimmt sie in das Gespräch auf. Sie soll dem Nutzer zuhören und nicht den anderen im Raum. Außerdem braucht es Signalwörter, bei denen sie anhält. Die Messwerte und Quellen stehen in `docs/hai-sprachmodus-recherche.md` (Abschnitt 10), die Prüffälle im Testplan (Gruppe S).
+
+### Ursache
+
+Mit Soniox ist das Mikrofon im Live-Modus für das ganze Gespräch offen. Soniox schreibt auch Sprache mit, die 40 Dezibel leiser ist als eine normale Stimme, und meldet dafür eine hohe Sicherheit (gemessen: Konfidenz 0,99). Zusätzlich hob die automatische Pegelregelung des Browsers (`autoGainControl`) eine leise Stimme allein im Raum um etwa 16 Dezibel auf den Pegel der Person am Mikrofon an. Die Schleife kannte keine Lautstärke je Äußerung: Alles, was Soniox als Äußerung lieferte, ging an die HAI, und zwei erkannte Wörter reichten, um die HAI mitten im Satz zu unterbrechen. Im Laborversuch ohne das Pegel-Tor (Abschnitt 10 der Recherche, Stimme im Raum 20 Dezibel unter der Person, sonst derselbe Code) gingen vier Sätze der leisen Stimme an das Chatmodell, die HAI wurde viermal von ihr unterbrochen, und ein "Stopp" aus dem Hintergrund hielt sie an.
+
+### Schutz in Stufen
+
+| Stufe | Was | Ort | Stand |
+|---|---|---|---|
+| 1 | **Pegel-Tor je Äußerung**, adaptiv | `src/lib/hai/voice/levelGate.ts` | gebaut, im Labor belegt |
+| 2 | **Mikrofonprofil `live`**: Pegelregelung aus, Echo-Unterdrückung an, Rauschunterdrückung weiter aus | `src/lib/hai/voice/client/deps.ts` | gebaut, gemessen |
+| 3 | **Konfidenz** der Erkennung (mittlere Sicherheit der Wörter einer Äußerung) | `levelGate.ts`, `soniox.ts` | gebaut, trennt aber nur Genuschel, nicht nah von fern |
+| 4 | **Sprechertrennung** (`enable_speaker_diarization`) | | **nicht gebaut**, Begründung unten |
+| 5 | **Sichtbarkeit**: Messpunkte mit Grund, dezente Anzeige ohne fremden Text | `useHaiVoice.ts`, `trace.ts`, Overlay | gebaut |
+| 6 | **Einstellungen**: Empfindlichkeit, Drücken zum Sprechen, Signalwörter | Panel, `filterSettings.ts` | gebaut |
+
+**Pegel-Tor.** Die Erkennung meldet den Pegel der Aufnahme zehnmal je Sekunde (Effektivwert mal fünf, 0 bis 1, `onlevel`). Das Tor behält die letzte halbe Minute. Zu jeder fertigen Äußerung liefert Soniox den Zeitraum der Wörter (`start_ms`, `end_ms`, umgerechnet auf die Uhrzeit des Browsers, 150 Millisekunden Spielraum an beiden Seiten) und die Konfidenz. Das Tor prüft zwei Dinge: Der **Mittelwert** des Zeitraums muss die Schwelle erreichen und der **Spitzenwert** muss mindestens das 1,5fache der Schwelle sein (ein kurzer Ausschlag, etwa ein Lachen im Hintergrund, ist keine Stimme). Die Schwelle ist adaptiv:
+
+- **Raumpegel**: das 20. Perzentil der letzten halben Minute (die Pausen zwischen den Wörtern machen den größten Teil der Zeit aus). Unbekannt (0) unter 20 Messungen.
+- **Referenzpegel der Person**: der obere Median (60 Prozent der sortierten Werte) der Mittelwerte der letzten sieben **angenommenen** Äußerungen. Nur was durch das Tor kam und zwei oder mehr Wörter hatte, zählt. Ein einzelner Schrei verschiebt ihn nicht.
+- **Schwelle** = Raumpegel plus Anteil mal (Referenz minus Raumpegel), mindestens das Dreifache (streng: Vierfache) des Raumpegels, begrenzt auf Untergrenze und Obergrenze. Vor der ersten angenommenen Äußerung gibt es keine Referenz, dann gilt nur die Untergrenze (mit dem Raumpegel).
+
+| Einstellung | Untergrenze | Obergrenze | Anteil | Konfidenz mindestens |
+|---|---|---|---|---|
+| Normal (Standard) | 0,04 (Effektivwert 0,008, etwa minus 42 dBFS) | 0,20 | 20 Prozent | 0,60 |
+| Streng, nur meine Stimme | 0,08 | 0,30 | 45 Prozent | 0,75 |
+
+Die Obergrenze verhindert, dass eine laute erste Äußerung die Person aussperrt. Die Untergrenze hält den Raum auch dann draußen, wenn noch nichts gehört wurde. Pegel in der Einheit des Messpunkts: 0,33 ist eine Stimme am Laptop-Mikrofon (Effektivwert 0,066), 0,045 eine Stimme 17 Dezibel darunter.
+
+**Vorläufiger Text** (Unterbrechen, Signalwort, Anzeige des Textes während des Sprechens): Es gibt noch keinen fertigen Zeitraum. Dann müssen der Mittelwert der letzten 1,2 Sekunden die Schwelle und der Spitzenwert das 2,5fache der Schwelle erreichen (`interimPeakFactor`). Der Wert kommt aus dem Labor: Mit 1,5 und nur dem Spitzenwert unterbrach eine Stimme 14 Dezibel unter der Person noch die HAI, weil der Spitzenwert einer Silbe über die Schwelle kam. Ein vorläufiger Text, der das Tor nicht besteht, wird nicht angezeigt und zählt nicht als Sprechen (kein Zurücksetzen der stillen Zeit).
+
+**Ohne Messung kein Urteil.** Liefert ein Anbieter keinen Pegel oder keinen Zeitraum (Sokrates, Browser), prüft das Tor nicht: die Äußerung zählt, wie bisher. Bei Soniox ohne Zeitangaben in den Wörtern gilt der Zeitraum, in dem die Wörter ankamen.
+
+**Konfidenz.** Soniox liefert je Wort `confidence` (0,0 bis 1,0). Die mittlere Konfidenz einer Äußerung unter 0,60 (streng 0,75) verwirft sie. Das fängt Genuschel und Rauschen, das als Wörter herauskam (gemessen: einzelne Wörter bis 0,5, Mittel einer klaren Äußerung 0,98 bis 1,0). Es trennt **nicht** nah von fern, eine Stimme 40 Dezibel leiser hat 0,999. Die Schwellen sind aus synthetischer Sprache begründet, Werte aus echten Räumen stehen aus.
+
+**Mikrofonprofil.** `autoGainControl: false` im Profil `live`. Die Runden (Live-Modus aus) behalten die Regelung (das Mikrofon ist beim Sprechen der HAI aus, niemand sonst wird gehört, leise Sprecher profitieren). Die Rauschunterdrückung bleibt aus: Gemessen senkt sie nur gleichmäßiges Rauschen (Rauschboden von 0,00065 auf 0,00009), eine leise **Stimme** im Raum lässt sie unverändert (0,0093 gegen 0,0099), und sie verbessert die Erkennung nicht. Die Echo-Unterdrückung bleibt an.
+
+**Sprechertrennung, nicht gebaut.** Soniox kann sie in Echtzeit (`enable_speaker_diarization`, Feld `speaker` je Wort, bis 15 Sprecher). Die Dokumentation sagt aber, dass sie in Echtzeit mehr Fehler macht als im Nachhinein, dass Sprecherwechsel vorübergehend falsch sein können und dass die Endpunkterkennung die Genauigkeit senkt ("für die höchste Genauigkeit keine Endpunkterkennung"). Wir brauchen die Endpunkterkennung für die Antwortzeit. Die Messung (synthetische Stimmen, mit Endpunkterkennung) bestätigt die Schwäche für unseren Fall: Dieselbe leise Stimme bekam in zwei Äußerungen zwei verschiedene Sprecher (1 und 2). Spricht zuerst jemand im Hintergrund, wird der "erste bestätigte Sprecher" der Hintergrund und die Person wird als Fremde verworfen. Beides sperrt den Nutzer aus, ein Fehler, der schlimmer ist als ein durchgelassenes Hintergrundgespräch. Der Pegel trennt nah und fern verlässlicher. Neu bewerten, wenn Soniox Sprechertrennung mit Endpunkterkennung belegt stabil anbietet.
+
+**Anzeige und Messpunkte.** Eine verworfene Äußerung erscheint als Messpunkt `utterance.discarded` mit `why` (`quiet` oder `confidence`) und nur Zahlen (`mean`, `peak`, `thr`, `conf`). Der Text wird nicht gespeichert, nicht gesendet, nicht angezeigt. In der Oberfläche steht kurz "Ich habe nur dich gehört." (sechs Sekunden). Nach drei zu leisen Äußerungen in Folge steht "Ich höre dich nicht deutlich. Sprich lauter oder näher am Mikrofon.", damit die Person den Grund kennt. Eine angenommene Äußerung löscht den Hinweis.
+
+### Signalwörter
+
+Alle Wörter stehen an einer Stelle, `src/lib/hai/voice/signalWords.ts` (Deutsch zuerst, Englisch vorbereitet, je Sprache `halt`, `end`, `micOff`, Füllwörter). Verglichen wird gefaltet: Groß und Klein, Umlaute (ä gleich ae, ö gleich oe, ü gleich ue, ß gleich ss), Akzente und Satzzeichen zählen nicht.
+
+| Art | Wörter (Deutsch) | Wo | Wirkung |
+|---|---|---|---|
+| Anhalten | Stopp, Stop, Halt, Warte, Moment, Ruhe, Hör auf, Abbrechen, Pause | **Anfang** der Äußerung (erste ein bis drei Wörter), schon aus dem vorläufigen Text | Die Stimme bricht sofort ab, der laufende Chat-Abruf wird abgebrochen, der Sprachmodus bleibt offen und hört weiter zu. Ein reines Anhaltwort geht nicht als Frage an die HAI. Folgt eine Frage ("Moment mal, was ist ein Index?"), hält die HAI an und die ganze Äußerung ist die nächste Frage |
+| Beenden | Gespräch beenden, Sprachmodus beenden, Beenden, Tschüss, Auf Wiedersehen, Das war es | **ganze** kurze Äußerung, am Ende der Äußerung | Der Sprachmodus endet wie mit dem Knopf Schließen. "Beenden wir das Kapitel?" ist eine Frage |
+| Mikrofon aus | Mikrofon aus, Mikrofon ausschalten | ganze kurze Äußerung | Hört nicht mehr zu, bis der Knopf gedrückt wird (wie der Knopf "Mikrofon ausschalten") |
+
+Ein Signalwort mitten im Satz löst nichts aus ("das war nicht der Stopp", "wir halten das fest"), und nur ganze Wörter oder die kurzen Wendungen der Liste ("Halte durch" ist kein "Halt"). Ein Signalwort **umgeht** die Regel "mindestens zwei Wörter oder genug Lautstärke" des Unterbrechens, **nicht aber** das Pegel-Tor und den Echo-Filter: ein Hintergrundgespräch, in dem "stopp" fällt, hält die HAI nicht an, und die eigene Stimme der HAI ("Einen Moment.") ist kein Signal. "Stopp" beendet das Gespräch nicht mehr (vorher tat es das). Der Schalter "Signalwörter" im Panel (Standard an) schaltet alle Wörter ab, dann geht jede Äußerung als Frage an die HAI. Beim ersten Mal auf einem Gerät steht, wenn die HAI das erste Mal spricht und das Mikrofon offen ist, sieben Sekunden lang "Sag Stopp, wenn ich aufhören soll."
+
+**Anbieter.** Das Anhalten aus dem vorläufigen Text und das Unterbrechen geht nur mit Soniox im Live-Modus: Nur dort ist das Mikrofon offen, während die HAI spricht, und nur dort kommen vorläufige Texte. Sokrates und der Browser arbeiten in Runden mit geschlossenem Mikrofon beim Sprechen: Signalwörter gelten dort für die fertige Äußerung (Beenden, Mikrofon aus, ein reines "Stopp" wird nicht als Frage gesendet), halten die HAI aber nicht an, während sie spricht. Das Pegel-Tor und die Konfidenz gibt es dort nicht, der Schutz ist "Drücken zum Sprechen".
+
+### Einstellungen (im Panel unter "Einstellungen zum Sprachassistenten", localStorage dieses Geräts)
+
+| Einstellung | Standard | Schlüssel | Wirkung |
+|---|---|---|---|
+| Empfindlichkeit für Hintergrundstimmen: Normal oder "Streng, nur meine Stimme (laute und nahe Stimme)" | Normal | `hai-voice-sensitivity` | Schwellen der Tabelle oben. Streng schützt stärker und kann leises Sprechen aussortieren |
+| Drücken zum Sprechen | aus | `hai-voice-ptt` | Das Mikrofon nimmt nur auf, solange der Halteknopf oder die Leertaste gehalten wird. Nichts davor, nichts danach: 100 Prozent Schutz vor dem Hintergrund |
+| Signalwörter | an | `hai-voice-signals` | siehe oben |
+
+Der Hinweis, dass ein **Headset oder ein Mikrofon nahe am Mund** am besten schützt, steht in den Einstellungen und in den Hinweisen des Sprachmodus.
+
+**Drücken zum Sprechen.** Der Halteknopf (Mikrofon-Symbol in der Leiste, `data-testid="hai-voice-ptt"`) nimmt Maus, Touch und Stift (Zeigerereignisse mit Festhalten des Zeigers, kein Kontextmenü bei langem Druck). Die Leertaste gilt auf der ganzen Seite, solange der Sprachmodus offen ist, mit Ausnahmen: nicht in Textfeldern, nicht auf Elementen, die die Leertaste selbst brauchen (Knopf, Link, Schalter, Auswahl), nicht mit Strg, Alt oder Meta, nur der erste Tastendruck (kein Wiederholen). Beim Verlieren des Fensterfokus oder beim Verbergen der Seite wird losgelassen. Drücken, während die HAI spricht oder nachdenkt, hält sie an (wie Unterbrechen), dann nimmt das Mikrofon auf. Beim Loslassen schließt das Mikrofon sofort und der Text geht als Frage an die HAI (Äußerungen während des Haltens, auch nach Pausen, werden zusammen gesendet). Im Halten gibt es kein Pegel-Tor und keine Konfidenzprüfung: Die Person hat entschieden. Das Mikrofon öffnet erst beim Drücken, die Aufnahme zwischen dem Drücken und dem Aufbau der Verbindung zu Soniox wird zwischengespeichert, geht also nicht verloren. Die Einwilligung "offenes Mikrofon" entfällt bei Drücken zum Sprechen, weil das Mikrofon nur beim Halten offen ist. Im Panel (Sprachmodus zu) hat das Mikrofon der Chat-Leiste denselben Halteknopf.
+
+### Grenzen
+
+- **Der Pegel trennt nah von fern, nicht Person von Person.** Eine zweite Person, die genauso laut am Mikrofon ankommt (nahe, laute Stimme, ein Meter), zählt. Im Laborversuch (Abschnitt 10 der Recherche) wurden Stimmen bis etwa 14 Dezibel unter der Person in "Normal" aussortiert, in "Streng" auch Stimmen 10 Dezibel darunter. Stimmen 10 und 6 Dezibel unter der Person kamen in "Normal" teilweise durch. Ein Headset ändert das Verhältnis zugunsten der Person stark, "Drücken zum Sprechen" löst es.
+- **Kaltstart.** Vor der ersten angenommenen Äußerung gilt nur die Untergrenze. Spricht zuerst jemand im Hintergrund, der lauter ist als die Untergrenze, kann diese Äußerung zählen und die Referenz verfälschen (der obere Median holt sich mit der Stimme der Person schnell zurück). Im Laborversuch lag eine Stimme 20 Dezibel unter der Person unter der Untergrenze und wurde auch im Kaltstart aussortiert.
+- **Zu leise Person.** Mikrofone mit sehr niedrigem Pegel (Effektivwert unter 0,008 bei normalem Sprechen) liegen unter der Untergrenze. Dann steht nach drei Äußerungen der Hinweis "Sprich lauter oder näher am Mikrofon", "Drücken zum Sprechen" ist der Ausweg. Mikrofon, Raum und Abstand sind nur am echten Gerät prüfbar (Testplan S).
+- **Eine Unterbrechung, die erst am Ende aussortiert wird.** Hat der vorläufige Text das Tor bestanden und die fertige Äußerung nicht, ist die HAI schon angehalten. Sie spricht nicht weiter, die Person kann neu fragen.
+- **Vorzeitiges Anhalten.** Das Signalwort wird am Anfang des vorläufigen Textes erkannt, bevor das Wort fertig ist: ein Wort wie "Haltung" oder "Pausenzeit" kann vorübergehend als "Halt" und "Pause" gelesen werden und die HAI anhalten.
+- **Zeitbezug.** Der Zeitraum der Wörter und der Pegel sind auf die Uhr des Browsers umgerechnet (Start der Aufnahme plus `start_ms`). Eine Abweichung bis 150 Millisekunden fängt der Spielraum auf. Passt der Zeitraum nicht zur Uhr (Zeit in der Zukunft, Strom neu gestartet), gilt die Ankunftszeit der Wörter.
+- **Sprachausgabe der HAI im Mikrofon.** Das Echo der HAI wird vom Browser (Echo-Unterdrückung) und vom Wortfilter gedämpft. Wie gut das an einem echten Gerät mit Lautsprechern klappt, ist offen (Testplan E31 und S).

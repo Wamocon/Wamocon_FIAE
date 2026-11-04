@@ -22,6 +22,7 @@ import { HaiVoiceFallbackNotice } from './HaiVoiceFallbackNotice';
 import { type VoiceError } from './useHaiVoice';
 import { consentParagraphs } from '@/lib/hai/voice/consentText';
 import { HaiVoiceModeButton } from './voice-mode/HaiVoiceModeButton';
+import { usePushToTalkKeys } from './voice-mode/usePushToTalkKeys';
 import { providerStatement } from './voice-mode/providerStatement';
 import { useOptionalHaiVoiceSession } from './voice-mode/voiceSessionContext';
 
@@ -36,6 +37,21 @@ export function HaiVoiceControl() {
   const { t } = useLanguage();
   const session = useOptionalHaiVoiceSession();
   const [askConsent, setAskConsent] = useState(false);
+
+  const voiceOrNull = session?.voice ?? null;
+  const pttActive =
+    !!session &&
+    !!voiceOrNull?.available &&
+    voiceOrNull.pushToTalk &&
+    session.view === 'closed' &&
+    voiceOrNull.phase !== 'idle' &&
+    voiceOrNull.phase !== 'error';
+  // the space bar records here only while the voice mode (which has its own) is closed
+  usePushToTalkKeys({
+    enabled: pttActive,
+    onDown: () => voiceOrNull?.pressToTalk(),
+    onUp: () => voiceOrNull?.releaseToTalk(),
+  });
 
   if (!session || !session.voice.available) return null;
   const voice = session.voice;
@@ -122,6 +138,35 @@ export function HaiVoiceControl() {
           )}
           <HaiVoiceFallbackNotice fallback={voice.fallback} />
         </div>
+        {pttActive && (
+          <button
+            type="button"
+            data-ptt-button=""
+            data-testid="hai-voice-control-ptt"
+            data-holding={voice.holding ? 'true' : 'false'}
+            aria-pressed={voice.holding}
+            aria-label={t('hai.voiceMode.ptt.hold')}
+            title={t('hai.voiceMode.ptt.hold')}
+            onPointerDown={event => {
+              event.preventDefault();
+              try {
+                event.currentTarget.setPointerCapture(event.pointerId);
+              } catch {
+                // no capture: the release still comes from pointerup
+              }
+              voice.pressToTalk();
+            }}
+            onPointerUp={() => voice.releaseToTalk()}
+            onPointerCancel={() => voice.releaseToTalk()}
+            onLostPointerCapture={() => voice.releaseToTalk()}
+            onContextMenu={event => event.preventDefault()}
+            style={{ touchAction: 'none' }}
+            className={`flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium select-none ${voice.holding ? 'animate-pulse bg-cyan-500 text-white' : 'bg-white/10 text-gray-200 hover:bg-white/20'}`}
+          >
+            <Mic className="h-4 w-4" aria-hidden="true" />
+            {t('hai.voiceMode.ptt.hold')}
+          </button>
+        )}
         <HaiVoiceModeButton className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20" />
         {active && (
           <button
@@ -186,6 +231,54 @@ export function HaiVoiceControl() {
             />
             {t('hai.voice.dayStart')}
           </label>
+          {/* protection against background voices (settings of this device) */}
+          <fieldset
+            className="space-y-1"
+            data-testid="hai-voice-sensitivity"
+            disabled={voice.pushToTalk}
+          >
+            <legend className="mb-1 text-gray-300">
+              {t('hai.voice.settings.sensitivity')}
+            </legend>
+            {(['normal', 'strict'] as const).map(value => (
+              <label key={value} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="hai-voice-sensitivity"
+                  value={value}
+                  checked={voice.sensitivity === value}
+                  onChange={() => voice.setSensitivity(value)}
+                />
+                {t(`hai.voice.settings.sensitivity.${value}`)}
+              </label>
+            ))}
+            <p className="text-gray-500">
+              {t('hai.voice.settings.sensitivity.hint')}
+            </p>
+          </fieldset>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              data-testid="hai-voice-ptt-setting"
+              checked={voice.pushToTalk}
+              onChange={e => voice.setPushToTalk(e.target.checked)}
+            />
+            {t('hai.voice.settings.ptt')}
+          </label>
+          <p className="text-gray-500">{t('hai.voice.settings.ptt.hint')}</p>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              data-testid="hai-voice-signals-setting"
+              checked={voice.signalWords}
+              onChange={e => voice.setSignalWords(e.target.checked)}
+            />
+            {t('hai.voice.settings.signals')}
+          </label>
+          <p className="text-gray-500">
+            {t('hai.voice.settings.signals.hint')}
+          </p>
+          <p>{t('hai.voice.settings.headset')}</p>
           {voice.consented && (
             <button
               type="button"
