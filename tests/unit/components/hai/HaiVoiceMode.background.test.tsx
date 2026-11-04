@@ -698,7 +698,7 @@ describe('notes in the voice mode (no text of anybody)', () => {
   it('asks to speak louder or closer after several quiet ones', () => {
     renderOverlay({ filterNote: 'too-quiet' });
     expect(screen.getByTestId('hai-voice-filter-note').textContent).toBe(
-      'Ich höre dich nicht deutlich. Sprich lauter oder näher am Mikrofon.'
+      'Ich höre dich kaum. Sprich etwas lauter oder näher am Mikrofon.'
     );
   });
 
@@ -742,5 +742,247 @@ describe('notes in the voice mode (no text of anybody)', () => {
     expect(releaseToTalk).toHaveBeenCalledTimes(1);
     // a long press on a phone must not open the context menu
     expect(fireEvent.contextMenu(hold)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// calibration, the way out and the diagnosis as the person meets them
+// ---------------------------------------------------------------------------
+
+describe('calibration and the way out in the voice mode', () => {
+  beforeEach(() => authFetchMock.mockReset());
+
+  const actions = () => ({
+    recalibrate: jest.fn(),
+    skipCalibration: jest.fn(),
+    dismissFilterPrompt: jest.fn(),
+    setPushToTalk: jest.fn(),
+    setSensitivity: jest.fn(),
+  });
+
+  it('shows nothing while no question is open', () => {
+    renderOverlay({ ...actions(), filterPrompt: null });
+    expect(screen.queryByTestId('hai-voice-filter-prompt')).toBeNull();
+  });
+
+  it('asks for the phrase of the calibration and can be skipped', () => {
+    const fn = actions();
+    renderOverlay({ ...fn, filterPrompt: 'calibrate' });
+    const prompt = screen.getByTestId('hai-voice-filter-prompt');
+    expect(prompt.getAttribute('data-prompt')).toBe('calibrate');
+    expect(prompt.getAttribute('role')).toBe('status');
+    expect(within(prompt).getByText('Sag kurz: Hallo HAI')).toBeTruthy();
+    expect(within(prompt).getByText(/geht an keinen Chat/)).toBeTruthy();
+    fireEvent.click(screen.getByTestId('hai-voice-calibrate-skip'));
+    expect(fn.skipCalibration).toHaveBeenCalledTimes(1);
+    // no choice yet
+    expect(screen.queryByTestId('hai-voice-choice-ptt')).toBeNull();
+  });
+
+  it.each([
+    ['quiet', /kaum gehört/],
+    ['noisy', /im Raum zu laut/],
+    ['nolevel', /kein Pegel/],
+    ['nothing', /nichts gehört/],
+  ])(
+    'a failed calibration (%s) says why and offers the three ways',
+    (reason, text) => {
+      renderOverlay({
+        ...actions(),
+        filterPrompt: 'calibration-failed',
+        calibrationReason: reason,
+      });
+      const prompt = screen.getByTestId('hai-voice-filter-prompt');
+      expect(prompt.getAttribute('data-prompt')).toBe('calibration-failed');
+      expect(within(prompt).getByText(text)).toBeTruthy();
+      expect(screen.getByTestId('hai-voice-choice-recalibrate')).toBeTruthy();
+      expect(screen.getByTestId('hai-voice-choice-ptt')).toBeTruthy();
+      expect(screen.getByTestId('hai-voice-choice-off')).toBeTruthy();
+    }
+  );
+
+  it('"Ich habe dich eventuell nicht gehört": the three ways call the loop', () => {
+    const fn = actions();
+    renderOverlay({ ...fn, filterPrompt: 'lost' });
+    const prompt = screen.getByTestId('hai-voice-filter-prompt');
+    expect(
+      within(prompt).getByText('Ich habe dich eventuell nicht gehört.')
+    ).toBeTruthy();
+    expect(
+      within(prompt)
+        .getAllByRole('button')
+        .map(button => button.textContent)
+    ).toEqual([
+      'Mikrofon neu einmessen',
+      'Drücken zum Sprechen',
+      'Filter aus',
+      'Schließen',
+    ]);
+    fireEvent.click(screen.getByTestId('hai-voice-choice-recalibrate'));
+    expect(fn.recalibrate).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId('hai-voice-choice-ptt'));
+    expect(fn.setPushToTalk).toHaveBeenCalledWith(true);
+    fireEvent.click(screen.getByTestId('hai-voice-choice-off'));
+    expect(fn.setSensitivity).toHaveBeenCalledWith('off');
+    fireEvent.click(screen.getByTestId('hai-voice-choice-dismiss'));
+    expect(fn.dismissFilterPrompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays out of the way while the microphone is switched off by the person', () => {
+    authFetchMock.mockImplementation(async () => ({
+      ok: true,
+      json: async () => ({}),
+    }));
+    renderWithProviders(
+      <HaiProvider userId="u1">
+        <SessionContext.Provider
+          value={{
+            ...fakeSession({ ...actions(), filterPrompt: 'lost' }),
+            muted: true,
+          }}
+        >
+          <HaiVoiceModeOverlay />
+        </SessionContext.Provider>
+      </HaiProvider>
+    );
+    expect(screen.queryByTestId('hai-voice-filter-prompt')).toBeNull();
+  });
+
+  it.each([
+    ['only-you', 'Ich habe nur dich gehört.'],
+    [
+      'too-quiet',
+      'Ich höre dich kaum. Sprich etwas lauter oder näher am Mikrofon.',
+    ],
+    [
+      'unclear',
+      'Ich habe dich nicht deutlich verstanden. Sag es bitte noch einmal.',
+    ],
+    ['loud', 'Bitte etwas leiser oder weiter weg vom Mikrofon.'],
+  ])('the note for "%s" has its own text', (note, text) => {
+    renderOverlay({ filterNote: note });
+    const shown = screen.getByTestId('hai-voice-filter-note');
+    expect(shown.textContent).toBe(text);
+    expect(shown.getAttribute('data-note')).toBe(note);
+  });
+
+  it('only the real silence asks to speak louder, a loud voice never does', () => {
+    for (const note of ['only-you', 'unclear', 'loud']) {
+      const view = renderOverlay({ filterNote: note });
+      expect(
+        screen.getByTestId('hai-voice-filter-note').textContent
+      ).not.toMatch(/lauter/);
+      view.unmount();
+    }
+  });
+
+  it('the notes card has the button "Mikrofon neu einmessen" while the gate is on', () => {
+    const fn = actions();
+    renderOverlay({ ...fn, sensitivity: 'normal' });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Hinweise zum Sprachmodus' })
+    );
+    fireEvent.click(screen.getByTestId('hai-voice-recalibrate'));
+    expect(fn.recalibrate).toHaveBeenCalledTimes(1);
+  });
+
+  it('the button is not there with the filter off or with push to talk', () => {
+    renderOverlay({ sensitivity: 'off' });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Hinweise zum Sprachmodus' })
+    );
+    expect(screen.queryByTestId('hai-voice-recalibrate')).toBeNull();
+  });
+});
+
+describe('settings: filter off, calibrate again, copy the diagnosis', () => {
+  beforeEach(() => {
+    authFetchMock.mockReset();
+    window.localStorage.clear();
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    delete (navigator as unknown as Record<string, unknown>).clipboard;
+  });
+
+  it('has the third choice "Aus", the default stays Normal, the choice is kept', async () => {
+    const { browser } = await mount();
+    expect(
+      (screen.getByRole('radio', { name: 'Normal' }) as HTMLInputElement)
+        .checked
+    ).toBe(true);
+    const off = screen.getByRole('radio', {
+      name: 'Aus (alle Stimmen zählen)',
+    }) as HTMLInputElement;
+    expect(off.checked).toBe(false);
+    await act(async () => {
+      fireEvent.click(off);
+    });
+    expect(browser.store['hai-voice-sensitivity']).toBe('off');
+    expect(
+      (
+        screen.getByRole('radio', {
+          name: 'Aus (alle Stimmen zählen)',
+        }) as HTMLInputElement
+      ).checked
+    ).toBe(true);
+    expect(
+      screen.getByText(
+        /Aus: Alle Stimmen zählen, nur Signalwörter und der Echo-Filter bleiben/
+      )
+    ).toBeTruthy();
+  });
+
+  it('reads a saved "off" when it appears again', async () => {
+    await mount({ ...consented, 'hai-voice-sensitivity': 'off' });
+    expect(
+      (
+        screen.getByRole('radio', {
+          name: 'Aus (alle Stimmen zählen)',
+        }) as HTMLInputElement
+      ).checked
+    ).toBe(true);
+  });
+
+  it('"Diagnose kopieren" puts the diagnosis on the clipboard and says so', async () => {
+    const write = jest.fn(async (_text: string) => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: write },
+      configurable: true,
+    });
+    await mount();
+    expect(
+      screen.getByText(/Diagnose kopieren und im Jira-Ticket anhängen/)
+    ).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('hai-voice-diagnosis-copy'));
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+    const json = JSON.parse(write.mock.calls[0][0]);
+    expect(json.type).toBe('hai-voice-diagnosis');
+    expect(json.setting).toBe('normal');
+    expect(Array.isArray(json.entries)).toBe(true);
+    expect(screen.getByText('Diagnose kopiert.')).toBeTruthy();
+  });
+
+  it('says plainly when the clipboard refuses', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: {
+        writeText: jest.fn(async () => {
+          throw new Error('denied');
+        }),
+      },
+      configurable: true,
+    });
+    await mount();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('hai-voice-diagnosis-copy'));
+    });
+    expect(screen.getByText(/Kopieren nicht möglich/)).toBeTruthy();
+  });
+
+  it('no button to calibrate again where there is no open microphone', async () => {
+    await mount();
+    expect(screen.queryByTestId('hai-voice-recalibrate')).toBeNull();
   });
 });

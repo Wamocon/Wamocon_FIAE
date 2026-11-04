@@ -43,6 +43,14 @@
  * and echo filter as any utterance. Push to talk (setting): the microphone records
  * only while a button or the space bar is held, nothing else is ever heard.
  *
+ * The gate never locks the person out (05.11.2026): at the start of the live mode
+ * the person says a short phrase ("Hallo HAI") that sets the reference of the voice
+ * and the room level (calibration, no chat call), the threshold is relative to
+ * that, a discarded utterance names its reason (quiet, not understood, overdriven,
+ * other voice), two discarded utterances in a row that stand clearly above the room
+ * offer a way out at once (calibrate again, push to talk, filter off), and every
+ * decision leaves its numbers in the local diagnosis (client/diagnostics.ts).
+ *
  * @module components/hai/useHaiVoice
  */
 
@@ -73,12 +81,18 @@ import {
 import {
   classifySignal,
   haltAtStart,
+  isCalibrationPhrase,
   speechWords,
   type SignalLanguage,
 } from '@/lib/hai/voice/signalWords';
 import { createBrowserSpeaker } from '@/lib/hai/voice/client/browserSpeech';
 import type { ProviderFallback } from '@/lib/hai/voice/client/fallback';
 import { mark } from '@/lib/hai/voice/client/trace';
+import {
+  buildDiagnosis,
+  copyText,
+  recordDiagnosis,
+} from '@/lib/hai/voice/client/diagnostics';
 import {
   cloudVoiceSupport,
   createCloudDeps,
@@ -223,6 +237,11 @@ export interface UseHaiVoiceOptions {
    * is pressed (the voice mode keeps its state). Left out: the loop just stops.
    */
   onMicOff?: () => void;
+  /**
+   * Calibrate the microphone at the start of the live mode ("Sag kurz: Hallo HAI").
+   * Default true. Left out of the calibration: push to talk and the setting "off".
+   */
+  calibrate?: boolean;
 }
 
 // Consent of the person, in the browser only. v1 is the consent to the browser as
@@ -250,12 +269,41 @@ const SIGNAL_LANGUAGES: readonly SignalLanguage[] = ['de'];
 /** How long the note "only you" stays in the display. */
 export const FILTER_NOTE_MS = 6_000;
 /** This many quiet utterances in a row make the note "speak louder or closer". */
-export const QUIET_STREAK = 3;
+export const QUIET_STREAK = 2;
+/** This many utterances in a row that stand above the room but under the threshold offer the way out. */
+export const LOST_STREAK = 2;
+/** The calibration waits this long for the phrase of the person. */
+export const CALIBRATION_MS = 12_000;
+/** The way out stays this long, then it goes away and does not come back for CHOICE_SNOOZE_MS. */
+export const CHOICE_MS = 30_000;
+export const CHOICE_SNOOZE_MS = 60_000;
 /** How long the first hint ("Sag Stopp ...") stays in the display. */
 export const SIGNAL_HINT_MS = 7_000;
 
-/** What the display says about utterances that were left out (never their text). */
-export type FilterNote = 'only-you' | 'too-quiet' | null;
+/**
+ * What the display says about utterances that were left out (never their text), one
+ * text per reason:
+ *   only-you   another voice, not the person (or a murmur that could not be told)
+ *   too-quiet  real silence at the microphone: only here the hint to speak louder
+ *   unclear    the words were not understood clearly
+ *   loud       overdriven or shouting, it counted: please a little softer
+ */
+export type FilterNote = 'only-you' | 'too-quiet' | 'unclear' | 'loud' | null;
+
+/** The calibration: not started, waiting for the phrase, done, failed, skipped. */
+export type CalibrationState =
+  | 'idle'
+  | 'listening'
+  | 'done'
+  | 'failed'
+  | 'skipped';
+/** Why a calibration failed (nothing: no phrase came in time). */
+export type CalibrationReason = 'quiet' | 'noisy' | 'nolevel' | 'nothing';
+/**
+ * What the display asks of the person next: say the phrase, the calibration failed
+ * (guidance and choice), or the person may not have been heard (choice).
+ */
+export type FilterPrompt = 'calibrate' | 'calibration-failed' | 'lost' | null;
 
 interface SpokenState {
   id: string | null;
@@ -477,6 +525,19 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
   // utterances said while the button is held, said together when it is released
   const holdBufferRef = useRef<string[]>([]);
   const quietStreakRef = useRef(0);
+  const roomStreakRef = useRef(0);
+  // the calibration and the way out
+  const calibrateOption = options.calibrate !== false;
+  const [calibration, setCalibrationState] = useState<CalibrationState>('idle');
+  const [calibrationReason, setCalibrationReason] =
+    useState<CalibrationReason | null>(null);
+  const [filterPrompt, setFilterPromptState] = useState<FilterPrompt>(null);
+  const calibrationRef = useRef<CalibrationState>('idle');
+  const promptRef = useRef<FilterPrompt>(null);
+  const calibNeededRef = useRef(false);
+  const calibTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const choiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const snoozeUntilRef = useRef(0);
   const noteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -584,12 +645,44 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     [userId, env]
   );
 
+  // ---- calibration and the way out of the gate (state only, the logic follows) ----
+  const setCalibration = useCallback(
+    (state: CalibrationState, reason: CalibrationReason | null = null) => {
+      calibrationRef.current = state;
+      setCalibrationState(state);
+      setCalibrationReason(reason);
+    },
+    []
+  );
+  const setPrompt = useCallback((next: FilterPrompt) => {
+    promptRef.current = next;
+    setFilterPromptState(next);
+  }, []);
+  /** The calibration and the way out end (the setting off, push to talk, a new start). */
+  const cancelCalibration = useCallback(() => {
+    calibNeededRef.current = false;
+    if (calibTimerRef.current) clearTimeout(calibTimerRef.current);
+    calibTimerRef.current = null;
+    if (choiceTimerRef.current) clearTimeout(choiceTimerRef.current);
+    choiceTimerRef.current = null;
+    roomStreakRef.current = 0;
+    if (
+      calibrationRef.current === 'listening' ||
+      calibrationRef.current === 'failed'
+    ) {
+      setCalibration('idle');
+    }
+    setPrompt(null);
+  }, [setCalibration, setPrompt]);
+
   const setSensitivity = useCallback(
     (value: Sensitivity) => {
       setSensitivityState(value);
       writeFilterSetting(env?.storage ?? null, SENSITIVITY_KEY, value);
+      // no gate, nothing to calibrate and no way out to offer
+      if (value === 'off') cancelCalibration();
     },
-    [env]
+    [env, cancelCalibration]
   );
   const setSignalWords = useCallback(
     (on: boolean) => {
@@ -662,8 +755,10 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       setError(reason);
       setInterim('');
       setPhase('error');
+      // the conversation is over: no question to the person stays open
+      cancelCalibration();
     },
-    [cancelSpeech, dropRecognition, endHold, setPhase]
+    [cancelCalibration, cancelSpeech, dropRecognition, endHold, setPhase]
   );
 
   const stop = useCallback(() => {
@@ -678,7 +773,16 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     setLevel(null);
     setError(null);
     setPhase('idle');
-  }, [cancelSpeech, dropRecognition, endHold, setPhase]);
+    cancelCalibration();
+    setCalibration('idle');
+  }, [
+    cancelCalibration,
+    cancelSpeech,
+    dropRecognition,
+    endHold,
+    setCalibration,
+    setPhase,
+  ]);
 
   // After the answer: listen again. Live mode: the microphone is still open, the
   // loop only gets the word back. A round: the microphone opens anew, a moment
@@ -817,6 +921,12 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     silenceTimerRef.current = setTimeout(() => {
       silenceTimerRef.current = null;
       if (stoppedRef.current || phaseRef.current !== 'listening') return;
+      // a question to the person is open (calibration failed, way out): the
+      // conversation waits for the answer, that is no silent round
+      if (promptRef.current !== null) {
+        armSilence();
+        return;
+      }
       silentRoundsRef.current += 1;
       mark('listen.silent', { n: silentRoundsRef.current });
       if (silentRoundsRef.current >= MAX_SILENT_ROUNDS) {
@@ -890,42 +1000,213 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     [bargeIn, loudEnoughNow]
   );
 
+  /** The display's short note for a while (one text per reason, never any text of a voice). */
+  const showNote = useCallback((note: Exclude<FilterNote, null>) => {
+    setFilterNote(note);
+    if (noteTimerRef.current) clearTimeout(noteTimerRef.current);
+    noteTimerRef.current = setTimeout(() => {
+      noteTimerRef.current = null;
+      setFilterNote(null);
+    }, FILTER_NOTE_MS);
+  }, []);
+
+  /**
+   * The way out: the person may not have been heard. Two utterances in a row that
+   * stand clearly above the room but under the threshold. No silent discarding: the
+   * display offers to calibrate again, push to talk, or the filter off. It goes away
+   * by itself after a while and does not come back at once.
+   */
+  const showLostPrompt = useCallback(() => {
+    if (promptRef.current !== null) return;
+    if (Date.now() < snoozeUntilRef.current) return;
+    setPrompt('lost');
+    mark('filter.choice');
+    const snap = gate.snapshot();
+    recordDiagnosis({
+      kind: 'choice',
+      why: 'lost',
+      mean: 0,
+      peak: 0,
+      threshold: snap.threshold,
+      ambient: snap.ambient,
+      reference: snap.reference,
+      confidence: null,
+      setting: gate.sensitivity,
+    });
+    // the person needs time to choose: the silent rounds start anew
+    silentRoundsRef.current = 0;
+    if (choiceTimerRef.current) clearTimeout(choiceTimerRef.current);
+    choiceTimerRef.current = setTimeout(() => {
+      choiceTimerRef.current = null;
+      snoozeUntilRef.current = Date.now() + CHOICE_SNOOZE_MS;
+      if (promptRef.current === 'lost') setPrompt(null);
+    }, CHOICE_MS);
+  }, [gate, setPrompt]);
+
   /**
    * An utterance that the gate or the confidence left out. Only numbers go to the
-   * measuring points, the text is gone: not stored, not sent, not shown. The
-   * display gets a short note ("only you"), after several quiet ones in a row the
-   * hint to speak louder or closer.
+   * measuring points and the local diagnosis, the text is gone: not stored, not
+   * sent, not shown. The display names the reason: another voice, real silence (only
+   * then "speak louder"), not understood. Two in a row that stand above the room
+   * offer the way out.
    */
   const discard = useCallback(
     (verdict: Extract<GateVerdict, { ok: false }>) => {
+      const snap = gate.snapshot();
       mark('utterance.discarded', {
         why: verdict.why,
         mean: verdict.mean,
         peak: verdict.peak,
         thr: verdict.threshold,
         conf: verdict.confidence ?? -1,
+        amb: snap.ambient,
+        ref: snap.reference ?? -1,
+      });
+      recordDiagnosis({
+        kind: 'discarded',
+        why: verdict.why,
+        mean: verdict.mean,
+        peak: verdict.peak,
+        threshold: verdict.threshold,
+        ambient: snap.ambient,
+        reference: snap.reference,
+        confidence: verdict.confidence,
+        setting: gate.sensitivity,
       });
       setInterim('');
       quietStreakRef.current =
         verdict.why === 'quiet' ? quietStreakRef.current + 1 : 0;
-      setFilterNote(
-        quietStreakRef.current >= QUIET_STREAK ? 'too-quiet' : 'only-you'
+      roomStreakRef.current =
+        verdict.why === 'background' ? roomStreakRef.current + 1 : 0;
+      showNote(
+        verdict.why === 'confidence'
+          ? 'unclear'
+          : verdict.why === 'quiet' && quietStreakRef.current >= QUIET_STREAK
+            ? 'too-quiet'
+            : 'only-you'
       );
-      if (noteTimerRef.current) clearTimeout(noteTimerRef.current);
-      noteTimerRef.current = setTimeout(() => {
-        noteTimerRef.current = null;
-        setFilterNote(null);
-      }, FILTER_NOTE_MS);
+      if (roomStreakRef.current >= LOST_STREAK) showLostPrompt();
     },
-    []
+    [gate, showLostPrompt, showNote]
   );
 
   const clearFilterNote = useCallback(() => {
     quietStreakRef.current = 0;
+    roomStreakRef.current = 0;
     if (noteTimerRef.current) clearTimeout(noteTimerRef.current);
     noteTimerRef.current = null;
     setFilterNote(null);
-  }, []);
+    // the person was heard: the way out is not needed any more
+    if (promptRef.current === 'lost') {
+      if (choiceTimerRef.current) clearTimeout(choiceTimerRef.current);
+      choiceTimerRef.current = null;
+      setPrompt(null);
+    }
+  }, [setPrompt]);
+
+  /** The calibration did not work: guidance and a choice, the gate stays tolerant (no reference). */
+  const failCalibration = useCallback(
+    (reason: CalibrationReason) => {
+      if (calibTimerRef.current) clearTimeout(calibTimerRef.current);
+      calibTimerRef.current = null;
+      mark('calibration.failed', { why: reason });
+      setCalibration('failed', reason);
+      setPrompt('calibration-failed');
+      silentRoundsRef.current = 0;
+      // the question stays for a while, then the conversation goes on without it
+      if (choiceTimerRef.current) clearTimeout(choiceTimerRef.current);
+      choiceTimerRef.current = setTimeout(() => {
+        choiceTimerRef.current = null;
+        if (promptRef.current === 'calibration-failed') setPrompt(null);
+      }, CHOICE_MS);
+    },
+    [setCalibration, setPrompt]
+  );
+
+  /**
+   * The calibration starts when the microphone of the live mode is open and the loop
+   * listens: the person says a short phrase, no chat call. The room level and the
+   * level of the voice come from what the recording measured.
+   */
+  const maybeBeginCalibration = useCallback(() => {
+    if (!calibNeededRef.current) return;
+    if (stoppedRef.current || pttRef.current || holdingRef.current) return;
+    if (!gate.enabled || !recRef.current?.live) return;
+    if (phaseRef.current !== 'listening') return;
+    calibNeededRef.current = false;
+    mark('calibration.start');
+    setCalibration('listening');
+    setPrompt('calibrate');
+    if (calibTimerRef.current) clearTimeout(calibTimerRef.current);
+    calibTimerRef.current = setTimeout(() => {
+      calibTimerRef.current = null;
+      if (calibrationRef.current !== 'listening') return;
+      const snap = gate.snapshot();
+      recordDiagnosis({
+        kind: 'calibration',
+        why: 'nothing',
+        mean: 0,
+        peak: snap.maxLevel,
+        threshold: snap.threshold,
+        ambient: snap.ambient,
+        reference: null,
+        confidence: null,
+        setting: gate.sensitivity,
+      });
+      failCalibration('nothing');
+    }, CALIBRATION_MS);
+  }, [failCalibration, gate, setCalibration, setPrompt]);
+
+  /** The phrase of the calibration came: set the reference and the room level, or fail. */
+  const finishCalibration = useCallback(
+    (info?: UtteranceInfo) => {
+      if (calibTimerRef.current) clearTimeout(calibTimerRef.current);
+      calibTimerRef.current = null;
+      const result = gate.calibrate(info ?? {}, Date.now());
+      const snap = gate.snapshot();
+      recordDiagnosis({
+        kind: 'calibration',
+        why: result.ok ? 'ok' : result.why,
+        mean: result.mean,
+        peak: result.peak,
+        threshold: snap.threshold,
+        ambient: result.ambient,
+        reference: result.ok ? result.reference : snap.reference,
+        confidence: info?.confidence ?? null,
+        setting: gate.sensitivity,
+      });
+      if (result.ok) {
+        mark('calibration.done', {
+          mean: result.mean,
+          peak: result.peak,
+          amb: result.ambient,
+          ref: result.reference,
+        });
+        setCalibration('done');
+        setPrompt(null);
+        silentRoundsRef.current = 0;
+        return;
+      }
+      failCalibration(result.why);
+    },
+    [failCalibration, gate, setCalibration, setPrompt]
+  );
+
+  const skipCalibration = useCallback(() => {
+    cancelCalibration();
+    setCalibration('skipped');
+    mark('calibration.skipped');
+  }, [cancelCalibration, setCalibration]);
+
+  /** Closes the prompt without a choice. The way out stays away for a while. */
+  const dismissFilterPrompt = useCallback(() => {
+    if (promptRef.current === 'lost') {
+      snoozeUntilRef.current = Date.now() + CHOICE_SNOOZE_MS;
+    }
+    if (choiceTimerRef.current) clearTimeout(choiceTimerRef.current);
+    choiceTimerRef.current = null;
+    setPrompt(null);
+  }, [setPrompt]);
 
   /**
    * Live mode: the speaker finished an utterance. Order: what is judged first is
@@ -937,6 +1218,24 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
   const handleUtterance = useCallback(
     (text: string, info?: UtteranceInfo) => {
       if (stoppedRef.current) return;
+      // the calibration: the phrase of the person sets the reference, nothing goes
+      // to the chat (only "end" and "microphone off" keep their meaning). A long
+      // sentence without a greeting is a conversation in the room: it is left out
+      // and does not set the reference.
+      if (calibrationRef.current === 'listening') {
+        const control = signalsRef.current
+          ? classifySignal(text, SIGNAL_LANGUAGES)
+          : null;
+        if (!control || (control.kind !== 'end' && control.kind !== 'micOff')) {
+          setInterim('');
+          if (isCalibrationPhrase(text)) {
+            finishCalibration(info);
+          } else {
+            mark('calibration.ignored');
+          }
+          return;
+        }
+      }
       const answeringAtStart =
         phaseRef.current === 'thinking' || phaseRef.current === 'speaking';
       const words = wordsOf(text);
@@ -1001,14 +1300,46 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
         setInterim('');
         return;
       }
-      // it counted: the level of this voice is the reference of the person
-      if (verdict && verdict.judged && words.length >= 2) {
-        gate.confirm(verdict.mean);
+      // it counted: the level of this voice is the reference of the person (an
+      // overdriven or shouted one is not: it would lift the threshold)
+      if (verdict && verdict.ok && verdict.judged && words.length >= 2) {
+        if (!verdict.hint) gate.confirm(verdict.mean);
       }
       clearFilterNote();
+      if (verdict && verdict.ok && verdict.hint) {
+        // low confidence at a high level: it counts, the person is asked to speak softer
+        const snap = gate.snapshot();
+        mark('utterance.hint', {
+          why: verdict.hint,
+          mean: verdict.mean,
+          peak: verdict.peak,
+          thr: verdict.threshold,
+          conf: verdict.confidence ?? -1,
+        });
+        recordDiagnosis({
+          kind: 'hint',
+          why: verdict.hint,
+          mean: verdict.mean,
+          peak: verdict.peak,
+          threshold: verdict.threshold,
+          ambient: snap.ambient,
+          reference: snap.reference,
+          confidence: verdict.confidence,
+          setting: gate.sensitivity,
+        });
+        showNote('loud');
+      }
       handleFinal(text.trim());
     },
-    [bargeIn, clearFilterNote, discard, gate, handleFinal]
+    [
+      bargeIn,
+      clearFilterNote,
+      discard,
+      finishCalibration,
+      gate,
+      handleFinal,
+      showNote,
+    ]
   );
 
   const listen = useCallback(async () => {
@@ -1031,6 +1362,7 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       setInterim('');
       setPhase('listening');
       armSilence();
+      maybeBeginCalibration();
       return;
     }
     dropRecognition();
@@ -1068,6 +1400,10 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       }
       // too quiet to be the person (the gate): not shown, not counted as speech.
       // The text of a voice in the room never reaches the display.
+      // during the calibration nothing is shown (it could be a voice of the room)
+      if (recRef.current?.live && calibrationRef.current === 'listening') {
+        return;
+      }
       if (recRef.current?.live && !loudEnoughNow()) return;
       setInterim(text);
       if (text && recRef.current?.live) {
@@ -1080,6 +1416,7 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
       setMicOpen(true);
       setLive(rec.live === true);
       armSilence();
+      maybeBeginCalibration();
     };
     rec.onutterance = (text, info) => {
       if (recRef.current !== rec) return;
@@ -1170,6 +1507,7 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     handleFinal,
     handleUtterance,
     loudEnoughNow,
+    maybeBeginCalibration,
     setPhase,
   ]);
 
@@ -1200,6 +1538,9 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     // a new conversation: the levels of the room and the person's reference start anew
     gate.reset();
     clearFilterNote();
+    cancelCalibration();
+    setCalibration('idle');
+    calibNeededRef.current = calibrateOption && gate.enabled && !pttRef.current;
     const now = env.now();
     if (dayStartEnabled && dayStartDue(env.storage, userId, now)) {
       markDayStart(env.storage, userId, now);
@@ -1208,6 +1549,8 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     }
     void listen();
   }, [
+    calibrateOption,
+    cancelCalibration,
     chain,
     clearFilterNote,
     consented,
@@ -1216,6 +1559,7 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     env,
     gate,
     listen,
+    setCalibration,
     submit,
     usable,
     userId,
@@ -1273,6 +1617,8 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     (on: boolean) => {
       setPushToTalkState(on);
       pttRef.current = on;
+      // nobody is judged while the button is held: no calibration, no way out
+      if (on) cancelCalibration();
       writeFilterSetting(
         env?.storage ?? null,
         PUSH_TO_TALK_KEY,
@@ -1286,7 +1632,7 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
         void listenRef.current();
       }
     },
-    [dropRecognition, endHold, env]
+    [cancelCalibration, dropRecognition, endHold, env]
   );
 
   /** A tap while the assistant speaks or thinks: be quiet and listen. */
@@ -1299,6 +1645,58 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     if (streamingMessageId) stopGeneration();
     void listen();
   }, [cancelSpeech, listen, stopGeneration, streamingMessageId]);
+
+  /**
+   * "Mikrofon neu einmessen": the person says the phrase again (a running answer is
+   * stopped first). Forgets the reference and the room level of the old calibration.
+   */
+  const recalibrate = useCallback(() => {
+    if (stoppedRef.current || pttRef.current || !gate.enabled) return;
+    gate.forgetCalibration();
+    clearFilterNote();
+    cancelCalibration();
+    setCalibration('idle');
+    calibNeededRef.current = true;
+    const phase = phaseRef.current;
+    if (phase === 'speaking' || phase === 'thinking') interrupt();
+    maybeBeginCalibration();
+  }, [
+    cancelCalibration,
+    clearFilterNote,
+    gate,
+    interrupt,
+    maybeBeginCalibration,
+    setCalibration,
+  ]);
+
+  /** The diagnosis (numbers and reasons, never any text) on the clipboard. True when it worked. */
+  const copyDiagnosis = useCallback(
+    () =>
+      copyText(
+        JSON.stringify(
+          buildDiagnosis({
+            gate: gate.snapshot(),
+            pushToTalk,
+            signalWords,
+            calibration,
+            calibrationReason,
+            provider: activeProvider,
+            live,
+          }),
+          null,
+          2
+        )
+      ),
+    [
+      activeProvider,
+      calibration,
+      calibrationReason,
+      gate,
+      live,
+      pushToTalk,
+      signalWords,
+    ]
+  );
 
   // read the answer aloud while it streams
   useEffect(() => {
@@ -1401,6 +1799,8 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     () => () => {
       if (noteTimerRef.current) clearTimeout(noteTimerRef.current);
       if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+      if (calibTimerRef.current) clearTimeout(calibTimerRef.current);
+      if (choiceTimerRef.current) clearTimeout(choiceTimerRef.current);
     },
     []
   );
@@ -1466,5 +1866,19 @@ export function useHaiVoice(options: UseHaiVoiceOptions) {
     filterNote,
     /** The first-time hint "Sag Stopp, wenn ich aufhören soll." is to be shown. */
     signalHint,
+    /** The calibration at the start of the live mode: idle, listening, done, failed, skipped. */
+    calibration,
+    /** Why the calibration failed (null while it did not). */
+    calibrationReason,
+    /** What the display asks next: say the phrase, calibration failed, or the way out. */
+    filterPrompt,
+    /** "Mikrofon neu einmessen": the person says the phrase again. */
+    recalibrate,
+    /** Leave the calibration out (the gate stays tolerant until the next one). */
+    skipCalibration,
+    /** Close the prompt without a choice. */
+    dismissFilterPrompt,
+    /** Copy the diagnosis (JSON, numbers only) to the clipboard. */
+    copyDiagnosis,
   };
 }

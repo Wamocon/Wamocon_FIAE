@@ -21,6 +21,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { HaiVoiceFallbackNotice } from './HaiVoiceFallbackNotice';
 import { type VoiceError } from './useHaiVoice';
 import { consentParagraphs } from '@/lib/hai/voice/consentText';
+import { HaiVoiceFilterPrompt } from './voice-mode/HaiVoiceFilterPrompt';
 import { HaiVoiceModeButton } from './voice-mode/HaiVoiceModeButton';
 import { usePushToTalkKeys } from './voice-mode/usePushToTalkKeys';
 import { providerStatement } from './voice-mode/providerStatement';
@@ -37,6 +38,8 @@ export function HaiVoiceControl() {
   const { t } = useLanguage();
   const session = useOptionalHaiVoiceSession();
   const [askConsent, setAskConsent] = useState(false);
+  // what "Diagnose kopieren" did: nothing yet, copied, or not possible
+  const [diagnosis, setDiagnosis] = useState<'copied' | 'failed' | null>(null);
 
   const voiceOrNull = session?.voice ?? null;
   const pttActive =
@@ -181,6 +184,14 @@ export function HaiVoiceControl() {
         )}
       </div>
 
+      {/* the calibration, or the way out when the person may not have been heard */}
+      {active && (
+        <HaiVoiceFilterPrompt
+          voice={voice}
+          className="mt-2 space-y-1.5 rounded-lg border border-cyan-500/30 bg-black/40 p-2.5 text-xs leading-snug text-cyan-100"
+        />
+      )}
+
       {askConsent && (
         <div
           role="dialog"
@@ -240,7 +251,7 @@ export function HaiVoiceControl() {
             <legend className="mb-1 text-gray-300">
               {t('hai.voice.settings.sensitivity')}
             </legend>
-            {(['normal', 'strict'] as const).map(value => (
+            {(['normal', 'strict', 'off'] as const).map(value => (
               <label key={value} className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -256,6 +267,16 @@ export function HaiVoiceControl() {
               {t('hai.voice.settings.sensitivity.hint')}
             </p>
           </fieldset>
+          {voice.live && voice.sensitivity !== 'off' && !voice.pushToTalk && (
+            <button
+              type="button"
+              data-testid="hai-voice-recalibrate"
+              onClick={() => voice.recalibrate()}
+              className="underline hover:text-gray-200"
+            >
+              {t('hai.voice.choice.recalibrate')}
+            </button>
+          )}
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -279,6 +300,28 @@ export function HaiVoiceControl() {
             {t('hai.voice.settings.signals.hint')}
           </p>
           <p>{t('hai.voice.settings.headset')}</p>
+          {/* the diagnosis for the test team: levels and reasons, never any text */}
+          <div className="space-y-1" data-testid="hai-voice-diagnosis">
+            <button
+              type="button"
+              data-testid="hai-voice-diagnosis-copy"
+              onClick={async () => {
+                const done = await voice.copyDiagnosis();
+                setDiagnosis(done ? 'copied' : 'failed');
+              }}
+              className="rounded-lg bg-white/10 px-2.5 py-1 text-gray-100 hover:bg-white/20"
+            >
+              {t('hai.voice.diagnosis.copy')}
+            </button>
+            <p className="text-gray-500">{t('hai.voice.diagnosis.hint')}</p>
+            <p role="status" aria-live="polite" className="text-gray-300">
+              {diagnosis === 'copied'
+                ? t('hai.voice.diagnosis.copied')
+                : diagnosis === 'failed'
+                  ? t('hai.voice.diagnosis.failed')
+                  : ''}
+            </p>
+          </div>
           {voice.consented && (
             <button
               type="button"

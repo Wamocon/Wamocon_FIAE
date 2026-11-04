@@ -38,6 +38,7 @@ import {
 } from './audio';
 import type { PieceEngine } from './browserSpeech';
 import { reasonCode } from './fallback';
+import { noteMicrophone } from './diagnostics';
 import { mark } from './trace';
 import {
   ProviderUnavailableError,
@@ -76,6 +77,8 @@ export interface MediaTrackLike {
   getSettings?(): object;
   readonly muted?: boolean;
   readonly readyState?: string;
+  /** The name of the device (only known after the permission). */
+  readonly label?: string;
 }
 
 export interface MediaStreamLike {
@@ -459,7 +462,13 @@ export class SonioxRecognition implements RecognitionLike {
     }
     if (!this.startRecorder()) return;
     this.startLevel(this.stream);
-    mark('stt.mic.ready', this.micInfo(this.stream));
+    const micInfo = this.micInfo(this.stream);
+    mark('stt.mic.ready', micInfo);
+    // kept for the diagnosis (the person copies it): what the browser really delivers
+    noteMicrophone(
+      { profile: this.continuous ? 'live' : 'raw', ...micInfo },
+      this.stream.getTracks()[0]?.label
+    );
     this.onaudiostart?.();
     await this.connectSession(tokenPromise);
   }

@@ -208,14 +208,15 @@ Mit Soniox ist das Mikrofon im Live-Modus für das ganze Gespräch offen. Soniox
 
 - **Raumpegel**: das 20. Perzentil der letzten halben Minute (die Pausen zwischen den Wörtern machen den größten Teil der Zeit aus). Unbekannt (0) unter 20 Messungen.
 - **Referenzpegel der Person**: der obere Median (60 Prozent der sortierten Werte) der Mittelwerte der letzten sieben **angenommenen** Äußerungen. Nur was durch das Tor kam und zwei oder mehr Wörter hatte, zählt. Ein einzelner Schrei verschiebt ihn nicht.
-- **Schwelle** = Raumpegel plus Anteil mal (Referenz minus Raumpegel), mindestens das Dreifache (streng: Vierfache) des Raumpegels, begrenzt auf Untergrenze und Obergrenze. Vor der ersten angenommenen Äußerung gibt es keine Referenz, dann gilt nur die Untergrenze (mit dem Raumpegel).
+- **Schwelle** = Raumpegel plus Anteil mal (Referenz minus Raumpegel), mindestens das Dreifache (streng: Vierfache) des Raumpegels, höchstens 75 Prozent (streng 90) der Referenz, begrenzt auf Untergrenze und Obergrenze. Die Referenz kommt aus der Einmessung zu Beginn und danach aus den angenommenen Äußerungen (Stand 05.11.2026, siehe Nachtrag unten). Ohne Referenz gilt nur eine sehr niedrige Sicherheitsgrenze mit dem doppelten Raumpegel.
 
-| Einstellung | Untergrenze | Obergrenze | Anteil | Konfidenz mindestens |
-|---|---|---|---|---|
-| Normal (Standard) | 0,04 (Effektivwert 0,008, etwa minus 42 dBFS) | 0,20 | 20 Prozent | 0,60 |
-| Streng, nur meine Stimme | 0,08 | 0,30 | 45 Prozent | 0,75 |
+| Einstellung | Untergrenze ohne / mit Referenz | Obergrenze | Anteil | Raumfaktor (ohne Referenz) | Deckel bei der Referenz | Konfidenz mindestens |
+|---|---|---|---|---|---|---|
+| Normal (Standard) | 0,012 (Effektivwert 0,0024, etwa minus 52 dBFS) / 0,006 | 0,20 | 20 Prozent | 3 (2) | 75 Prozent | 0,60 |
+| Streng, nur meine Stimme | 0,03 / 0,02 | 0,30 | 45 Prozent | 4 (3) | 90 Prozent | 0,75 |
+| Aus | kein Pegel-Tor, keine Konfidenzgrenze (nur gemessen, für die Diagnose) | | | | | |
 
-Die Obergrenze verhindert, dass eine laute erste Äußerung die Person aussperrt. Die Untergrenze hält den Raum auch dann draußen, wenn noch nichts gehört wurde. Pegel in der Einheit des Messpunkts: 0,33 ist eine Stimme am Laptop-Mikrofon (Effektivwert 0,066), 0,045 eine Stimme 17 Dezibel darunter.
+Bis 04.11.2026 abends war die Untergrenze 0,04 (streng 0,08) fest und der Raumfaktor galt auch mit Referenz ohne Deckel. Das hat eine leise Stimme ausgesperrt (Nachtrag 05.11.2026 unten). Die Obergrenze verhindert, dass eine laute erste Äußerung die Person aussperrt. Die Sicherheitsgrenze hält nur noch absolute Stille draußen. Pegel in der Einheit des Messpunkts: 0,33 ist eine Stimme am Laptop-Mikrofon (Effektivwert 0,066), 0,045 eine Stimme 17 Dezibel darunter.
 
 **Vorläufiger Text** (Unterbrechen, Signalwort, Anzeige des Textes während des Sprechens): Es gibt noch keinen fertigen Zeitraum. Dann müssen der Mittelwert der letzten 1,2 Sekunden die Schwelle und der Spitzenwert das 2,5fache der Schwelle erreichen (`interimPeakFactor`). Der Wert kommt aus dem Labor: Mit 1,5 und nur dem Spitzenwert unterbrach eine Stimme 14 Dezibel unter der Person noch die HAI, weil der Spitzenwert einer Silbe über die Schwelle kam. Ein vorläufiger Text, der das Tor nicht besteht, wird nicht angezeigt und zählt nicht als Sprechen (kein Zurücksetzen der stillen Zeit).
 
@@ -227,7 +228,7 @@ Die Obergrenze verhindert, dass eine laute erste Äußerung die Person aussperrt
 
 **Sprechertrennung, nicht gebaut.** Soniox kann sie in Echtzeit (`enable_speaker_diarization`, Feld `speaker` je Wort, bis 15 Sprecher). Die Dokumentation sagt aber, dass sie in Echtzeit mehr Fehler macht als im Nachhinein, dass Sprecherwechsel vorübergehend falsch sein können und dass die Endpunkterkennung die Genauigkeit senkt ("für die höchste Genauigkeit keine Endpunkterkennung"). Wir brauchen die Endpunkterkennung für die Antwortzeit. Die Messung (synthetische Stimmen, mit Endpunkterkennung) bestätigt die Schwäche für unseren Fall: Dieselbe leise Stimme bekam in zwei Äußerungen zwei verschiedene Sprecher (1 und 2). Spricht zuerst jemand im Hintergrund, wird der "erste bestätigte Sprecher" der Hintergrund und die Person wird als Fremde verworfen. Beides sperrt den Nutzer aus, ein Fehler, der schlimmer ist als ein durchgelassenes Hintergrundgespräch. Der Pegel trennt nah und fern verlässlicher. Neu bewerten, wenn Soniox Sprechertrennung mit Endpunkterkennung belegt stabil anbietet.
 
-**Anzeige und Messpunkte.** Eine verworfene Äußerung erscheint als Messpunkt `utterance.discarded` mit `why` (`quiet` oder `confidence`) und nur Zahlen (`mean`, `peak`, `thr`, `conf`). Der Text wird nicht gespeichert, nicht gesendet, nicht angezeigt. In der Oberfläche steht kurz "Ich habe nur dich gehört." (sechs Sekunden). Nach drei zu leisen Äußerungen in Folge steht "Ich höre dich nicht deutlich. Sprich lauter oder näher am Mikrofon.", damit die Person den Grund kennt. Eine angenommene Äußerung löscht den Hinweis.
+**Anzeige und Messpunkte.** Eine verworfene Äußerung erscheint als Messpunkt `utterance.discarded` mit `why` (`quiet`, `background` oder `confidence`) und nur Zahlen (`mean`, `peak`, `thr`, `conf`, `amb`, `ref`). Der Text wird nicht gespeichert, nicht gesendet, nicht angezeigt. In der Oberfläche steht je Grund ein eigener Text für sechs Sekunden (Tabelle im Nachtrag 05.11.2026). Eine angenommene Äußerung löscht den Hinweis.
 
 ### Signalwörter
 
@@ -247,7 +248,7 @@ Ein Signalwort mitten im Satz löst nichts aus ("das war nicht der Stopp", "wir 
 
 | Einstellung | Standard | Schlüssel | Wirkung |
 |---|---|---|---|
-| Empfindlichkeit für Hintergrundstimmen: Normal oder "Streng, nur meine Stimme (laute und nahe Stimme)" | Normal | `hai-voice-sensitivity` | Schwellen der Tabelle oben. Streng schützt stärker und kann leises Sprechen aussortieren |
+| Empfindlichkeit für Hintergrundstimmen: Normal, "Streng, nur meine Stimme (laute und nahe Stimme)" oder "Aus (alle Stimmen zählen)" | Normal | `hai-voice-sensitivity` (`normal`, `strict`, `off`) | Schwellen der Tabelle oben. Streng schützt stärker und kann leises Sprechen aussortieren. Aus: kein Pegel-Tor, keine Konfidenzgrenze, keine Einmessung, Signalwörter und Echo-Filter bleiben |
 | Drücken zum Sprechen | aus | `hai-voice-ptt` | Das Mikrofon nimmt nur auf, solange der Halteknopf oder die Leertaste gehalten wird. Nichts davor, nichts danach: 100 Prozent Schutz vor dem Hintergrund |
 | Signalwörter | an | `hai-voice-signals` | siehe oben |
 
@@ -258,9 +259,60 @@ Der Hinweis, dass ein **Headset oder ein Mikrofon nahe am Mund** am besten schü
 ### Grenzen
 
 - **Der Pegel trennt nah von fern, nicht Person von Person.** Eine zweite Person, die genauso laut am Mikrofon ankommt (nahe, laute Stimme, ein Meter), zählt. Im Laborversuch (Abschnitt 10 der Recherche) wurden Stimmen bis etwa 14 Dezibel unter der Person in "Normal" aussortiert, in "Streng" auch Stimmen 10 Dezibel darunter. Stimmen 10 Dezibel unter der Person kamen in "Normal" teilweise durch, Stimmen 6 Dezibel darunter auch in "Streng". Ein Headset ändert das Verhältnis zugunsten der Person stark, "Drücken zum Sprechen" löst es.
-- **Kaltstart.** Vor der ersten angenommenen Äußerung gilt nur die Untergrenze. Spricht zuerst jemand im Hintergrund, der lauter ist als die Untergrenze, kann diese Äußerung zählen und die Referenz verfälschen (der obere Median holt sich mit der Stimme der Person schnell zurück). Im Laborversuch lag eine Stimme 20 Dezibel unter der Person unter der Untergrenze und wurde auch im Kaltstart aussortiert.
-- **Zu leise Person.** Mikrofone mit sehr niedrigem Pegel (Effektivwert unter 0,008 bei normalem Sprechen) liegen unter der Untergrenze. Dann steht nach drei Äußerungen der Hinweis "Sprich lauter oder näher am Mikrofon", "Drücken zum Sprechen" ist der Ausweg. Mikrofon, Raum und Abstand sind nur am echten Gerät prüfbar (Testplan S).
+- **Kaltstart.** Seit der Einmessung (05.11.2026) gibt es eine Referenz, bevor Äußerungen beurteilt werden. Ohne Einmessung (übersprungen, misslungen) gilt nur die Sicherheitsgrenze: Dann kann auch ein Hintergrundgespräch zählen, das lauter ist als diese Grenze und der doppelte Raumpegel. Der obere Median holt sich mit der Stimme der Person schnell zurück.
+- **Zu leise Person.** Seit 05.11.2026 sperrt ein leises Mikrofon nicht mehr aus: Die Einmessung und die Schwelle relativ zur Referenz halten die Person drin, bis herunter zu einem Effektivwert von 0,005 (im Labor gemessen). Wer nach dem Einmessen deutlich leiser spricht, bekommt nach zwei Äußerungen die Auswahl (Nachtrag). Mikrofon, Raum und Abstand sind nur am echten Gerät prüfbar (Testplan S und U).
 - **Eine Unterbrechung, die erst am Ende aussortiert wird.** Hat der vorläufige Text das Tor bestanden und die fertige Äußerung nicht, ist die HAI schon angehalten. Sie spricht nicht weiter, die Person kann neu fragen.
 - **Vorzeitiges Anhalten.** Das Signalwort wird am Anfang des vorläufigen Textes erkannt, bevor das Wort fertig ist: ein Wort wie "Haltung" oder "Pausenzeit" kann vorübergehend als "Halt" und "Pause" gelesen werden und die HAI anhalten.
 - **Zeitbezug.** Der Zeitraum der Wörter und der Pegel sind auf die Uhr des Browsers umgerechnet (Start der Aufnahme plus `start_ms`). Eine Abweichung bis 150 Millisekunden fängt der Spielraum auf. Passt der Zeitraum nicht zur Uhr (Zeit in der Zukunft, Strom neu gestartet), gilt die Ankunftszeit der Wörter.
 - **Sprachausgabe der HAI im Mikrofon.** Das Echo der HAI wird vom Browser (Echo-Unterdrückung) und vom Wortfilter gedämpft. Wie gut das an einem echten Gerät mit Lautsprechern klappt, ist offen (Testplan E31 und S).
+
+### Nachtrag 05.11.2026: Das Tor sperrt die Person nicht aus (Einmessung, Ausweg, Filter aus, Diagnose)
+
+Meldung von Niko (Preview mit PR 307): "Analysiere die Logs: Die HAI hat mich jetzt überhaupt nicht gehört und hat gesagt, ich soll lauter sprechen, obwohl ich ins Mikro direkt geschrien habe!!" Die Server-Logs zeigten keinen Aufruf der HAI-Routen: Keine Äußerung kam beim Chat an, das Pegel-Tor im Browser hat sie verworfen. Befund, Laborversuche und Zahlen: `docs/hai-sprachmodus-recherche.md` (Abschnitt 11), Prüffälle: Testplan Gruppe U (Hinweis für das Testteam in Gruppe S, Fall S23).
+
+**Ursache (Zusammenfassung, Belege in der Recherche).** Das Tor kannte vor der ersten angenommenen Äußerung keine Stimme der Person. Es rechnete mit einer festen Untergrenze (0,04) und mindestens dem Dreifachen des Raumpegels, und es gab keinen Ausweg: Eine Äußerung unter der Schwelle wurde verworfen, die nächste ebenso, bis nach 24 Sekunden Stille der Sprachmodus mit "keine Sprache" endete. Eine Person mit leisem Mikrofon (die automatische Verstärkung ist seit PR 307 aus) oder in einem Raum mit Gesprächen (hoher Raumpegel) lag so dauerhaft darunter. Der Text sagte dann "Sprich lauter", auch wenn der Pegel hoch war.
+
+**Was jetzt gilt.**
+
+| Baustein | Verhalten | Ort |
+|---|---|---|
+| Einmessung | Beim Start des Live-Modus bittet die Figur: "Sag kurz: Hallo HAI". Die Äußerung geht an keinen Chat. Aus ihr kommen der Pegel der Stimme (Referenz) und der Raumpegel vor den Wörtern. Es zählt nur eine kurze Begrüßung (höchstens drei Wörter oder ein Grußwort), ein langer Satz aus dem Raum setzt die Referenz nicht. Zeigt die Einmessung nichts, bleibt das Tor tolerant (keine Referenz, nur die Sicherheitsgrenze) | `levelGate.ts` (`calibrate`), `useHaiVoice.ts`, `signalWords.ts` (`isCalibrationPhrase`) |
+| Misslingt die Einmessung | Nach 12 Sekunden ohne Satz, bei zu leiser Stimme, bei einem Raum, der so laut ist wie die Stimme, oder ohne Pegel zeigt die Oberfläche den Grund und die Wahl "Mikrofon neu einmessen", "Drücken zum Sprechen", "Filter aus". Die Person wird währenddessen gehört. Nach 30 Sekunden geht die Anleitung weg | `HaiVoiceFilterPrompt.tsx` |
+| Überspringen, neu einmessen | "Überspringen" bei der Aufforderung. "Mikrofon neu einmessen" in der Hinweise-Karte der Figur, in den Einstellungen und in der Auswahl, auch während die HAI spricht (sie wird still) | Overlay, `HaiVoiceControl.tsx` |
+| Relative Schwelle | Schwelle = Raumpegel plus 20 Prozent (streng 45) des Weges zur Referenz, mindestens das Dreifache (streng Vierfache) des Raumpegels, **höchstens 75 Prozent (streng 90) der Referenz**. Der Raumfaktor kann die Schwelle nie über die Stimme der eingemessenen Person heben. Die Referenz ist beim Einmessen das 0,6fache des Mittelwerts der Sprechstellen von "Hallo HAI" (ein lautes Wortpaar liegt über dem Mittel einer Frage mit Pausen) und fällt danach nicht unter 70 Prozent der eingemessenen, auch wenn leise Bruchstücke durchkommen (sonst zieht das Hintergrundgespräch die Schwelle Stück für Stück herunter). Absolute Untergrenzen nur noch als Sicherheitsgrenze: 0,012 ohne Referenz (Effektivwert 0,0024, etwa minus 52 dBFS), 0,006 mit Referenz. Ein einzelnes Wort (Zeitraum unter 0,8 s) entscheidet nach dem Spitzenwert: mindestens das Dreifache der Schwelle, in einem ruhigen Raum aber höchstens das 1,6fache der Referenz (eine kurze Frage der Person kommt durch). In einem **lauten Raum** (Raumpegel mindestens ein Viertel der Referenz, die Person ist kaum lauter als das Gespräch) gilt immer das Dreifache der Schwelle, sonst kämen Wörter des Gesprächs durch | `levelGate.ts` |
+| Ausweg | Zwei Äußerungen in Folge, die aussortiert wurden, aber klar über dem Raumpegel lagen (Grund `background`), öffnen sofort die Auswahl "Ich habe dich eventuell nicht gehört" mit den drei Wegen. Kein stilles Weiterverwerfen. Eine angenommene Äußerung schließt sie, nach 30 Sekunden geht sie von selbst weg und kommt 60 Sekunden nicht wieder. Solange sie offen ist, zählen keine stillen Runden, das Gespräch endet währenddessen nicht | `useHaiVoice.ts` |
+| Einstellung "Aus" | Dritte Wahl neben Normal (Standard) und Streng: kein Pegel-Tor, keine Konfidenzgrenze, keine Einmessung. Signalwörter und Echo-Filter bleiben. Die Pegel werden weiter gemessen (Diagnose) | `levelGate.ts`, `filterSettings.ts`, Einstellungen |
+| Übersteuerung | Niedrige Konfidenz bei hohem Pegel (Spitzenwert nahe 1: Grund `clipped`, Mittelwert mindestens das Dreifache der Schwelle: Grund `loud`) verwirft **nicht**. Die Äußerung wird verarbeitet, die Oberfläche zeigt "Bitte etwas leiser oder weiter weg vom Mikrofon." Eine solche Äußerung hebt die Referenz nicht an | `levelGate.ts` |
+| Pegel liefert nichts | Hat die Messung nur Nullen (Audiokontext läuft nicht, falscher Strom), kann das Tor nichts beurteilen: die Äußerung zählt. Die Einmessung nennt dann den Grund "kein Pegel" | `levelGate.ts` (`levelDead`) |
+| Diagnose | Immer lokal, auch ohne Messschalter: Ringpuffer der letzten 50 Entscheidungen im Speicher und im `sessionStorage` des Tabs (`hai-voice-diag`), nur Zahlen und Gründe. Der Knopf **Diagnose kopieren** (Einstellungen zum Sprachassistenten) legt ein JSON in die Zwischenablage: Einstellung, Mikrofonprofil und was der Browser wirklich liefert (Abtastrate, Verstärkungsregelung, Echo-Unterdrückung, Zustand des Audiokontexts), Gerätename (wenn der Browser ihn nennt), Browser, Zahlen des Tors und die Einträge (`mean`, `peak`, `threshold`, `ambient`, `reference`, `confidence`, `why`). Nie ein Text, nie an einen Server | `client/diagnostics.ts` |
+
+**Meldung nach Grund.** Je Grund ein eigener Text. Nur bei echter Stille steht "lauter":
+
+| Grund (`why`) | Bedeutung | Text |
+|---|---|---|
+| `background` | eine Stimme klar über dem Raum, aber unter der Schwelle der Person (fremde Stimme) | "Ich habe nur dich gehört." |
+| `quiet` | nichts am Mikrofon (nur Stille oder Murmeln weit unter dem Raum), nach zwei in Folge (vorher nach drei) | "Ich höre dich kaum. Sprich etwas lauter oder näher am Mikrofon." (vorher "Ich höre dich nicht deutlich ...", auch bei hohem Pegel) |
+| `confidence` | bei normalem Pegel nicht deutlich verstanden | "Ich habe dich nicht deutlich verstanden. Sag es bitte noch einmal." |
+| `clipped`, `loud` | übersteuert oder geschrien, die Äußerung zählt | "Bitte etwas leiser oder weiter weg vom Mikrofon." |
+
+Die Messpunkte (`utterance.discarded`) tragen jetzt zusätzlich `amb` und `ref`. `why` ist `quiet`, `background` oder `confidence`.
+
+**Ergebnis im Labor.** Echte Schleife, echtes Soniox, gefälschtes Mikrofon, vor und nach der Änderung mit denselben Dateien (Tabelle und Auswertung: Recherche, Abschnitt 11):
+
+| Fall | Stimme und Raum (Effektivwert) | Fragen der Person angenommen, vorher | nachher | Sätze aus dem Raum im Chat, vorher | nachher |
+|---|---|---|---|---|---|
+| a5 | leise Stimme, Effektivwert 0,005, leerer Raum | 0 von 3, Gespräch endet nach 24 s | 3 von 3 | 0 | 0 |
+| a75 | leise Stimme, Effektivwert 0,0075, leerer Raum | 0 von 3, Gespräch endet nach 24 s | 3 von 3 | 0 | 0 |
+| a10 | leise Stimme, Effektivwert 0,01, leerer Raum | 0 von 3 | 3 von 3 | 0 | 0 |
+| n_nohello | wie a75, aber ohne "Hallo HAI" am Anfang (Kaltstart ohne Referenz) | 0 von 3, Gespräch endet nach 24 s | 2 von 3 | 0 | 0 |
+| b20_03 | Stimme 0,02 (leises Mikrofon), Gespräch im Raum 0,003 | 3 von 3 | 3 von 3 | 4 | 6 |
+| b20_06 | Stimme 0,02, Gespräch im Raum 0,006 | 3 von 3 | 3 von 3 | 5 | 4 |
+| b20_12 | Stimme 0,02, Gespräch im Raum 0,012 | 2 von 3 | 2 von 3 | 3 | 3 |
+| b40_12 | Stimme 0,04, Gespräch im Raum 0,012 | 3 von 3 | 3 von 3 | 7 | 4 |
+| b40_24 | Stimme 0,04, Gespräch im Raum 0,024 | 2 von 3 | 2 von 3 | 1 | 5 |
+| b10_06 | Stimme 0,01, Gespräch im Raum 0,006 | 2 von 3 | 2 von 3 | 0 | 3 |
+| c_normal | normale Stimme 0,078, leerer Raum | 3 von 3 | 3 von 3 | 0 | 0 |
+| c_loud | laute Stimme (Spitze 0,95) | 3 von 3 | 3 von 3 | 0 | 0 |
+| c_clip | übersteuert (plus 20 Dezibel, hartes Clipping) | 3 von 3 | 3 von 3 | 0 | 0 |
+| c_susp | normale Stimme, aber der Audiokontext läuft nicht (Pegel liefert nur Nullen) | 0 von 3, Gespräch endet nach 24 s | 3 von 3 | 0 | 0 |
+| l_lost | Einmessung mit normaler Stimme, danach 22 Dezibel leiser | 0 von 3, Gespräch endet nach 24 s | 0 von 3 | 0 | 0 |

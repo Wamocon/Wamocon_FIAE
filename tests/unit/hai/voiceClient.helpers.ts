@@ -97,6 +97,7 @@ export class FakeStream implements MediaStreamLike {
         }),
         muted: false,
         readyState: 'live',
+        label: 'Test-Mikrofon (Headset)',
       },
     ];
   }

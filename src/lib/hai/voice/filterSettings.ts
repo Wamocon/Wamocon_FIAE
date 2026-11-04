@@ -4,7 +4,9 @@
  * the device, not to the account). Pure functions over a storage object, so
  * tests need no browser.
  *
- *  - sensitivity   'normal' (default) or 'strict' (only my voice, loud and near)
+ *  - sensitivity   'normal' (default), 'strict' (only my voice, loud and near) or
+ *                  'off' (no level gate and no confidence limit; signal words and
+ *                  the echo filter stay)
  *  - push to talk  off (default) or on: the microphone records only while a
  *                  button or the space bar is held
  *  - signal words  on (default) or off: "Stopp", "Gespräch beenden" and so on
@@ -49,9 +51,9 @@ function read(storage: FilterStorage | null, key: string): string | null {
 export function readFilterSettings(
   storage: FilterStorage | null
 ): FilterSettings {
+  const saved = read(storage, SENSITIVITY_KEY);
   return {
-    sensitivity:
-      read(storage, SENSITIVITY_KEY) === 'strict' ? 'strict' : 'normal',
+    sensitivity: saved === 'strict' || saved === 'off' ? saved : 'normal',
     pushToTalk: read(storage, PUSH_TO_TALK_KEY) === 'on',
     signalWords: read(storage, SIGNAL_WORDS_KEY) !== 'off',
   };

@@ -350,3 +350,119 @@ Befunde, die den Code geändert haben:
 1. Mit nur dem Spitzenwert (Faktor 1,5) für den vorläufigen Text unterbrach schon eine Stimme minus 14 Dezibel die HAI (ein Spitzenwert einer Silbe). Seitdem: Mittelwert der letzten 1,2 Sekunden und Spitzenwert das 2,5fache der Schwelle.
 2. Der Zeitraum der Wörter von Soniox ist nur ein grober Anhaltspunkt: Der laute Teil der Aufnahme beginnt 100 bis 350 Millisekunden nach `start_ms`, und ein einzelnes Wort kommt mit einem Zeitraum von 60 bis 120 Millisekunden. Ein "Stopp" der Person wurde deshalb in einem von vier Läufen als zu leise aussortiert. Seitdem reicht das Fenster mindestens 1,2 Sekunden und 450 Millisekunden über das letzte Wort hinaus, und bei einem Zeitraum unter 0,8 Sekunden entscheidet der Spitzenwert (das Dreifache der Schwelle).
 3. Die Grenze des Pegels: Stimmen etwa 14 Dezibel (Normal) beziehungsweise 10 Dezibel (Streng) unter der Person werden ausgeschlossen, 6 Dezibel darunter nicht mehr.
+
+## 11. Das Pegel-Tor sperrt die Person aus: Befund und Messwerte (05.11.2026)
+
+Meldung von Niko (Preview mit PR 307, wörtlich): "Analysiere die Logs: Die HAI hat mich jetzt überhaupt nicht gehört und hat gesagt, ich soll lauter sprechen, obwohl ich ins Mikro direkt geschrien habe!!" Die Umsetzung steht in `docs/hai-sprachmodus.md` (Abschnitt 14, Nachtrag 05.11.2026), die Prüffälle im Testplan (Gruppe U, Hinweis für das Testteam in Gruppe S).
+
+### (a) Was die Logs belegen
+
+- Die Server-Logs der Preview zeigen **keinen Aufruf** der HAI-Routen im Zeitraum. Es kam also keine Äußerung beim Chat an. Das Tor im Browser hat sie verworfen.
+- Die Meldung "Ich hoere dich nicht deutlich ..." steht nach `QUIET_STREAK` (drei) Äußerungen in Folge mit `why === 'quiet'`. Das Tor hat also dreimal "zu leise" gesagt, auch bei einer lauten Stimme.
+- Das Messprotokoll `hai-voice-trace` ist standardmäßig aus. **Von Nikos Versuch gibt es keine Zahlen.** Alles Weitere ist deshalb aus Laborversuchen mit derselben Schleife und demselben Soniox abgeleitet, nicht aus seinem Gerät. Ab dieser Änderung läuft die Diagnose immer lokal mit (Abschnitt 14 des Sprachmodus), damit das nächste Mal Zahlen da sind.
+
+### (b) Aufbau der Laborversuche
+
+Wie in Abschnitt 10 (e): Chrome mit gefälschtem Mikrofon (`--use-fake-device-for-media-stream`, `--use-file-for-fake-audio-capture`), eine kleine Seite mit der echten Schleife `useHaiVoice` und dem echten Soniox-Client (Erkennung und Sprachausgabe, Region EU, Schlüssel von einem lokalen Hilfsserver). Nur der Chat ist eine Attrappe (antwortet "Alles klar." und merkt sich, was ihn erreichte). Kein Chatmodell. Stimmen: synthetische Sprache von Soniox (Daniel als Person, Lena als Hintergrund), auf Pegel gebracht, dazu Raumrauschen bei etwa minus 58 dBFS. Die Person sagt "Hallo HAI." (1,5 s), eine lange Frage (9 s), eine kurze Frage (21 s) und die lange Frage noch einmal (31 s). "Vorher" ist der Stand von `origin/preview` (PR 307 und 306), "nachher" der Stand dieser Änderung, **dieselben Dateien**. Skripte im Scratchpad, nicht im Repository. Gemessen wird je Äußerung, was das Tor sieht (`mean`, `peak`, `thr`, `conf`, Raumpegel `amb`, Referenz `ref`). Der Hintergrund in den Fällen b ist ein Gespräch zweier Stimmen (Lena und Daniel) ohne Pausen, damit der Raumpegel hoch ist.
+
+### (c) Ergebnis: Ursache belegt und ausgeschlossen
+
+**Belegt (im Labor reproduziert):**
+
+1. **Eine leise Stimme in einem leeren Raum wird vollständig ausgesperrt** (Fälle a). Bei Effektivwert 0,005 bis 0,01 (Pegel 0,025 bis 0,05) liegt der Mittelwert der Äußerung (0,013 bis 0,036, weil Pausen und Nachlauf im Zeitraum mitzählen) unter der festen Untergrenze 0,04. Es gibt vor der ersten angenommenen Äußerung keine Referenz, die Untergrenze entscheidet allein. **Alle** Äußerungen wurden verworfen, auch eine Stimme mit Konfidenz 0,999. Bei 0,005 und 0,0075 endete der Sprachmodus nach 24 Sekunden mit "keine Sprache", weil verworfene Äußerungen keine stille Runde zurücksetzen. Von der Person aus gesehen: nichts passiert, dann "Sprich lauter".
+2. **Untergrenze und Raumfaktor sperren die Person in einem Raum mit Gesprächen aus** (Fälle b). Die Schwelle ist mindestens das Dreifache des Raumpegels (und nie unter 0,04). Spricht die Person nur etwa 4 dB lauter als das Gespräch (b10_06, b20_12, b40_24), wird die **kurze** Frage F2 verworfen: Mittelwert 0,044, 0,093 und 0,134 gegen Schwellen von 0,040, 0,072 und 0,141, Spitzenwerte 0,079, 0,203 und 0,272. Das waren 3 von 18 Fragen in sechs Räumen, immer die kurze. Ein Zeitraum unter 0,8 s wird nach dem Spitzenwert beurteilt, der die dreifache Schwelle verlangen muss, und dort liegt die Hürde in einem lauten Raum über dem, was die Stimme erreicht.
+3. **Wer nach dem ersten Satz leiser wird, hat keinen Ausweg** (Fall l_lost: "Hallo HAI" normal, danach 22 dB leiser): Die Stimme (Mittelwert 0,025 und 0,015) liegt unter der Untergrenze 0,04, jede Äußerung wird verworfen, nach 24 Sekunden endet das Gespräch. Die Referenz (0,121) war da, entschied aber nicht: Die Untergrenze 0,04 stand darüber.
+4. **Ein Audiokontext, der nicht läuft, ist eine vollständige Aussperrung** (Fall c_susp): Der Pegel ist 0 (`stt.mic.ready` zeigt `ctx: "suspended"`), der Mittelwert jeder Äußerung 0, jede wird als "quiet" verworfen, das Gespräch endet nach 24 Sekunden. Das passt zu "überhaupt nicht gehört", ist aber **nur im Labor erzeugt** (der Audiokontext wurde im Test künstlich angehalten). Ob er in Nikos Browser stand, ist nicht belegt.
+
+**Ausgeschlossen oder nicht reproduziert:**
+
+- **Zeitversatz zwischen Wortzeiten und Pegel-Zeitachse:** gemessen wurde, wo der laute Teil der Aufnahme gegen den Zeitraum der Wörter liegt (`skew`). In den Fällen ohne Hintergrund (a, c, p) beginnt der laute Teil 20 bis 390 ms nach dem Beginn des Zeitraums und endet 650 ms vor bis 150 ms nach dessen Ende. Das Fenster des Tors (150 ms davor, mindestens 1,2 s und 450 ms über das Ende) trifft die Stimme in allen Läufen. Mittelwert und Spitzenwert lagen bei normaler Stimme bei dem, was die Stimme hat (0,29 bis 0,30 und 0,76 bis 0,79 bei Effektivwert 0,078). In den Fällen b streuen die Werte (minus 630 bis plus 430 ms), weil das Gespräch selbst laut ist. Kein Befund.
+- **Übersteuerung beim Schreien:** laute Stimme (Spitze 0,95) und hart übersteuerte Stimme (plus 20 dB, Spitze 1) wurden in allen Läufen angenommen, die Konfidenz blieb bei 0,999 (die kurze Äußerung "Hallo HAI" 0,77 bis 0,89). **Mit synthetischer Sprache lässt sich die Meldung durch Schreien nicht erzeugen.** Ob echte Übersteuerung die Konfidenz unter 0,6 drückt (dann wäre es der Grund `confidence`, nicht "quiet"), ist am echten Gerät zu prüfen. Der Schutz dafür ist trotzdem gebaut (unten).
+- **Referenz aus einer falschen ersten Äußerung:** In den Fällen b setzt das alte Tor die Referenz aus der ersten Äußerung, die es annimmt (0,05 bis 0,17, bei der Person selbst läge sie bei 0,14 bis 0,30), und die Untergrenze lässt eine laute Hintergrundäußerung als erste durch. Das senkt die Schwelle, sperrt die Person aber nicht aus. Ein Leck, kein Grund für Nikos Meldung.
+- **Sicher belegt ist demnach nur der Mechanismus** (Punkte 1 bis 4), nicht welcher davon bei Niko vorlag. Die wahrscheinlichste Kombination ist ein Mikrofon mit niedrigem Pegel (die automatische Verstärkung ist seit PR 307 aus) oder ein Raum mit Gesprächen, weil nur das mit einer lauten Stimme zusammen zu der Meldung führt, ohne dass etwas kaputt ist. Das ist eine **Vermutung**.
+
+### (d) Messwerte: vorher und nachher
+
+Fragen der Person angenommen (von drei, F1 bis F3), Sätze der Stimme im Raum, die an den Chat gingen ("Sätze aus dem Raum", nur Fälle b, gezählt an den Sätzen der Stimme Lena). Raum und Stimme als Effektivwert. Dieselben Dateien, derselbe Soniox, einmal je Stand (ein Lauf je Fall, das Hintergrundgespräch erzeugt Schwankungen von einigen Sätzen).
+
+| Fall | Stimme und Raum (Effektivwert) | Fragen der Person angenommen, vorher | nachher | Sätze aus dem Raum im Chat, vorher | nachher |
+|---|---|---|---|---|---|
+| a5 | leise Stimme, Effektivwert 0,005, leerer Raum | 0 von 3, Gespräch endet nach 24 s | 3 von 3 | 0 | 0 |
+| a75 | leise Stimme, Effektivwert 0,0075, leerer Raum | 0 von 3, Gespräch endet nach 24 s | 3 von 3 | 0 | 0 |
+| a10 | leise Stimme, Effektivwert 0,01, leerer Raum | 0 von 3 | 3 von 3 | 0 | 0 |
+| n_nohello | wie a75, aber ohne "Hallo HAI" am Anfang (Kaltstart ohne Referenz) | 0 von 3, Gespräch endet nach 24 s | 2 von 3 | 0 | 0 |
+| b20_03 | Stimme 0,02 (leises Mikrofon), Gespräch im Raum 0,003 | 3 von 3 | 3 von 3 | 4 | 6 |
+| b20_06 | Stimme 0,02, Gespräch im Raum 0,006 | 3 von 3 | 3 von 3 | 5 | 4 |
+| b20_12 | Stimme 0,02, Gespräch im Raum 0,012 | 2 von 3 | 2 von 3 | 3 | 3 |
+| b40_12 | Stimme 0,04, Gespräch im Raum 0,012 | 3 von 3 | 3 von 3 | 7 | 4 |
+| b40_24 | Stimme 0,04, Gespräch im Raum 0,024 | 2 von 3 | 2 von 3 | 1 | 5 |
+| b10_06 | Stimme 0,01, Gespräch im Raum 0,006 | 2 von 3 | 2 von 3 | 0 | 3 |
+| c_normal | normale Stimme 0,078, leerer Raum | 3 von 3 | 3 von 3 | 0 | 0 |
+| c_loud | laute Stimme (Spitze 0,95) | 3 von 3 | 3 von 3 | 0 | 0 |
+| c_clip | übersteuert (plus 20 Dezibel, hartes Clipping) | 3 von 3 | 3 von 3 | 0 | 0 |
+| c_susp | normale Stimme, aber der Audiokontext läuft nicht (Pegel liefert nur Nullen) | 0 von 3, Gespräch endet nach 24 s | 3 von 3 | 0 | 0 |
+| l_lost | Einmessung mit normaler Stimme, danach 22 Dezibel leiser | 0 von 3, Gespräch endet nach 24 s | 0 von 3 | 0 | 0 |
+
+Die erste Frage der Person im Einzelnen (`mean`, `peak` Pegel 0 bis 1, `thr` Schwelle, `conf` Konfidenz, `ambient` Raumpegel, `reference` Referenz der Person):
+
+| Fall | Erste Frage vorher | Erste Frage nachher | Zustand nachher |
+|---|---|---|---|
+| a5 | verworfen (quiet); mean 0.022, peak 0.055, thr 0.04, conf 0.998, ambient 0.003, reference keine | angenommen; mean 0.019, peak 0.052, thr 0.01, conf 0.999, ambient 0.003, reference 0.018 | 4.5s cal=done prompt=null  |
+| a75 | verworfen (quiet); mean 0.029, peak 0.077, thr 0.04, conf 0.999, ambient 0.003, reference keine | angenommen; mean 0.029, peak 0.072, thr 0.01, conf 0.999, ambient 0.003, reference 0.034 | 4.5s cal=done prompt=null  |
+| a10 | verworfen (quiet); mean 0.036, peak 0.106, thr 0.04, conf 0.999, ambient 0.003, reference keine | angenommen; mean 0.037, peak 0.104, thr 0.01, conf 0.999, ambient 0.003, reference 0.038 | 4.6s cal=done prompt=null  |
+| n_nohello | verworfen (quiet); mean 0.029, peak 0.078, thr 0.04, conf 0.998, ambient 0.003, reference keine | angenommen; mean 0.016, peak 0.059, thr 0.012, conf 0.998, ambient 0.003, reference keine | 12.3s cal=failed prompt=calibration-failed  |
+| b20_03 | angenommen; mean 0.082, peak 0.199, thr 0.04, conf 0.992, ambient 0.007, reference 0.053 | angenommen; mean 0.084, peak 0.208, thr 0.019, conf 0.99, ambient 0.006, reference 0.072 | 3.5s cal=done prompt=null ; 6.0s cal=done prompt=null -you |
+| b20_06 | angenommen; mean 0.1, peak 0.205, thr 0.04, conf 0.972, ambient 0.012, reference 0.064 | angenommen; mean 0.096, peak 0.198, thr 0.037, conf 0.97, ambient 0.012, reference 0.083 | 3.1s cal=done prompt=null ; 4.3s cal=done prompt=null -you |
+| b20_12 | angenommen; mean 0.097, peak 0.233, thr 0.068, conf 0.961, ambient 0.023, reference 0.072 | angenommen; mean 0.103, peak 0.23, thr 0.06, conf 0.968, ambient 0.025, reference 0.079 | 3.0s cal=done prompt=null ; 3.7s cal=done prompt=null -you |
+| b40_12 | angenommen; mean 0.197, peak 0.413, thr 0.054, conf 0.978, ambient 0.018, reference 0.114 | angenommen; mean 0.198, peak 0.409, thr 0.074, conf 0.968, ambient 0.025, reference 0.163 | 3.0s cal=done prompt=null ; 4.3s cal=done prompt=null -you |
+| b40_24 | angenommen; mean 0.215, peak 0.46, thr 0.142, conf 0.971, ambient 0.047, reference 0.174 | angenommen; mean 0.21, peak 0.398, thr 0.114, conf 0.967, ambient 0.045, reference 0.152 | 3.0s cal=done prompt=null ; 3.4s cal=done prompt=null -you |
+| b10_06 | angenommen; mean 0.052, peak 0.116, thr 0.04, conf 0.964, ambient 0.01, reference keine | angenommen; mean 0.052, peak 0.118, thr 0.03, conf 0.972, ambient 0.014, reference 0.04 | 3.1s cal=done prompt=null ; 3.8s cal=done prompt=null -you |
+| c_normal | angenommen; mean 0.304, peak 0.792, thr 0.04, conf 0.999, ambient 0.003, reference 0.142 | angenommen; mean 0.284, peak 0.759, thr 0.072, conf 0.999, ambient 0.003, reference 0.348 | 4.5s cal=done prompt=null  |
+| c_loud | angenommen; mean 0.514, peak 1, thr 0.056, conf 0.999, ambient 0.003, reference 0.265 | angenommen; mean 0.527, peak 1, thr 0.1, conf 0.999, ambient 0.003, reference 0.489 | 4.5s cal=done prompt=null  |
+| c_clip | angenommen; mean 0.835, peak 1, thr 0.064, conf 0.999, ambient 0.003, reference 0.306 | angenommen; mean 0.857, peak 1, thr 0.111, conf 0.999, ambient 0.003, reference 0.542 | 4.5s cal=done prompt=null  |
+| c_susp | verworfen (quiet); mean 0, peak 0, thr 0.04, conf 0.999, ambient 0, reference keine | angenommen; mean 0, peak 0, thr 0.012, conf 0.999, ambient 0, reference keine | 4.5s cal=failed prompt=calibration-failed ; 34.7s cal=failed prompt=null  |
+| l_lost | verworfen (quiet); mean 0.025, peak 0.061, thr 0.04, conf 0.997, ambient 0.003, reference 0.121 | verworfen (background); mean 0.024, peak 0.062, thr 0.072, conf 0.998, ambient 0.003, reference 0.345 | 4.7s cal=done prompt=null ; 14.0s cal=done prompt=null -you |
+
+Lesehilfe:
+
+- **Nachher sind alle Fälle ohne Hintergrund gelöst**, auch Effektivwert 0,005 (Pegel 0,025). Die Einmessung stand nach 3,0 bis 4,8 Sekunden. Im Fall l_lost bleibt die 22 dB leisere Stimme verworfen **und die Auswahl erscheint** nach der zweiten Äußerung (Sekunde 23,7). Das ist der Entwurf: kein stilles Verwerfen, die Person kann sich mit einem Klick helfen (neu einmessen, Drücken zum Sprechen, Filter aus).
+- **Ohne "Hallo HAI" am Anfang** (n_nohello) verfällt die Einmessung nach 12 Sekunden ("nichts gehört"), danach wird die Person gehört (Schwelle 0,012, nur die Sicherheitsgrenze). Die erste Frage, gestellt während der Einmessung, ging nicht an den Chat: Das folgt aus der Regel "während der Einmessung kein Chat-Aufruf".
+- **Audiokontext suspendiert** (c_susp): Die Einmessung meldet "kein Pegel", die Person wird trotzdem gehört (das Tor beurteilt nichts, wenn alle Pegelwerte null sind). Vorher: 0 von 3 und Ende nach 24 Sekunden.
+- **Räume mit Gespräch (b), die Person nur etwa 4 bis 10 dB lauter:** Hier gibt es keinen Gewinn und keinen Verlust gegenüber vorher, nur eine andere Verteilung. Die kurze Frage F2 wird wie vorher in den drei engsten Räumen (b20_12, b40_24, b10_06) zurückgehalten, weil dort die Schwelle für ein einzelnes Wort das Dreifache beträgt (laute Räume, siehe unten). Das Gespräch im Raum kam vorher mit 4, 5, 3, 7, 1 und 0 Sätzen durch (b20_03, b20_06, b20_12, b40_12, b40_24, b10_06), nachher mit 6, 4, 3, 4, 5 und 3, in einem zweiten Lauf mit 5, 4, 7, 4, 6 und 3. Die Schwankung zwischen zwei Läufen derselben Fassung beträgt einige Sätze. In diesen Räumen schützt das neue Tor also nicht schlechter, aber auch nicht besser als das alte. Besser wird es nur mit "Streng", einem Headset oder "Drücken zum Sprechen".
+- **Wer hier trotzdem hängen bleibt:** Zwei zurückgehaltene Äußerungen über dem Raumpegel in Folge öffnen die Auswahl (im Test ausgelöst, wenn die kurze Frage zweimal fiel).
+
+### (e) Schutz vor Hintergrund: die Fälle aus PR 307 (Abschnitt 10 (e)) mit dem neuen Tor
+
+Dieselbe Datei wie damals (Person fragt, während der Antwort redet eine Stimme im Raum, vier Sätze, einer davon "Stopp"; dann "Stopp." der Person, eine Frage, "Gespräch beenden."), diesmal mit "Hallo HAI." am Anfang als Einmessung. Normal, wenn nicht anders angegeben.
+
+| Stimme im Raum | Einstellung | Sätze der Stimme im Raum im Chat, vorher | Unterbrechungen der HAI durch den Raum, vorher | Stopp aus dem Raum hält an, vorher | Fragen der Person im Chat, vorher | Sätze im Chat, nachher | Unterbrechungen, nachher | Stopp aus dem Raum, nachher | Fragen der Person, nachher |
+|---|---|---|---|---|---|---|---|---|---|
+| minus 20 dB | Normal | 0 von 4 | 0 | nein | 2 von 2 | 0 von 4 | 0 | nein | 2 von 2 |
+| minus 14 dB | Normal | 1 von 4 | 1 | nein | 2 von 2 | 0 von 4 | 0 | nein | 2 von 2 |
+| minus 10 dB | Normal | 4 von 4 | 4 | ja | 2 von 2 | 3 von 4 | 3 | ja | 2 von 2 |
+| minus 10 dB | Streng | 0 von 4 | 0 | nein | 2 von 2 | 0 von 4 | 0 | nein | 2 von 2 |
+| minus 6 dB | Normal | 4 von 4 | 4 | ja | 2 von 2 | 4 von 4 | 4 | ja | 2 von 2 |
+| minus 6 dB | Streng | 3 von 4 | 3 | ja | 2 von 2 | 3 von 4 | 3 | ja | 2 von 2 |
+
+"Unterbrechungen" sind Unterbrechungen der HAI durch die Stimme im Raum (zwischen Sekunde 15 und 33 der Datei), nicht die der Person. "Fragen der Person": ihre zwei Fragen an die HAI (die lange und die kurze). Die HAI sprach in diesen Läufen wirklich (lange Antwort, Sprachausgabe von Soniox), die Läufe liefen einzeln hintereinander, weil bei vier gleichzeitigen Läufen die Sprachausgabe nicht lange genug lief.
+
+- **Minus 20 und minus 14 dB (Normal): 0 Sätze der Stimme im Raum, 0 Unterbrechungen, das "Stopp" aus dem Raum hält nicht an.** Das gilt für das neue Tor in allen Läufen der Entwicklung. Der Fall minus 14 dB ist beim alten Tor ein Grenzfall (Mittelwert des Hintergrunds 0,056 bis 0,06 gegen eine Schwelle von 0,058 bis 0,062): in drei Läufen kamen 0, 1 und 4 von 4 Sätzen durch. Beim neuen Tor liegt die Schwelle bei etwa 0,07 bis 0,09, mit mehr Abstand.
+- **Minus 10 und minus 6 dB:** unverändert die Grenze des Pegels (3 bis 4 von 4 Sätzen kommen in Normal durch, das "Stopp" aus dem Raum hält an). Mit "Streng" bleiben bei minus 10 dB alle draußen, bei minus 6 dB nicht (3 von 4, wie vorher).
+- Die Fragen der Person kamen in allen Zeilen an (2 von 2).
+
+### (f) Was daraus gebaut wurde und wie die Werte entstanden
+
+Einmessung, relative Schwelle mit Deckel bei der Referenz, Ausweg nach zwei aussortierten Äußerungen über dem Raum, Einstellung "Aus", Hinweis statt Verwerfen bei niedriger Konfidenz mit hohem Pegel, Meldung je Grund, Erkennung eines Pegels aus nur Nullen, Diagnose mit Knopf. Beschreibung: `docs/hai-sprachmodus.md`, Abschnitt 14, Nachtrag 05.11.2026.
+
+Die Werte kommen aus Läufen in den Räumen b und den Fällen aus PR 307. Der Weg dorthin, ehrlich mit den Fehlschlägen:
+
+1. **Raumfaktor 1,5 mit Deckel 60 Prozent** (Erstfassung): ließ das Gespräch im Raum deutlich öfter durch (bis 22 Sätze in b20_12 in einem Lauf). Verworfen.
+2. **Raumfaktor 3 (wie PR 307) mit Deckel 70 oder 80 Prozent** der Referenz: nahe beieinander, die Läufe schwankten um einige Sätze. Gewählt: Deckel 75 Prozent (streng 90).
+3. **Referenz aus "Hallo HAI" mal 0,75:** Die Referenz lag 1,1 bis 1,6mal über dem Mittelwert späterer Fragen. In "Streng" fiel dadurch die kurze Frage der Person weg (zwei Läufe, minus 10 und minus 6 dB). Faktor 0,6.
+4. **Mit Faktor 0,6 und der Regel, dass ein einzelnes Wort höchstens das 1,6fache der Referenz braucht:** Das Gespräch im Raum kam in den engen Räumen mit 14 bis 17 Sätzen durch (b40_24, vorher 1 bis 2): Bruchstücke des Gesprächs (ein einzelnes Wort mit hohem Spitzenwert) liefen durch und zogen die Referenz herunter. Behoben durch (a) einen Boden der Referenz bei 70 Prozent der eingemessenen und (b) die volle Anforderung (dreifache Schwelle) für ein einzelnes Wort in einem lauten Raum (Raumpegel mindestens ein Viertel der Referenz). Der Preis ist die zurückgehaltene kurze Frage in den engsten Räumen, wie vor der Änderung, mit der Auswahl als Ausweg.
+
+### (g) Nicht belegt, nur am echten Gerät prüfbar
+
+- Ob Nikos Mikrofon einen niedrigen Pegel liefert, ob der Audiokontext lief und was die Konfidenz bei echter Übersteuerung ist: Dafür ist die Diagnose gebaut (Testplan S23 und U9).
+- Die Einmessung in Räumen mit Gesprächen, die zugleich mit "Hallo HAI" zu hören sind: Eine kurze Fremdäußerung (höchstens drei Wörter) kann die Einmessung auslösen. Im Labor passierte das nicht, aber die Hintergrundstimmen waren synthetisch.
+- Mikrofone, Headsets, Echo-Unterdrückung, Safari und iOS.

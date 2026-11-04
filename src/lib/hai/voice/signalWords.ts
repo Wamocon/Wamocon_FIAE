@@ -223,6 +223,31 @@ export function classifySignal(
   return haltAtStart(text, languages);
 }
 
+/** The words of the greeting of the calibration (folded): "Hallo HAI". */
+const GREETING_WORDS: readonly string[] = [
+  'hallo',
+  'hai',
+  'hi',
+  'hey',
+  'hello',
+];
+/** A calibration phrase is at most this many words (a greeting is short). */
+export const CALIBRATION_MAX_WORDS = 3;
+
+/**
+ * Is this the short phrase of the calibration ("Hallo HAI")? A greeting word, or at
+ * most three words in all. A sentence of a conversation in the room (a long one
+ * without a greeting) is not: it must not set the reference of the person.
+ */
+export function isCalibrationPhrase(text: string): boolean {
+  const words = foldedWords(text);
+  if (words.length === 0) return false;
+  return (
+    words.length <= CALIBRATION_MAX_WORDS ||
+    words.some(word => GREETING_WORDS.includes(word))
+  );
+}
+
 /**
  * Words that count as speech for an interruption: letters and digits, at least
  * two (a single letter is a breath or a click).

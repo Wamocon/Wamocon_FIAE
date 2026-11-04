@@ -135,6 +135,7 @@ function makeEnv(
   };
   return {
     env,
+    calibrate: false,
     recognitions,
     log,
     store,
@@ -154,6 +155,7 @@ function setup(env: VoiceEnv, extra: Record<string, unknown> = {}) {
     stopGeneration: jest.fn(),
     placeholderText: 'Denkt nach...',
     env,
+    calibrate: false,
     ...extra,
   };
   const hook = renderHook((p: typeof props) => useHaiVoice(p as never), {

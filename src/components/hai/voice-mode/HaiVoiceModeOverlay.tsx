@@ -35,6 +35,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { consentParagraphs } from '@/lib/hai/voice/consentText';
 import { HaiNavigationCard } from '../HaiNavigationCard';
 import { HaiVoiceFallbackNotice } from '../HaiVoiceFallbackNotice';
+import { FILTER_NOTE_KEY, HaiVoiceFilterPrompt } from './HaiVoiceFilterPrompt';
 import type { VoiceError, VoicePhase } from '../useHaiVoice';
 import { useHaiAnchor } from '../haiLayout';
 import { HaiCharacter, type CharacterState } from './HaiCharacter';
@@ -383,6 +384,18 @@ function LiveFigure() {
               <p>{t('hai.voiceMode.hint')}</p>
               {voice.live && <p>{t('hai.voice.liveHint')}</p>}
               <p>{t('hai.voiceMode.signalsInfo')}</p>
+              {voice.live &&
+                voice.sensitivity !== 'off' &&
+                !voice.pushToTalk && (
+                  <button
+                    type="button"
+                    data-testid="hai-voice-recalibrate"
+                    onClick={() => voice.recalibrate()}
+                    className="rounded-lg bg-white/10 px-2.5 py-1 text-xs text-gray-100 hover:bg-white/20"
+                  >
+                    {t('hai.voice.choice.recalibrate')}
+                  </button>
+                )}
               <p>{providerStatement(voice, t)}</p>
             </div>
           )}
@@ -404,6 +417,8 @@ function LiveFigure() {
                 {t('hai.voice.micOpen')}
               </p>
             )}
+            {/* the calibration, or the way out when the person may not have been heard */}
+            {!muted && <HaiVoiceFilterPrompt voice={voice} />}
             {/* what was left out: only a short note, never the text of anybody */}
             {voice.filterNote && !muted && (
               <p
@@ -412,11 +427,7 @@ function LiveFigure() {
                 data-note={voice.filterNote}
                 className="rounded-full bg-[#06183a]/90 px-2.5 py-1 text-xs text-cyan-100 shadow"
               >
-                {t(
-                  voice.filterNote === 'too-quiet'
-                    ? 'hai.voice.filter.tooQuiet'
-                    : 'hai.voice.filter.onlyYou'
-                )}
+                {t(FILTER_NOTE_KEY[voice.filterNote])}
               </p>
             )}
             {/* the first time: a word stops the HAI */}
