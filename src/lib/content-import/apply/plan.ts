@@ -48,6 +48,7 @@ import type {
   PlanSkip,
   QuizLevel,
 } from './types';
+import { isRecord } from '@/lib/type-guards';
 
 /** Parsed content of one source file. */
 export type SourceContent =
@@ -1133,9 +1134,6 @@ export function planCounts(plan: ImportPlan): PlanCounts {
     superseded: plan.superseded.length,
   };
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Checks a plan, for example one that was read back from a JSON file. Returns

@@ -14,6 +14,7 @@ import {
   QUIZ_MODE_MAX_SELECTED,
   QUIZ_MODE_MAX_TOPIC_CHARS,
 } from './logic';
+import { isRecord } from '@/lib/type-guards';
 
 export interface NextRequestInput {
   enablerId: string | null;
@@ -27,10 +28,6 @@ export interface AnswerRequestInput {
 }
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 /** Control characters out, blanks collapsed, cut to the topic limit. */
 export function cleanTopicInput(value: string): string | null {

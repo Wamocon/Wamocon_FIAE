@@ -30,6 +30,7 @@ import {
 } from '@/lib/content-upload/staging/result';
 import { LIMITS } from '@/lib/content-upload/staging/config';
 import { isUuid } from '@/lib/uuid';
+import { isRecord } from '@/lib/type-guards';
 
 export type AssignmentFailureCode =
   | 'ASSIGNMENT_INCOMPLETE'
@@ -220,9 +221,6 @@ export interface DecisionRequest {
   expectedVersion: number;
   command: DecisionCommandInput;
 }
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
 
 const FIELDS = [
   'docType',

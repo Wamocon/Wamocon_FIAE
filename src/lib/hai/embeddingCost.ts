@@ -16,6 +16,7 @@
  */
 
 import { TRAINER_SOLUTION_SOURCE_LABEL } from './trainerSolutions';
+import { isRecord } from '@/lib/type-guards';
 
 export type CostScenario = 'optimistic' | 'base' | 'pessimistic';
 
@@ -86,10 +87,6 @@ export function estimateTokens(
 // ============================================================================
 // Config
 // ============================================================================
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 function positive(value: unknown, name: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {

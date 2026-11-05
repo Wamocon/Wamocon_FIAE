@@ -14,22 +14,11 @@ import {
   profiles,
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
-import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireReportCatalogFilter } from '@/lib/auth/activity-report-access';
 import { requireCatalogScope } from '@/lib/catalog/scope';
-
-// Helper to get ISO week number
-function getISOWeek(date: Date): number {
-  const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
+import { calculateAusbildungsjahr, getISOWeek } from '@/lib/school/schuljahr';
 
 // Helper to get week start/end dates
 function getWeekDates(
@@ -53,16 +42,6 @@ function getWeekDates(
   targetFriday.setDate(targetMonday.getDate() + 4);
 
   return { start: targetMonday, end: targetFriday };
-}
-
-// Helper to calculate the module phase for the report period.
-function calculateAusbildungsjahr(
-  startDate: Date,
-  durationYears?: number | null,
-  atDate: Date = new Date(),
-  phaseOneMonths?: number | null
-): number {
-  return getTrainingPhase(startDate, durationYears, atDate, phaseOneMonths);
 }
 
 // GET /api/trainee/school/reports?status=...&year=...

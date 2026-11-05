@@ -30,6 +30,7 @@ import type {
   UseCasePlanCounts,
   UseCaseSkip,
 } from './types';
+import { isRecord } from '@/lib/type-guards';
 
 /** Parsed content of one source file. */
 export type SourceContent = {
@@ -462,9 +463,6 @@ export function countUseCasePlan(plan: UseCasePlan): UseCasePlanCounts {
     superseded: plan.superseded.length,
   };
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Checks a plan, for example one that was read back from a JSON file. Returns

@@ -71,7 +71,3 @@ export function detectUiIntent(message: unknown): UiIntent {
   };
 }
 
-/** Whether the message asks for anything the tools can do. */
-export function hasUiIntent(intent: UiIntent): boolean {
-  return intent.fill || intent.open;
-}

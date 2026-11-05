@@ -401,11 +401,6 @@ export class RowCollector {
   }
 }
 
-/** Whether the rows fold into a plan the schema accepts. */
-export function isValidPlan(plan: ContentPlan): boolean {
-  return contentPlanSchema.safeParse(plan).success;
-}
-
 // ---------------------------------------------------------------------------
 // Confirming a proposal: the selected and edited fields
 // ---------------------------------------------------------------------------

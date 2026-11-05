@@ -32,6 +32,7 @@ import {
   isMetadataAllowedForTrainingScope,
   type HaiTrainingScope,
 } from './trainingScope';
+import { escapeRegExp } from '@/lib/regex-escape';
 
 // ============================================================================
 // TYPES
@@ -636,7 +637,7 @@ function scorePagesByRelevance(
         score += weight;
         // Bonus for multiple occurrences
         const occurrences = (
-          lowerText.match(new RegExp(escapeRegex(word), 'gi')) || []
+          lowerText.match(new RegExp(escapeRegExp(word), 'gi')) || []
         ).length;
         if (occurrences > 1) {
           score += Math.min(occurrences - 1, 3) * weight * 0.2;
@@ -806,10 +807,6 @@ function extractKeywords(text: string): string[] {
     .split(/\s+/)
     .filter(w => w.length >= 3 && !stopWords.has(w))
     .filter((w, i, arr) => arr.indexOf(w) === i); // unique
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ============================================================================

@@ -152,7 +152,3 @@ export function validateFormTool(
   };
 }
 
-/** All form ids of the register (tests). */
-export function registeredFormIds(): string[] {
-  return UI_FORMS.map(form => form.id);
-}
