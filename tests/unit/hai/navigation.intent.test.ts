@@ -3,7 +3,10 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { detectNavigationIntent } from '@/lib/hai/navigation/intent';
+import {
+  detectNavigationIntent,
+  isDirectCommand,
+} from '@/lib/hai/navigation/intent';
 import { foldText } from '@/lib/hai/navigation/fold';
 import {
   isOpenConfirmation,
@@ -150,9 +153,150 @@ describe('detectNavigationIntent: enablers and use cases by number or name', () 
     ).toBeNull();
   });
 
-  it('needs a number or a name: "den Use Case" alone is no request', () => {
-    expect(detectNavigationIntent('öffne den Use Case')).toBeNull();
+  it('needs a number or a name: "den Use Case" alone is a command without a target', () => {
+    // a command to open it is answered by the platform (nearest pages), never by the model
+    expect(detectNavigationIntent('öffne den Use Case')).toEqual({
+      kind: 'unmatched',
+      query: 'oeffne den use case',
+    });
+    // a soft wish without a name stays with the pipeline
     expect(detectNavigationIntent('zeig mir den Enabler')).toBeNull();
+  });
+});
+
+describe('detectNavigationIntent: the ways a person really asks (03.11.2026)', () => {
+  it.each([
+    ['Kannst du mich zum Berichtsheft bringen?', 'activity_reports'],
+    ['kannst du mich zur berufsschule bringen', 'school'],
+    ['Mach das Dashboard auf.', 'dashboard'],
+    ['Rufe bitte meine Berufsschule auf.', 'school'],
+    ['Nimm mich mit zum Dashboard.', 'dashboard'],
+    ['Lass uns zum Profil gehen.', 'profile'],
+    ['Zum Dashboard bitte.', 'dashboard'],
+    ['zurück zur Startseite', 'dashboard'],
+    ['Ich möchte meine Berufsschule sehen.', 'school'],
+    ['Wo ist das Dashboard?', 'dashboard'],
+    ['Wo kann ich meine Berichte sehen?', 'activity_reports'],
+    ['Kannst du mir das Dashboard zeigen?', 'dashboard'],
+    ['Öffne meine Kurse.', 'courses'],
+    ['Bring mich zu meinen Kursen.', 'courses'],
+    ['ich will zum lernen', 'courses'],
+    ['Zeig mir mein Ausbilder-Feedback.', 'trainer_feedback'],
+    ['Öffne das Feedback von meinem Ausbilder.', 'trainer_feedback'],
+    // the report wins over the feedback word
+    ['Öffne das Feedback zu meinem Bericht.', 'activity_reports'],
+    ['Ich will zur Quiz-Übersicht.', 'quizzes'],
+  ])('%s', (message, target) => {
+    expect(detectNavigationIntent(message)).toEqual({
+      kind: 'static',
+      target,
+    });
+  });
+
+  it('reads a spoken number word and the letter before a number', () => {
+    for (const [message, number] of [
+      ['öffne enabler drei', '3'],
+      ['öffne enabler e drei', '3'],
+      ['öffne enabler ee drei', '3'],
+      ['Öffne Enabler E3', '3'],
+      ['Öffne Enabler Nummer zwölf', '12'],
+      ['geh zu enabler eins', '1'],
+      ['bring mich zum quiz von enabler drei', '3'],
+    ] as const) {
+      const intent = detectNavigationIntent(message);
+      expect(intent).toMatchObject({ ref: { number } });
+    }
+    expect(detectNavigationIntent('öffne use case vier')).toEqual({
+      kind: 'use_case',
+      ref: { number: '4' },
+    });
+  });
+
+  it('does not take the first word of a name for a number word', () => {
+    expect(
+      detectNavigationIntent('öffne den Enabler Drei-Schichten-Architektur')
+    ).toEqual({ kind: 'enabler', ref: { name: 'drei-schichten-architektur' } });
+    expect(detectNavigationIntent('öffne den Enabler Excel Basics')).toEqual({
+      kind: 'enabler',
+      ref: { name: 'excel basics' },
+    });
+  });
+
+  it('reads "starte das Quiz von Enabler 3" as the quiz page of the enabler', () => {
+    expect(detectNavigationIntent('Starte das Quiz von Enabler 3.')).toEqual({
+      kind: 'enabler_quiz',
+      ref: { number: '3' },
+    });
+  });
+
+  it.each([
+    'Wo finde ich die Benachrichtigungen?',
+    'Wo ist der Fehler in meinem Bericht?',
+    'Ich habe ein Problem mit dem Dashboard.',
+    'Wo finde ich Hilfe bei SQL?',
+    'Geh bitte auf meine Frage ein.',
+    'Zu welchem Thema gibt es ein Quiz?',
+    'Zum Glück habe ich das Berichtsheft schon geschrieben und dann noch mehr',
+  ])('%s stays with the pipeline', message => {
+    expect(detectNavigationIntent(message)).toBeNull();
+  });
+});
+
+describe('isDirectCommand: carried out or offered', () => {
+  it.each([
+    'Öffne den Ausbildungsnachweis.',
+    'Bring mich zu den Quizzen.',
+    'Geh zum Dashboard.',
+    'Gehe zu meinem Profil.',
+    'Führe mich bitte zum Quiz.',
+    'Leite mich zur Berufsschule weiter.',
+    'Navigiere zu Profil.',
+    'Wechsle zum Profil.',
+    'Spring zum Kalender.',
+    'Mach das Dashboard auf.',
+    'Rufe bitte meine Berufsschule auf.',
+    'Nimm mich mit zum Dashboard.',
+    'Lass uns zum Profil gehen.',
+    'Kannst du mich zum Berichtsheft bringen?',
+    'Kannst du mir das Dashboard öffnen?',
+    'Ich will zum Kalender.',
+    'Ich möchte zu meinen Berichten.',
+    'Zum Dashboard bitte.',
+    'Ich will weiterlernen.',
+    'Mach mit dem Lernen weiter.',
+    'Starte das Quiz von Enabler 3.',
+    'öffne bitte mein profil',
+    'geh zum dashboard',
+  ])('%s is carried out', message => {
+    expect(isDirectCommand(message)).toBe(true);
+  });
+
+  it.each([
+    'Zeig mir meine Berufsschule.',
+    'Zeig mir bitte den Blockkalender.',
+    'Ich möchte meine Berufsschule sehen.',
+    'Kannst du mir das Dashboard zeigen?',
+    'Wo finde ich das Berichtsheft?',
+    'Wo ist das Dashboard?',
+    'Wie komme ich zu meinen Quizzen?',
+    'Wo geht es weiter?',
+    'Was soll ich als nächstes lernen?',
+    'Wie geht es jetzt weiter?',
+    'Was ist mein nächster Schritt?',
+    'Wo kann ich das Dashboard öffnen?',
+    'Wohin muss ich gehen, um die Berichte zu öffnen?',
+    'Dashboard',
+    'Hallo',
+    '',
+  ])('%s is only offered', message => {
+    expect(isDirectCommand(message)).toBe(false);
+  });
+
+  it('is false for something that is not a string and for a long text', () => {
+    expect(isDirectCommand(undefined as unknown as string)).toBe(false);
+    expect(
+      isDirectCommand(`öffne das Dashboard ${'und noch ein Satz '.repeat(12)}`)
+    ).toBe(false);
   });
 });
 

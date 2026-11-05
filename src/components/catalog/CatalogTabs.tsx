@@ -3,6 +3,7 @@
 import { useId, useRef, type KeyboardEvent } from 'react';
 import { useCatalog } from '@/contexts/CatalogContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { catalogDisplayTitle } from '@/lib/catalog/display-title';
 
 /**
  * One tab per training (occupation) at the top of the content and list pages of
@@ -70,7 +71,13 @@ export function CatalogTabs() {
     >
       <p role="status" className="sr-only">
         {t('catalog.tabs.current', {
-          title: tabs[activeIndex]?.title ?? activeCode,
+          title: tabs[activeIndex]
+            ? catalogDisplayTitle(
+                t,
+                tabs[activeIndex].code,
+                tabs[activeIndex].title
+              )
+            : activeCode,
         })}
         {tabs[activeIndex] && !tabs[activeIndex].isActive
           ? ` (${t('catalog.tabs.inactive')})`
@@ -83,6 +90,7 @@ export function CatalogTabs() {
       >
         {tabs.map((tab, index) => {
           const selected = tab.code === activeCode;
+          const tabTitle = catalogDisplayTitle(t, tab.code, tab.title);
           return (
             <button
               key={tab.code}
@@ -96,8 +104,8 @@ export function CatalogTabs() {
               tabIndex={index === activeIndex ? 0 : -1}
               title={
                 tab.isActive
-                  ? tab.title
-                  : `${tab.title} (${t('catalog.tabs.inactive')})`
+                  ? tabTitle
+                  : `${tabTitle} (${t('catalog.tabs.inactive')})`
               }
               onClick={() => selectTab(tab.code)}
               onKeyDown={event => onKeyDown(event, index)}

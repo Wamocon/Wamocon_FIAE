@@ -15,6 +15,8 @@ import {
   requireCatalogScopeForUser,
 } from '@/lib/catalog/scope';
 import { loadCourseProgressions } from '@/lib/catalog/progression-db';
+import { sortCourses } from '@/lib/catalog/course-order';
+import { courseProgressPercent } from '@/lib/catalog/course-progress';
 
 // GET courses for a trainee with progress calculation
 // An enabler is complete when every active lesson quiz is passed (score >= 50%).
@@ -57,10 +59,11 @@ export async function GET(req: NextRequest) {
           : [];
         if (!courseIds.length) return { courses: [] };
 
-        const rows = await db
-          .select()
-          .from(courses)
-          .where(inArray(courses.id, courseIds));
+        // In the order of the training plan (component number, numeric), the
+        // database returns the rows in no particular order
+        const rows = sortCourses(
+          await db.select().from(courses).where(inArray(courses.id, courseIds))
+        );
         // The completion of every enabler, by the one definition
         const progressions = await loadCourseProgressions(traineeId, courseIds);
         const anyEnabler = Array.from(progressions.values()).some(
@@ -134,27 +137,20 @@ export async function GET(req: NextRequest) {
               progress: 0,
               enablerCount: 0,
               completedCount: 0,
+              useCaseCount: 0,
+              approvedUseCaseCount: 0,
             };
           }
 
-          // Calculate weighted progress:
-          // - Enablers: 70% weight
-          // - Use Cases: 30% weight (if any)
-          const enablerProgress =
-            totalEnablers > 0 ? completedCount / totalEnablers : 1;
-          const useCaseProgress =
-            totalUseCases > 0 ? approvedUseCaseCount / totalUseCases : 1;
-
-          let progress: number;
-          if (totalEnablers > 0 && totalUseCases > 0) {
-            progress = Math.round(
-              (enablerProgress * 0.7 + useCaseProgress * 0.3) * 100
-            );
-          } else if (totalEnablers > 0) {
-            progress = Math.round(enablerProgress * 100);
-          } else {
-            progress = Math.round(useCaseProgress * 100);
-          }
+          // The percentage is a weighted mean of enablers and use cases (one
+          // function for the list and the dashboard), the page shows both
+          // counts next to it
+          const progress = courseProgressPercent({
+            enablerTotal: totalEnablers,
+            enablerDone: completedCount,
+            useCaseTotal: totalUseCases,
+            useCaseDone: approvedUseCaseCount,
+          });
 
           return {
             id: c.id,
@@ -164,6 +160,8 @@ export async function GET(req: NextRequest) {
             progress,
             enablerCount: totalEnablers,
             completedCount,
+            useCaseCount: totalUseCases,
+            approvedUseCaseCount,
           };
         });
 

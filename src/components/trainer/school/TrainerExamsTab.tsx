@@ -4,7 +4,9 @@ import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCatalog } from '@/contexts/CatalogContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { checkExamPoints, isAboveMax } from '@/lib/school/exam-points';
 import {
   FileText,
   User,
@@ -71,6 +73,9 @@ function getTraineeDisplayName(trainee: Trainee, traineeLabel: string): string {
 export function TrainerExamsTab() {
   const { profile, isPlatformOwner } = useAuth();
   const { t } = useLanguage();
+  // An exam belongs to one occupation: a switch of the occupation tab loads the
+  // list again (the server answers for the chosen occupation)
+  const { activeCode: catalog } = useCatalog();
 
   // Get exam type label helper
   const getExamTypeLabel = (type: string) => {
@@ -79,6 +84,8 @@ export function TrainerExamsTab() {
       TEST: t('exams.type.test'),
       PROJEKT: t('exams.type.projekt'),
       PRAESENTATION: t('exams.type.praesentation'),
+      ABGABE: t('exams.type.abgabe'),
+      MUENDLICH: t('exams.type.muendlich'),
       COMPANY: t('exams.type.company'),
     };
     return typeMap[type] || typeMap['KLAUSUR'];
@@ -100,7 +107,7 @@ export function TrainerExamsTab() {
       try {
         const [examsRes, traineesRes] = await Promise.all([
           authFetch(
-            `/api/trainer/school/exams${traineeFilter ? `&traineeId=${traineeFilter}` : ''}`,
+            `/api/trainer/school/exams${traineeFilter ? `?traineeId=${traineeFilter}` : ''}`,
             { cache: 'no-store' }
           ),
           authFetch(`/api/trainer/trainees`, {
@@ -122,7 +129,7 @@ export function TrainerExamsTab() {
       }
     }
     loadData();
-  }, [profile?.id, traineeFilter, t]);
+  }, [profile?.id, traineeFilter, t, catalog]);
 
   const handleAddExam = async (examData: any) => {
     if (!profile?.id) return;
@@ -164,6 +171,10 @@ export function TrainerExamsTab() {
         );
         setShowGradeModal(false);
         setSelectedExam(null);
+      } else {
+        // The server names what is wrong (points above the maximum)
+        const body = await res.json().catch(() => null);
+        setError(body?.error || t('exams.error.grade'));
       }
     } catch (e) {
       setError(t('exams.error.grade'));
@@ -313,7 +324,11 @@ function ExamCard({
   getExamTypeLabel: (type: string) => string;
   t: (key: string) => string;
 }) {
-  const examType = exam.isCompanyExam ? 'COMPANY' : exam.examTypeValue;
+  // The type the exam was given (an exam of a trainee is a "Test" or a
+  // "Klausur", not always a company exam). Only an exam without a type of its
+  // own is labelled by where it belongs.
+  const examType =
+    exam.examTypeValue || (exam.isCompanyExam ? 'COMPANY' : 'KLAUSUR');
   const typeStyle =
     EXAM_TYPE_STYLES[examType as keyof typeof EXAM_TYPE_STYLES] ||
     EXAM_TYPE_STYLES.KLAUSUR;
@@ -345,12 +360,28 @@ function ExamCard({
         </div>
         <div className="flex items-center gap-3">
           {hasGrade ? (
-            <div
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${exam.passed ? 'bg-green-500/20 text-green-600' : 'bg-rose-500/20 text-rose-600'}`}
-            >
-              {exam.points}/{exam.maxPoints} (
-              {exam.passed ? t('status.passed') : t('status.failed')})
-            </div>
+            <>
+              <div
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium ${exam.passed ? 'bg-green-500/20 text-green-600' : 'bg-rose-500/20 text-rose-600'}`}
+              >
+                {exam.points}
+                {exam.maxPoints !== null ? `/${exam.maxPoints}` : ''} (
+                {exam.passed ? t('status.passed') : t('status.failed')})
+              </div>
+              {isAboveMax(exam.points, exam.maxPoints) && (
+                <span className="text-xs font-medium text-amber-600">
+                  {t('exams.aboveMax')}
+                </span>
+              )}
+              {canGrade && onGrade && (
+                <button
+                  onClick={onGrade}
+                  className="bg-accent/10 text-accent hover:bg-accent/20 rounded-lg px-3 py-1.5 text-sm font-medium"
+                >
+                  {t('exams.gradeChange')}
+                </button>
+              )}
+            </>
           ) : canGrade && onGrade ? (
             <button
               onClick={onGrade}
@@ -511,17 +542,43 @@ function GradeExamModal({
     exam.maxPoints?.toString() || '100'
   );
 
+  // Esc closes the dialog like the other dialogs
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  // Whole points from 0 up to the maximum, the same check as the server. A
+  // result saved above its maximum before this check shows the message and
+  // stays correctable.
+  const check = checkExamPoints(points, maxPoints);
+  const problem = points.trim() === '' ? null : !check.ok ? check.code : null;
+  const problemText =
+    problem === 'POINTS_ABOVE_MAX'
+      ? t('exams.pointsAboveMax').replace('{max}', maxPoints)
+      : problem === 'MAX_POINTS_INVALID'
+        ? t('exams.maxPointsInvalid')
+        : problem === 'POINTS_INVALID'
+          ? t('exams.pointsInvalid')
+          : null;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const p = parseFloat(points);
-    const m = parseFloat(maxPoints);
-    if (isNaN(p) || isNaN(m) || p < 0 || m <= 0) return;
-    onGrade(exam.id, p, m);
+    if (!check.ok) return;
+    onGrade(exam.id, check.points, check.maxPoints);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="bg-card border-border w-full max-w-sm rounded-2xl border shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('exams.grading')}
+        className="bg-card border-border w-full max-w-sm rounded-2xl border shadow-2xl"
+      >
         <div className="border-border border-b p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -538,32 +595,56 @@ function GradeExamModal({
         <form onSubmit={handleSubmit} className="space-y-4 p-6">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-2 block text-sm font-medium">
+              <label
+                htmlFor="exam-points"
+                className="mb-2 block text-sm font-medium"
+              >
                 {t('exams.points')}
               </label>
               <input
+                id="exam-points"
                 type="number"
                 value={points}
                 onChange={e => setPoints(e.target.value)}
                 className="bg-muted border-border w-full rounded-xl border px-4 py-3"
                 min="0"
+                max={maxPoints || undefined}
+                step="1"
+                aria-invalid={problemText ? true : undefined}
+                aria-describedby={
+                  problemText ? 'exam-points-problem' : undefined
+                }
                 required
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium">
+              <label
+                htmlFor="exam-max-points"
+                className="mb-2 block text-sm font-medium"
+              >
                 {t('exams.maxPoints')}
               </label>
               <input
+                id="exam-max-points"
                 type="number"
                 value={maxPoints}
                 onChange={e => setMaxPoints(e.target.value)}
                 className="bg-muted border-border w-full rounded-xl border px-4 py-3"
                 min="1"
+                step="1"
                 required
               />
             </div>
           </div>
+          {problemText && (
+            <p
+              id="exam-points-problem"
+              role="alert"
+              className="text-destructive text-sm"
+            >
+              {problemText}
+            </p>
+          )}
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -574,7 +655,8 @@ function GradeExamModal({
             </button>
             <button
               type="submit"
-              className="btn-accent flex-1 rounded-xl px-4 py-3 font-medium"
+              disabled={!check.ok}
+              className="btn-accent flex-1 rounded-xl px-4 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t('common.save')}
             </button>

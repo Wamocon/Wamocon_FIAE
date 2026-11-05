@@ -6,6 +6,8 @@ import { and, eq } from 'drizzle-orm';
 import { schoolExamResults, schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { notFoundUnlessUuid } from '@/lib/uuid';
+import { checkExamPoints } from '@/lib/school/exam-points';
+import { ensureSchoolRowInChosenCatalog } from '@/lib/school/catalog-access';
 
 interface RouteParams {
     params: Promise<{ examId: string }>;
@@ -27,12 +29,21 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: 'points and maxPoints required' }, { status: 400 });
         }
 
-        const numPoints = parseFloat(points);
-        const numMaxPoints = parseFloat(maxPoints);
-
-        if (isNaN(numPoints) || isNaN(numMaxPoints) || numPoints < 0 || numMaxPoints <= 0) {
-            return NextResponse.json({ error: 'Invalid points values' }, { status: 400 });
+        // Whole points from 0 up to the maximum (WMCNL-3016: 150 of 100 was saved)
+        const check = checkExamPoints(points, maxPoints);
+        if (!check.ok) {
+            const messages = {
+                POINTS_INVALID: 'Die Punkte müssen eine ganze Zahl ab 0 sein.',
+                MAX_POINTS_INVALID: 'Die Maximalpunktzahl muss eine ganze Zahl ab 1 sein.',
+                POINTS_ABOVE_MAX: 'Die Punkte dürfen die Maximalpunktzahl nicht überschreiten.',
+            } as const;
+            return NextResponse.json(
+                { error: messages[check.code], code: check.code },
+                { status: 400 }
+            );
         }
+        const numPoints = check.points;
+        const numMaxPoints = check.maxPoints;
 
         // Calculate pass/fail (50% threshold)
         const percentage = (numPoints / numMaxPoints) * 100;
@@ -40,7 +51,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
         // Get the exam to find traineeId
         const [exam] = await db
-            .select({ traineeId: schoolExams.traineeId })
+            .select({ traineeId: schoolExams.traineeId, trainingCatalogId: schoolExams.trainingCatalogId })
             .from(schoolExams)
             .where(eq(schoolExams.id, examId as any));
 
@@ -50,6 +61,15 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
         const access = await requireTraineeAccess(session, String(exam.traineeId), req, 'Exam not found');
         if (isErrorResponse(access)) return access;
+
+        // An exam of another chosen occupation is answered like a missing one
+        const outsideCatalog = await ensureSchoolRowInChosenCatalog(
+            session,
+            req,
+            exam,
+            () => NextResponse.json({ error: 'Exam not found' }, { status: 404 })
+        );
+        if (outsideCatalog) return outsideCatalog;
 
         const organizationId = await getUserOrgId(String(exam.traineeId));
 

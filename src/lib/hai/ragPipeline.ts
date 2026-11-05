@@ -20,6 +20,7 @@
 import { ChatMessage } from './client';
 import {
   chatWithFallback,
+  chatWithSokratesOnly,
   getChatProvider,
   getEmbeddingProvider,
 } from './providers';
@@ -29,12 +30,25 @@ import type {
 } from './providers';
 import {
   CHAT_UNAVAILABLE_I18N_KEY,
+  MODEL_BUSY_I18N_KEY,
   isChatUnavailableError,
+  modelBusyPayload,
+  type ChatUnavailableError,
 } from './providers/errors';
+import {
+  SEARCH_UNAVAILABLE_NOTE,
+  searchDeadlineMs,
+  withDeadline,
+} from './searchDeadline';
 import { searchWithContext, SearchResult } from './vectorSearch';
 import { fetchPageIndexContext } from './pageIndexService';
 import { resolveRetrievalAccess } from './retrievalAccess';
 import { citationUrl } from './citationUrl';
+import {
+  isTrainerSolutionChunk,
+  searchMayUseTrainerSolutions,
+  trainerSolutionsChatSokratesOnly,
+} from './trainerSolutions';
 import type { RetrievalAccess } from './retrievalAccess';
 import {
   FIAE_PERSONA,
@@ -59,17 +73,44 @@ import {
   getOffTopicResponse,
 } from './prompts';
 import { fetchDataContext } from './dataContext';
+import { documentOptionsFor, isDocumentQuestion } from './documentQuery';
+import { buildPageContextSection } from './pageContext/prompt';
+import {
+  isPageContextEnabled,
+  type ResolvedPageContext,
+} from './pageContext/server';
 import { isDayQuestion } from './dayQuestion';
 import type { UserRole } from './dataContext';
 import { handleActionMessage } from './actionFlow';
+import type { UiActionEvent } from './uiActions/event';
+import {
+  applyUiTools,
+  uiStreamSink,
+  uiToolsPromptFor,
+  withUiNote,
+  type UiToolsTurn,
+} from './uiActions/flow';
 import type { PendingAction } from './actionPolicy';
-import { handleNavigationMessage } from './navigation/flow';
+import {
+  handleNavigationMessage,
+  traineeListOfferFor,
+} from './navigation/flow';
+import { isLiveDataOnlyTurn } from './dataIntent';
+
+/** Head line of the detail of an own trainee in the live data (dataContext.ts). */
+const TRAINEE_DETAIL_MARKER = '**Azubi-Detail:';
 import type { NavigationOffer } from './navigation/offer';
 import type { HaiTrainingScope } from './trainingScope';
 import {
   isLearningTechniqueQuestion,
   usesLearningTechniques,
 } from './learningTechniques/detect';
+import {
+  loadMemoryForPrompt,
+  memoryScopeFor,
+  proposeMemoryForTurn,
+  type MemoryProposalPayload,
+} from './memory/turn';
 
 // ============================================================================
 // TYPES
@@ -117,11 +158,22 @@ export interface PipelineContext {
   /** Duration-aware content scope for trainee-facing answers */
   trainingScope?: HaiTrainingScope;
   /**
+   * Server source only: the history or summary handed to this turn comes from a
+   * session that holds trainer knowledge. With HAI_TRAINER_SOLUTIONS_CHAT=sokrates
+   * such a turn is answered by Sokrates only.
+   */
+  holdsTrainerKnowledge?: boolean;
+  /**
    * The question was spoken and the answer is read aloud (voice assistant). Set by
    * the chat route after it checked that the organization allows it, never taken
    * from the text of a message. Same pipeline, same retrieval, same guards.
    */
   voice?: boolean;
+  /**
+   * Filled by the pipeline with the time (ms) of its stages, only read by the chat
+   * route for the timing of the voice assistant (numbers, no content).
+   */
+  timings?: Record<string, number>;
   /**
    * The person holds an admin level (SUPER_ADMIN, ADMIN, TEMP_ADMIN). Set by the
    * chat route from the session, only used to pick the admin pages for the
@@ -134,6 +186,24 @@ export interface PipelineContext {
    * reason hint to the model (UMFANG), never an access right.
    */
   contextDropped?: boolean;
+  /**
+   * The page the person is on (page context): cleaned, its ids checked against
+   * the access rules. Set by the chat route, only data for "this page" and "this
+   * file", never a right. Only used in the chat and voice path, and only while
+   * the switch HAI_PAGE_CONTEXT is on.
+   */
+  page?: ResolvedPageContext;
+}
+
+/**
+ * The chat function of a turn: normally the provider chain (Gemini, with
+ * Sokrates as the only fallback). A turn that holds trainer knowledge goes to
+ * Sokrates only when the owner chose that (HAI_TRAINER_SOLUTIONS_CHAT=sokrates).
+ */
+function chatProviderFor(holdsTrainerKnowledge: boolean) {
+  return holdsTrainerKnowledge && trainerSolutionsChatSokratesOnly()
+    ? chatWithSokratesOnly
+    : chatWithFallback;
 }
 
 export interface QuizState {
@@ -159,23 +229,71 @@ export interface PipelineResult {
   pendingAction?: PendingAction;
   /** A page the interface can offer with a card "Öffnen", never a write */
   navigationOffer?: NavigationOffer;
+  /** The nearest targets as cards for a question back (at most three, never auto) */
+  navigationChoices?: NavigationOffer[];
+  /** How the navigation answered (one token, for the measuring point of the client) */
+  navigationOutcome?: string;
+  /**
+   * A checked form action for the browser (fill, focus, scroll), only with the
+   * switch HAI_UI_ACTIONS on. It writes nothing: the browser only sets values in
+   * the form of the current page, the person saves (docs/hai-ui-aktionen.md).
+   */
+  uiAction?: UiActionEvent;
+  /**
+   * A question of the memory (yes, no, change): the browser shows the card. The
+   * entry is stored as `proposed` and has no effect before the person says yes
+   * (src/lib/hai/memory/turn.ts). Only with the switch HAI_MEMORY on.
+   */
+  memoryProposal?: MemoryProposalPayload;
   /** The person asked to be quizzed: the browser opens the quiz card */
   quizMode?: QuizModeStartSignal;
   error?: string;
+  /**
+   * Set (true) only when the answer was built with text of a model solution of
+   * the private bucket (trainer solutions). The chat route stores it with the
+   * message and the session so that no other role gets it back as context or
+   * history.
+   */
+  usedTrainerSolutions?: boolean;
   /**
    * i18n key of a message for the user, set when no chat provider could answer
    * (hai.error.chatUnavailable). Then `response` is empty: the caller shows the
    * message and does not store it as an answer of the assistant.
    */
   errorKey?: string;
+  /**
+   * Stable code next to the key: `MODEL_BUSY` when the model did not answer in
+   * time or is overloaded (a retry may work). Absent for every other failure.
+   */
+  errorCode?: string;
+  /** With MODEL_BUSY: when to try again, in seconds (a hint). */
+  retryAfterSec?: number;
 }
 
 /**
  * No chat provider could answer: the primary failed and there is no Sokrates
  * fallback (or it failed too). The user gets a clear message, never a text that
- * looks like an answer, and nothing was sent to any other provider.
+ * looks like an answer, and nothing was sent to any other provider. When the
+ * failure was a time limit or an overloaded model (timeout, 429, 502, 503, 504,
+ * 524) the message says that (MODEL_BUSY) instead of "not reachable".
  */
-function chatUnavailableResult(): PipelineResult {
+function chatUnavailableResult(error?: unknown): PipelineResult {
+  const busy =
+    typeof error === 'object' &&
+    error !== null &&
+    (error as Partial<ChatUnavailableError>).modelBusy === true;
+  if (busy) {
+    const { code, retryAfterSec } = modelBusyPayload();
+    return {
+      response: '',
+      intent: 'question',
+      citations: [],
+      error: 'model_busy',
+      errorKey: MODEL_BUSY_I18N_KEY,
+      errorCode: code,
+      retryAfterSec,
+    };
+  }
   return {
     response: '',
     intent: 'question',
@@ -421,6 +539,24 @@ function isDayBriefingTurn(
   return !!context.userRole && isDayQuestion(userMessage);
 }
 
+/**
+ * A trainer asks for the own trainees or the open reviews (also as a short
+ * follow-up like "Welche mit Namen?"): the answer comes from the live data
+ * alone, so the turn skips the knowledge search and no source cards of the
+ * knowledge base (quizzes, orders) hang under it. A knowledge question keeps
+ * its search and its sources.
+ */
+function isLiveDataOnlyTurnOf(
+  userMessage: string,
+  context: PipelineContext
+): boolean {
+  return isLiveDataOnlyTurn(
+    userMessage,
+    context.userRole,
+    context.previousMessages
+  );
+}
+
 function determineMode(
   intent: IntentType,
   context: PipelineContext
@@ -462,6 +598,123 @@ function convertToProviderMessages(
 }
 
 // ============================================================================
+// STAGES AND LIVE DATA (shared by processMessage and processMessageStream)
+// ============================================================================
+
+/**
+ * The waiting stages of a turn the client may show ("Ich suche in den
+ * Unterlagen"). Data only, never a content: the stream route sends them when
+ * the client asked for them.
+ */
+export type PipelineStage = 'search' | 'answer';
+
+/**
+ * Runs `work` and adds its duration (ms) to `context.timings[name]`, also when
+ * it fails. Numbers only, read by the chat route for its timing line.
+ */
+async function timed<T>(
+  context: PipelineContext,
+  name: string,
+  work: () => Promise<T>
+): Promise<T> {
+  const startedAt = Date.now();
+  try {
+    return await work();
+  } finally {
+    if (context.timings) {
+      context.timings[name] = Date.now() - startedAt;
+    }
+  }
+}
+
+/** What the live data of a turn hands to the retrieval (a file the question named). */
+interface DocumentTurn {
+  documentIds?: string[];
+  /**
+   * The live data answers the question (the detail of an own trainee was
+   * found): the knowledge search of this turn is dropped, no source cards of
+   * the knowledge base belong to such an answer.
+   */
+  liveAnswer?: boolean;
+}
+
+/** The prompt section for the page of the user, or undefined (switch off, no page). */
+function pageSectionFor(context: PipelineContext): string | undefined {
+  if (!context.page || !isPageContextEnabled()) return undefined;
+  return buildPageContextSection(context.page) || undefined;
+}
+
+/**
+ * The turn as the UI tools see it (docs/hai-ui-aktionen.md): the message of the
+ * person, the audience from the database access and the path of the CHECKED page
+ * context (the page context has to be on for a form tool).
+ */
+function uiTurnOf(
+  userMessage: string,
+  context: PipelineContext,
+  access: RetrievalAccess | null
+): UiToolsTurn {
+  return {
+    userId: context.userId,
+    userMessage,
+    access,
+    pagePath: context.page && isPageContextEnabled() ? context.page.path : null,
+    voice: context.voice === true,
+  };
+}
+
+/**
+ * The live data of the person for the system prompt (non-fatal): undefined
+ * without a role or when the data could not be read. Never rejects, so it can
+ * run next to the retrieval and be awaited later.
+ */
+async function loadLiveDataContext(
+  userMessage: string,
+  context: PipelineContext,
+  access?: RetrievalAccess | null,
+  turn?: DocumentTurn
+): Promise<string | undefined> {
+  if (!context.userRole) return undefined;
+  try {
+    const dataCtx = await fetchDataContext(
+      context.userId,
+      context.userRole as UserRole,
+      userMessage,
+      {
+        preferredCatalogCode: context.preferredCatalogCode,
+        trainingScope: context.trainingScope,
+        // for the short follow-up of a trainer ("Welche mit Namen?")
+        previousMessages: context.previousMessages,
+        // a question about files: what the person may read and the records of
+        // the page (the database decides, not the page). Other turns get the
+        // options as before.
+        ...(isDocumentQuestion(userMessage)
+          ? documentOptionsFor(
+              access,
+              context.trainingScope,
+              context.page && isPageContextEnabled()
+                ? context.page.entities
+                : []
+            )
+          : {}),
+      }
+    );
+    if (turn && dataCtx?.documentIds) turn.documentIds = dataCtx.documentIds;
+    if (
+      turn &&
+      dataCtx?.dataIntent === 'trainee_detail_query' &&
+      dataCtx.summary.includes(TRAINEE_DETAIL_MARKER)
+    ) {
+      turn.liveAnswer = true;
+    }
+    return dataCtx ? dataCtx.summary : undefined;
+  } catch (dataError) {
+    console.warn('HAI.ai: DataContext fetch failed (non-fatal):', dataError);
+    return undefined;
+  }
+}
+
+// ============================================================================
 // RETRIEVAL (shared by processMessage and processMessageStream)
 // ============================================================================
 
@@ -470,7 +723,48 @@ export interface RetrievedContext {
   searchResults: SearchResult[];
   /** Text block for the system prompt */
   retrievedContext: string;
+  /**
+   * Set (true) only when the context holds text of a model solution of the
+   * private bucket. The chat route marks the answer and the session with it, so
+   * that this text never comes back as context for a role that may not have it.
+   */
+  usedTrainerSolutions?: boolean;
 }
+
+/**
+ * Characters of the chunks of the knowledge base that go into one prompt. The
+ * model reads every token of the prompt before the first word of the answer
+ * (about one second per 1,000 tokens on Sokrates, docs/hai-geschwindigkeit.md).
+ * Five chunks of the index are 5,000 characters on average and stay whole; the
+ * budget cuts only the rare case of five long chunks (up to 3,000 characters
+ * each). The chunks are in the order of their relevance, the least relevant
+ * ones go first, the two most relevant ones always stay.
+ */
+export const RETRIEVED_CONTEXT_MAX_CHARS = 9000;
+/** The most relevant chunks that always stay, whatever their length. */
+const RETRIEVED_CONTEXT_MIN_CHUNKS = 2;
+
+/**
+ * The chunks that fit into the budget, in the given order. A chunk that is not
+ * in the prompt is not cited either, so the caller keeps only these.
+ */
+export function limitToContextBudget<T extends { content: string }>(
+  results: T[],
+  maxChars: number = RETRIEVED_CONTEXT_MAX_CHARS
+): T[] {
+  const kept: T[] = [];
+  let used = 0;
+  for (const result of results) {
+    used += result.content.length;
+    if (kept.length >= RETRIEVED_CONTEXT_MIN_CHUNKS && used > maxChars) break;
+    kept.push(result);
+  }
+  return kept;
+}
+
+/** Heading note of a chunk that holds a model solution (trainer knowledge). */
+const TRAINER_SOLUTION_NOTE =
+  'Hinweis: Auszüge mit der Kennzeichnung Musterlösung sind Trainerwissen und nur für Trainer. Gib sie nur im Gespräch mit dieser Person weiter.';
 
 /**
  * Retrieve the context for one message: vector search and PageIndex, limited
@@ -485,7 +779,8 @@ export interface RetrievedContext {
 export async function retrieveContext(
   userMessage: string,
   context: PipelineContext,
-  resolvedAccess?: RetrievalAccess | null
+  resolvedAccess?: RetrievalAccess | null,
+  retrieval: { documentIds?: string[] } = {}
 ): Promise<RetrievedContext> {
   // The pipelines resolve the access once per turn and pass it on
   const access =
@@ -502,37 +797,71 @@ export async function retrieveContext(
     return { searchResults: [], retrievedContext: '' };
   }
 
-  // Step 3: Vector search — may return empty if embedding provider differs from indexing provider
+  // Step 3: Vector search — may return empty if embedding provider differs from indexing provider.
+  // A search that could not run (embedding at Sokrates timed out, database
+  // failed, time limit of a question about the own data) is not "nothing found":
+  // the turn goes on without it and the prompt says so.
   let searchResults: SearchResult[] = [];
+  let searchUnavailable = false;
   try {
-    const searchContext = await searchWithContext(
-      userMessage,
-      {
-        currentEnablerId: context.currentEnablerId,
-        currentCourseId: context.currentCourseId,
-        // A question about learning reserves places for learning cards
-        ...(isLearningTechniqueQuestion(userMessage)
-          ? { includeLearningTechniques: true }
-          : {}),
-      },
-      {
-        topK: 5,
-        minSimilarity: 0.45,
-        catalogIds: access.catalogIds,
-        audience: access.audience,
-        organizationId: access.organizationId,
-        userId: access.userId,
-        trainingScope: context.trainingScope,
-      }
+    const outcome = await withDeadline(
+      searchWithContext(
+        userMessage,
+        {
+          currentEnablerId: context.currentEnablerId,
+          currentCourseId: context.currentCourseId,
+          // A question about learning reserves places for learning cards
+          ...(isLearningTechniqueQuestion(userMessage)
+            ? { includeLearningTechniques: true }
+            : {}),
+        },
+        {
+          topK: 5,
+          minSimilarity: 0.45,
+          catalogIds: access.catalogIds,
+          audience: access.audience,
+          organizationId: access.organizationId,
+          userId: access.userId,
+          trainingScope: context.trainingScope,
+          // model solutions of the private bucket: only with this permission,
+          // which comes from the role in the database and the server switch
+          includeTrainerSolutions: access.includeTrainerSolutions,
+        }
+      ),
+      // a question about the own data does not wait long for the search
+      context.userRole ? searchDeadlineMs(userMessage) : null
     );
-    searchResults = searchContext.results;
+    if (outcome.timedOut) {
+      console.warn(
+        'HAI.ai: knowledge search took too long for a question about the own data, going on without it'
+      );
+      searchUnavailable = true;
+    } else {
+      searchResults = outcome.value.results;
+      if (outcome.value.unavailable) searchUnavailable = true;
+    }
   } catch (vectorError) {
     console.warn(
       'HAI.ai: Vector search failed (non-fatal, falling back to PageIndex):',
       vectorError
     );
     searchResults = [];
+    searchUnavailable = true;
   }
+
+  // Second guard behind the SQL filter: a chunk of a model solution of the
+  // private bucket stays out unless this access may have it
+  const mayUseSolutions = searchMayUseTrainerSolutions(access);
+  if (!mayUseSolutions) {
+    searchResults = searchResults.filter(
+      r => !isTrainerSolutionChunk(r.metadata)
+    );
+  }
+  // the prompt gets as many chunks as fit the budget (relevance order)
+  searchResults = limitToContextBudget(searchResults);
+  const usedTrainerSolutions =
+    mayUseSolutions &&
+    searchResults.some(r => isTrainerSolutionChunk(r.metadata));
 
   let retrievedContext = buildRetrievedContext(
     searchResults.map(r => ({
@@ -541,6 +870,13 @@ export async function retrieveContext(
       metadata: r.metadata,
     }))
   );
+  if (usedTrainerSolutions) {
+    retrievedContext = `${TRAINER_SOLUTION_NOTE}\n\n${retrievedContext}`;
+  }
+  // no search, no text: the model is told why instead of "nothing was found"
+  if (searchUnavailable && !retrievedContext) {
+    retrievedContext = SEARCH_UNAVAILABLE_NOTE;
+  }
 
   // PageIndex — fetch relevant PDF pages at query time (non-fatal)
   try {
@@ -554,6 +890,7 @@ export async function retrieveContext(
         catalogIds: access.catalogIds,
         audience: access.audience,
         organizationId: access.organizationId,
+        documentIds: retrieval.documentIds,
       }
     );
     if (pageIndexResult.pdfContext) {
@@ -585,12 +922,30 @@ export async function retrieveContext(
     console.warn('HAI.ai: PageIndex fetch failed (non-fatal):', pageIndexError);
   }
 
-  return { searchResults, retrievedContext };
+  return {
+    searchResults,
+    retrievedContext,
+    ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
+  };
 }
 
 // ============================================================================
 // PERSONA (shared by processMessage and processMessageStream)
 // ============================================================================
+
+/**
+ * Role that the system prompt states. The audience of the server (account and
+ * role in the database) wins over what the context carries, so a role claimed
+ * in a message or a request never reaches the prompt. Without access the role
+ * of the context is used (it comes from the route, which reads the account).
+ */
+export function promptRoleOf(
+  access: RetrievalAccess | null | undefined,
+  userRole: PipelineContext['userRole']
+): PipelineContext['userRole'] {
+  if (!access) return userRole;
+  return access.audience === 'trainer' ? 'TRAINER' : 'TRAINEE';
+}
 
 export interface TurnPersona {
   /** What the user may read, null without a scope (fail closed). */
@@ -679,7 +1034,9 @@ export async function processMessage(
       throw new Error('Chat provider not initialized');
     }
   } catch (gateError) {
-    if (isChatUnavailableError(gateError)) return chatUnavailableResult();
+    if (isChatUnavailableError(gateError)) {
+      return chatUnavailableResult(gateError);
+    }
     return {
       response:
         'HAI.ai ist momentan nicht verfügbar. Bitte kontaktiere deinen Trainer.',
@@ -738,9 +1095,11 @@ export async function processMessage(
 
     // Step 1: Classify intent
     const dayBriefing = isDayBriefingTurn(userMessage, context);
-    const intent: IntentType = dayBriefing
-      ? 'question'
-      : classifyIntent(userMessage, context.quizState, persona);
+    const liveOnly = isLiveDataOnlyTurnOf(userMessage, context);
+    const intent: IntentType =
+      dayBriefing || liveOnly
+        ? 'question'
+        : classifyIntent(userMessage, context.quizState, persona);
 
     // Handle special intents
     if (intent === 'greeting') {
@@ -768,15 +1127,35 @@ export async function processMessage(
     // Step 3: Retrieve relevant context (skip for quiz answers)
     let searchResults: SearchResult[] = [];
     let retrievedContext = '';
+    let usedTrainerSolutions: boolean | undefined;
 
-    if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
+    // Step 3b: live data context (non-fatal). It runs next to the retrieval,
+    // the two do not depend on each other.
+    const documentTurn: DocumentTurn = {};
+    const liveDataPromise = loadLiveDataContext(
+      userMessage,
+      context,
+      access,
+      documentTurn
+    );
+    // Step 3b2: the memory of the person in the occupation of this turn (never
+    // rejects, empty without the switch HAI_MEMORY), runs next to the retrieval
+    const memoryScope = memoryScopeFor(access, persona);
+    const memoryPromise = loadMemoryForPrompt(memoryScope);
+
+    if (
+      intent !== 'quiz_answer' &&
+      !enableWebSearch &&
+      !dayBriefing &&
+      !liveOnly
+    ) {
+      // A question about files: the file it names comes from the database (the
+      // live data), so the retrieval waits for it and loads its pages
+      if (isDocumentQuestion(userMessage)) await liveDataPromise;
       // Vector search and PageIndex, limited to the occupation, audience and
       // organization of the user (one function for both pipelines)
-      ({ searchResults, retrievedContext } = await retrieveContext(
-        userMessage,
-        context,
-        access
-      ));
+      ({ searchResults, retrievedContext, usedTrainerSolutions } =
+        await retrieveContext(userMessage, context, access, documentTurn));
     }
 
     // If web search is enabled, switch to general mode to allow external knowledge
@@ -784,28 +1163,13 @@ export async function processMessage(
       mode = 'general';
     }
 
-    // Step 3b: Fetch live data context (non-fatal)
-    let liveDataContext: string | undefined;
-    if (context.userRole) {
-      try {
-        const dataCtx = await fetchDataContext(
-          context.userId,
-          context.userRole as UserRole,
-          userMessage,
-          {
-            preferredCatalogCode: context.preferredCatalogCode,
-            trainingScope: context.trainingScope,
-          }
-        );
-        if (dataCtx) {
-          liveDataContext = dataCtx.summary;
-        }
-      } catch (dataError) {
-        console.warn(
-          'HAI.ai: DataContext fetch failed (non-fatal):',
-          dataError
-        );
-      }
+    const liveDataContext = await liveDataPromise;
+    const memory = await memoryPromise;
+    // the live data answered (detail of an own trainee): no knowledge sources
+    if (documentTurn.liveAnswer) {
+      searchResults = [];
+      retrievedContext = '';
+      usedTrainerSolutions = undefined;
     }
 
     // Step 3c: what the pipeline knows about a limit of access (denial.ts)
@@ -816,6 +1180,8 @@ export async function processMessage(
         intent !== 'quiz_answer' &&
         !enableWebSearch &&
         !dayBriefing &&
+        !liveOnly &&
+        !documentTurn.liveAnswer &&
         !retrievedContext,
       contextDropped: context.contextDropped === true,
       liveDataContext,
@@ -833,7 +1199,7 @@ export async function processMessage(
           ? extractQuizTopic(userMessage, persona)
           : undefined,
       liveDataContext,
-      userRole: context.userRole,
+      userRole: promptRoleOf(access, context.userRole),
       conversationSummary: context.conversationSummary,
       crossSessionMemory: context.crossSessionMemory,
       trainingScope: context.trainingScope,
@@ -843,6 +1209,9 @@ export async function processMessage(
       navigation: true,
       accessReasons,
       dayBriefing,
+      pageContext: pageSectionFor(context),
+      uiTools: uiToolsPromptFor(uiTurnOf(userMessage, context, access)),
+      ...(memory ? { memory } : {}),
     });
 
     // Step 5: Convert previous messages to provider format
@@ -863,12 +1232,23 @@ export async function processMessage(
       enableWebSearch,
     };
 
-    const responseData = await chatWithFallback(
+    const responseData = await chatProviderFor(
+      !!usedTrainerSolutions || !!context.holdsTrainerKnowledge
+    )(
       systemPrompt,
       providerMessages,
       userMessage,
       undefined, // no streaming
       options
+    );
+
+    // UI tools (switch HAI_UI_ACTIONS): the block of the model is cut out of the
+    // answer and checked on the server. Without the switch the text is as it was.
+    const uiOutcome = await applyUiTools(
+      responseData.text,
+      uiTurnOf(userMessage, context, access),
+      context,
+      access
     );
 
     // Step 7: Build citations from search results (local RAG)
@@ -925,14 +1305,33 @@ export async function processMessage(
       };
     }
 
+    // A question of the memory (yes, no, change), at most one per conversation,
+    // never in a quiz round (null without the switch HAI_MEMORY)
+    const memoryProposal = await proposeMemoryForTurn({
+      scope: memoryScope,
+      message: userMessage,
+      sessionId: context.sessionId,
+      voice: context.voice === true,
+      quizActive: isQuizRound(intent, context.quizState),
+    });
+
+    // A question for the list of the own trainees also gets the card to the
+    // page "Auszubildende" (the server builds it, never the model)
+    const listOffer = traineeListOfferFor(userMessage, context, access);
+
+    const offer = listOffer ?? uiOutcome.navigationOffer;
     return {
-      response: responseData.text,
+      response: withUiNote(uiOutcome),
       intent,
       citations,
       quizState: newQuizState,
+      ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
+      ...(memoryProposal ? { memoryProposal } : {}),
+      ...(offer ? { navigationOffer: offer } : {}),
+      ...(uiOutcome.uiAction ? { uiAction: uiOutcome.uiAction } : {}),
     };
   } catch (error) {
-    if (isChatUnavailableError(error)) return chatUnavailableResult();
+    if (isChatUnavailableError(error)) return chatUnavailableResult(error);
     console.error('HAI.ai Pipeline Error:', error);
     return {
       response:
@@ -951,7 +1350,8 @@ export async function processMessage(
 export async function processMessageStream(
   userMessage: string,
   context: PipelineContext,
-  onChunk: (text: string) => void
+  onChunk: (text: string) => void,
+  onStage?: (stage: PipelineStage) => void
 ): Promise<PipelineResult> {
   // Quick validation — fall back to non-streaming for empty/uninitialized
   if (!userMessage.trim()) {
@@ -1022,9 +1422,11 @@ export async function processMessageStream(
     }
 
     const dayBriefing = isDayBriefingTurn(userMessage, context);
-    const intent: IntentType = dayBriefing
-      ? 'question'
-      : classifyIntent(userMessage, context.quizState, persona);
+    const liveOnly = isLiveDataOnlyTurnOf(userMessage, context);
+    const intent: IntentType =
+      dayBriefing || liveOnly
+        ? 'question'
+        : classifyIntent(userMessage, context.quizState, persona);
 
     // Handle special intents immediately
     if (intent === 'greeting') {
@@ -1042,17 +1444,38 @@ export async function processMessageStream(
     // Logic to determine if we should use web search
     let enableWebSearch = intent === 'web_search';
 
-    // Retrieve context
+    // Retrieve context and fetch the live data at the same time: they do not
+    // depend on each other, so the turn waits for the slower one, not for both
     let searchResults: SearchResult[] = [];
     let retrievedContext = '';
+    let usedTrainerSolutions: boolean | undefined;
 
-    if (intent !== 'quiz_answer' && !enableWebSearch && !dayBriefing) {
+    const searchStartedAt = Date.now();
+    const documentTurn: DocumentTurn = {};
+    const liveDataPromise = timed(context, 'data', () =>
+      loadLiveDataContext(userMessage, context, access, documentTurn)
+    );
+    // the memory of the person in the occupation of this turn (never rejects,
+    // empty without the switch HAI_MEMORY)
+    const memoryScope = memoryScopeFor(access, persona);
+    const memoryPromise = loadMemoryForPrompt(memoryScope);
+    if (
+      intent !== 'quiz_answer' &&
+      !enableWebSearch &&
+      !dayBriefing &&
+      !liveOnly
+    ) {
       // Same retrieval as processMessage: scoped to the user
-      ({ searchResults, retrievedContext } = await retrieveContext(
-        userMessage,
-        context,
-        access
-      ));
+      onStage?.('search');
+      const retrievalStartedAt = Date.now();
+      // A question about files: the file it names comes from the database (the
+      // live data), so the retrieval waits for it and loads its pages
+      if (isDocumentQuestion(userMessage)) await liveDataPromise;
+      ({ searchResults, retrievedContext, usedTrainerSolutions } =
+        await retrieveContext(userMessage, context, access, documentTurn));
+      if (context.timings) {
+        context.timings.retrieval = Date.now() - retrievalStartedAt;
+      }
     }
 
     let mode = determineMode(intent, context);
@@ -1060,29 +1483,19 @@ export async function processMessageStream(
       mode = 'general';
     }
 
-    // Fetch live data context (non-fatal)
-    let liveDataContext: string | undefined;
-    if (context.userRole) {
-      try {
-        const dataCtx = await fetchDataContext(
-          context.userId,
-          context.userRole as UserRole,
-          userMessage,
-          {
-            preferredCatalogCode: context.preferredCatalogCode,
-            trainingScope: context.trainingScope,
-          }
-        );
-        if (dataCtx) {
-          liveDataContext = dataCtx.summary;
-        }
-      } catch (dataError) {
-        console.warn(
-          'HAI.ai: DataContext fetch failed (non-fatal):',
-          dataError
-        );
-      }
+    // Live data context (non-fatal, never rejects)
+    const liveDataContext = await liveDataPromise;
+    const memory = await memoryPromise;
+    // the live data answered (detail of an own trainee): no knowledge sources
+    if (documentTurn.liveAnswer) {
+      searchResults = [];
+      retrievedContext = '';
+      usedTrainerSolutions = undefined;
     }
+
+    // retrieval and live data are done: the model call is what is left to wait for
+    if (context.timings) context.timings.search = Date.now() - searchStartedAt;
+    onStage?.('answer');
 
     // What the pipeline knows about a limit of access (denial.ts)
     const accessReasons = detectAccessReasons({
@@ -1092,6 +1505,8 @@ export async function processMessageStream(
         intent !== 'quiz_answer' &&
         !enableWebSearch &&
         !dayBriefing &&
+        !liveOnly &&
+        !documentTurn.liveAnswer &&
         !retrievedContext,
       contextDropped: context.contextDropped === true,
       liveDataContext,
@@ -1105,7 +1520,7 @@ export async function processMessageStream(
       scenarioText: context.scenarioText,
       retrievedContext: retrievedContext || undefined,
       liveDataContext,
-      userRole: context.userRole,
+      userRole: promptRoleOf(access, context.userRole),
       conversationSummary: context.conversationSummary,
       crossSessionMemory: context.crossSessionMemory,
       trainingScope: context.trainingScope,
@@ -1115,6 +1530,9 @@ export async function processMessageStream(
       navigation: true,
       accessReasons,
       dayBriefing,
+      pageContext: pageSectionFor(context),
+      uiTools: uiToolsPromptFor(uiTurnOf(userMessage, context, access)),
+      ...(memory ? { memory } : {}),
     });
 
     // Convert messages to provider format
@@ -1135,13 +1553,30 @@ export async function processMessageStream(
       enableWebSearch,
     };
 
-    const response = await chatWithFallback(
+    // With the switch HAI_UI_ACTIONS on, a filter keeps the block of the UI
+    // tools off the stream, without it the sink is onChunk itself
+    const uiSink = uiStreamSink(onChunk);
+    const response = await chatProviderFor(
+      !!usedTrainerSolutions || !!context.holdsTrainerKnowledge
+    )(
       systemPrompt,
       providerMessages,
       userMessage,
-      onChunk, // streaming callback
+      uiSink.push, // streaming callback
       options
     );
+    uiSink.flush();
+    const uiOutcome = await applyUiTools(
+      response.text,
+      uiTurnOf(userMessage, context, access),
+      context,
+      access
+    );
+    // the fixed sentence of the server (what was filled, or why not) follows
+    // the streamed text, so the stream and the stored answer are the same
+    if (uiOutcome.note) {
+      onChunk(withUiNote(uiOutcome).slice(uiOutcome.text.length));
+    }
 
     // Process local RAG citations
     const citations: Citation[] = searchResults
@@ -1179,13 +1614,32 @@ export async function processMessageStream(
       }
     }
 
+    // A question of the memory, like in processMessage (the card comes with the
+    // end event, after the text)
+    const memoryProposal = await proposeMemoryForTurn({
+      scope: memoryScope,
+      message: userMessage,
+      sessionId: context.sessionId,
+      voice: context.voice === true,
+      quizActive: isQuizRound(intent, context.quizState),
+    });
+
+    // The card to the page "Auszubildende" for a question for the list of the
+    // own trainees, like in processMessage
+    const listOffer = traineeListOfferFor(userMessage, context, access);
+
+    const offer = listOffer ?? uiOutcome.navigationOffer;
     return {
-      response: response.text,
+      response: withUiNote(uiOutcome),
       intent,
       citations,
+      ...(usedTrainerSolutions ? { usedTrainerSolutions: true } : {}),
+      ...(memoryProposal ? { memoryProposal } : {}),
+      ...(offer ? { navigationOffer: offer } : {}),
+      ...(uiOutcome.uiAction ? { uiAction: uiOutcome.uiAction } : {}),
     };
   } catch (error) {
-    if (isChatUnavailableError(error)) return chatUnavailableResult();
+    if (isChatUnavailableError(error)) return chatUnavailableResult(error);
     console.error('HAI.ai Stream Error:', error);
     const errorMsg =
       'Ups, da ist etwas schiefgelaufen! 🦈💫 Bitte versuche es noch einmal.';
@@ -1202,6 +1656,18 @@ export async function processMessageStream(
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+/**
+ * A quiz round of the chat is running or starts with this message: the memory
+ * never asks a question in the middle of it.
+ */
+function isQuizRound(intent: IntentType, quizState?: QuizState): boolean {
+  return (
+    quizState?.active === true ||
+    intent === 'quiz_request' ||
+    intent === 'quiz_answer'
+  );
+}
 
 /**
  * Extract quiz topic from user message

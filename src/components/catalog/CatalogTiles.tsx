@@ -11,6 +11,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { normalizeRole, ROLE } from '@/lib/auth/roles';
 import { FIAE_CATALOG_CODE, isBrandingApplied } from '@/lib/catalog/branding';
 import { dashboardPathForRole } from '@/lib/catalog/choice';
+import { catalogDisplayTitle } from '@/lib/catalog/display-title';
 
 type ListState =
   | { status: 'loading' }
@@ -113,7 +114,11 @@ export function CatalogTiles() {
     return (
       <div role="alert" className="space-y-4">
         <p className="text-foreground text-sm">
-          {t('catalog.tiles.userError')}
+          {t(
+            isTrainee
+              ? 'catalog.tiles.userErrorTrainee'
+              : 'catalog.tiles.userError'
+          )}
         </p>
         <button
           type="button"
@@ -174,7 +179,7 @@ export function CatalogTiles() {
                   id={titleId}
                   className={`text-xl font-bold ${open ? 'text-foreground' : 'text-muted-foreground'}`}
                 >
-                  {catalog.title}
+                  {catalogDisplayTitle(t, catalog.code, catalog.title)}
                 </h2>
                 {!open && (
                   <p
@@ -206,7 +211,7 @@ export function CatalogTiles() {
                     type="button"
                     onClick={() => choose(catalog.code)}
                     aria-label={t('catalog.tiles.openLabel', {
-                      title: catalog.title,
+                      title: catalogDisplayTitle(t, catalog.code, catalog.title),
                     })}
                     className="bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-accent mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold after:absolute after:inset-0 focus-visible:ring-2 focus-visible:outline-none"
                   >
@@ -228,7 +233,7 @@ export function CatalogTiles() {
                     aria-haspopup="dialog"
                     aria-describedby={lockedId}
                     aria-label={t('catalog.tiles.requestLabel', {
-                      title: catalog.title,
+                      title: catalogDisplayTitle(t, catalog.code, catalog.title),
                     })}
                     onClick={event => {
                       opener.current = event.currentTarget;

@@ -21,6 +21,13 @@ export interface NavigationOffer {
   label: string;
   /** One short reason, why this page (German). */
   reason: string;
+  /**
+   * The person gave a clear command ("Öffne ...", "Bring mich zu ...", "Geh
+   * zu ..."): the interface opens the page right away, the card only reports
+   * it. Without it the card waits for the tap on "Öffnen" (or a spoken "ja").
+   * Set by the server from the command, never by the model.
+   */
+  auto?: boolean;
 }
 
 const MAX_TEXT = 200;
@@ -35,16 +42,43 @@ function cleanText(value: unknown): string | null {
 /**
  * An offer from untrusted input (the answer of the server as the client reads
  * it), or undefined if it is malformed or its path is not on the allow list.
- * Only the three known members are taken over.
+ * Only the four known members are taken over.
  */
 export function toNavigationOffer(raw: unknown): NavigationOffer | undefined {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     return undefined;
   }
-  const { path, label, reason } = raw as Record<string, unknown>;
+  const { path, label, reason, auto } = raw as Record<string, unknown>;
   if (!isAllowedNavigationPath(path)) return undefined;
   const cleanLabel = cleanText(label);
   const cleanReason = cleanText(reason);
   if (!cleanLabel || !cleanReason) return undefined;
-  return { path, label: cleanLabel, reason: cleanReason };
+  return {
+    path,
+    label: cleanLabel,
+    reason: cleanReason,
+    ...(auto === true ? { auto: true } : {}),
+  };
+}
+
+/** At most this many cards in a question back (the same limit as the server). */
+export const MAX_NAVIGATION_CHOICES = 3;
+
+/**
+ * The cards of a question back from untrusted input: at most three, each one a
+ * valid offer on the allow list. `auto` is never taken over, a card always waits
+ * for a tap.
+ */
+export function toNavigationChoices(raw: unknown): NavigationOffer[] {
+  if (!Array.isArray(raw)) return [];
+  const choices: NavigationOffer[] = [];
+  for (const entry of raw) {
+    const offer = toNavigationOffer(entry);
+    if (!offer) continue;
+    const { auto: _auto, ...card } = offer;
+    void _auto;
+    choices.push(card);
+    if (choices.length >= MAX_NAVIGATION_CHOICES) break;
+  }
+  return choices;
 }

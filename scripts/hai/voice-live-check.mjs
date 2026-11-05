@@ -22,6 +22,16 @@
  * Usage:
  *   npm run hai:voice-check                    both providers
  *   npm run hai:voice-check -- --only soniox   Soniox only (or: --only haus)
+ *   npm run hai:voice-check -- --webm          also the way of the browser (see below)
+ *
+ * --webm (Soniox): the way the browser takes, which the first probe (raw PCM from
+ * Node) does not test. The speech of the probe is encoded to webm/opus with
+ * ffmpeg (if ffmpeg is installed, else a clear note), sent in slices of about
+ * 100 ms with the real config of the app (audio_format auto, endpoint
+ * detection), the times to the first word and to the endpoint are measured. Then
+ * a second connection with the same key (may a stock of keys use it twice?) and
+ * a second speech stream on the same connection (what a warm connection saves).
+ * Costs a few cents of Soniox. Writes nothing.
  *
  * Exit code: 0 everything passed, 1 something failed, 2 not set up (or a wrong
  * call). A failure wins over "not set up". Not part of the CI (no network, no
@@ -29,6 +39,7 @@
  * replaced fetch and websocket.
  */
 
+import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import {
   TTS_SAMPLE_RATE,
@@ -159,7 +170,7 @@ function socketRound(WebSocketImpl, grant, onOpen, onMessage) {
         return;
       }
       try {
-        onMessage(message, value => finish(resolve, value));
+        onMessage(message, value => finish(resolve, value), socket);
       } catch {
         finish(reject, new Error('Antwort nicht lesbar'));
       }
@@ -280,6 +291,8 @@ async function checkSoniox(deps) {
   }
   const config = loaded.config;
   deps.secrets.add(config.apiKey);
+  // what the probe of the browser way needs (--webm)
+  deps.probe = { config, grants: {}, pcm: null };
   rows.push(
     row(
       'Soniox eingerichtet',
@@ -304,6 +317,7 @@ async function checkSoniox(deps) {
     if (result.ok) {
       deps.secrets.add(result.grant.apiKey);
       grants[purpose] = result.grant;
+      deps.probe.grants[purpose] = true;
       rows.push(
         row(
           label,
@@ -357,6 +371,7 @@ async function checkSoniox(deps) {
         );
       } else {
         pcm = spoken.pcm;
+        deps.probe.pcm = spoken.pcm;
         const length = pcm.length / 2 / TTS_SAMPLE_RATE;
         rows.push(
           row(
@@ -573,15 +588,362 @@ async function checkHaus(deps) {
 }
 
 // ---------------------------------------------------------------------------
+// The way of the browser (--webm): the recording as the browser sends it
+// ---------------------------------------------------------------------------
+
+/** About 100 ms of a recording of the browser (webm/opus at 64 kbit/s is 8 KB per second). */
+const WEBM_SLICE_BYTES = 800;
+/** Silence after the speech, so the endpoint detection has something to detect. */
+const SILENCE_SECONDS = 1.5;
+/** After the last slice: wait this long for the endpoint, then end the stream. */
+const END_WAIT_MS = 3_000;
+const SECOND_SENTENCE = 'Das ist die zweite Antwort.';
+
+/**
+ * Encodes 24 kHz mono signed 16 bit PCM to webm/opus with ffmpeg (the container
+ * the browser records). Resolves null when ffmpeg is not installed.
+ */
+export function encodeWebmWithFfmpeg(pcm, spawnImpl = spawn) {
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      child = spawnImpl(
+        'ffmpeg',
+        [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-f',
+          's16le',
+          '-ar',
+          String(TTS_SAMPLE_RATE),
+          '-ac',
+          '1',
+          '-i',
+          'pipe:0',
+          '-c:a',
+          'libopus',
+          '-b:a',
+          '32k',
+          '-f',
+          'webm',
+          'pipe:1',
+        ],
+        { stdio: ['pipe', 'pipe', 'pipe'] }
+      );
+    } catch {
+      resolve(null);
+      return;
+    }
+    const out = [];
+    child.stdout.on('data', chunk => out.push(chunk));
+    child.stdin.on('error', () => undefined);
+    child.on('error', error => {
+      if (error && error.code === 'ENOENT') resolve(null);
+      else reject(new Error('ffmpeg lässt sich nicht starten'));
+    });
+    child.on('close', code => {
+      if (code === 0 && out.length > 0) resolve(Buffer.concat(out));
+      else reject(new Error(`ffmpeg endete mit dem Code ${String(code)}`));
+    });
+    child.stdin.end(pcm);
+  });
+}
+
+/** Length of 24 kHz mono 16 bit PCM in milliseconds. */
+const pcmMs = pcm => (pcm.length / 2 / TTS_SAMPLE_RATE) * 1000;
+
+/** The speech with a pause at the end, as 16 bit PCM. */
+function withSilence(pcm) {
+  return Buffer.concat([
+    pcm,
+    Buffer.alloc(Math.round(TTS_SAMPLE_RATE * SILENCE_SECONDS) * 2),
+  ]);
+}
+
+/**
+ * Sends the webm recording in slices like the browser does (the config of the
+ * app first, then binary frames) and ends the stream the way the app does: at
+ * the endpoint (token <end>) with an empty text frame, or after a wait.
+ */
+async function sonioxRecognizeWebm(deps, grant, webm, options = {}) {
+  const started = deps.now();
+  let text = '';
+  let firstMs = null;
+  let endpointMs = null;
+  let lastSentAt = started;
+  let sendStart = started;
+  let slices = 0;
+  let ended = false;
+  await socketRound(
+    deps.WebSocketImpl,
+    grant,
+    socket => {
+      // exactly what the browser sends: the config of the app, no change
+      socket.send(JSON.stringify(grant.config));
+      sendStart = deps.now();
+      const total = Math.ceil(webm.length / WEBM_SLICE_BYTES);
+      const count = Math.min(total, options.maxSlices ?? total);
+      // the browser sends in real time: the endpoint detection works on the audio
+      // that arrives, a recording poured in at once would measure nothing
+      const gap =
+        deps.realtime && options.audioMs && !options.endAfterSend
+          ? options.audioMs / total
+          : 0;
+      const sendAll = async () => {
+        try {
+          for (let i = 0; i < count; i += 1) {
+            if (ended) return;
+            socket.send(
+              webm.subarray(i * WEBM_SLICE_BYTES, (i + 1) * WEBM_SLICE_BYTES)
+            );
+            slices += 1;
+            if (gap > 0) await new Promise(resolve => setTimeout(resolve, gap));
+          }
+          lastSentAt = deps.now();
+          if (options.endAfterSend) {
+            ended = true;
+            socket.send('');
+            return;
+          }
+          setTimeout(() => {
+            if (!ended) {
+              ended = true;
+              socket.send('');
+            }
+          }, deps.endWaitMs);
+        } catch {
+          // the connection ended while sending: socketRound reports it
+        }
+      };
+      void sendAll();
+    },
+    (message, done, socket) => {
+      if (Array.isArray(message.tokens)) {
+        for (const token of message.tokens) {
+          if (typeof token?.text !== 'string') continue;
+          if (token.text === '<end>') {
+            if (endpointMs === null) {
+              // from the end of the speech (the silence after it is what is detected)
+              const speechEnd =
+                deps.realtime && options.speechMs
+                  ? sendStart + options.speechMs
+                  : lastSentAt;
+              endpointMs = Math.max(0, deps.now() - speechEnd);
+            }
+            if (!ended) {
+              ended = true;
+              socket.send('');
+            }
+            continue;
+          }
+          if (token.text === '<fin>') continue;
+          if (firstMs === null) firstMs = deps.now() - started;
+          if (token.is_final === true) text += token.text;
+        }
+      }
+      if (message.finished === true) done(null);
+    }
+  );
+  return {
+    text: text.trim(),
+    firstMs,
+    endpointMs,
+    slices,
+    ms: deps.now() - started,
+  };
+}
+
+/** Two speech streams one after the other on ONE connection. */
+async function sonioxSpeakTwice(deps, grant) {
+  const connectStarted = deps.now();
+  let secondStarted = 0;
+  let firstMs = null;
+  let secondMs = null;
+  let stage = 1;
+  const id = n => `voice-live-check-${n}`;
+  const start = (socket, n, text) => {
+    socket.send(JSON.stringify({ stream_id: id(n), ...grant.config }));
+    socket.send(JSON.stringify({ text, text_end: true, stream_id: id(n) }));
+  };
+  await socketRound(
+    deps.WebSocketImpl,
+    grant,
+    socket => start(socket, 1, PROBE_TEXT),
+    (message, done, socket) => {
+      if (typeof message.audio === 'string' && message.audio.length > 0) {
+        if (stage === 1 && firstMs === null) {
+          firstMs = deps.now() - connectStarted;
+        }
+        if (stage === 2 && secondMs === null) {
+          secondMs = deps.now() - secondStarted;
+        }
+      }
+      if (message.terminated === true && message.stream_id === id(1)) {
+        stage = 2;
+        secondStarted = deps.now();
+        start(socket, 2, SECOND_SENTENCE);
+      } else if (message.terminated === true && message.stream_id === id(2)) {
+        done(null);
+      }
+    }
+  );
+  return { firstMs, secondMs };
+}
+
+async function freshRecognitionKey(deps, config, label, rows) {
+  const recorder = recordingFetch(deps.fetchImpl, deps.now);
+  const result = await createSonioxToken(
+    config,
+    'stt',
+    'voice-live-check',
+    recorder.fetch
+  );
+  if (!result.ok) {
+    rows.push(row(label, 'failed', sonioxTokenFailure(result, config.region)));
+    return null;
+  }
+  deps.secrets.add(result.grant.apiKey);
+  return result.grant;
+}
+
+/**
+ * The probe of the way the browser takes (the recognition gets the container
+ * of a MediaRecorder with the real config of the app incl. endpoint detection),
+ * the second connection with the same key and the second speech stream on the
+ * same connection. Needs ffmpeg for the webm file; without it a clear note.
+ */
+async function checkSonioxWebm(deps) {
+  const rows = [];
+  const probe = deps.probe;
+  const CHECK = 'Soniox Browserweg (webm/opus, Endpunkterkennung)';
+  const SECOND = 'Soniox zweite Verbindung mit demselben Schlüssel';
+  const TWICE = 'Soniox zweiter Sprach-Strom auf derselben Verbindung';
+  if (!probe?.config) {
+    rows.push(row(CHECK, 'skipped', 'Soniox ist nicht eingerichtet'));
+    return rows;
+  }
+
+  // two speech streams on one connection (no ffmpeg needed)
+  if (!probe.grants?.tts) {
+    rows.push(row(TWICE, 'skipped', 'kein Kurzzeit-Schlüssel'));
+  } else {
+    const ttsKey = await (async () => {
+      // the key of the first probe was used once: a fresh one for this connection
+      const result = await createSonioxToken(
+        probe.config,
+        'tts',
+        'voice-live-check',
+        deps.fetchImpl
+      );
+      if (result.ok) deps.secrets.add(result.grant.apiKey);
+      return result.ok ? result.grant : null;
+    })();
+    if (!ttsKey) {
+      rows.push(row(TWICE, 'failed', 'kein Kurzzeit-Schlüssel'));
+    } else {
+      try {
+        const twice = await sonioxSpeakTwice(deps, ttsKey);
+        rows.push(
+          twice.firstMs === null || twice.secondMs === null
+            ? row(TWICE, 'failed', 'Soniox lieferte nicht für beide Sätze Ton.')
+            : row(
+                TWICE,
+                'ok',
+                `erster Satz nach ${seconds(twice.firstMs)} (mit Verbindungsaufbau), zweiter Satz nach ${seconds(twice.secondMs)} auf der stehenden Verbindung`
+              )
+        );
+      } catch (error) {
+        rows.push(row(TWICE, 'failed', errorText(error)));
+      }
+    }
+  }
+
+  if (!probe.pcm) {
+    rows.push(row(CHECK, 'skipped', 'keine Sprache erzeugt'));
+    rows.push(row(SECOND, 'skipped', 'keine Sprache erzeugt'));
+    return rows;
+  }
+  let webm = null;
+  try {
+    webm = await deps.encodeWebm(withSilence(probe.pcm));
+  } catch (error) {
+    rows.push(row(CHECK, 'failed', errorText(error)));
+    rows.push(row(SECOND, 'skipped', 'keine Aufnahme erzeugt'));
+    return rows;
+  }
+  if (!webm) {
+    const note =
+      'ffmpeg nicht gefunden: die Probe kodiert die Sprache mit ffmpeg zu webm/opus wie der Browser (Windows: winget install Gyan.FFmpeg).';
+    rows.push(row(CHECK, 'skipped', note));
+    rows.push(row(SECOND, 'skipped', note));
+    return rows;
+  }
+
+  const grant = await freshRecognitionKey(deps, probe.config, CHECK, rows);
+  if (!grant) {
+    rows.push(row(SECOND, 'skipped', 'kein Kurzzeit-Schlüssel'));
+    return rows;
+  }
+  try {
+    const heard = await sonioxRecognizeWebm(deps, grant, webm, {
+      audioMs: pcmMs(withSilence(probe.pcm)),
+      speechMs: pcmMs(probe.pcm),
+    });
+    const outcome = recognitionRow(CHECK, heard.text, heard.ms);
+    const endpoint =
+      heard.endpointMs === null
+        ? 'kein Endpunkt gemeldet'
+        : `Endpunkt ${seconds(heard.endpointMs)} nach dem Ende der Sprache`;
+    const first =
+      heard.firstMs === null
+        ? 'kein Wort'
+        : `erstes Wort nach ${seconds(heard.firstMs)}`;
+    const prefix = `${heard.slices} Stücke (${kilobytes(webm.length)}), ${first}, ${endpoint}, `;
+    rows.push({ ...outcome, detail: `${prefix}${outcome.detail}` });
+  } catch (error) {
+    rows.push(row(CHECK, 'failed', errorText(error)));
+  }
+
+  // the same key for a second connection: may the stock of keys use it twice?
+  try {
+    await sonioxRecognizeWebm(deps, grant, webm, {
+      maxSlices: 3,
+      endAfterSend: true,
+    });
+    rows.push(
+      row(
+        SECOND,
+        'ok',
+        'angenommen: der Schlüssel darf in seiner Laufzeit mehrfach genutzt werden (die App gibt ihn trotzdem nur einmal aus, das ist sicher)'
+      )
+    );
+  } catch (error) {
+    const text = errorText(error);
+    rows.push(
+      text.startsWith('Soniox meldet den Fehler')
+        ? row(
+            SECOND,
+            'ok',
+            `abgelehnt (${text}): der Schlüssel gilt für eine Verbindung, die App gibt jeden Schlüssel nur einmal aus, das ist richtig so`
+          )
+        : row(SECOND, 'failed', text)
+    );
+  }
+  return rows;
+}
+
+// ---------------------------------------------------------------------------
 // Run and output
 // ---------------------------------------------------------------------------
 
 export const USAGE =
-  'Aufruf: node scripts/hai/voice-live-check.mjs [--only soniox|haus]';
+  'Aufruf: node scripts/hai/voice-live-check.mjs [--only soniox|haus] [--webm]';
 
 /** The providers to check, or an error text. */
 export function parseArgs(argv) {
   let only = null;
+  let webm = false;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--only' || arg.startsWith('--only=')) {
@@ -591,11 +953,16 @@ export function parseArgs(argv) {
         return { error: `--only kennt soniox oder haus. ${USAGE}` };
       }
       only = value;
+    } else if (arg === '--webm') {
+      webm = true;
     } else {
       return { error: `Unbekannter Schalter ${arg}. ${USAGE}` };
     }
   }
-  return { providers: only ? [only] : PROVIDERS };
+  if (webm && only === 'haus') {
+    return { error: `--webm gehört zu Soniox. ${USAGE}` };
+  }
+  return { providers: only ? [only] : PROVIDERS, webm };
 }
 
 export function exitCodeOf(rows) {
@@ -630,6 +997,9 @@ export async function runVoiceCheck({
   WebSocketImpl = globalThis.WebSocket,
   write = line => process.stdout.write(`${line}\n`),
   now = () => performance.now(),
+  encodeWebm = encodeWebmWithFfmpeg,
+  endWaitMs = END_WAIT_MS,
+  realtime = true,
 } = {}) {
   const parsed = parseArgs(argv);
   if ('error' in parsed) {
@@ -645,13 +1015,26 @@ export async function runVoiceCheck({
     }
     return clean;
   };
-  const deps = { env, fetchImpl, WebSocketImpl, now, secrets };
+  const deps = {
+    env,
+    fetchImpl,
+    WebSocketImpl,
+    now,
+    secrets,
+    encodeWebm,
+    endWaitMs,
+    realtime,
+    probe: null,
+  };
   const rows = [];
   for (const provider of parsed.providers) {
     try {
       rows.push(
         ...(await (provider === 'soniox' ? checkSoniox(deps) : checkHaus(deps)))
       );
+      if (provider === 'soniox' && parsed.webm) {
+        rows.push(...(await checkSonioxWebm(deps)));
+      }
     } catch (error) {
       rows.push(
         row(

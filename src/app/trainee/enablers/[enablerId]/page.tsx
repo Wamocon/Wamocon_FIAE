@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,6 +34,14 @@ import {
 } from 'lucide-react';
 import { lockText } from '@/components/trainee/EnablerStateBadge';
 import { PASS_THRESHOLD } from '@/lib/catalog/progression';
+import { hasText } from '@/lib/submission-input';
+import { capitalizeFirst, themenkreisDescription } from '@/lib/display-text';
+import {
+  traineeDocumentPath,
+  traineeScenarioPath,
+} from '@/lib/documentContentPath';
+import { viewerSubtitle } from '@/lib/documentTypeLabel';
+import { useDocumentParam } from '@/lib/hai/navigation/useDocumentParam';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -123,7 +131,6 @@ export default function TraineeEnablerPage() {
     documents: Array<{
       id: string;
       title: string;
-      storageUrl: string;
       documentType: string;
       /** The document of the own organization (not the shared curriculum) */
       isOwnOrganization?: boolean;
@@ -136,7 +143,8 @@ export default function TraineeEnablerPage() {
     error: enablerError,
   } = useApiQuery<EnablerResponse>(enablerUrl);
   const { data: quizzesData } = useApiQuery<QuizzesResponse>(quizzesUrl);
-  const { data: docsData } = useApiQuery<DocsResponse>(docsUrl);
+  const { data: docsData, error: docsError } =
+    useApiQuery<DocsResponse>(docsUrl);
 
   const enabler = enablerData?.enabler || null;
   // Order of work: a locked enabler shows its title and material, the
@@ -148,14 +156,9 @@ export default function TraineeEnablerPage() {
     progression?.reason ?? 'SEQUENCE',
     progression?.lockedBy?.title ?? quizzesData?.lockedBy?.title
   );
-  // A row without a file is no link (a scenario kept without a PDF)
-  const documents = useMemo(
-    () =>
-      (docsData?.documents || []).filter(
-        d => typeof d.storageUrl === 'string' && d.storageUrl.trim() !== ''
-      ),
-    [docsData]
-  );
+  // The route lists only documents that carry a file, and it gives no address of
+  // the file: the viewer opens a document by its id (traineeDocumentPath)
+  const documents = useMemo(() => docsData?.documents || [], [docsData]);
   const gated = useMemo(() => {
     const list = quizzesData?.quizzes || [];
     const order: Difficulty[] = ['LOW', 'MEDIUM', 'HIGH'];
@@ -170,6 +173,8 @@ export default function TraineeEnablerPage() {
     Array<{ scenarioIndex: number; text: string }>
   >([]);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  // The reason a summary was not taken, shown at the form (not instead of the page)
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   // Submission state for edit/status tracking
   const [submission, setSubmission] = useState<{
@@ -205,6 +210,12 @@ export default function TraineeEnablerPage() {
     () => (quizContent ? quizContent.questions[currentIndex] : null),
     [quizContent, currentIndex]
   );
+  // The next button stays disabled until the question is answered: the hint
+  // under the answers says why (a disabled button gives no click to answer)
+  const isUnanswered = (q: QuizQuestion) =>
+    q.questionType === 'TEXT'
+      ? !String(answers[q.id] || '').trim()
+      : !answers[q.id];
 
   // Sync form state (submission + solutions) from server data
   useEffect(() => {
@@ -236,6 +247,8 @@ export default function TraineeEnablerPage() {
     try {
       const body = await r.clone().json();
       if (body?.code === 'ENABLER_LOCKED') return t('progression.locked403');
+      if (body?.code === 'EMPTY_SUBMISSION')
+        return t('enablerPage.emptySummary');
     } catch {
       // no JSON body
     }
@@ -278,6 +291,9 @@ export default function TraineeEnablerPage() {
 
   const handleTileClick = async (g: GatedQuizInfo) => {
     if (!g.quizId) return;
+    // The difficulty that is open already: a second click must not start over
+    // (the answers given so far, or the result on screen, stay)
+    if (quizContent && selectedDifficulty === g.difficulty) return;
     // A passed quiz is shown as it was answered, one that was not passed is
     // taken again
     setReviewMode(!!g.passed);
@@ -384,8 +400,15 @@ export default function TraineeEnablerPage() {
   const submitSolution = async () => {
     if (!profile?.id || !enablerId || savingSolution)
       return setError(t('enablerPage.profileMissing'));
-    setSavingSolution(true);
     setSaveSuccess(null);
+    setSummaryError(null);
+    // A summary without text is no summary: only white space counts as empty
+    // (the server answers the same)
+    if (!solutions.some(s => hasText(s.text))) {
+      setSummaryError(t('enablerPage.emptySummary'));
+      return;
+    }
+    setSavingSolution(true);
     setError(null);
     try {
       // Filter out empty solutions and send only filled ones
@@ -417,7 +440,7 @@ export default function TraineeEnablerPage() {
       );
       if (enablerUrl) queryClient.invalidateQueries({ queryKey: [enablerUrl] });
     } catch (e: any) {
-      setError(e?.message || t('error.unknown'));
+      setSummaryError(e?.message || t('error.unknown'));
     } finally {
       setSavingSolution(false);
     }
@@ -566,6 +589,48 @@ export default function TraineeEnablerPage() {
     return { part: null, label: cleaned };
   };
 
+  // A link of the HAI (?document=<id>) opens that document in the reader, but
+  // only when it is one of the documents this page lists for the person (the
+  // route of the list applies the rules of the document routes). Anything else,
+  // a document that does not exist and one the person may not see alike, gets the
+  // same neutral note. The reader asks the content route again for the bytes.
+  const documentParam = useDocumentParam();
+  const handledDocument = useRef<string | null>(null);
+  const [documentNote, setDocumentNote] = useState(false);
+  useEffect(() => {
+    if (!documentParam || handledDocument.current === documentParam) return;
+    if (!enabler || (!docsData && !docsError)) return;
+    handledDocument.current = documentParam;
+    const listed = [...theoryDocs, ...scenarioDocs].find(
+      d => d.id === documentParam
+    );
+    if (listed) {
+      flipbook.openPdf(
+        listed.documentType === 'EXERCISE'
+          ? formatScenarioLabel(listed.title).label
+          : listed.title,
+        traineeDocumentPath(listed.id),
+        viewerSubtitle(listed.documentType, t)
+      );
+      return;
+    }
+    // the single scenario PDF of the enabler itself (no row of its own)
+    if (
+      documentParam === String(enabler.id ?? enablerId).toLowerCase() &&
+      enabler.hasScenarioPdf &&
+      scenarioDocs.length === 0
+    ) {
+      flipbook.openPdf(
+        t('trainer.content.scenarios'),
+        traineeScenarioPath(String(enabler.id ?? enablerId)),
+        viewerSubtitle('EXERCISE', t)
+      );
+      return;
+    }
+    setDocumentNote(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentParam, enabler, docsData, docsError, theoryDocs, scenarioDocs]);
+
   if (!profile)
     return <div className="p-6">{t('enablerPage.pleaseLogin')}</div>;
   if (loading) return <PageLoader />;
@@ -579,7 +644,18 @@ export default function TraineeEnablerPage() {
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       {/* Enabler header */}
       <div className="border-accent/30 bg-background rounded-3xl border p-5">
-        <h1 className="text-foreground text-2xl font-bold">{enabler.title}</h1>
+        <h1 className="text-foreground text-2xl font-bold">
+          {capitalizeFirst(enabler.title)}
+        </h1>
+        {documentNote && (
+          <p
+            role="status"
+            data-testid="document-not-found"
+            className="text-muted-foreground mt-2 text-sm"
+          >
+            {t('document.notFound')}
+          </p>
+        )}
         {enabler.isActive && enabler.durationValue && enabler.activatedAt && (
           <div className="mt-3 text-sm">
             {(() => {
@@ -605,18 +681,24 @@ export default function TraineeEnablerPage() {
           {enabler.descriptionText && (
             <LinkifyText
               className="text-muted-foreground mt-2"
-              text={String(enabler.descriptionText)}
+              text={themenkreisDescription(String(enabler.descriptionText))}
               preserveLineBreaks
             />
           )}
         </div>
         {/* Theory materials */}
-        {(theoryDocs.length > 0 || enabler.videoUrl || enabler.pptUrl) && (
+        {(theoryDocs.length > 0 || enabler.videoUrl) && (
           <div className="mt-4 flex flex-wrap gap-2">
             {theoryDocs.map(doc => (
               <button
                 key={doc.id}
-                onClick={() => flipbook.openPdf(doc.title, doc.storageUrl)}
+                onClick={() =>
+                  flipbook.openPdf(
+                    doc.title,
+                    traineeDocumentPath(doc.id),
+                    viewerSubtitle(doc.documentType, t)
+                  )
+                }
                 className="border-accent/30 hover:bg-accent/15 hover:border-accent/60 flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]"
               >
                 <BookOpen className="h-4 w-4 shrink-0" />
@@ -633,16 +715,6 @@ export default function TraineeEnablerPage() {
                 {t('enablerPage.watchVideo')}
               </a>
             )}
-            {enabler.pptUrl && (
-              <a
-                className="border-accent/30 hover:bg-accent/15 hover:border-accent/60 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors"
-                href={enabler.pptUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t('enablerPage.openPpt')}
-              </a>
-            )}
           </div>
         )}
 
@@ -650,8 +722,10 @@ export default function TraineeEnablerPage() {
         <FlipbookViewer
           title={flipbook.title}
           pdfUrl={flipbook.pdfUrl}
+          subtitle={flipbook.subtitle}
           isOpen={flipbook.isOpen}
           onClose={flipbook.closePdf}
+          allowDownload={false}
         />
       </div>
 
@@ -684,7 +758,7 @@ export default function TraineeEnablerPage() {
       )}
 
       {/* Scenario Section */}
-      {(scenarioDocs.length > 0 || enabler.scenarioPdfUrl) && (
+      {(scenarioDocs.length > 0 || enabler.hasScenarioPdf) && (
         <div className="border-accent/30 bg-background rounded-3xl border p-5">
           <div className="mb-4 flex items-center gap-2">
             <Layers className="h-5 w-5 text-amber-500" />
@@ -706,12 +780,13 @@ export default function TraineeEnablerPage() {
           </div>
 
           {/* Legacy single scenario PDF */}
-          {enabler.scenarioPdfUrl && scenarioDocs.length === 0 && (
+          {enabler.hasScenarioPdf && scenarioDocs.length === 0 && (
             <button
               onClick={() =>
                 flipbook.openPdf(
                   t('trainer.content.scenarios'),
-                  enabler.scenarioPdfUrl
+                  traineeScenarioPath(String(enabler.id ?? enablerId)),
+                  viewerSubtitle('EXERCISE', t)
                 )
               }
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 text-white shadow-sm transition-colors hover:bg-amber-700"
@@ -731,7 +806,13 @@ export default function TraineeEnablerPage() {
                 return (
                   <button
                     key={doc.id}
-                    onClick={() => flipbook.openPdf(label, doc.storageUrl)}
+                    onClick={() =>
+                      flipbook.openPdf(
+                        label,
+                        traineeDocumentPath(doc.id),
+                        viewerSubtitle('EXERCISE', t)
+                      )
+                    }
                     className="border-accent/20 group flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-left transition-all duration-200 hover:scale-[1.02] hover:border-amber-500/50 hover:bg-amber-500/10 hover:shadow-lg hover:shadow-amber-500/10 active:scale-[0.98]"
                   >
                     {part !== null && (
@@ -875,6 +956,15 @@ export default function TraineeEnablerPage() {
           </div>
         )}
 
+        {summaryError && (
+          <div
+            role="alert"
+            className="rounded-md border border-red-500/40 bg-red-500/10 p-2 text-sm text-red-600 dark:text-red-400"
+          >
+            {summaryError}
+          </div>
+        )}
+
         <div className="mb-2 text-lg font-semibold">
           {t('enablerPage.summaryLabel')}
         </div>
@@ -963,6 +1053,9 @@ export default function TraineeEnablerPage() {
                   onClick={() => !disabled && handleTileClick(g)}
                   className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'border-accent/20 bg-muted/20 cursor-not-allowed opacity-60' : 'border-accent/30 hover:bg-accent/15 hover:border-accent/60 hover:shadow-accent/20 bg-muted/30 cursor-pointer hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]'}`}
                   aria-disabled={disabled}
+                  aria-pressed={
+                    !!quizContent && selectedDifficulty === g.difficulty
+                  }
                 >
                   <div className="text-muted-foreground text-sm">
                     {t('enablerPage.difficulty')}
@@ -1041,11 +1134,15 @@ export default function TraineeEnablerPage() {
                     : ''}
                 </div>
               </div>
-              <div className="text-muted-foreground text-sm">
-                {t('enablerPage.questionCounter')
-                  .replace('{current}', String(currentIndex + 1))
-                  .replace('{total}', String(quizContent.questions.length))}
-              </div>
+              {/* The counter belongs to the question by question view, a
+                  result or a review shows all questions at once */}
+              {!result && !reviewMode && (
+                <div className="text-muted-foreground text-sm">
+                  {t('enablerPage.questionCounter')
+                    .replace('{current}', String(currentIndex + 1))
+                    .replace('{total}', String(quizContent.questions.length))}
+                </div>
+              )}
             </div>
 
             {!result && !reviewMode ? (
@@ -1094,6 +1191,17 @@ export default function TraineeEnablerPage() {
                       )}
                     </div>
 
+                    {isUnanswered(currentQuestion) && (
+                      <p
+                        role="status"
+                        data-testid="quiz-answer-hint"
+                        className="text-muted-foreground text-sm"
+                      >
+                        {currentQuestion.questionType === 'TEXT'
+                          ? t('enablerPage.answerRequiredText')
+                          : t('enablerPage.answerRequired')}
+                      </p>
+                    )}
                     <div className="mt-4 flex items-center justify-between">
                       <button
                         className="border-accent/30 hover:bg-background/60 rounded-md border px-3 py-1.5 disabled:opacity-60"
@@ -1151,7 +1259,9 @@ export default function TraineeEnablerPage() {
               <div className="space-y-3">
                 {(quizLocked || reviewMode) && (
                   <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-600 dark:text-yellow-400">
-                    {t('enablerPage.quizAlreadySubmitted')}
+                    {result && result.feedback.length === 0
+                      ? t('enablerPage.quizAlreadySubmittedNoAnswers')
+                      : t('enablerPage.quizAlreadySubmitted')}
                   </div>
                 )}
                 {result?.score === null ? (
@@ -1201,8 +1311,13 @@ export default function TraineeEnablerPage() {
                     )}
                   </>
                 )}
+                {/* A result without stored answers (a score that came without
+                    its answers) lists no question with an empty answer */}
                 <ul className="space-y-2">
-                  {quizContent.questions.map(q => {
+                  {(result && result.feedback.length === 0
+                    ? []
+                    : quizContent.questions
+                  ).map(q => {
                     const fb = result?.feedback.find(
                       f => String(f.questionId) === String(q.id)
                     );
@@ -1210,6 +1325,12 @@ export default function TraineeEnablerPage() {
                     const correctOption = q.options.find(
                       o => String(o.id) === String(fb?.correctOptionId || '')
                     );
+                    // A choice question names the option, a free text question
+                    // the expected text (both only once the server sends them)
+                    const correctText =
+                      q.questionType === 'TEXT' || q.options.length === 0
+                        ? fb?.correctAnswerText || ''
+                        : correctOption?.optionText || '';
                     const explanation = fb?.explanation;
                     // No solution to grade against: neither right nor wrong
                     const notGraded = fb?.graded === false;
@@ -1242,12 +1363,23 @@ export default function TraineeEnablerPage() {
                                 o => String(o.id) === String(chosen)
                               )?.optionText || '-'}
                         </div>
-                        {q.questionType !== 'TEXT' && !fb?.correct && (
-                          <div className="mt-1 text-sm text-green-400">
-                            {t('enablerPage.correct')}{' '}
-                            {correctOption?.optionText || '-'}
-                          </div>
-                        )}
+                        {!notGraded &&
+                          fb &&
+                          !fb.correct &&
+                          (correctText ? (
+                            <div className="mt-1 text-sm text-green-400">
+                              {t('enablerPage.correct')} {correctText}
+                            </div>
+                          ) : (
+                            // The key comes with the pass (the server holds it
+                            // back until then), say so instead of showing "-"
+                            <div
+                              data-testid="key-after-pass"
+                              className="text-muted-foreground mt-1 text-sm"
+                            >
+                              {t('enablerPage.keyAfterPass')}
+                            </div>
+                          ))}
                         {explanation && (
                           <div className="border-accent/20 text-muted-foreground bg-muted/30 mt-2 rounded-md border p-2 text-xs">
                             {t('enablerPage.explanationLabel')} {explanation}
@@ -1289,8 +1421,15 @@ export default function TraineeEnablerPage() {
       </div>
 
       <div>
-        <Link href="/trainee/modules" className="text-sm underline">
-          {t('enablerPage.backToModules')}
+        <Link
+          href={
+            enabler?.courseId
+              ? `/trainee/modules/${enabler.courseId}`
+              : '/trainee/courses'
+          }
+          className="text-sm underline"
+        >
+          {t('enablerPage.backToThemes')}
         </Link>
       </div>
     </div>

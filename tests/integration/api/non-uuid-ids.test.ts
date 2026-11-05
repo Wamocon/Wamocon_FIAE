@@ -269,6 +269,25 @@ const OWN_CHECK: Entry[] = [
     params: { userId: '{bad}' },
     as: 'admin',
   },
+  // the memory of the HAI: the entry of a person and the shared entry
+  {
+    route: 'hai/memory/[id]',
+    method: 'PATCH',
+    params: { id: '{bad}' },
+    body: { decision: 'confirm' },
+  },
+  {
+    route: 'hai/memory/[id]',
+    method: 'DELETE',
+    params: { id: '{bad}' },
+  },
+  {
+    route: 'admin/hai/memory/[id]',
+    method: 'PATCH',
+    params: { id: '{bad}' },
+    body: { status: 'approved' },
+    as: 'superAdmin',
+  },
 ];
 
 describe('a path id that is no uuid: routes with their own check', () => {

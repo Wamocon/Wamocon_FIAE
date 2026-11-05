@@ -16,10 +16,19 @@ import {
   type TrainingPhase,
 } from '@/lib/ausbildung/duration';
 import { getISOWeekDates, getISOWeekInfo } from '@/lib/date/iso-week';
+import { componentPhase } from '@/lib/ausbildung/component-phase';
+import { compareReportsNewestWeekFirst } from '@/lib/ausbildung/report-order';
+import { activityReportHasContent } from '@/lib/submission-input';
 import {
   componentHoursLabel,
   normalizePlannedHours,
 } from '@/lib/ausbildung/planned-hours';
+import {
+  formatHours,
+  remainingAfterEntry,
+} from '@/lib/ausbildung/hours-format';
+import { useEscapeKey } from '@/lib/hooks/useEscapeKey';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   ClipboardList,
   Plus,
@@ -50,6 +59,8 @@ interface TrainingComponent {
   totalWeeks: number;
   totalHours: number;
   trainingYear: number | null;
+  /** Phase of a catalog component (KfBM has no training year). */
+  phase?: number | null;
   orderIndex: number;
 }
 
@@ -59,6 +70,8 @@ interface TrainingUseCase {
   letter: string;
   description: string;
   plannedHours: number;
+  /** false: no hours are given, there is nothing to exhaust or overbook. */
+  hoursLimited?: boolean;
   orderIndex: number;
 }
 
@@ -172,9 +185,7 @@ export default function TraineeActivityReportsPage() {
   const profileDurationYears =
     (profile as { ausbildungDurationYears?: number | null } | null)
       ?.ausbildungDurationYears ?? profile?.ausbildung_duration_years;
-  const durationYears = normalizeDurationYears(
-    profileDurationYears
-  );
+  const durationYears = normalizeDurationYears(profileDurationYears);
 
   const formatPhaseLabel = (phase: number) => {
     if (phase === 3) return t('reports.integrativePhase');
@@ -259,12 +270,21 @@ export default function TraineeActivityReportsPage() {
     }
   };
 
-  const handleDeleteReport = async (e: React.MouseEvent, reportId: string) => {
-    e.stopPropagation();
-    if (!confirm(t('reports.deleteConfirm'))) return;
+  // Deleting asks in the dialog of the platform (like exams and calendar), not
+  // in the dialog of the browser
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
+  const handleDeleteReport = (e: React.MouseEvent, reportId: string) => {
+    e.stopPropagation();
+    setDeleteTarget(reportId);
+  };
+
+  const confirmDeleteReport = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      const res = await authFetch(`/api/activity-reports/${reportId}`, {
+      const res = await authFetch(`/api/activity-reports/${deleteTarget}`, {
         method: 'DELETE',
       });
 
@@ -273,6 +293,9 @@ export default function TraineeActivityReportsPage() {
       loadData();
     } catch (err: any) {
       toast.error(err.message);
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -283,9 +306,12 @@ export default function TraineeActivityReportsPage() {
     e.stopPropagation();
     try {
       // Fetch entries for this report
-      const res = await authFetch(`/api/activity-reports/${report.id}/entries`, {
-        cache: 'no-store',
-      });
+      const res = await authFetch(
+        `/api/activity-reports/${report.id}/entries`,
+        {
+          cache: 'no-store',
+        }
+      );
       if (!res.ok) throw new Error(t('reports.error.loadEntries'));
 
       const data = await res.json();
@@ -579,11 +605,7 @@ export default function TraineeActivityReportsPage() {
           <div className="divide-border/50 divide-y">
             {reports
               .filter(r => filterStatus === 'ALL' || r.status === filterStatus)
-              .sort(
-                (a, b) =>
-                  new Date(b.createdAt).getTime() -
-                  new Date(a.createdAt).getTime()
-              )
+              .sort(compareReportsNewestWeekFirst)
               .map(report => (
                 <div
                   key={report.id}
@@ -711,6 +733,15 @@ export default function TraineeActivityReportsPage() {
         />
       )}
 
+      {deleteTarget && (
+        <ConfirmDialog
+          message={t('reports.deleteConfirm')}
+          busy={deleting}
+          onConfirm={confirmDeleteReport}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
       {/* Report Detail Modal */}
       {selectedReport && (
         <ReportDetailModal
@@ -758,12 +789,10 @@ function CreateReportModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [weekNumber, setWeekNumber] = useState(currentWeek);
   const [year, setYear] = useState(currentYear);
-  const [ausbildungsjahr] = useState(
-    initialReport?.ausbildungsjahr || 1
-  );
+  const [ausbildungsjahr] = useState(initialReport?.ausbildungsjahr || 1);
   const [entries, setEntries] = useState<
     {
       useCaseId: string;
@@ -784,6 +813,9 @@ function CreateReportModal({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Escape closes the form like every other dialog (not while saving)
+  useEscapeKey(onClose, !saving);
 
   const formatModalPhaseLabel = (phase: TrainingPhase) => {
     const range = getPhaseMonthRange(durationYears, phase, phaseOneMonths);
@@ -945,7 +977,11 @@ function CreateReportModal({
   // Check for overbooking
   const checkOverbooked = (useCaseId: string, actualHours: number) => {
     const useCase = getUseCaseById(useCaseId);
-    return useCase && actualHours > useCase.plannedHours;
+    return (
+      useCase &&
+      useCase.hoursLimited !== false &&
+      actualHours > useCase.plannedHours
+    );
   };
 
   // Calculate totals
@@ -959,10 +995,7 @@ function CreateReportModal({
 
   // Validation helpers
   const periodValid =
-    weekNumber >= 1 &&
-    weekNumber <= 53 &&
-    year >= 2020 &&
-    year <= 2100;
+    weekNumber >= 1 && weekNumber <= 53 && year >= 2020 && year <= 2100;
 
   const entriesValid =
     entries.length > 0 &&
@@ -984,6 +1017,32 @@ function CreateReportModal({
     entriesValid &&
     allSkillsRated;
 
+  // What keeps "Einreichen" grey, named next to the buttons (WMCNL-2945). The
+  // fields behind it are marked red, so nobody has to guess what is missing.
+  const hoursMissing = entries.some(e => !(e.actualHours > 0));
+  const notesMissing = entries.some(e => e.notes.trim().length === 0);
+  const problems: string[] = [];
+  if (entries.length === 0) problems.push(t('reports.missing.noEntries'));
+  if (hoursMissing) problems.push(t('reports.missing.hours'));
+  if (notesMissing) problems.push(t('reports.missing.notes'));
+  if (!periodValid) problems.push(t('reports.missing.period'));
+  if (!allSkillsRated) problems.push(t('reports.missing.skills'));
+  if (duplicateExists) {
+    problems.push(
+      t('reports.modal.duplicate')
+        .replace('{week}', String(weekNumber))
+        .replace('{year}', String(year))
+    );
+  }
+  if (hasOverbooking) problems.push(t('reports.modal.overbooking'));
+  if (exceeds40h) {
+    problems.push(
+      t('reports.error.exceeds40h')
+        .replace('{hours}', String(totalActualHours))
+        .replace('{max}', String(MAX_WEEKLY_HOURS))
+    );
+  }
+
   const handleSave = async (submit: boolean = false) => {
     try {
       setSaving(true);
@@ -993,7 +1052,7 @@ function CreateReportModal({
       if (entries.length === 0) {
         setError(
           t('reports.error.noEntries') ||
-            'Bitte fügen Sie mindestens eine Tätigkeit hinzu.'
+            'Bitte füge mindestens eine Tätigkeit hinzu.'
         );
         setSaving(false);
         return;
@@ -1005,7 +1064,7 @@ function CreateReportModal({
       if (missingHours.length > 0) {
         setError(
           t('reports.error.missingHours') ||
-            'Bitte tragen Sie für alle Tätigkeiten die IST-Stunden ein (> 0).'
+            'Bitte trage für alle Tätigkeiten die IST-Stunden ein (> 0).'
         );
         setSaving(false);
         return;
@@ -1017,16 +1076,14 @@ function CreateReportModal({
       if (submit && missingNotes.length > 0) {
         setError(
           t('reports.error.missingNotes') ||
-            'Bitte beschreiben Sie für alle Tätigkeiten, was Sie gelernt haben.'
+            'Bitte beschreibe für alle Tätigkeiten, was du gelernt hast.'
         );
         setSaving(false);
         return;
       }
 
       if (!periodValid) {
-        setError(
-          'Bitte geben Sie eine gültige Kalenderwoche (1-53) und Jahr an.'
-        );
+        setError(t('reports.missing.period'));
         setSaving(false);
         return;
       }
@@ -1034,7 +1091,9 @@ function CreateReportModal({
       // 40h/week maximum check
       if (totalActualHours > MAX_WEEKLY_HOURS) {
         setError(
-          `Maximale Wochenstunden überschritten: ${totalActualHours} Std. eingetragen, aber maximal ${MAX_WEEKLY_HOURS} Std. pro Woche zulässig (§ 8 JArbSchG).`
+          t('reports.error.exceeds40h')
+            .replace('{hours}', String(totalActualHours))
+            .replace('{max}', String(MAX_WEEKLY_HOURS))
         );
         setSaving(false);
         return;
@@ -1042,9 +1101,7 @@ function CreateReportModal({
 
       // Mandatory skill self-ratings when submitting
       if (submit && !COMPETENCY_AREAS.every(area => skillSelfRatings[area])) {
-        setError(
-          'Bitte bewerten Sie alle Kompetenzbereiche (Fachkompetenz, Methodenkompetenz, Personalkompetenz) mit einer Note 1-6.'
-        );
+        setError(t('reports.missing.skills'));
         setSaving(false);
         return;
       }
@@ -1143,38 +1200,47 @@ function CreateReportModal({
             </div>
           )}
 
-          {error && (
-            <div className="bg-destructive/10 border-destructive/30 text-destructive rounded-lg border p-3 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* Period Selection */}
+          {/* Period Selection (the error of a click is shown in the footer,
+              next to the buttons, where the trainee is looking) */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-foreground mb-2 block text-sm font-medium">
+              <label
+                htmlFor="report-week"
+                className="text-foreground mb-2 block text-sm font-medium"
+              >
                 {t('reports.calendarWeek')}
               </label>
               <input
+                id="report-week"
                 type="number"
                 min={1}
                 max={53}
                 value={weekNumber}
+                aria-invalid={!periodValid}
                 onChange={e => setWeekNumber(Number(e.target.value))}
-                className="bg-background border-border text-foreground w-full rounded-lg border px-3 py-2"
+                className={`bg-background text-foreground w-full rounded-lg border px-3 py-2 ${
+                  periodValid ? 'border-border' : 'border-destructive'
+                }`}
               />
             </div>
             <div>
-              <label className="text-foreground mb-2 block text-sm font-medium">
+              <label
+                htmlFor="report-year"
+                className="text-foreground mb-2 block text-sm font-medium"
+              >
                 {t('reports.yearLabel')}
               </label>
               <input
+                id="report-year"
                 type="number"
                 min={2020}
                 max={2100}
                 value={year}
+                aria-invalid={!periodValid}
                 onChange={e => setYear(Number(e.target.value))}
-                className="bg-background border-border text-foreground w-full rounded-lg border px-3 py-2"
+                className={`bg-background text-foreground w-full rounded-lg border px-3 py-2 ${
+                  periodValid ? 'border-border' : 'border-destructive'
+                }`}
               />
             </div>
           </div>
@@ -1198,6 +1264,7 @@ function CreateReportModal({
                 return (
                   <div
                     key={entry.useCaseId}
+                    data-hai-form="activity_report_entry"
                     className={`rounded-lg border p-4 ${isOverbooked ? 'border-yellow-500/50 bg-yellow-500/10' : 'border-border bg-muted/30'}`}
                   >
                     <div className="mb-3 flex items-start justify-between">
@@ -1223,13 +1290,21 @@ function CreateReportModal({
                           {t('reports.plannedHours')}
                         </label>
                         <p className="text-foreground font-medium">
-                          {useCase?.plannedHours} {t('reports.hours')}
+                          {useCase?.plannedHours
+                            ? `${useCase.plannedHours} ${t('reports.hours')}`
+                            : t('reports.noPlannedHours')}
                         </p>
                         {/* Remaining hours indicator */}
                         {(() => {
                           const ucHours = useCaseHours[entry.useCaseId];
                           if (!ucHours) return null;
+                          // The server counts the other reports, the hours typed
+                          // into this form come off live (WMCNL-2943)
                           const remaining = ucHours.remainingHours;
+                          const remainingNow = remainingAfterEntry(
+                            remaining,
+                            entry.actualHours
+                          );
                           const usedPercent = Math.min(
                             100,
                             ((ucHours.usedHours + entry.actualHours) /
@@ -1243,7 +1318,7 @@ function CreateReportModal({
                                 <span
                                   className={`text-[10px] ${wouldExceed ? 'font-medium text-red-400' : 'text-muted-foreground'}`}
                                 >
-                                  {remaining.toFixed(1)}{' '}
+                                  {formatHours(remainingNow, language)}{' '}
                                   {t('reports.hoursRemaining')}
                                 </span>
                               </div>
@@ -1266,10 +1341,15 @@ function CreateReportModal({
                         })()}
                       </div>
                       <div>
-                        <label className="text-muted-foreground mb-1 block text-xs">
+                        <label
+                          htmlFor={`hours-${entry.useCaseId}`}
+                          className="text-muted-foreground mb-1 block text-xs"
+                        >
                           {t('reports.actualHours')}
                         </label>
                         <input
+                          id={`hours-${entry.useCaseId}`}
+                          data-hai-field="hours"
                           type="number"
                           min={0}
                           step={0.5}
@@ -1281,16 +1361,26 @@ function CreateReportModal({
                               Math.max(0, Number(e.target.value) || 0)
                             )
                           }
+                          aria-invalid={!(entry.actualHours > 0)}
                           className={`bg-background text-foreground w-full rounded border px-3 py-1.5 ${
-                            isOverbooked ? 'border-yellow-500' : 'border-border'
+                            !(entry.actualHours > 0)
+                              ? 'border-destructive'
+                              : isOverbooked
+                                ? 'border-yellow-500'
+                                : 'border-border'
                           }`}
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="text-muted-foreground mb-1 block text-xs">
+                        <label
+                          htmlFor={`notes-${entry.useCaseId}`}
+                          className="text-muted-foreground mb-1 block text-xs"
+                        >
                           {t('reports.notesLabel')}
                         </label>
                         <textarea
+                          id={`notes-${entry.useCaseId}`}
+                          data-hai-field="notes"
                           value={entry.notes}
                           onChange={e =>
                             updateEntry(
@@ -1301,7 +1391,12 @@ function CreateReportModal({
                           }
                           placeholder={t('reports.notesPlaceholder')}
                           rows={3}
-                          className="bg-background border-border text-foreground min-h-[60px] w-full resize-y rounded border px-3 py-1.5"
+                          aria-invalid={entry.notes.trim().length === 0}
+                          className={`bg-background text-foreground min-h-[60px] w-full resize-y rounded border px-3 py-1.5 ${
+                            entry.notes.trim().length === 0
+                              ? 'border-destructive'
+                              : 'border-border'
+                          }`}
                         />
                       </div>
                     </div>
@@ -1365,9 +1460,10 @@ function CreateReportModal({
                         <span>
                           {t('reports.overbookedDetails').replace(
                             '{hours}',
-                            (
-                              entry.actualHours - (useCase?.plannedHours || 0)
-                            ).toFixed(1)
+                            formatHours(
+                              entry.actualHours - (useCase?.plannedHours || 0),
+                              language
+                            )
                           )}
                         </span>
                       </div>
@@ -1389,7 +1485,7 @@ function CreateReportModal({
                               .replace('{entered}', String(entry.actualHours))
                               .replace(
                                 '{remaining}',
-                                ucHours.remainingHours.toFixed(1)
+                                formatHours(ucHours.remainingHours, language)
                               )
                               .replace('{total}', String(ucHours.totalHours))}
                           </span>
@@ -1497,7 +1593,11 @@ function CreateReportModal({
                 return (
                   <div
                     key={area}
-                    className="border-border/50 bg-card hover:bg-muted/20 rounded-xl border p-4 transition-colors"
+                    className={`bg-card hover:bg-muted/20 rounded-xl border p-4 transition-colors ${
+                      selectedGrade
+                        ? 'border-border/50'
+                        : 'border-destructive/60'
+                    }`}
                   >
                     <div className="flex items-center justify-between gap-4">
                       <div className="min-w-0 flex-1">
@@ -1582,7 +1682,7 @@ function CreateReportModal({
                   {formatModalPhaseLabel(1)}
                 </h4>
                 {components
-                  .filter(c => c.trainingYear === 1)
+                  .filter(c => componentPhase(c) === 1)
                   .sort((a, b) => a.orderIndex - b.orderIndex)
                   .map(component => (
                     <ComponentItem
@@ -1604,7 +1704,7 @@ function CreateReportModal({
                   {formatModalPhaseLabel(2)}
                 </h4>
                 {components
-                  .filter(c => c.trainingYear === 2)
+                  .filter(c => componentPhase(c) === 2)
                   .sort((a, b) => a.orderIndex - b.orderIndex)
                   .map(component => (
                     <ComponentItem
@@ -1626,7 +1726,7 @@ function CreateReportModal({
                   {t('reports.integrativePhase')}
                 </h4>
                 {components
-                  .filter(c => c.trainingYear === 3 || !c.trainingYear) // Fallback for any others
+                  .filter(c => componentPhase(c) === 3)
                   .sort((a, b) => a.orderIndex - b.orderIndex)
                   .map(component => (
                     <ComponentItem
@@ -1645,37 +1745,62 @@ function CreateReportModal({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="border-border/50 flex items-center justify-between border-t p-6">
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground px-4 py-2 transition-colors"
-          >
-            {t('common.cancel')}
-          </button>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => handleSave(false)}
-              disabled={
-                saving ||
-                entries.length === 0 ||
-                duplicateExists ||
-                hasOverbooking ||
-                exceeds40h
-              }
-              className="bg-muted text-foreground hover:bg-muted/80 flex items-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
+        {/* Footer: what is wrong or missing stands right above the buttons */}
+        <div className="border-border/50 border-t p-6">
+          {error && (
+            <div
+              role="alert"
+              className="bg-destructive/10 border-destructive/30 text-destructive mb-4 rounded-lg border p-3 text-sm"
             >
-              <Save className="h-4 w-4" />
-              {t('reports.saveAsDraft')}
-            </button>
-            <button
-              onClick={() => handleSave(true)}
-              disabled={!canSubmit}
-              className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
+              {error}
+            </div>
+          )}
+          {problems.length > 0 && (
+            <div
+              data-testid="report-problems"
+              className="border-border bg-muted/30 mb-4 rounded-lg border p-3 text-sm"
             >
-              <Send className="h-4 w-4" />
-              {t('common.submit')}
+              <p className="text-foreground mb-1 font-medium">
+                {t('reports.missing.title')}
+              </p>
+              <ul className="text-muted-foreground list-disc space-y-0.5 pl-5">
+                {problems.map(problem => (
+                  <li key={problem}>{problem}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground px-4 py-2 transition-colors"
+            >
+              {t('common.cancel')}
             </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleSave(false)}
+                disabled={
+                  saving ||
+                  entries.length === 0 ||
+                  duplicateExists ||
+                  hasOverbooking ||
+                  exceeds40h
+                }
+                className="bg-muted text-foreground hover:bg-muted/80 flex items-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {t('reports.saveAsDraft')}
+              </button>
+              <button
+                onClick={() => handleSave(true)}
+                disabled={!canSubmit}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" />
+                {t('common.submit')}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1728,6 +1853,9 @@ function ReportDetailModal({
   const [savingSkills, setSavingSkills] = useState(false);
   const [skillsSaved, setSkillsSaved] = useState(false);
 
+  // Escape closes the detail like every other dialog
+  useEscapeKey(onClose, !savingSkills);
+
   const [locallySubmitted, setLocallySubmitted] = useState(false);
 
   // One-time submission: check if skills were already submitted (from DB or just saved)
@@ -1760,9 +1888,12 @@ function ReportDetailModal({
 
   const loadEntries = async () => {
     try {
-      const res = await authFetch(`/api/activity-reports/${report.id}/entries`, {
-        cache: 'no-store',
-      });
+      const res = await authFetch(
+        `/api/activity-reports/${report.id}/entries`,
+        {
+          cache: 'no-store',
+        }
+      );
       if (res.ok) {
         const data = await res.json();
         setEntries(data.entries || []);
@@ -1837,6 +1968,12 @@ function ReportDetailModal({
   const handleSubmitDraftReport = async () => {
     if (!profile?.id || report.status !== 'DRAFT') return;
 
+    // A draft without a single entry with hours is not handed in (WMCNL-3011)
+    if (!activityReportHasContent(entries)) {
+      toast.error(t('reports.error.noEntries'));
+      return;
+    }
+
     const missingNotes = entries.filter(
       entry => !entry.notes || entry.notes.trim().length === 0
     );
@@ -1845,8 +1982,14 @@ function ReportDetailModal({
       area => !skillSelfRatings[area]
     );
 
-    if (missingNotes.length > 0 || missingGrades.length > 0 || missingSkills.length > 0) {
-      toast.error('Bitte fülle Notizen, Selbstbewertungen und Kompetenzbewertungen vollständig aus.');
+    if (
+      missingNotes.length > 0 ||
+      missingGrades.length > 0 ||
+      missingSkills.length > 0
+    ) {
+      toast.error(
+        'Bitte fülle Notizen, Selbstbewertungen und Kompetenzbewertungen vollständig aus.'
+      );
       return;
     }
 
@@ -1980,7 +2123,9 @@ function ReportDetailModal({
                           {t('reports.plannedHours')}
                         </p>
                         <p className="text-foreground font-medium">
-                          {entry.plannedHours} {t('reports.hours')}
+                          {entry.plannedHours
+                            ? `${entry.plannedHours} ${t('reports.hours')}`
+                            : t('reports.noPlannedHours')}
                         </p>
                       </div>
                       <div>
@@ -2092,7 +2237,11 @@ function ReportDetailModal({
               </div>
               {isSkillsSubmitted && !skillsSaved && (
                 <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                  <Check className="h-3.5 w-3.5" /> Abgegeben
+                  <Check className="h-3.5 w-3.5" />
+                  {/* A draft is not handed in yet (WMCNL-2944) */}
+                  {report.status === 'DRAFT'
+                    ? t('reports.skillsDraft')
+                    : t('reports.skillsSubmitted')}
                 </span>
               )}
               {skillsSaved && (
@@ -2267,7 +2416,7 @@ function ReportDetailModal({
           {report.status === 'DRAFT' && (
             <button
               onClick={handleSubmitDraftReport}
-              disabled={savingSkills}
+              disabled={savingSkills || loading}
               className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
             >
               <Send className="h-4 w-4" />
@@ -2308,7 +2457,7 @@ function ComponentItem({
   onAddEntry,
   useCaseHours,
 }: ComponentItemProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   return (
     <div className="border-border/50 border-b last:border-b-0">
       <button
@@ -2341,11 +2490,22 @@ function ComponentItem({
           {useCases
             .sort((a, b) => a.orderIndex - b.orderIndex)
             .map(useCase => {
-              const isSelected = entries.some(e => e.useCaseId === useCase.id);
+              const selectedEntry = entries.find(
+                e => e.useCaseId === useCase.id
+              );
+              const isSelected = Boolean(selectedEntry);
               const ucHours = useCaseHours?.[useCase.id];
               const isExhausted = ucHours && ucHours.remainingHours <= 0;
+              // A use case in this report shows what is left after the hours
+              // typed into the form, the same number as in its card
+              const remainingLeft = ucHours
+                ? remainingAfterEntry(
+                    ucHours.remainingHours,
+                    selectedEntry?.actualHours
+                  )
+                : 0;
               const remainingText = ucHours
-                ? `${ucHours.remainingHours} ${t('reports.hoursRemaining')}`
+                ? `${formatHours(remainingLeft, language)} ${t('reports.hoursRemaining')}`
                 : '';
 
               return (
@@ -2392,13 +2552,15 @@ function ComponentItem({
                         </span>
                       ) : ucHours ? (
                         <span
-                          className={`text-xs whitespace-nowrap ${ucHours.remainingHours <= 10 ? 'text-yellow-500' : 'text-muted-foreground'}`}
+                          className={`text-xs whitespace-nowrap ${remainingLeft <= 10 ? 'text-yellow-500' : 'text-muted-foreground'}`}
                         >
                           {remainingText}
                         </span>
                       ) : (
                         <span className="text-muted-foreground text-xs whitespace-nowrap">
-                          ({useCase.plannedHours} {t('reports.hours')})
+                          {useCase.plannedHours
+                            ? `(${useCase.plannedHours} ${t('reports.hours')})`
+                            : `(${t('reports.noPlannedHours')})`}
                         </span>
                       )}
                     </span>

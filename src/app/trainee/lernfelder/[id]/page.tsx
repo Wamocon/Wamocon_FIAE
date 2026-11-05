@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { formatLernfeldLabel } from '@/lib/school/lernfeld-label';
+import { joinHardLineBreaks } from '@/lib/text/paragraphs';
 import {
   ArrowLeft,
   BookOpen,
@@ -156,14 +158,16 @@ export default function TraineeLernfeldDetailPage() {
           </div>
           <div className="min-w-0">
             <span className="bg-accent text-accent-foreground rounded-full px-3 py-1 text-xs font-bold">
-              {lernfeld.label}
+              {formatLernfeldLabel(lernfeld.label)}
             </span>
             <h1 className="text-foreground mt-2 text-2xl font-bold break-words">
               {lernfeld.title}
             </h1>
             {lernfeld.description ? (
+              // the hard line breaks of a text taken from a PDF would cut the
+              // sentences in the middle, only paragraphs stay (WMCNL-2960)
               <p className="text-muted mt-2 max-w-2xl text-sm whitespace-pre-line">
-                {lernfeld.description}
+                {joinHardLineBreaks(lernfeld.description)}
               </p>
             ) : (
               <p className="text-muted/70 mt-2 text-sm italic">
@@ -239,6 +243,11 @@ export default function TraineeLernfeldDetailPage() {
                     </span>
                   )}
                 </div>
+                {!enabler.accessible && (
+                  <p className="text-muted mt-1 text-xs">
+                    {t('lernfelder.detail.releasedByTrainer')}
+                  </p>
+                )}
                 {enabler.accessible && enabler.state && (
                   <div className="mt-2">
                     <EnablerStateBadge
@@ -301,6 +310,11 @@ export default function TraineeLernfeldDetailPage() {
                     </span>
                   )}
                 </div>
+                {!useCase.accessible && (
+                  <p className="text-muted mt-1 text-xs">
+                    {t('lernfelder.detail.releasedByTrainer')}
+                  </p>
+                )}
               </li>
             ))}
           </ul>

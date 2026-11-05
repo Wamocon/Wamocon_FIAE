@@ -84,6 +84,10 @@ describe('the targets per level', () => {
       'calendar',
       'profile',
       'quizzes',
+      // the menu entries "Lernen" and "Ausbilder-Feedback"
+      'courses',
+      'trainer_feedback',
+      'evaluations',
     ]);
     for (const target of targetsForLevel('TRAINEE')) {
       expect(target.path.startsWith('/trainee/')).toBe(true);
@@ -98,10 +102,14 @@ describe('the targets per level', () => {
       'calendar',
       'profile',
       'quizzes',
+      // the courses of the trainer level are managed in the content management
+      'courses',
       'trainees',
       'reviews',
       'content_management',
       'statistics',
+      'evaluations',
+      'certificate',
     ]);
     for (const target of targetsForLevel('TRAINER')) {
       expect(target.path.startsWith('/trainer/')).toBe(true);
@@ -129,6 +137,25 @@ describe('the targets per level', () => {
     expect(staticTargetFor('organizations', 'TRAINER')).toBeNull();
     expect(staticTargetFor('users', 'TRAINEE')).toBeNull();
     expect(staticTargetFor('content_management', 'TRAINEE')).toBeNull();
+    // the feedback page is a page of the trainees only
+    expect(staticTargetFor('trainer_feedback', 'TRAINER')).toBeNull();
+    expect(staticTargetFor('trainer_feedback', 'ADMIN')).toBeNull();
+  });
+
+  it('gives the menu entry "Lernen" to a trainee and the content management to the trainer levels', () => {
+    expect(staticTargetFor('courses', 'TRAINEE')?.path).toBe(
+      '/trainee/courses'
+    );
+    expect(staticTargetFor('courses', 'TRAINEE')?.label).toBe('Lernen');
+    expect(staticTargetFor('courses', 'TRAINER')?.path).toBe(
+      '/trainer/content-management'
+    );
+    expect(staticTargetFor('courses', 'ADMIN')?.path).toBe(
+      '/trainer/content-management'
+    );
+    expect(staticTargetFor('trainer_feedback', 'TRAINEE')?.path).toBe(
+      '/trainee/trainer-feedback'
+    );
   });
 
   it('keeps the calendar of a trainee on the school page, as the sidebar does', () => {
@@ -185,10 +212,26 @@ describe('toNavigationOffer (what the client reads)', () => {
     reason: 'Dort findest du den Stundenplan.',
   };
 
-  it('takes an offer with an allowed path and only its three members', () => {
+  it('takes an offer with an allowed path and only its known members', () => {
     expect(toNavigationOffer({ ...good, extra: 'x', status: 'open' })).toEqual(
       good
     );
+  });
+
+  it('takes the mark auto only when it is exactly true', () => {
+    expect(toNavigationOffer({ ...good, auto: true })).toEqual({
+      ...good,
+      auto: true,
+    });
+    for (const auto of [false, 'true', 1, null, {}, []]) {
+      expect(toNavigationOffer({ ...good, auto })).toEqual(good);
+    }
+  });
+
+  it('never marks an offer with a path outside the list as auto', () => {
+    expect(
+      toNavigationOffer({ ...good, path: '/trainer/admin/secret', auto: true })
+    ).toBeUndefined();
   });
 
   it.each([

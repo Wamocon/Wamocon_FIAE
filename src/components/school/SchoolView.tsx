@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -70,7 +70,9 @@ export function SchoolView() {
     const searchParams = useSearchParams();
 
     // Get tab from URL or default to calendar
-    const tabParam = searchParams.get('tab') as TabId | null;
+    // (notifications created before the tab was renamed link to "blocks")
+    const rawTab = searchParams.get('tab');
+    const tabParam = (rawTab === 'blocks' ? 'calendar' : rawTab) as TabId | null;
     const [activeTab, setActiveTab] = useState<TabId>(
         tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'lernfelder'
     );
@@ -92,15 +94,16 @@ export function SchoolView() {
         router.push(`?${params.toString()}`, { scroll: false });
     };
 
-    // Load overview stats
-    useEffect(() => {
+    // Load overview stats. The tabs call it again after they changed something
+    // (an exam added or deleted, a calendar entry), so the cards above never
+    // show a number of before (WMCNL-2956).
+    const loadStats = useCallback(async () => {
         if (!profile?.id) return;
-
-        const loadStats = async () => {
+        {
             try {
-                // Fetch upcoming exams
+                // Fetch upcoming exams (the number is the count, not a page)
                 const examsRes = await authFetch(
-                    `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=true&limit=5`,
+                    `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=true&limit=200`,
                     { cache: 'no-store' }
                 );
                 const examsData = examsRes.ok ? await examsRes.json() : { exams: [] };
@@ -130,7 +133,8 @@ export function SchoolView() {
                     : null;
 
                 setStats({
-                    upcomingExams: examsData.exams?.length || 0,
+                    upcomingExams:
+                        examsData.meta?.total ?? examsData.exams?.length ?? 0,
                     pendingReports: reportsData.meta?.stats?.draft || 0,
                     currentBlock: blockLabel,
                     averageGrade: null,
@@ -140,19 +144,21 @@ export function SchoolView() {
             } finally {
                 setLoading(false);
             }
-        };
-
-        loadStats();
+        }
     }, [profile?.id, catalog]);
+
+    useEffect(() => {
+        loadStats();
+    }, [loadStats]);
 
     const renderTabContent = () => {
         switch (activeTab) {
             case 'lernfelder':
                 return <LernfelderTab />;
             case 'calendar':
-                return <BlockCalendar />;
+                return <BlockCalendar onChanged={loadStats} />;
             case 'exams':
-                return <ExamManager />;
+                return <ExamManager onChanged={loadStats} />;
             case 'notes':
                 return <LernfeldNotes />;
 

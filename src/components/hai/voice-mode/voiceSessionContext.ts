@@ -10,7 +10,7 @@ import { createContext, useContext } from 'react';
 import type { HaiNavigationOffer } from '../HaiProvider';
 import type { useHaiVoice } from '../useHaiVoice';
 
-export type VoiceModeView = 'closed' | 'full' | 'mini';
+export type VoiceModeView = 'closed' | 'open';
 
 export interface OpenNavigationOffer {
   messageId: string;
@@ -22,7 +22,7 @@ export interface HaiVoiceSession {
   voice: ReturnType<typeof useHaiVoice>;
   /** The voice assistant is on for the organization and this browser can use it. */
   available: boolean;
-  /** closed, the large voice mode, or the small mascot at the edge. */
+  /** closed, or open: the HAI figure stands in its basin at the bottom right. */
   view: VoiceModeView;
   /** Subtitles shown in the voice mode (a choice of the person, kept in the browser). */
   captions: boolean;
@@ -30,12 +30,14 @@ export interface HaiVoiceSession {
   /** The page the HAI offered by voice and the person has not answered yet. */
   offer: OpenNavigationOffer | null;
   openNavigation: (messageId: string) => void;
-  /** Open the voice mode (large) and start listening if the person consented. */
+  /** Open the voice mode (the figure rises) and start listening if the person consented. */
   openMode: () => void;
   /** End the conversation and the voice mode. */
   closeMode: () => void;
-  /** Bring the large mascot back from the edge. */
-  restore: () => void;
+  /** The microphone is switched off by the person (the conversation waits). */
+  muted: boolean;
+  /** Switch the microphone off (the loop stops, the mode stays) or on again. */
+  toggleMic: () => void;
   /** Consent to the provider(s) and start. */
   acceptConsent: () => void;
 }

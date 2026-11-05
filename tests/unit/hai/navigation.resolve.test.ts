@@ -11,6 +11,16 @@ const mockEnablers = jest.fn();
 const mockUseCases = jest.fn();
 const mockLock = jest.fn();
 const mockNext = jest.fn();
+const mockTrainerEnablers = jest.fn();
+const mockTrainerUseCases = jest.fn();
+jest.mock('@/lib/hai/navigation/contentData', () => ({
+  loadTrainerEnablers: (...args: unknown[]) => mockTrainerEnablers(...args),
+  loadTrainerUseCases: (...args: unknown[]) => mockTrainerUseCases(...args),
+  loadCourses: jest.fn().mockResolvedValue([]),
+  findDocumentsOf: jest.fn().mockResolvedValue([]),
+  findDocumentsByName: jest.fn().mockResolvedValue([]),
+  enablerHasScenarioPdf: jest.fn().mockResolvedValue(false),
+}));
 jest.mock('@/lib/hai/navigation/data', () => ({
   loadTraineeEnablers: (...args: unknown[]) => mockEnablers(...args),
   loadTraineeUseCases: (...args: unknown[]) => mockUseCases(...args),
@@ -36,6 +46,7 @@ const FIAE = '00000000-0000-4000-8000-000000000001';
 const E1 = '20000000-0000-4000-8000-000000000001';
 const E2 = '20000000-0000-4000-8000-000000000002';
 const U1 = '30000000-0000-4000-8000-000000000001';
+const COURSE = '40000000-0000-4000-8000-000000000001';
 
 function scope(overrides: Partial<NavigationScope> = {}): NavigationScope {
   return { userId: USER, level: 'TRAINEE', catalogIds: [FIAE], ...overrides };
@@ -51,7 +62,7 @@ const candidate = (id: string, title: string, code: string | null = null) => ({
   id,
   title,
   code,
-  courseId: 'course-1',
+  courseId: COURSE,
   courseTitle: 'Datenbanken',
 });
 
@@ -217,14 +228,23 @@ describe('rights per level', () => {
     expect(adminStats.offer?.path).toBe('/trainer/admin/content-stats');
   });
 
-  it('sends a trainer who asks for an enabler or a use case to the content management', async () => {
-    for (const message of [
-      'öffne Enabler 3',
+  it('sends a trainer who asks for an enabler to the editor of its course and for a use case to its own page', async () => {
+    mockTrainerEnablers.mockResolvedValue([
+      candidate(E1, 'Enabler 3: SQL Grundlagen', '3'),
+    ]);
+    mockTrainerUseCases.mockResolvedValue([
+      candidate(U1, 'Bestellsystem', '2'),
+    ]);
+    const enabler = await run('öffne Enabler 3', scope({ level: 'TRAINER' }));
+    expect(enabler.offer?.path).toBe(
+      `/trainer/content-management/${COURSE}/edit?enabler=${E1}`
+    );
+    const useCase = await run(
       'öffne den Use Case Bestellsystem',
-    ]) {
-      const outcome = await run(message, scope({ level: 'TRAINER' }));
-      expect(outcome.offer?.path).toBe('/trainer/content-management');
-    }
+      scope({ level: 'TRAINER' })
+    );
+    expect(useCase.offer?.path).toBe(`/trainer/use-cases/${U1}`);
+    // a trainer never goes through the records of a trainee
     expect(mockEnablers).not.toHaveBeenCalled();
     expect(mockUseCases).not.toHaveBeenCalled();
   });
@@ -351,17 +371,18 @@ describe('a locked enabler (order of work)', () => {
       hasActiveQuiz: true,
     });
     const outcome = await run('öffne Enabler 3');
-    expect(outcome.kind).toBe('locked');
-    expect(outcome.offer).toBeUndefined();
-    // GESPERRT: the reason (order of work) and a way forward
-    expect(outcome.text).toBe(
-      'Der Enabler Enabler 3: SQL Grundlagen ist noch gesperrt, weil in der Reihenfolge der Arbeit zuerst Enabler 2: Datenmodell abgeschlossen sein muss. Schließe Enabler 2: Datenmodell ab, dann wird er frei, und bis dahin helfe ich dir gern bei Enabler 2: Datenmodell.'
+    // the page opens like the page itself shows a locked enabler: title and
+    // material can be read, the answer says that quizzes and submission are closed
+    expect(outcome.kind).toBe('offer');
+    expect(outcome.offer?.path).toBe(`/trainee/enablers/${E1}`);
+    expect(outcome.offer?.path).not.toContain('quiz');
+    expect(outcome.offer?.reason).toBe(
+      'Er ist noch gesperrt, weil in der Reihenfolge der Arbeit zuerst Enabler 2: Datenmodell abgeschlossen sein muss. Titel und Material kannst du lesen, Quizze und Abgabe sind noch zu.'
     );
-    expect(namesDenialReason(outcome.text, 'GESPERRT')).toBe(true);
-    expect(outcome.text).not.toContain('/trainee');
+    expect(outcome.text).toContain('Titel und Material kannst du lesen');
   });
 
-  it('gives no link to the quiz of a locked enabler either', async () => {
+  it('gives no link to the quiz of a locked enabler', async () => {
     mockLock.mockResolvedValue({
       locked: true,
       lockedByTitle: null,
@@ -377,6 +398,7 @@ describe('a locked enabler (order of work)', () => {
   });
 
   it('writes the titles as plain text', async () => {
+    // (the text of a locked enabler too)
     mockEnablers.mockResolvedValue([
       candidate(E1, 'Enabler **3** [x](http://evil.example)', '3'),
     ]);

@@ -195,8 +195,13 @@ jobs:
       # (--update never); changing existing rows is a separate, manual decision (Content
       # Sync workflow, update_mode). The report with the exact counts of the dry run that
       # precedes the commit is written to the job summary. See scripts/db/content-sync.mjs.
+      # Only the occupation KFBM (--catalog KFBM, a fixed value, decision D18): the content
+      # of FIAE is not touched by a release, because the preview has FIAE rows that are
+      # missing in production on purpose or by accident. Aligning FIAE is a separate decision
+      # (manual Content Sync workflow). The run ends with a second dry run that must report
+      # zero changes.
       - name: Sync training content
-        run: node scripts/db/content-sync.mjs --linked --apply --direction preview-to-production --update never
+        run: node scripts/db/content-sync.mjs --linked --apply --direction preview-to-production --update never --catalog KFBM
 
   deploy:
     name: Deploy to Production

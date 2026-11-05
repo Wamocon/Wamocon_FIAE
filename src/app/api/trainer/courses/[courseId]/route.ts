@@ -11,6 +11,10 @@ import { apiCache } from '@/lib/api-cache';
 import { requireContentScope } from '@/lib/catalog/scope';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import {
+  removeSubmissionFiles,
+  submissionFileTargetsOfCourse,
+} from '@/lib/submission-file/on-delete';
+import {
   courses,
   courseMembers,
   courseSkills,
@@ -189,21 +193,26 @@ export async function PATCH(
     // Notify course members about the update
     try {
       const memberRows = await db
-        .select({ userId: courseMembers.userId })
+        .select({ userId: courseMembers.userId, role: courseMembers.role })
         .from(courseMembers)
         .where(eq(courseMembers.courseId, courseId as any));
       const membersToNotify = memberRows.filter(
         m => String(m.userId) !== trainerId
       );
       if (membersToNotify.length > 0) {
-        const courseTitle = out?.title || 'Kurs';
+        const courseTitle = out?.title || 'Fragenkomplex';
         const notifValues = membersToNotify.map(m => ({
           userId: String(m.userId),
           actorId: trainerId,
           type: 'COURSE_UPDATED',
-          title: 'Kurs aktualisiert',
-          message: `Der Kurs "${courseTitle}" wurde aktualisiert.`,
-          linkUrl: '/trainee/modules',
+          title: 'Fragenkomplex aktualisiert',
+          message: `Der Fragenkomplex "${courseTitle}" wurde aktualisiert.`,
+          // The course itself, not the list of the tab FIAE: the list of
+          // /trainee/modules goes to the courses of the first occupation, so
+          // a link to a KfBM course ended in an empty FIAE list
+          linkUrl: isTrainerLevelRole(m.role)
+            ? `/trainer/courses/${courseId}`
+            : `/trainee/modules/${courseId}`,
           context: { courseId },
           organizationId,
         }));
@@ -260,7 +269,11 @@ export async function DELETE(
       .select({ userId: courseMembers.userId, role: courseMembers.role })
       .from(courseMembers)
       .where(eq(courseMembers.courseId, courseId as any));
-    const courseName = courseRow.title || 'Kurs';
+    const courseName = courseRow.title || 'Fragenkomplex';
+
+    // The use cases of the course and their submissions go with it (cascade), the files of
+    // the submissions in the bucket do not: find them first, remove them after the delete
+    const fileTargets = await submissionFileTargetsOfCourse(courseId);
 
     // Import trainee_achieved_skills for cascade delete
     const { traineeAchievedSkills } =
@@ -287,8 +300,8 @@ export async function DELETE(
           userId: String(m.userId),
           actorId: trainerId,
           type: 'COURSE_DELETED',
-          title: 'Kurs gelöscht',
-          message: `Der Kurs "${courseName}" wurde gelöscht.`,
+          title: 'Fragenkomplex gelöscht',
+          message: `Der Fragenkomplex "${courseName}" wurde gelöscht.`,
           linkUrl: isTrainerLevelRole(m.role)
             ? '/trainer/courses'
             : '/trainee/modules',
@@ -300,6 +313,9 @@ export async function DELETE(
     } catch (notifyErr) {
       console.warn('Failed to notify members for course deletion', notifyErr);
     }
+
+    // Last, so that a slow storage can not keep the notifications back. Never throws.
+    await removeSubmissionFiles(fileTargets);
 
     return NextResponse.json({ ok: true });
   } catch (e) {

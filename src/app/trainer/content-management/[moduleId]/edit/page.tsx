@@ -1,7 +1,7 @@
 'use client';
 
 import { authFetch } from '@/lib/authFetch';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,12 +22,27 @@ import {
 import { PdfUploader } from '@/components/trainer/PdfUploader';
 import { FlipbookViewer } from '@/components/ui/FlipbookViewer';
 import { documentTypeLabel } from '@/lib/documentTypeLabel';
+import { useEditorParams } from '@/lib/hai/navigation/useDocumentParam';
+
+// One comparable string of the course form, to tell unsaved changes
+const courseFormKey = (form: {
+  title: string;
+  year: string;
+  chapter: string;
+  examPart: string;
+  skills: string;
+}) => JSON.stringify(form);
 
 export default function EditCoursePage() {
   const router = useRouter();
   const params = useParams<{ moduleId: string }>();
   const courseId = params?.moduleId as string;
-  const { profile, isPlatformOwner, subscriptionPlan, loading: authLoading } = useAuth();
+  const {
+    profile,
+    isPlatformOwner,
+    subscriptionPlan,
+    loading: authLoading,
+  } = useAuth();
   // Curriculum edits are for the platform wide admin only. isPlatformOwner
   // and the super admin decide which documents are visible (canSeeTheoryDoc).
   const canEditCurriculum = useIsSuperAdmin();
@@ -61,6 +76,9 @@ export default function EditCoursePage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // The form values as loaded or last saved. Only a curriculum editor can
+  // change them, so only an editor can have unsaved changes (WMCNL-3022)
+  const [loadedForm, setLoadedForm] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewPdf, setPreviewPdf] = useState<{
     title: string;
@@ -132,7 +150,8 @@ export default function EditCoursePage() {
   // LIGHT plan hides only Wamocon THEORY PDFs; scenario + use case PDFs are always visible
   const canSeeTheoryDoc = (doc: { organizationId?: string | null }) => {
     if (isPlatformOwner || canEditCurriculum) return true;
-    if (isLightPlan) return doc.organizationId != null && doc.organizationId === trainerOrgId;
+    if (isLightPlan)
+      return doc.organizationId != null && doc.organizationId === trainerOrgId;
     return true;
   };
 
@@ -184,10 +203,9 @@ export default function EditCoursePage() {
     const load = async () => {
       try {
         setLoading(true);
-        const res = await authFetch(
-          `/api/trainer/courses/${courseId}`,
-          { cache: 'no-store' }
-        );
+        const res = await authFetch(`/api/trainer/courses/${courseId}`, {
+          cache: 'no-store',
+        });
         if (!res.ok)
           throw new Error(t('trainer.content.errorCourseLoadFailed'));
         const data = await res.json();
@@ -196,6 +214,15 @@ export default function EditCoursePage() {
         setChapter(String(data.course.chapter ?? ''));
         setExamPart(String(data.course.examPart ?? '') as any);
         setSkills((data.skills || []).join(', '));
+        setLoadedForm(
+          courseFormKey({
+            title: data.course.title,
+            year: String(data.course.year ?? ''),
+            chapter: String(data.course.chapter ?? ''),
+            examPart: String(data.course.examPart ?? ''),
+            skills: (data.skills || []).join(', '),
+          })
+        );
         setEnablers(
           (data.enablers || []).map((e: any) => ({
             id: e.id,
@@ -242,6 +269,31 @@ export default function EditCoursePage() {
     };
     if (courseId) load();
   }, [courseId]);
+
+  const hasUnsavedChanges =
+    canEditCurriculum &&
+    loadedForm !== null &&
+    courseFormKey({ title, year, chapter, examPart, skills }) !== loadedForm;
+
+  // Reloading or closing the tab with unsaved changes asks first
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasUnsavedChanges]);
+
+  const handleCancel = () => {
+    if (
+      hasUnsavedChanges &&
+      !window.confirm(t('trainer.content.confirmDiscard'))
+    )
+      return;
+    router.back();
+  };
 
   useEffect(() => {
     const q = searchTrainer.trim();
@@ -319,16 +371,14 @@ export default function EditCoursePage() {
           .filter(Boolean),
       };
 
-      const res = await authFetch(
-        `/api/trainer/courses/${courseId}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await authFetch(`/api/trainer/courses/${courseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
       if (!res.ok) throw new Error(t('trainer.content.errorSaveFailed'));
 
+      setLoadedForm(courseFormKey({ title, year, chapter, examPart, skills }));
       router.replace('/trainer/content-management');
     } catch (e: any) {
       setError(e?.message || t('common.unknownError'));
@@ -337,12 +387,117 @@ export default function EditCoursePage() {
     }
   };
 
+  // Opens the editor (or, for a trainer without write rights, the view) of one
+  // enabler of this course: the Edit button of the list, and a link of the HAI
+  // (?enabler=<id>) take the same way.
+  const openEnablerEditor = async (
+    enablerId: string
+  ): Promise<
+    Array<{ id: string; title: string; storageUrl: string; fileName: string }>
+  > => {
+    let loaded: Array<{
+      id: string;
+      title: string;
+      storageUrl: string;
+      fileName: string;
+    }> = [];
+    try {
+      setEditingEnablerId(enablerId);
+      const er = await authFetch(`/api/trainer/enablers/${enablerId}`, {
+        cache: 'no-store',
+      });
+      if (er.ok) {
+        const ej = await er.json();
+        const en = ej.enabler || {};
+        setEnablerTitle(en.title || '');
+        setEnablerDescription(en.descriptionText || '');
+        setEnablerScenarioPdf(en.scenarioPdfUrl || '');
+        setEnablerScenarioPdfLink(ej.signedLinks?.scenarioPdfUrl || '');
+        // The save sends all of these, so they have to be loaded:
+        // an empty state would switch the lesson off and drop the links
+        setEnablerPpt(en.pptUrl || '');
+        setEnablerVideo(en.videoUrl || '');
+        setEnablerDuration(
+          en.durationValue != null ? String(en.durationValue) : ''
+        );
+        setEnablerActive(!!en.isActive);
+      }
+      const ql = await authFetch(`/api/trainer/enablers/${enablerId}/quizzes`, {
+        cache: 'no-store',
+      });
+      if (ql.ok) {
+        const qlj = await ql.json();
+        setEnablerQuizList(qlj.quizzes || []);
+      } else {
+        setEnablerQuizList([]);
+      }
+      try {
+        const dr = await authFetch(
+          `/api/trainer/enablers/${enablerId}/documents`,
+          { cache: 'no-store' }
+        );
+        if (dr.ok) {
+          const dj = await dr.json();
+          loaded = dj.documents || [];
+          setEnablerDocuments(loaded);
+        } else {
+          setEnablerDocuments([]);
+        }
+      } catch {
+        setEnablerDocuments([]);
+      }
+      setShowEditEnabler(true);
+    } catch (e) {
+      console.error(e);
+    }
+    return loaded;
+  };
+
+  // A link of the HAI (?enabler=<id>, with ?document=<id> for a file of it)
+  // opens the enabler of this course the way the Edit button does, and shows the
+  // file in the reader when it is one of the files the list of the enabler gives
+  // this person. Anything else gets a neutral note, a missing enabler and a missing
+  // or forbidden file alike. Opening writes nothing.
+  const { enablerId: linkedEnabler, documentId: linkedDocument } =
+    useEditorParams();
+  const handledLink = useRef<string | null>(null);
+  const [linkNote, setLinkNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!linkedEnabler || loading || authLoading) return;
+    const key = `${linkedEnabler}:${linkedDocument ?? ''}`;
+    if (handledLink.current === key) return;
+    handledLink.current = key;
+    if (!enablers.some(item => item.id === linkedEnabler)) {
+      setLinkNote(t('enablerPage.notFound'));
+      return;
+    }
+    void openEnablerEditor(linkedEnabler).then(files => {
+      if (!linkedDocument) return;
+      const file = files.find(item => item.id === linkedDocument);
+      if (file?.storageUrl) {
+        setPreviewPdf({ title: file.title, url: file.storageUrl });
+      } else {
+        setLinkNote(t('document.notFound'));
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedEnabler, linkedDocument, loading, authLoading, enablers]);
+
   if (loading || authLoading) return <PageLoader />;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
   return (
     <div className="from-background relative min-h-full space-y-6 bg-gradient-to-br via-red-900/30 to-red-800/40 p-6">
       <div className="glass-effect border-accent/30 mx-auto max-w-7xl rounded-3xl border p-8 shadow-lg">
+        {linkNote && (
+          <p
+            role="status"
+            data-testid="document-not-found"
+            className="text-muted-foreground mb-3 text-sm"
+          >
+            {linkNote}
+          </p>
+        )}
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="from-accent to-primary flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br">
@@ -350,21 +505,31 @@ export default function EditCoursePage() {
             </div>
             <div>
               <h1 className="text-foreground text-xl font-bold">
-                {t('trainer.content.editCourse')}
+                {canEditCurriculum
+                  ? t('trainer.content.editCourse')
+                  : t('trainer.content.viewCourse')}
               </h1>
               <div className="text-muted-foreground text-xs">
-                {t('trainer.content.editCourseSub')}
+                {canEditCurriculum
+                  ? t('trainer.content.editCourseSub')
+                  : t('trainer.content.viewCourseSub')}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={handleCancel}
               className="border-accent/30 text-foreground hover:bg-background/60 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
             >
-              <X className="h-4 w-4" /> {t('common.cancel')}
+              <X className="h-4 w-4" />{' '}
+              {canEditCurriculum ? t('common.cancel') : t('common.close')}
             </button>
+            {hasUnsavedChanges && (
+              <span className="text-xs text-amber-500" role="status">
+                {t('trainer.content.unsavedChanges')}
+              </span>
+            )}
             {canEditCurriculum && (
               <button
                 onClick={e => handleSave(e as any)}
@@ -470,6 +635,7 @@ export default function EditCoursePage() {
                     value={examPart}
                     onChange={e => setExamPart(e.target.value as any)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    disabled={!canEditCurriculum}
                   >
                     <option value="">
                       {t('trainer.content.examPartNone')}
@@ -485,7 +651,8 @@ export default function EditCoursePage() {
                   <input
                     value={skills}
                     onChange={e => setSkills(e.target.value)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    disabled={!canEditCurriculum}
+                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder={t('trainer.content.skillsPlaceholder')}
                   />
                 </div>
@@ -692,14 +859,11 @@ export default function EditCoursePage() {
                         type="button"
                         className="border-accent/30 rounded-md border px-2 py-1 text-xs"
                         onClick={async () => {
-                          await authFetch(
-                            `/api/trainer/enablers/${e.id}`,
-                            {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ isActive: !e.isActive }),
-                            }
-                          );
+                          await authFetch(`/api/trainer/enablers/${e.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ isActive: !e.isActive }),
+                          });
                           const r = await authFetch(
                             `/api/trainer/courses/${courseId}`,
                             { cache: 'no-store' }
@@ -722,62 +886,7 @@ export default function EditCoursePage() {
                     <button
                       type="button"
                       className="border-accent/30 rounded-md border px-2 py-1 text-xs"
-                      onClick={async () => {
-                        try {
-                          setEditingEnablerId(e.id);
-                          const er = await authFetch(
-                            `/api/trainer/enablers/${e.id}`,
-                            { cache: 'no-store' }
-                          );
-                          if (er.ok) {
-                            const ej = await er.json();
-                            const en = ej.enabler || {};
-                            setEnablerTitle(en.title || '');
-                            setEnablerDescription(en.descriptionText || '');
-                            setEnablerScenarioPdf(en.scenarioPdfUrl || '');
-                            setEnablerScenarioPdfLink(
-                              ej.signedLinks?.scenarioPdfUrl || ''
-                            );
-                            // The save sends all of these, so they have to be loaded:
-                            // an empty state would switch the lesson off and drop the links
-                            setEnablerPpt(en.pptUrl || '');
-                            setEnablerVideo(en.videoUrl || '');
-                            setEnablerDuration(
-                              en.durationValue != null
-                                ? String(en.durationValue)
-                                : ''
-                            );
-                            setEnablerActive(!!en.isActive);
-                          }
-                          const ql = await authFetch(
-                            `/api/trainer/enablers/${e.id}/quizzes`,
-                            { cache: 'no-store' }
-                          );
-                          if (ql.ok) {
-                            const qlj = await ql.json();
-                            setEnablerQuizList(qlj.quizzes || []);
-                          } else {
-                            setEnablerQuizList([]);
-                          }
-                          try {
-                            const dr = await authFetch(
-                              `/api/trainer/enablers/${e.id}/documents`,
-                              { cache: 'no-store' }
-                            );
-                            if (dr.ok) {
-                              const dj = await dr.json();
-                              setEnablerDocuments(dj.documents || []);
-                            } else {
-                              setEnablerDocuments([]);
-                            }
-                          } catch {
-                            setEnablerDocuments([]);
-                          }
-                          setShowEditEnabler(true);
-                        } catch (e) {
-                          console.error(e);
-                        }
-                      }}
+                      onClick={() => void openEnablerEditor(e.id)}
                     >
                       {canEditCurriculum ? t('common.edit') : t('content.view')}
                     </button>
@@ -859,14 +968,11 @@ export default function EditCoursePage() {
                         type="button"
                         className="border-accent/30 rounded-md border px-2 py-1 text-xs"
                         onClick={async () => {
-                          await authFetch(
-                            `/api/trainer/use-cases/${u.id}`,
-                            {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ isActive: !u.isActive }),
-                            }
-                          );
+                          await authFetch(`/api/trainer/use-cases/${u.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ isActive: !u.isActive }),
+                          });
                           const r = await authFetch(
                             `/api/trainer/courses/${courseId}`,
                             { cache: 'no-store' }
@@ -1087,8 +1193,9 @@ export default function EditCoursePage() {
                     type="number"
                     min={0}
                     value={enablerDuration}
+                    disabled={!canEditCurriculum}
                     onChange={e => setEnablerDuration(e.target.value)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder={t('trainer.content.durationPlaceholder')}
                   />
                 </div>
@@ -1097,6 +1204,7 @@ export default function EditCoursePage() {
                     <input
                       type="checkbox"
                       checked={enablerActive}
+                      disabled={!canEditCurriculum}
                       onChange={e => setEnablerActive(e.target.checked)}
                     />
                     <span>{t('common.active')}</span>
@@ -1719,7 +1827,9 @@ export default function EditCoursePage() {
           <div className="glass-effect border-accent/30 bg-background relative z-10 max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-3xl border p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">
-                {t('trainer.content.editLesson')}
+                {canEditCurriculum
+                  ? t('trainer.content.editLesson')
+                  : t('trainer.content.viewLesson')}
               </h2>
               <button
                 className="border-accent/30 rounded-md border px-2 py-1 text-sm"
@@ -1792,7 +1902,9 @@ export default function EditCoursePage() {
                                   )
                                 }
                               >
-                                {canEditCurriculum ? t('common.edit') : t('content.view')}
+                                {canEditCurriculum
+                                  ? t('common.edit')
+                                  : t('content.view')}
                               </button>
                               {canEditCurriculum && (
                                 <button
@@ -1951,13 +2063,18 @@ export default function EditCoursePage() {
                       {t('trainer.content.theoryPdfs')}
                     </span>
                     {enablerDocuments.filter(
-                      d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
+                      d =>
+                        (d.documentType === 'THEORY' || !d.documentType) &&
+                        canSeeTheoryDoc(d)
                     ).length > 0 && (
                       <span className="text-muted text-xs">
                         (
                         {
                           enablerDocuments.filter(
-                            d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
+                            d =>
+                              (d.documentType === 'THEORY' ||
+                                !d.documentType) &&
+                              canSeeTheoryDoc(d)
                           ).length
                         }
                         )
@@ -1968,12 +2085,16 @@ export default function EditCoursePage() {
 
                 {/* Theory documents - inline pills */}
                 {enablerDocuments.filter(
-                  d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
+                  d =>
+                    (d.documentType === 'THEORY' || !d.documentType) &&
+                    canSeeTheoryDoc(d)
                 ).length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-2">
                     {enablerDocuments
                       .filter(
-                        d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
+                        d =>
+                          (d.documentType === 'THEORY' || !d.documentType) &&
+                          canSeeTheoryDoc(d)
                       )
                       .map(doc => (
                         <div
@@ -2033,39 +2154,39 @@ export default function EditCoursePage() {
 
                 {/* Upload Theory PDF */}
                 {canEditCurriculum && (
-                <PdfUploader
-                  compact
-                  userId={trainerId || ''}
-                  onUpload={async url => {
-                    if (!trainerId || !editingEnablerId) return;
-                    const fileName = url.split('/').pop() || 'document.pdf';
-                    const title = fileName
-                      .replace(/^\d+_/, '')
-                      .replace(/\.pdf$/i, '');
-                    try {
-                      const res = await authFetch(
-                        `/api/trainer/enablers/${editingEnablerId}/documents`,
-                        {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            title,
-                            fileName,
-                            storageUrl: url,
-                            documentType: 'THEORY',
-                          }),
+                  <PdfUploader
+                    compact
+                    userId={trainerId || ''}
+                    onUpload={async url => {
+                      if (!trainerId || !editingEnablerId) return;
+                      const fileName = url.split('/').pop() || 'document.pdf';
+                      const title = fileName
+                        .replace(/^\d+_/, '')
+                        .replace(/\.pdf$/i, '');
+                      try {
+                        const res = await authFetch(
+                          `/api/trainer/enablers/${editingEnablerId}/documents`,
+                          {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title,
+                              fileName,
+                              storageUrl: url,
+                              documentType: 'THEORY',
+                            }),
+                          }
+                        );
+                        if (res.ok) {
+                          const data = await res.json();
+                          setEnablerDocuments(prev => [...prev, data.document]);
                         }
-                      );
-                      if (res.ok) {
-                        const data = await res.json();
-                        setEnablerDocuments(prev => [...prev, data.document]);
+                      } catch (err) {
+                        console.error(err);
                       }
-                    } catch (err) {
-                      console.error(err);
-                    }
-                  }}
-                  disabled={!editingEnablerId}
-                />
+                    }}
+                    disabled={!editingEnablerId}
+                  />
                 )}
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -2077,8 +2198,9 @@ export default function EditCoursePage() {
                     type="number"
                     min={0}
                     value={enablerDuration}
+                    disabled={!canEditCurriculum}
                     onChange={e => setEnablerDuration(e.target.value)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder={t('trainer.content.durationPlaceholder')}
                   />
                 </div>
@@ -2087,6 +2209,7 @@ export default function EditCoursePage() {
                     <input
                       type="checkbox"
                       checked={enablerActive}
+                      disabled={!canEditCurriculum}
                       onChange={e => setEnablerActive(e.target.checked)}
                     />
                     <span>{t('common.active')}</span>
@@ -2198,51 +2321,53 @@ export default function EditCoursePage() {
                     >
                       <Eye className="h-3 w-3" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setEnablerScenarioPdf('')}
-                      className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+                    {canEditCurriculum && (
+                      <button
+                        type="button"
+                        onClick={() => setEnablerScenarioPdf('')}
+                        className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
                 )}
 
                 {/* Upload Scenario PDF */}
                 {canEditCurriculum && (
-                <PdfUploader
-                  compact
-                  userId={trainerId || ''}
-                  onUpload={async url => {
-                    if (!trainerId || !editingEnablerId) return;
-                    const fileName = url.split('/').pop() || 'scenario.pdf';
-                    const title = fileName
-                      .replace(/^\d+_/, '')
-                      .replace(/\.pdf$/i, '');
-                    try {
-                      const res = await authFetch(
-                        `/api/trainer/enablers/${editingEnablerId}/documents`,
-                        {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            title,
-                            fileName,
-                            storageUrl: url,
-                            documentType: 'EXERCISE',
-                          }),
+                  <PdfUploader
+                    compact
+                    userId={trainerId || ''}
+                    onUpload={async url => {
+                      if (!trainerId || !editingEnablerId) return;
+                      const fileName = url.split('/').pop() || 'scenario.pdf';
+                      const title = fileName
+                        .replace(/^\d+_/, '')
+                        .replace(/\.pdf$/i, '');
+                      try {
+                        const res = await authFetch(
+                          `/api/trainer/enablers/${editingEnablerId}/documents`,
+                          {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title,
+                              fileName,
+                              storageUrl: url,
+                              documentType: 'EXERCISE',
+                            }),
+                          }
+                        );
+                        if (res.ok) {
+                          const data = await res.json();
+                          setEnablerDocuments(prev => [...prev, data.document]);
                         }
-                      );
-                      if (res.ok) {
-                        const data = await res.json();
-                        setEnablerDocuments(prev => [...prev, data.document]);
+                      } catch (err) {
+                        console.error(err);
                       }
-                    } catch (err) {
-                      console.error(err);
-                    }
-                  }}
-                  disabled={!editingEnablerId}
-                />
+                    }}
+                    disabled={!editingEnablerId}
+                  />
                 )}
               </div>
 
@@ -2271,6 +2396,18 @@ export default function EditCoursePage() {
                         alert(t('trainer.content.errorNoTitle'));
                         return;
                       }
+                      // Switching a lesson off hides it for every trainee
+                      const wasActive = enablers.find(
+                        x => x.id === editingEnablerId
+                      )?.isActive;
+                      if (
+                        wasActive &&
+                        !enablerActive &&
+                        !window.confirm(
+                          t('trainer.content.confirmDeactivateLesson')
+                        )
+                      )
+                        return;
                       try {
                         const pr = await authFetch(
                           `/api/trainer/enablers/${editingEnablerId}`,
@@ -2279,7 +2416,8 @@ export default function EditCoursePage() {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                               title: enablerTitle.trim(),
-                              descriptionText: enablerDescription.trim() || null,
+                              descriptionText:
+                                enablerDescription.trim() || null,
                               scenarioPdfUrl: enablerScenarioPdf.trim() || null,
                               pptUrl: enablerPpt.trim() || null,
                               videoUrl: enablerVideo.trim() || null,
@@ -2334,7 +2472,9 @@ export default function EditCoursePage() {
           <div className="glass-effect border-accent/30 bg-background relative z-10 max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-3xl border p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">
-                {t('trainer.content.editUseCase')}
+                {canEditCurriculum
+                  ? t('trainer.content.editUseCase')
+                  : t('trainer.content.viewUseCase')}
               </h2>
               <button
                 className="border-accent/30 rounded-md border px-2 py-1 text-sm"
@@ -2587,39 +2727,39 @@ export default function EditCoursePage() {
 
                 {/* Compact PDF Upload */}
                 {canEditCurriculum && (
-                <PdfUploader
-                  compact
-                  userId={trainerId || ''}
-                  onUpload={async url => {
-                    if (!trainerId || !editingUseCaseId) return;
-                    const fileName = url.split('/').pop() || 'document.pdf';
-                    const title = fileName
-                      .replace(/^\d+_/, '')
-                      .replace(/\.pdf$/i, '');
-                    try {
-                      const res = await authFetch(
-                        `/api/trainer/use-cases/${editingUseCaseId}/documents`,
-                        {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            title,
-                            fileName,
-                            storageUrl: url,
-                            documentType: 'THEORY',
-                          }),
+                  <PdfUploader
+                    compact
+                    userId={trainerId || ''}
+                    onUpload={async url => {
+                      if (!trainerId || !editingUseCaseId) return;
+                      const fileName = url.split('/').pop() || 'document.pdf';
+                      const title = fileName
+                        .replace(/^\d+_/, '')
+                        .replace(/\.pdf$/i, '');
+                      try {
+                        const res = await authFetch(
+                          `/api/trainer/use-cases/${editingUseCaseId}/documents`,
+                          {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title,
+                              fileName,
+                              storageUrl: url,
+                              documentType: 'THEORY',
+                            }),
+                          }
+                        );
+                        if (res.ok) {
+                          const data = await res.json();
+                          setUseCaseDocuments(prev => [...prev, data.document]);
                         }
-                      );
-                      if (res.ok) {
-                        const data = await res.json();
-                        setUseCaseDocuments(prev => [...prev, data.document]);
+                      } catch (err) {
+                        console.error(err);
                       }
-                    } catch (err) {
-                      console.error(err);
-                    }
-                  }}
-                  disabled={!editingUseCaseId}
-                />
+                    }}
+                    disabled={!editingUseCaseId}
+                  />
                 )}
               </div>
 

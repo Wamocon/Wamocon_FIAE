@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import { requireEnablerOpen } from '@/lib/catalog/progression-db';
+import {
+  EMPTY_SUBMISSION_CODE,
+  enablerSubmissionHasContent,
+} from '@/lib/submission-input';
 import db from '@/db';
+import { submissionNoticeText } from '@/lib/notifications/submissionNotice';
 import { and, eq } from 'drizzle-orm';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import {
@@ -67,6 +72,20 @@ export async function POST(
       courseId: String(e.courseId),
     });
     if (locked) return locked;
+
+    // A summary without text is no summary: only white space counts as empty
+    // (the page checks the same, this is the rule that holds)
+    if (
+      !enablerSubmissionHasContent({
+        solutionText: body?.solutionText,
+        solutions: body?.solutions,
+      })
+    ) {
+      return NextResponse.json(
+        { error: 'Empty submission', code: EMPTY_SUBMISSION_CODE },
+        { status: 400 }
+      );
+    }
 
     // Upsert-like: if trainee already has a submission, update the latest; else insert
     const existing: EnablerSubmission[] = await db
@@ -146,10 +165,17 @@ export async function POST(
           userId: uid,
           actorId: traineeId,
           type: 'ENABLER_SUBMITTED',
-          title: 'Szenario eingereicht',
-          message: `Ein Trainee hat ein Enabler-Szenario eingereicht: ${e.title}`,
+          ...submissionNoticeText('ENABLER_SUBMITTED', {
+            traineeName: session.fullName,
+            subject: e.title,
+          }),
           linkUrl: '/trainer/reviews?view=enablers&onlyPending=true',
-          context: { enablerId, courseId: e.courseId },
+          context: {
+            enablerId,
+            courseId: e.courseId,
+            traineeName: session.fullName,
+            subjectTitle: e.title,
+          },
           organizationId,
         }));
         await db.insert(notifications).values(values);

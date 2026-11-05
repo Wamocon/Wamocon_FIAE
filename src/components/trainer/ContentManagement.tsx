@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
+import { countLabel } from '@/lib/i18n/count-label';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   Plus,
@@ -162,6 +163,11 @@ export function ContentManagement() {
   const handleAssign = async () => {
     if (!profile?.id) {
       setAssignError(t('content.noTrainerProfile'));
+      return;
+    }
+    // Name everything that is missing, not only the first thing
+    if (!selectedTrainees.length && !assignCourseIds.length) {
+      setAssignError(t('content.assignSelectBoth'));
       return;
     }
     if (!selectedTrainees.length) {
@@ -352,23 +358,30 @@ export function ContentManagement() {
                 />
               </div>
 
-              <h3 className="text-foreground mb-2 line-clamp-3 min-h-[3.5rem] text-xl font-bold">
+              <h3
+                className="text-foreground mb-2 line-clamp-4 min-h-[3.5rem] text-xl font-bold break-words"
+                title={course.title}
+              >
                 {course.title}
               </h3>
 
               <div className="text-muted mb-3 flex flex-wrap items-center gap-2 text-sm">
-                <span className="bg-accent text-foreground rounded-full px-3 py-1 font-medium">
-                  {t('content.yearNumber').replace(
-                    '{number}',
-                    String(course.year ?? '-')
-                  )}
-                </span>
-                <span className="bg-muted/30 text-muted rounded-full px-3 py-1">
-                  {t('content.chapterNumber').replace(
-                    '{number}',
-                    String(course.chapter ?? '-')
-                  )}
-                </span>
+                {course.year != null && (
+                  <span className="bg-accent text-foreground rounded-full px-3 py-1 font-medium">
+                    {t('content.yearNumber').replace(
+                      '{number}',
+                      String(course.year)
+                    )}
+                  </span>
+                )}
+                {course.chapter != null && (
+                  <span className="bg-muted/30 text-muted rounded-full px-3 py-1">
+                    {t('content.chapterNumber').replace(
+                      '{number}',
+                      String(course.chapter)
+                    )}
+                  </span>
+                )}
                 {course.examPart && (
                   <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400">
                     {t('content.examPartNumber').replace(
@@ -389,9 +402,10 @@ export function ContentManagement() {
                 </span>
                 <span className="border-accent/30 bg-accent/10 text-foreground inline-flex items-center gap-1 rounded-full border px-2 py-1">
                   <Users className="h-3.5 w-3.5" />
-                  {t('content.assignedTrainees').replace(
-                    '{count}',
-                    String(course.traineesCount ?? 0)
+                  {countLabel(
+                    t,
+                    'content.assignedTrainees',
+                    course.traineesCount ?? 0
                   )}
                 </span>
               </div>
@@ -498,7 +512,7 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 cursor-pointer overflow-hidden rounded-3xl border p-6 shadow-lg"
+              className="glass-effect border-accent/30 cursor-pointer overflow-hidden rounded-2xl border px-4 py-3 shadow-sm"
               onClick={() =>
                 router.push(`/trainer/content-management/${course.id}/edit`)
               }
@@ -514,26 +528,33 @@ export function ContentManagement() {
               {/* Header Row */}
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="flex min-w-0 flex-1 items-start gap-4">
-                  <div className="from-accent to-primary flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br">
-                    <BookOpen className="text-foreground h-7 w-7" />
+                  <div className="from-accent to-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br">
+                    <BookOpen className="text-foreground h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-foreground mb-1 text-2xl font-bold break-words">
+                    <h3
+                      className="text-foreground mb-1 text-base font-semibold break-words"
+                      title={course.title}
+                    >
                       {course.title}
                     </h3>
                     <div className="flex flex-wrap gap-2">
-                      <span className="bg-accent text-foreground rounded-full px-3 py-1 text-xs font-semibold">
-                        {t('content.yearNumber').replace(
-                          '{number}',
-                          String(course.year ?? '-')
-                        )}
-                      </span>
-                      <span className="bg-muted/30 text-muted rounded-full px-3 py-1 text-xs">
-                        {t('content.chapterNumber').replace(
-                          '{number}',
-                          String(course.chapter ?? '-')
-                        )}
-                      </span>
+                      {course.year != null && (
+                        <span className="bg-accent text-foreground rounded-full px-2.5 py-0.5 text-xs font-semibold">
+                          {t('content.yearNumber').replace(
+                            '{number}',
+                            String(course.year)
+                          )}
+                        </span>
+                      )}
+                      {course.chapter != null && (
+                        <span className="bg-muted/30 text-muted rounded-full px-2.5 py-0.5 text-xs">
+                          {t('content.chapterNumber').replace(
+                            '{number}',
+                            String(course.chapter)
+                          )}
+                        </span>
+                      )}
                       {course.examPart && (
                         <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400">
                           {t('content.examPartNumber').replace(
@@ -542,9 +563,6 @@ export function ContentManagement() {
                           )}
                         </span>
                       )}
-                      <span className="bg-muted/30 text-muted rounded-full px-3 py-1 text-xs">
-                        ID {course.id.slice(0, 8)}…
-                      </span>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs">
                       <span className="border-accent/30 bg-accent/10 text-foreground inline-flex items-center gap-1 rounded-full border px-2 py-1">
@@ -556,9 +574,10 @@ export function ContentManagement() {
                       </span>
                       <span className="border-accent/30 bg-accent/10 text-foreground inline-flex items-center gap-1 rounded-full border px-2 py-1">
                         <Users className="h-3.5 w-3.5" />
-                        {t('content.assignedTrainees').replace(
-                          '{count}',
-                          String(course.traineesCount ?? 0)
+                        {countLabel(
+                          t,
+                          'content.assignedTrainees',
+                          course.traineesCount ?? 0
                         )}
                       </span>
                     </div>
@@ -605,41 +624,11 @@ export function ContentManagement() {
                 </div>
               </div>
 
-              {/* Stats Row */}
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
-                <div className="glass-effect bg-muted/30 flex items-center justify-between rounded-xl p-4">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <FolderOpen className="text-muted h-5 w-5" />
-                    <div className="min-w-0">
-                      <p className="text-foreground truncate text-sm font-semibold">
-                        {t('content.lessons')}
-                      </p>
-                      <p className="text-muted truncate text-xs">
-                        {t('content.topicsInCourse')}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-foreground text-lg font-bold">
-                    {course.enablersCount}
-                  </span>
-                </div>
-                <div className="glass-effect bg-muted/30 flex items-center justify-between rounded-xl p-4">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <FileText className="text-muted h-5 w-5" />
-                    <div className="min-w-0">
-                      <p className="text-foreground truncate text-sm font-semibold">
-                        {t('content.useCases')}
-                      </p>
-                      <p className="text-muted truncate text-xs">
-                        {t('content.tasksInCourse')}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-foreground text-lg font-bold">
-                    {course.useCasesCount}
-                  </span>
-                </div>
-              </div>
+              {/* Counts in one line */}
+              <p className="text-muted mt-2 text-xs">
+                {course.enablersCount} {t('content.topics')} ·{' '}
+                {course.useCasesCount} {t('content.tasks')}
+              </p>
             </div>
           ))}
         </div>

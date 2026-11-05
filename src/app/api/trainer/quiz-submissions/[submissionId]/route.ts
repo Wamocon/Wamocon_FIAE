@@ -18,6 +18,10 @@ import { apiCache } from '@/lib/api-cache';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import { ensureContentInScope, requireCatalogScope } from '@/lib/catalog/scope';
 import { isUuid, notFoundUnlessUuid } from '@/lib/uuid';
+import {
+  QUIZ_REVIEWED_LINK,
+  quizReviewedMessage,
+} from '@/lib/notifications/quiz-reviewed';
 
 // GET /api/trainer/quiz-submissions/[submissionId]
 // The review of one submission: the questions with the marker of the correct
@@ -211,14 +215,32 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ submissio
       try {
         const actorId = reviewer_id || null;
         const organizationId = await getUserOrgId(String(sub.traineeId));
+        // The notification names the quiz and the result, the trainee gets
+        // several of them (WMCNL-2963)
+        const [reviewedQuiz] = await db
+          .select({ title: quizzes.title })
+          .from(quizzes)
+          .where(eq(quizzes.id, sub.quizId as any))
+          .limit(1);
+        // a submission that was reviewed before keeps its feedback
+        const hasFeedback = Boolean(trainer_feedback || sub.trainerFeedback);
         await db.insert(notifications).values({
           userId: String(sub.traineeId),
           actorId: actorId ? String(actorId) : null,
           type: 'QUIZ_REVIEWED',
           title: 'Quiz bewertet',
-          message: trainer_feedback ? 'Dein Quiz wurde bewertet. Trainer-Feedback ist verfügbar.' : 'Dein Quiz wurde bewertet.',
-          linkUrl: '/trainee/quizzes',
-          context: { submissionId },
+          message: quizReviewedMessage({
+            quizTitle: reviewedQuiz?.title,
+            score: sub.score,
+            hasFeedback,
+          }),
+          linkUrl: QUIZ_REVIEWED_LINK,
+          context: {
+            submissionId,
+            quizId: String(sub.quizId),
+            quizTitle: reviewedQuiz?.title ?? null,
+            score: sub.score ?? null,
+          },
           organizationId,
         });
       } catch (notifyErr) {

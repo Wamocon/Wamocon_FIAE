@@ -28,6 +28,12 @@ import {
 // private after the go-live: the pages must not notice. A file that is no file
 // of the bucket (a video on another host) and the model solutions of the other
 // private bucket keep their way.
+//
+// The lists for a TRAINEE are the exception since the document protection
+// (docs/dokumentschutz.md): a trainee gets no address of a file at all, neither
+// stored nor signed. The viewer reads the file by the id of the document, from
+// the content routes. The trainee tests below say so and keep the filters
+// (no solution, no private reference of another bucket).
 
 const FIAE = '00000000-0000-4000-8000-000000000001';
 const ENABLER = 'aaaaaaa6-0000-4000-8000-000000000006';
@@ -203,24 +209,21 @@ describe('trainee list of the documents of an enabler', () => {
     return { res, body: await res.json(), calls };
   };
 
-  it('signs the file of the bucket content, in every stored form, for an hour', async () => {
+  it('lists the documents of the bucket content in every stored form, without any address', async () => {
     const { body, calls } = await call([
       row({ id: 'a', storageUrl: PUBLIC }),
       row({ id: 'b', storageUrl: REFERENCE }),
       row({ id: 'c', storageUrl: 'enablers/x/y.pdf' }),
     ]);
-    expect(body.documents.map((d: any) => d.storageUrl)).toEqual([
-      signedFor(PATH),
-      signedFor(PATH),
-      signedFor('enablers/x/y.pdf'),
-    ]);
-    expect(calls).toEqual([
-      {
-        bucket: 'content',
-        paths: [PATH, 'enablers/x/y.pdf'],
-        seconds: 3600,
-      },
-    ]);
+    expect(body.documents.map((d: any) => d.id)).toEqual(['a', 'b', 'c']);
+    for (const document of body.documents) {
+      expect(document).not.toHaveProperty('storageUrl');
+    }
+    // nothing of the storage is in the answer, and nothing is signed for it
+    expect(JSON.stringify(body)).not.toMatch(
+      /storage\/v1|supabase\.co|private:|UC_6d_Titel|enablers\/x/
+    );
+    expect(calls).toEqual([]);
   });
 
   it('keeps the fields of the page and adds nothing internal', async () => {
@@ -235,27 +238,27 @@ describe('trainee list of the documents of an enabler', () => {
         'isOwnOrganization',
         'orderIndex',
         'pageCount',
-        'storageUrl',
         'title',
       ].sort()
     );
   });
 
-  it('leaves a link to another host alone and asks the storage for nothing', async () => {
+  it('a link to another host is no address in the answer either, and the storage is asked for nothing', async () => {
     const { body, calls } = await call([
       row({ storageUrl: 'https://example.test/a.pdf' }),
     ]);
-    expect(body.documents[0].storageUrl).toBe('https://example.test/a.pdf');
+    expect(body.documents[0]).not.toHaveProperty('storageUrl');
+    expect(JSON.stringify(body)).not.toContain('example.test');
     expect(calls).toEqual([]);
   });
 
-  it('while the bucket is public the stored address survives a failing storage, a reference does not leave', async () => {
+  it('a failing storage changes nothing for the list, no address and no reference leave', async () => {
     const { body } = await call(
       [row({ id: 'a' }), row({ id: 'b', storageUrl: REFERENCE })],
       'error'
     );
-    expect(body.documents.map((d: any) => d.storageUrl)).toEqual([PUBLIC, '']);
-    expect(JSON.stringify(body)).not.toContain('private://');
+    expect(body.documents.map((d: any) => d.id)).toEqual(['a', 'b']);
+    expect(JSON.stringify(body)).not.toMatch(/private:|supabase\.co/);
   });
 
   it('lists the private reference of the bucket content for a trainee, never one of the solutions', async () => {
@@ -280,23 +283,27 @@ describe('trainee list of the documents of a use case', () => {
   const ucRow = (over: Record<string, unknown> = {}) =>
     row({ enablerId: null, useCaseId: USE_CASE, ...over });
 
-  it('signs the file of the bucket content', async () => {
+  it('lists the documents without any address of a file', async () => {
     const { res, body, calls } = await call([
       ucRow({ id: 'a' }),
       ucRow({ id: 'b', storageUrl: REFERENCE }),
     ]);
     expect(res.status).toBe(200);
-    expect(body.documents.map((d: any) => d.storageUrl)).toEqual([
-      signedFor(PATH),
-      signedFor(PATH),
-    ]);
-    expect(calls).toHaveLength(1);
+    expect(body.documents.map((d: any) => d.id)).toEqual(['a', 'b']);
+    for (const document of body.documents) {
+      expect(document).not.toHaveProperty('storageUrl');
+    }
+    expect(JSON.stringify(body)).not.toMatch(
+      /storage\/v1|supabase\.co|private:/
+    );
+    expect(calls).toEqual([]);
     expect(body.useCaseTitle).toBe('UC');
   });
 
-  it('keeps the stored address while the bucket is public when signing fails', async () => {
+  it('a failing storage changes nothing for the list', async () => {
     const { body } = await call([ucRow()], 'error');
-    expect(body.documents[0].storageUrl).toBe(PUBLIC);
+    expect(body.documents.map((d: any) => d.id)).toEqual(['d1']);
+    expect(JSON.stringify(body)).not.toContain('supabase.co');
   });
 
   it('shows no solution reference to a trainee', async () => {
@@ -325,25 +332,47 @@ describe('trainee detail of an enabler', () => {
     return { res, body: await res.json(), calls };
   };
 
-  it('signs the scenario PDF and the slides, a video on another host stays', async () => {
+  it('says that there is a scenario PDF, gives no address of it and no slides, a video on another host stays', async () => {
     const { body, calls } = await call();
-    expect(body.enabler.scenarioPdfUrl).toBe(signedFor(PATH));
-    expect(body.enabler.pptUrl).toBe(signedFor('slides/ppt.pdf'));
+    expect(body.enabler.hasScenarioPdf).toBe(true);
+    expect(body.enabler).not.toHaveProperty('scenarioPdfUrl');
+    expect(body.enabler).not.toHaveProperty('pptUrl');
     expect(body.enabler.videoUrl).toBe('https://www.youtube.com/watch?v=abc');
-    expect(calls).toHaveLength(1);
+    expect(JSON.stringify(body)).not.toMatch(/storage\/v1|\.pdf/);
+    // nothing is signed: the video is a link to another host
+    expect(calls).toEqual([]);
   });
 
-  it('keeps empty fields empty and the stored address when signing fails (public bucket)', async () => {
+  it('says that there is none for an empty field, and a failing storage changes nothing', async () => {
     const empty = await call('ok', {
       scenarioPdfUrl: null,
       pptUrl: null,
       videoUrl: null,
     });
-    expect(empty.body.enabler.scenarioPdfUrl).toBeNull();
+    expect(empty.body.enabler.hasScenarioPdf).toBe(false);
+    expect(empty.body.enabler.videoUrl).toBeNull();
     expect(empty.calls).toEqual([]);
 
     const failing = await call('error');
-    expect(failing.body.enabler.scenarioPdfUrl).toBe(PUBLIC);
+    expect(failing.body.enabler.hasScenarioPdf).toBe(true);
+    expect(JSON.stringify(failing.body)).not.toContain('supabase.co');
+  });
+
+  it('a video of the bucket content is still signed (the slides and the scenario PDF are not)', async () => {
+    const { body, calls } = await call('ok', {
+      videoUrl: 'videos/intro.mp4',
+    });
+    expect(body.enabler.videoUrl).toBe(signedFor('videos/intro.mp4'));
+    expect(calls).toEqual([
+      { bucket: 'content', paths: ['videos/intro.mp4'], seconds: 3600 },
+    ]);
+  });
+
+  it('a scenario PDF that is a model solution reference of another bucket does not count', async () => {
+    const { body } = await call('ok', {
+      scenarioPdfUrl: 'private://content-solutions/preview/kfbm/x.pdf',
+    });
+    expect(body.enabler.hasScenarioPdf).toBe(false);
   });
 });
 
@@ -502,8 +531,8 @@ describe('a private reference of another bucket never reaches a trainee', () => 
       params: Promise.resolve({ enablerId: ENABLER }),
     });
     const body = await res.json();
-    expect(body.enabler.scenarioPdfUrl).toBe('');
-    expect(body.enabler.pptUrl).toBe('');
+    expect(body.enabler.hasScenarioPdf).toBe(false);
+    expect(body.enabler).not.toHaveProperty('pptUrl');
     expect(body.enabler.videoUrl).toBe('');
     expect(JSON.stringify(body)).not.toMatch(/private:/i);
   });

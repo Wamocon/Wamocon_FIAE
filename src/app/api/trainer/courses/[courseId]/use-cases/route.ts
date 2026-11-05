@@ -158,7 +158,7 @@ export async function POST(
             type: 'USE_CASE_CREATED',
             title: 'Neuer Use Case verfügbar',
             message: `Ein neuer Use Case "${title}" wurde aktiviert.`,
-            linkUrl: '/trainee/modules',
+            linkUrl: `/trainee/modules/${courseId}`,
             context: { useCaseId: inserted.id, courseId },
             organizationId,
           }));

@@ -60,6 +60,8 @@ export class HausRecognition implements RecognitionLike {
   onresult: RecognitionLike['onresult'] = null;
   onerror: RecognitionLike['onerror'] = null;
   onend: RecognitionLike['onend'] = null;
+  onaudiostart: RecognitionLike['onaudiostart'] = null;
+  onlevel: RecognitionLike['onlevel'] = null;
 
   private closed = false;
   private stream: MediaStreamLike | null = null;
@@ -89,11 +91,12 @@ export class HausRecognition implements RecognitionLike {
   }
 
   private fail(
-    error: 'not-allowed' | 'provider-unavailable' | 'audio-capture'
+    error: 'not-allowed' | 'provider-unavailable' | 'audio-capture',
+    reason?: string
   ) {
     if (this.closed) return;
     this.cleanup();
-    this.onerror?.({ error });
+    this.onerror?.({ error, ...(reason ? { reason } : {}) });
   }
 
   private async run(): Promise<void> {
@@ -128,11 +131,14 @@ export class HausRecognition implements RecognitionLike {
       this.fail('audio-capture');
       return;
     }
+    this.onaudiostart?.();
     const detector = new VoiceActivity(this.activity);
     const block = new Float32Array(analyser.fftSize);
     this.poll = setInterval(() => {
       analyser.getFloatTimeDomainData(block);
-      const verdict = detector.feed(rmsOf(block), this.now());
+      const rms = rmsOf(block);
+      this.onlevel?.(Math.min(1, rms * 5));
+      const verdict = detector.feed(rms, this.now());
       if (verdict === 'speech-ended') this.finishRecording(true);
       else if (verdict === 'no-speech') this.finishRecording(false);
     }, POLL_MS);
@@ -176,8 +182,12 @@ export class HausRecognition implements RecognitionLike {
     let text: string;
     try {
       text = (await this.deps.transcribe(audio)).trim();
-    } catch {
-      this.fail('provider-unavailable');
+    } catch (error) {
+      const message = (error as { message?: unknown } | null)?.message;
+      this.fail(
+        'provider-unavailable',
+        typeof message === 'string' ? message : undefined
+      );
       return;
     }
     if (this.closed) return;

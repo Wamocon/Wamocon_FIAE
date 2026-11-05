@@ -67,7 +67,7 @@ const DAY_KEYWORDS = [
 
 /** Words a person puts in front of the question ("Hallo, sag mal, ..."). */
 const LEAD =
-  '(?:(?:hallo|hi|hey|moin|servus|ahoi|hai|na|also|und|okay|ok|guten\\s+(?:tag|morgen|abend)|sag(?:\\s+mir)?(?:\\s+mal)?|kannst\\s+du(?:\\s+mir)?(?:\\s+sagen)?|koenntest\\s+du(?:\\s+mir)?(?:\\s+sagen)?|bitte|weisst\\s+du|ich\\s+(?:moechte|will|wuerde\\s+gerne?)\\s+wissen)\\s+)*';
+  '(?:(?:hallo|hi|hey|moin|servus|ahoi|hai|na|also|und|okay|ok|guten\\s+(?:tag|morgen|abend)|sag(?:\\s+mir)?(?:\\s+mal)?|zeig(?:e)?(?:\\s+mir)?(?:\\s+mal)?|nenn(?:e)?(?:\\s+mir)?(?:\\s+mal)?|kannst\\s+du(?:\\s+mir)?(?:\\s+sagen)?|koenntest\\s+du(?:\\s+mir)?(?:\\s+sagen)?|bitte|weisst\\s+du|ich\\s+(?:moechte|will|wuerde\\s+gerne?)\\s+wissen)\\s+)*';
 
 /** Words after the question that change nothing ("..., bitte", "... eigentlich"). */
 const TAIL =
@@ -84,6 +84,10 @@ const QUESTIONS: readonly string[] = [
   `was\\s+(?:(?:fuer\\s+mich|bei\\s+mir|heute|jetzt|aktuell|so|denn|eigentlich)\\s+)*ansteht`,
   // "Was habe ich heute zu tun", "Was habe ich vor", "Was habe ich diese Woche zu erledigen"
   `was\\s+habe\\s+ich\\s+(?:(?:${FILL}|in\\s+dieser\\s+woche)\\s+)*(?:zu\\s+tun|zu\\s+erledigen|zu\\s+machen|vor|offen)`,
+  // "Zeig mir, was ich gerade zu tun habe", "Sag mir, was ich heute zu erledigen habe"
+  `was\\s+ich\\s+(?:(?:${FILL}|in\\s+dieser\\s+woche)\\s+)*(?:zu\\s+tun|zu\\s+erledigen|zu\\s+machen)\\s+habe`,
+  // "Was habe ich heute für Aufgaben", "Was habe ich an Terminen"
+  `was\\s+habe\\s+ich\\s+(?:(?:${FILL}|in\\s+dieser\\s+woche)\\s+)*(?:fuer|an)\\s+(?:aufgaben|terminen?|to-?dos?|to\\s+dos?)`,
   // "Was muss ich machen", "Was soll ich heute erledigen", "Was muss ich als Nächstes tun"
   `was\\s+(?:muss|soll|sollte)\\s+ich\\s+(?:(?:${FILL}|als\\s+naechstes|zuerst|bis\\s+\\w+)\\s+)*(?:machen|erledigen|tun|bearbeiten|angehen)`,
   // "Was ist zu tun", "Was ist offen", "Was ist als Nächstes dran", "Was ist heute fällig"

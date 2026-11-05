@@ -45,7 +45,6 @@ describe('middleware Cache-Control for API reads', () => {
       '/api/training-components?catalog=KFBM',
       '/api/training-use-cases',
       '/api/training-use-cases?catalog=KFBM',
-      '/api/softskill-criteria',
       '/api/trainee/evaluations/softskills',
       '/api/verify/abc123',
     ])('%s is public', path => {
@@ -57,6 +56,7 @@ describe('middleware Cache-Control for API reads', () => {
     it.each([
       '/api/trainee/dashboard',
       '/api/trainee/use-case-hours',
+      '/api/softskill-criteria',
       '/api/trainer/courses',
       '/api/me/catalogs',
       '/api/catalogs',

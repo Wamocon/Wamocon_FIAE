@@ -28,6 +28,21 @@ export function documentTypeLabelKey(
   return LABEL_KEYS[documentType as DocumentTypeKey] ?? null;
 }
 
+/**
+ * Line under the title of a document in the viewer. A theory text keeps the
+ * "Theory document" line it always had, a scenario, a task and a model solution
+ * name what they are (the viewer used to say "Theory document" for all of them).
+ * A type that is unknown or unset gets the neutral "Document".
+ */
+export function viewerSubtitle(
+  documentType: string | null | undefined,
+  t: (key: string) => string
+): string {
+  if (documentType === 'THEORY') return t('flipbook.theoryDocument');
+  const key = documentTypeLabelKey(documentType);
+  return key ? t(key) : t('flipbook.document');
+}
+
 /** Label for a type: the translated name, or the raw type if it is unknown. */
 export function documentTypeLabel(
   documentType: string | null | undefined,

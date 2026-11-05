@@ -8,6 +8,10 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
+import {
+  removeSubmissionFiles,
+  submissionFileTargetsOfUseCases,
+} from '@/lib/submission-file/on-delete';
 
 export async function GET(
   _req: NextRequest,
@@ -117,7 +121,7 @@ export async function PATCH(
             type: 'USE_CASE_ACTIVATED',
             title: 'Neuer Use Case aktiviert',
             message: `Ein Use Case wurde aktiviert: ${row0.title}`,
-            linkUrl: '/trainee/modules',
+            linkUrl: `/trainee/modules/${row0.courseId}`,
             context: { useCaseId, courseId: row0.courseId },
             organizationId,
           }));
@@ -170,7 +174,10 @@ export async function DELETE(
 
     // Curriculum writes are limited to the platform wide admin
 
+    // the submissions go with the use case (cascade), their files in the bucket do not
+    const fileTargets = await submissionFileTargetsOfUseCases([useCaseId]);
     await db.delete(useCases).where(eq(useCases.id, useCaseId as any));
+    await removeSubmissionFiles(fileTargets);
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('Delete use-case error', e);

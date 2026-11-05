@@ -634,14 +634,14 @@ test('the keys of the content tables are unique in the Production data (measured
   assert.deepEqual(keys.options, ['question_id', 'option_text', 'is_correct']);
 });
 
-test('the release workflow only inserts, the manual workflow chooses the update mode', () => {
+test('the release workflow only inserts (and only KFBM), the manual workflow chooses the update mode', () => {
   const release = readFileSync(
     '.github/workflows/release-production.yml',
     'utf8'
   );
   assert.ok(
     release.includes(
-      'content-sync.mjs --linked --apply --direction preview-to-production --update never'
+      'content-sync.mjs --linked --apply --direction preview-to-production --update never --catalog KFBM'
     )
   );
   const manual = readFileSync('.github/workflows/content-sync.yml', 'utf8');

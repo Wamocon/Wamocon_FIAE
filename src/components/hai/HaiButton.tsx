@@ -1,131 +1,154 @@
 'use client';
 
 /**
- * HAI Floating Button
- * 
- * Features real animated shark logo (WebP).
+ * HAI symbol: the round fish pond with the pixel shark (shark-new.gif).
+ *
+ * It sits at the bottom right of the page and is the handle of the chat panel:
+ * a click opens the panel as a column of the layout at the right edge (the page
+ * moves to the left), another click closes it. While the panel is open the
+ * symbol sits at the bottom right of the page that is left, next to the panel
+ * (haiLayout.ts), stays visible and clickable and shows a small arrow.
+ *
+ * In the voice mode the symbol itself becomes the pond of the HAI figure: the
+ * same round pond, grown (scale only, so the border and the glow grow with it),
+ * the pixel shark fades out and the figure rises out of the water (HaiCharacter,
+ * HaiVoiceModeOverlay). When the mode ends the figure dives in and the symbol
+ * shrinks back to the button.
  */
 
 import React from 'react';
 import Image from 'next/image';
 import { useHai } from './HaiProvider';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronUp } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { HAI_PANEL_ID, useHaiAnchor } from './haiLayout';
+import { useOptionalHaiVoiceSession } from './voice-mode/voiceSessionContext';
+import { usePondState } from './voice-mode/usePondState';
 
 export function HaiButton() {
-    const { viewMode, toggleChat, messages, setViewMode } = useHai();
-    const { t } = useLanguage();
+  const { viewMode, toggleChat, messages, setViewMode } = useHai();
+  const { t } = useLanguage();
+  const anchor = useHaiAnchor();
+  const voice = useOptionalHaiVoiceSession();
+  const { pond } = usePondState(voice?.view ?? 'closed');
 
-    if (viewMode === 'full') return null;
+  if (viewMode === 'full') return null;
 
-    const isActive = viewMode !== 'hidden' && viewMode !== 'minimized';
-    const hasMessages = messages.length > 0;
+  const isActive = viewMode !== 'hidden' && viewMode !== 'minimized';
+  const hasMessages = messages.length > 0;
 
-    return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2" data-tour="hai-button">
-            {/* Minimized Indicator */}
-            <AnimatePresence>
-                {viewMode === 'minimized' && hasMessages && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.8 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        className="bg-card border border-border/50 shadow-lg rounded-xl px-4 py-2 mb-2 flex items-center gap-3 cursor-pointer hover:bg-accent/50 transition-colors"
-                        onClick={() => setViewMode('widget')}
-                    >
-                        <span className="relative flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
-                        </span>
-                        <span className="text-sm font-medium">{t('hai.button.continueChat')}</span>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+  return (
+    // z-40, one level under the viewers and dialogs (z-50): the button is
+    // part of the page, an open viewer or dialog lies over it (WMCNL-2969).
+    // Bottom right: the HAI lives in the corner, as it always did (haiLayout.ts).
+    <div
+      ref={anchor.ref}
+      className={`${anchor.className} flex flex-col items-end gap-2`}
+      data-tour="hai-button"
+      data-hai-anchor=""
+      data-panel={isActive ? 'open' : 'closed'}
+      data-docked={anchor.docked ? 'true' : 'false'}
+    >
+      {/* Minimized Indicator */}
+      <AnimatePresence>
+        {viewMode === 'minimized' && hasMessages && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.8 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="bg-card border-border/50 hover:bg-accent/50 mb-2 flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-2 shadow-lg transition-colors"
+            onClick={() => setViewMode('widget')}
+          >
+            <span className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-75"></span>
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-cyan-500"></span>
+            </span>
+            <span className="text-sm font-medium">
+              {t('hai.button.continueChat')}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            {/* Main Button */}
-            <motion.button
-                onClick={toggleChat}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`
-                    relative group
-                    w-20 h-20 rounded-full
-                    flex items-center justify-center
-                    shadow-xl shadow-cyan-500/40
-                    transition-all duration-300
-                    overflow-hidden
-                    ${isActive
-                        ? 'bg-background/90 backdrop-blur-md border border-border'
-                        : 'bg-[#020b1c] border-2 border-cyan-500/40' // Dark blue bg to match shark gif
-                    }
-                `}
-                aria-label={isActive ? t('hai.button.close') : t('hai.button.open')}
+      {/* The pond: scaled up as a whole in the voice mode */}
+      <div
+        data-pond={pond ? 'true' : 'false'}
+        className={`group relative origin-bottom-right transition-transform duration-500 ease-out motion-reduce:transition-none ${
+          pond ? 'scale-[2] sm:scale-[2.8]' : ''
+        }`}
+      >
+        {/* Main Button */}
+        <motion.button
+          type="button"
+          data-hai-handle=""
+          onClick={toggleChat}
+          whileHover={pond ? undefined : { scale: 1.05 }}
+          whileTap={pond ? undefined : { scale: 0.95 }}
+          aria-expanded={isActive}
+          aria-controls={HAI_PANEL_ID}
+          className={`relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 bg-[#242845] shadow-xl shadow-cyan-500/40 transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#020b1c] focus-visible:outline-none sm:h-20 sm:w-20 ${
+            isActive ? 'border-cyan-400/80' : 'border-cyan-500/40'
+          }`}
+          aria-label={isActive ? t('hai.button.close') : t('hai.button.open')}
+        >
+          {/* Glow Ring */}
+          {!isActive && !pond && (
+            <motion.div
+              className="absolute inset-0 rounded-full"
+              style={{
+                background:
+                  'radial-gradient(circle, rgba(34, 211, 238, 0.2) 0%, transparent 70%)',
+              }}
+              animate={{
+                scale: [1, 1.1, 1],
+                opacity: [0.5, 0.8, 0.5],
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
+            />
+          )}
+
+          {/* The pixel shark: the symbol. It fades out when the pond is a pond. */}
+          <span
+            className={`relative block h-full w-full transition-opacity duration-500 motion-reduce:transition-none ${
+              pond ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
+            <Image
+              src="/images/shark-new.gif"
+              alt="HAI"
+              fill
+              className="scale-110 object-cover"
+              unoptimized
+            />
+          </span>
+
+          {/* The panel is open: the symbol shows that a click slides it back */}
+          {isActive && !pond && (
+            <span
+              aria-hidden="true"
+              data-testid="hai-handle-arrow"
+              className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-cyan-400 text-[#06183a] shadow"
             >
-                {/* Glow Ring */}
-                {!isActive && (
-                    <motion.div
-                        className="absolute inset-0 rounded-full"
-                        style={{
-                            background: 'radial-gradient(circle, rgba(34, 211, 238, 0.2) 0%, transparent 70%)',
-                        }}
-                        animate={{
-                            scale: [1, 1.1, 1],
-                            opacity: [0.5, 0.8, 0.5],
-                        }}
-                        transition={{
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: 'easeInOut',
-                        }}
-                    />
-                )}
+              <ChevronRight className="h-3.5 w-3.5" />
+            </span>
+          )}
+        </motion.button>
 
-                <AnimatePresence mode="wait">
-                    {isActive ? (
-                        <motion.div
-                            key="close"
-                            initial={{ rotate: -90, opacity: 0 }}
-                            animate={{ rotate: 0, opacity: 1 }}
-                            exit={{ rotate: 90, opacity: 0 }}
-                        >
-                            <ChevronUp className="w-6 h-6 text-foreground" />
-                        </motion.div>
-                    ) : (
-                        <motion.div
-                            key="open"
-                            initial={{ scale: 0.5, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.5, opacity: 0 }}
-                            className="relative w-full h-full"
-                        >
-                            <Image
-                                src="/images/shark-new.gif"
-                                alt="HAI"
-                                fill
-                                className="object-cover scale-110"
-                                unoptimized
-                            />
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Hover Tooltip */}
-                {!isActive && (
-                    <span className="
-                        absolute right-full mr-4 top-1/2 -translate-y-1/2
-                        px-3 py-1.5 rounded-lg
-                        bg-popover text-popover-foreground text-sm font-medium
-                        opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0
-                        transition-all duration-200 pointer-events-none whitespace-nowrap
-                        border border-border/50 shadow-md
-                    ">
-                        {t('hai.button.askHai')}
-                    </span>
-                )}
-            </motion.button>
-        </div>
-    );
+        {/* Hover Tooltip: left of the symbol (the page is to its left), outside
+            of the round button so it is not clipped */}
+        {!isActive && !pond && (
+          <span className="bg-popover text-popover-foreground border-border/50 pointer-events-none absolute top-1/2 right-full mr-4 hidden translate-x-2 -translate-y-1/2 rounded-lg border px-3 py-1.5 text-sm font-medium whitespace-nowrap opacity-0 shadow-md transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 sm:block">
+            {t('hai.button.askHai')}
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default HaiButton;

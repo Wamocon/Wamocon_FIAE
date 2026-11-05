@@ -213,6 +213,14 @@ export function denialAreaText(
 }
 
 /**
+ * ROLLE: a page that only the trainees have ("Ausbilder-Feedback"), asked for
+ * by a person of the trainer level.
+ */
+export function denialTraineePageText(examples: string): string {
+  return `Diese Seite gibt es nur für Auszubildende, sie ist für deine Rolle nicht vorgesehen. Ich bringe dich gern zu einer Seite, die für dich da ist, zum Beispiel ${examples}.`;
+}
+
+/**
  * Not a permission at all: the page is not known. Says so, so nobody takes it
  * for a missing right.
  */
@@ -326,6 +334,9 @@ export function chatFailureKey(status: number, code?: unknown): string {
     return 'hai.denial.awaitingActivation';
   }
   if (status === 403) return 'hai.denial.forbidden';
+  // the model is slow or overloaded (the route's MODEL_BUSY), not a failure of
+  // the person's network and not a missing right: a retry may work
+  if (status === 503 && code === 'MODEL_BUSY') return 'hai.error.modelBusy';
   if (status === 429) return 'hai.denial.rateLimited';
   if (status === 400) return 'hai.denial.inputInvalid';
   return 'hai.error.somethingWrong';

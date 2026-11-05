@@ -36,6 +36,8 @@ type EnablerQuizResult = {
   enablerTitle: string;
   quizId: string;
   quizTitle: string;
+  /** Difficulty of the quiz (one quiz per level and enabler). */
+  difficulty?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
   score: number | null;
   submittedAt: string;
   trainerFeedback?: string | null;
@@ -130,7 +132,9 @@ export default function TraineeFeedbackPage() {
     <span
       className={`rounded-full border px-2 py-1 text-xs ${s === 'PENDING' ? 'border-yellow-500 text-yellow-600' : s === 'APPROVED' ? 'border-green-500 text-green-600' : 'border-red-500 text-red-600'}`}
     >
-      {s}
+      {/* the status in the language of the page, not the raw value of the
+          database (PENDING, APPROVED, REJECTED) */}
+      {t(`feedback.status.${s.toLowerCase()}`)}
     </span>
   );
 
@@ -440,6 +444,18 @@ export default function TraineeFeedbackPage() {
                 <div className="flex items-center justify-between">
                   <div className="font-semibold">
                     {q.enablerTitle}
+                    {q.difficulty ? (
+                      <span className="border-accent/30 ml-2 rounded-full border px-2 py-0.5 text-xs">
+                        {t('enablerQuiz.difficulty')}:{' '}
+                        {t(
+                          q.difficulty === 'LOW'
+                            ? 'enablerPage.difficultyLow'
+                            : q.difficulty === 'MEDIUM'
+                              ? 'enablerPage.difficultyMedium'
+                              : 'enablerPage.difficultyHigh'
+                        )}
+                      </span>
+                    ) : null}
                     {q.attemptNumber ? (
                       <span className="border-accent/30 ml-2 rounded-full border px-2 py-0.5 text-xs">
                         {t('feedback.attempt').replace(

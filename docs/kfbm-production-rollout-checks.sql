@@ -133,9 +133,9 @@ where o.is_platform_owner
 group by o.name, p.role
 order by o.name, p.role;
 
--- V07. Row counts of the tables the rollout touches (measured 23.10.2026: 26 courses,
--- 189 enablers, 88 use cases, 6 profiles). Keep the output: it is the reference for the
--- comparison after the rollout.
+-- V07. Row counts of the tables the rollout touches (measured 28.10.2026 in production:
+-- 25 courses, 186 enablers, 85 use cases, 6 profiles; the earlier values 26, 189 and 88
+-- are those of the preview). Keep the output: it is the reference for the comparison after the rollout.
 select 'courses' as table_name, count(*) as row_count from public.courses
 union all select 'enablers', count(*) from public.enablers
 union all select 'use_cases', count(*) from public.use_cases
@@ -265,8 +265,8 @@ order by table_name, column_name;
 -- N checks (after a stage, the runbook says which)
 -- ============================================================================
 
--- N01. Ledger against the 41 files of the repository (202606260001 and the 40 files from
--- 20261023100000 to 20261102000400). Expect 0 rows after the release (and after the repair
+-- N01. Ledger against the 44 files of the repository (202606260001 and the 43 files from
+-- 20261023100000 to 20261103000300). Expect 0 rows after the release (and after the repair
 -- of 202606260001). Every row is a file whose version is missing in the ledger: it was not
 -- applied through the pipeline. Every new migration file needs its version in this list,
 -- tests/unit/migrations/rollout-checks-ledger.test.ts fails otherwise.
@@ -283,7 +283,8 @@ with expected(version) as (
          ('20261029000100'), ('20261029000200'), ('20261029000300'),
          ('20261030000100'), ('20261030000200'), ('20261030000300'),
          ('20261101000100'), ('20261101000200'),
-         ('20261102000100'), ('20261102000200'), ('20261102000300'), ('20261102000400')
+         ('20261102000100'), ('20261102000200'), ('20261102000300'), ('20261102000400'),
+         ('20261103000100'), ('20261103000200'), ('20261103000300')
 )
 select e.version as missing_in_ledger
 from expected e
@@ -347,6 +348,13 @@ from (
     -- 20261102000400: a weekly evaluation belongs to one occupation (column not null with default FIAE, index per trainee, occupation, year and week)
     ('column weekly_evaluations.training_catalog_id (not null, with default)', exists (select 1 from pg_attribute where attrelid = to_regclass('public.weekly_evaluations') and attname = 'training_catalog_id' and attnotnull and atthasdef and not attisdropped)),
     ('index weekly_evaluations_trainee_catalog_week_idx', to_regclass('public.weekly_evaluations_trainee_catalog_week_idx') is not null),
+    -- 20261103000100: school exams and school blocks belong to one occupation (column not null with default FIAE on both tables, index per trainee and occupation)
+    ('column school_exams.training_catalog_id (not null, with default)', exists (select 1 from pg_attribute where attrelid = to_regclass('public.school_exams') and attname = 'training_catalog_id' and attnotnull and atthasdef and not attisdropped)),
+    ('column ausbildung_blocks.training_catalog_id (not null, with default)', exists (select 1 from pg_attribute where attrelid = to_regclass('public.ausbildung_blocks') and attname = 'training_catalog_id' and attnotnull and atthasdef and not attisdropped)),
+    ('index school_exams_trainee_catalog_idx', to_regclass('public.school_exams_trainee_catalog_idx') is not null),
+    ('index ausbildung_blocks_trainee_catalog_idx', to_regclass('public.ausbildung_blocks_trainee_catalog_idx') is not null),
+    -- 20261103000200: checksum of the stored file of a content document (nullable text, no default)
+    ('column content_documents.content_sha256 (nullable text, no default)', exists (select 1 from pg_attribute where attrelid = to_regclass('public.content_documents') and attname = 'content_sha256' and atttypid = 'text'::regtype and not attnotnull and not atthasdef and not attisdropped)),
     ('enum value user_role SUPER_ADMIN', exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'user_role' and e.enumlabel = 'SUPER_ADMIN')),
     ('PUBLIC cannot create in schema public', not has_schema_privilege('public', 'public', 'CREATE'))
 ) as t(check_name, present)

@@ -67,7 +67,7 @@ describe('school components call the school routes with authFetch', () => {
     renderWithProviders(<ExamResultsOverview />);
     await waitFor(() =>
       expect(urlsOfAuthFetch()).toContain(
-        '/api/trainee/school/exams?traineeId=trainee-1&upcoming=false'
+        '/api/trainee/school/exams?traineeId=trainee-1'
       )
     );
     expect(plainFetch).not.toHaveBeenCalled();

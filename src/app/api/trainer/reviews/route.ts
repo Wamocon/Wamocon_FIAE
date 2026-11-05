@@ -1,21 +1,29 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, eq, inArray } from 'drizzle-orm';
+import { countDistinct, desc, eq, inArray } from 'drizzle-orm';
 import {
-  courses,
-  courseMembers,
   enablers,
   enablerSubmissions,
   profiles,
   useCases,
   useCaseSubmissions,
 } from '@/db/migrations/schemas/schema';
+import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
+import { requireCatalogScope } from '@/lib/catalog/scope';
 import {
-  requireTraineeScopeCondition,
-  traineeIdInScope,
-} from '@/lib/auth/trainee-scope-conditions';
-import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
+  enablerSubmissionsWhere,
+  reviewableCourseIds,
+  newestFirst,
+  submissionsOfUseCasesWhere,
+} from '@/lib/trainer/pending-reviews';
+import { parsePaging, parseStatusFilter } from '@/lib/trainer/review-paging';
+
+// GET /api/trainer/reviews?type=enabler|usecase&status=pending|all|approved|rejected&limit=&offset=
+// One page of the lesson (enabler) and use case submissions, newest first, and
+// the total of the same filter (enablerTotal, useCaseTotal), so the page can say
+// "50 of 2158" and load more (WMCNL-2999). Without `type` both lists are read.
+// `onlyPending=true` is the older form of `status=pending`.
 
 export async function GET(req: NextRequest) {
   try {
@@ -26,8 +34,8 @@ export async function GET(req: NextRequest) {
     if (isErrorResponse(scope)) return scope;
 
     const { searchParams } = new URL(req.url);
-    const trainerId = session.id;
-    const onlyPending = searchParams.get('onlyPending') === 'true';
+    const statusFilter = parseStatusFilter(searchParams);
+    const { limit, offset } = parsePaging(searchParams);
     const type = searchParams.get('type'); // 'enabler' | 'usecase' | undefined (all)
 
     // Only submissions of trainees of the own organization (the super admin:
@@ -36,50 +44,18 @@ export async function GET(req: NextRequest) {
     const traineeScope = await requireTraineeScopeCondition(session, req);
     if (isErrorResponse(traineeScope)) return traineeScope;
 
-    // Determine courses the trainer can review: creator or member (TRAINER)
-    const created = await db
-      .select({ id: courses.id })
-      .from(courses)
-      .where(eq(courses.createdById, trainerId));
-    const member = await db
-      .select({ courseId: courseMembers.courseId })
-      .from(courseMembers)
-      .where(
-        and(
-          eq(courseMembers.userId, trainerId),
-          eq(courseMembers.role, 'TRAINER')
-        )
-      );
-    const candidateCourseIds = Array.from(
-      new Set([
-        ...created.map(c => String(c.id)),
-        ...member.map(m => String(m.courseId)),
-      ])
-    );
-    // Only courses of the caller's catalogs
-    const courseIds = candidateCourseIds.length
-      ? (
-          await db
-            .select({ id: courses.id })
-            .from(courses)
-            .where(
-              and(
-                inArray(courses.id, candidateCourseIds as any),
-                catalogCondition(courses.trainingCatalogId, scope)
-              )
-            )
-        ).map(c => String(c.id))
-      : [];
+    // The courses a trainer reviews: every course of the caller's catalogs. Who
+    // the submissions of those courses belong to is limited by the trainee scope
+    // above (own organization, chosen occupation), not by who created the
+    // course or is a member of it (decision of the owner, WMCNL-2876).
+    const courseIds = await reviewableCourseIds(scope);
     if (!courseIds.length)
       return NextResponse.json({
         enablerSubmissions: [],
         useCaseSubmissions: [],
+        enablerTotal: 0,
+        useCaseTotal: 0,
       });
-
-    // Build status filter conditions for SQL WHERE
-    const statusFilter = onlyPending
-      ? eq(enablerSubmissions.status, 'PENDING')
-      : undefined;
 
     let enablerRows: Array<{
       id: string;
@@ -106,13 +82,22 @@ export async function GET(req: NextRequest) {
       traineeName?: string;
       attemptNumber?: number | null;
     }> = [];
+    let enablerTotal = 0;
+    let useCaseTotal = 0;
     if (!type || type === 'enabler') {
       // Get enabler submissions for trainer's courses
-      const esWhere = and(
-        inArray(enablers.courseId, courseIds),
-        traineeIdInScope(enablerSubmissions.traineeId, traineeScope.condition),
-        statusFilter ? eq(enablerSubmissions.status, 'PENDING') : undefined
+      // The same filter the dashboard counts the pending reviews with
+      const esWhere = enablerSubmissionsWhere(
+        courseIds,
+        traineeScope.condition,
+        statusFilter
       );
+      const [enablerCount] = await db
+        .select({ c: countDistinct(enablerSubmissions.id) })
+        .from(enablerSubmissions)
+        .innerJoin(enablers, eq(enablers.id, enablerSubmissions.enablerId))
+        .where(esWhere);
+      enablerTotal = Number(enablerCount?.c) || 0;
       const es = await db
         .select({
           id: enablerSubmissions.id,
@@ -128,7 +113,13 @@ export async function GET(req: NextRequest) {
         })
         .from(enablerSubmissions)
         .leftJoin(enablers, eq(enablers.id, enablerSubmissions.enablerId))
-        .where(esWhere);
+        .where(esWhere)
+        .orderBy(
+          desc(enablerSubmissions.submittedAt),
+          desc(enablerSubmissions.id)
+        )
+        .limit(limit)
+        .offset(offset);
       enablerRows = es;
 
       if (enablerRows.length) {
@@ -163,11 +154,17 @@ export async function GET(req: NextRequest) {
     }
 
     if (!type || type === 'usecase') {
-      const usWhere = and(
-        inArray(useCases.courseId, courseIds),
-        traineeIdInScope(useCaseSubmissions.traineeId, traineeScope.condition),
-        onlyPending ? eq(useCaseSubmissions.status, 'PENDING') : undefined
+      const usWhere = submissionsOfUseCasesWhere(
+        courseIds,
+        traineeScope.condition,
+        statusFilter
       );
+      const [useCaseCount] = await db
+        .select({ c: countDistinct(useCaseSubmissions.id) })
+        .from(useCaseSubmissions)
+        .innerJoin(useCases, eq(useCases.id, useCaseSubmissions.useCaseId))
+        .where(usWhere);
+      useCaseTotal = Number(useCaseCount?.c) || 0;
       const us = await db
         .select({
           id: useCaseSubmissions.id,
@@ -180,7 +177,13 @@ export async function GET(req: NextRequest) {
         })
         .from(useCaseSubmissions)
         .leftJoin(useCases, eq(useCases.id, useCaseSubmissions.useCaseId))
-        .where(usWhere);
+        .where(usWhere)
+        .orderBy(
+          desc(useCaseSubmissions.submittedAt),
+          desc(useCaseSubmissions.id)
+        )
+        .limit(limit)
+        .offset(offset);
       useCaseRows = us;
 
       if (useCaseRows.length) {
@@ -214,8 +217,10 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      enablerSubmissions: enablerRows,
-      useCaseSubmissions: useCaseRows,
+      enablerSubmissions: newestFirst(enablerRows),
+      useCaseSubmissions: newestFirst(useCaseRows),
+      enablerTotal,
+      useCaseTotal,
     });
   } catch (e) {
     console.error('Trainer reviews GET error', e);

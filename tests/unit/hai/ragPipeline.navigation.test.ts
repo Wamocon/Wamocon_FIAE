@@ -6,8 +6,10 @@
 // navigation offer, in the blocking and in the streaming path. No model call,
 // no write. The persona gate (another occupation, no scope) and the action step
 // come first, the level of the person comes from the access of the database
-// (never from the claimed role), a spoken question ends with "Soll ich sie
-// öffnen?".
+// (never from the claimed role). A clear command ("Öffne ...") is carried out
+// right away (the offer carries `auto`, the text says "Ich öffne ..."), a
+// question for the way ("Wo finde ich ...") stays an offer: typed with the hint
+// at the button, spoken with "Soll ich sie öffnen?".
 
 const mockDetect = jest.fn();
 const mockChat = jest.fn();
@@ -136,8 +138,8 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
     });
   });
 
-  it('answers a request for a page with an offer and no model call, no write', async () => {
-    const result = await run('öffne meine Berichte', ctx());
+  it('answers a question for the way with an offer and no model call, no write', async () => {
+    const result = await run('wo finde ich meine Berichte', ctx());
 
     expect(mockChat).not.toHaveBeenCalled();
     expect(result.intent).toBe('navigation');
@@ -150,17 +152,50 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
     expect(result.pendingAction).toBeUndefined();
     expect(result.actionResult).toBeUndefined();
     expect(result.citations).toEqual([]);
-    // typed: the hint at the button, no question, no automatic change
+    // typed: the hint at the button, no question, the person taps
     expect(result.response).toContain('Mit Öffnen gelangst du direkt dorthin.');
     expect(result.response).not.toContain('Soll ich sie öffnen?');
   });
 
-  it('asks "Soll ich sie öffnen?" for a spoken question', async () => {
-    const result = await run('öffne meine Berichte', ctx({ voice: true }));
+  it('asks "Soll ich sie öffnen?" for a spoken question for the way', async () => {
+    const result = await run(
+      'wo finde ich meine berichte',
+      ctx({ voice: true })
+    );
     expect(result.navigationOffer?.path).toBe('/trainee/activity-reports');
+    expect(result.navigationOffer?.auto).toBeUndefined();
     expect(result.response.endsWith('Soll ich sie öffnen?')).toBe(true);
     expect(result.response).not.toContain('Mit Öffnen');
     expect(mockChat).not.toHaveBeenCalled();
+  });
+
+  it('carries out a clear command: the offer is marked auto and the text says "Ich öffne ...", typed and spoken', async () => {
+    for (const voice of [false, true]) {
+      const result = await run(
+        'öffne meine Berichte',
+        ctx(voice ? { voice: true } : {})
+      );
+      expect(mockChat).not.toHaveBeenCalled();
+      expect(result.intent).toBe('navigation');
+      expect(result.navigationOffer).toEqual({
+        path: '/trainee/activity-reports',
+        label: 'Ausbildungsnachweis',
+        reason:
+          'Dort führst du dein Berichtsheft mit den wöchentlichen Tätigkeitsnachweisen.',
+        auto: true,
+      });
+      // no question and no hint at a button: the page is opened
+      expect(result.response).toBe('Ich öffne die Seite Ausbildungsnachweis.');
+      expect(result.pendingAction).toBeUndefined();
+      expect(result.actionResult).toBeUndefined();
+    }
+  });
+
+  it('keeps "zeig mir" an offer: it is no clear command', async () => {
+    const result = await run('zeig mir meine Berufsschule', ctx());
+    expect(result.navigationOffer?.path).toBe('/trainee/school');
+    expect(result.navigationOffer?.auto).toBeUndefined();
+    expect(result.response).toContain('Mit Öffnen gelangst du direkt dorthin.');
   });
 
   it('sends the text of the answer through the chunk callback in the streaming path', async () => {
@@ -176,6 +211,7 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
   it('finds an enabler of the own scope and takes the catalogs from the access', async () => {
     const result = await run('bring mich zum Quiz von Enabler 3', ctx());
     expect(result.navigationOffer?.path).toBe(`/trainee/enablers/${E1}`);
+    expect(result.navigationOffer?.auto).toBe(true);
     expect(mockEnablers).toHaveBeenCalledWith(USER, [FIAE]);
     expect(mockChat).not.toHaveBeenCalled();
   });
@@ -211,18 +247,22 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
     expect(result.navigationOffer?.path).toBe(`/trainee/enablers/${E1}`);
   });
 
-  it('gives a locked enabler title and hint, no offer', async () => {
+  it('opens a locked enabler like its page shows it: title and material, never the quiz', async () => {
     mockLock.mockResolvedValue({
       locked: true,
       lockedByTitle: 'Enabler 2: Datenmodell',
       hasActiveQuiz: true,
     });
     const result = await run('öffne Enabler 3', ctx());
-    expect(result.navigationOffer).toBeUndefined();
-    expect(result.response).toBe(
-      'Der Enabler Enabler 3: SQL Grundlagen ist noch gesperrt, weil in der Reihenfolge der Arbeit zuerst Enabler 2: Datenmodell abgeschlossen sein muss. Schließe Enabler 2: Datenmodell ab, dann wird er frei, und bis dahin helfe ich dir gern bei Enabler 2: Datenmodell.'
-    );
+    expect(result.navigationOffer?.path).toBe(`/trainee/enablers/${E1}`);
+    expect(result.navigationOffer?.path).not.toContain('quiz');
+    expect(result.response).toContain('Titel und Material kannst du lesen');
+    expect(result.response).toContain('Quizze und Abgabe sind noch zu');
     expect(mockChat).not.toHaveBeenCalled();
+    // the quiz of a locked enabler stays closed: title, reason, no link
+    const quiz = await run('bring mich zum Quiz von Enabler 3', ctx());
+    expect(quiz.navigationOffer).toBeUndefined();
+    expect(quiz.response).toContain('gesperrt');
   });
 
   it('computes "Weiter lernen" with the plan of the person', async () => {
@@ -254,11 +294,46 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
       })
     );
     expect(result.navigationOffer?.path).toBe(`/trainee/enablers/${E1}`);
+    // a question for the way: an offer, not carried out
+    expect(result.navigationOffer?.auto).toBeUndefined();
     expect(result.response).toContain(
       'Weiter geht es mit dem Enabler SQL Grundlagen.'
     );
     expect(result.response).toContain('(Phase 1)');
     expect(mockChat).not.toHaveBeenCalled();
+  });
+
+  it('carries out "Ich will weiterlernen" with the reason of the step', async () => {
+    mockNext.mockResolvedValue([
+      {
+        enablerId: E1,
+        title: 'SQL Grundlagen',
+        courseTitle: 'Datenbanken',
+        stage: 1,
+        chapter: 1,
+        orderIndex: 1,
+        completed: false,
+        locked: false,
+      },
+    ]);
+    const result = await run('ich will weiterlernen', ctx());
+    expect(result.navigationOffer?.path).toBe(`/trainee/enablers/${E1}`);
+    expect(result.navigationOffer?.auto).toBe(true);
+    expect(result.response).toContain('Ich öffne den Enabler SQL Grundlagen.');
+    expect(result.response).toContain('Das ist dein nächster freigeschalteter');
+  });
+
+  it('never carries out a page that was refused: a command to the quiz of a locked enabler or a trainer page gives no offer', async () => {
+    mockLock.mockResolvedValue({
+      locked: true,
+      lockedByTitle: null,
+      hasActiveQuiz: true,
+    });
+    const locked = await run('öffne das Quiz von Enabler 3', ctx());
+    expect(locked.navigationOffer).toBeUndefined();
+    const trainerPage = await run('öffne die Auszubildenden', ctx());
+    expect(trainerPage.navigationOffer).toBeUndefined();
+    expect(trainerPage.response).toContain('für deine Rolle nicht freigegeben');
   });
 
   it('refuses the page of the trainer area to a trainee, even if the client claims to be a trainer', async () => {
@@ -293,6 +368,7 @@ describe.each(paths)('HAI navigation through %s', (_name, run) => {
       ctx({ userRole: 'TRAINER' })
     );
     expect(trainer.navigationOffer?.path).toBe('/trainer/trainees');
+    expect(trainer.navigationOffer?.auto).toBe(true);
     const noAdmin = await run(
       'öffne die Benutzerverwaltung',
       ctx({ userRole: 'TRAINER' })

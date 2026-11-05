@@ -7,6 +7,9 @@ import { Users, TrendingUp, AlertTriangle, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { reviewViewFor } from '@/lib/trainer/review-view';
+import { DashboardOccupation } from '@/components/catalog/DashboardOccupation';
+import { useCatalog } from '@/contexts/CatalogContext';
 
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -67,9 +70,18 @@ type DashboardResponse = {
 const TRAINER_DASHBOARD_CACHE_KEY = 'wmc_trainer_dashboard_cache_v4';
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (increased from 5)
 
-const getCachedDashboard = (): DashboardResponse | null => {
+// A trainer with several occupations has one dashboard per occupation: the
+// occupation is part of the key, so the placeholder never shows the numbers of
+// the other tab while the data of the chosen one loads (WMCNL-2981). With one
+// occupation the key stays as it was.
+const getDashboardCacheKey = (catalogCode: string | null) =>
+  catalogCode
+    ? `${TRAINER_DASHBOARD_CACHE_KEY}_${catalogCode}`
+    : TRAINER_DASHBOARD_CACHE_KEY;
+
+const getCachedDashboard = (cacheKey: string): DashboardResponse | null => {
   try {
-    const cached = localStorage.getItem(TRAINER_DASHBOARD_CACHE_KEY);
+    const cached = localStorage.getItem(cacheKey);
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
       if (Date.now() - timestamp < CACHE_TTL) return data;
@@ -78,10 +90,10 @@ const getCachedDashboard = (): DashboardResponse | null => {
   return null;
 };
 
-const setCachedDashboard = (data: DashboardResponse) => {
+const setCachedDashboard = (cacheKey: string, data: DashboardResponse) => {
   try {
     localStorage.setItem(
-      TRAINER_DASHBOARD_CACHE_KEY,
+      cacheKey,
       JSON.stringify({ data, timestamp: Date.now() })
     );
   } catch (_) {}
@@ -91,6 +103,10 @@ export default function TrainerDashboard() {
   const router = useRouter();
   const { user, profile } = useAuth();
   const { t } = useLanguage();
+  const { activeCode, isMultiple } = useCatalog();
+  const dashboardCacheKey = getDashboardCacheKey(
+    isMultiple ? activeCode : null
+  );
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -104,13 +120,13 @@ export default function TrainerDashboard() {
 
   const { data, isLoading: dataLoading } = useApiQuery<DashboardResponse>(url, {
     usePrefetch: true,
-    placeholderData: () => getCachedDashboard() ?? undefined,
+    placeholderData: () => getCachedDashboard(dashboardCacheKey) ?? undefined,
   });
 
   // Persist fresh data to localStorage for instant display on next visit
   useEffect(() => {
-    if (data) setCachedDashboard(data);
-  }, [data]);
+    if (data) setCachedDashboard(dashboardCacheKey, data);
+  }, [dashboardCacheKey, data]);
 
   // Derive state from the query response
   const trainees = data?.trainees ?? [];
@@ -154,6 +170,7 @@ export default function TrainerDashboard() {
       {/* Enhanced red background overlay */}
       <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25"></div>
       <div className="relative z-10">
+        <DashboardOccupation />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-8 lg:col-span-2">
             {/* Action Required Section */}
@@ -200,7 +217,9 @@ export default function TrainerDashboard() {
                   </p>
                   <button
                     onClick={() =>
-                      router.push('/trainer/reviews?onlyPending=true')
+                      router.push(
+                        `/trainer/reviews?onlyPending=true&view=${reviewViewFor(data?.counts ?? {})}`
+                      )
                     }
                     className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 w-full rounded-xl px-4 py-2 text-sm transition-colors"
                   >
@@ -281,6 +300,9 @@ export default function TrainerDashboard() {
                   {t('dashboard.overallProgress')}
                 </h3>
               </div>
+              <p className="text-muted-foreground mb-3 text-xs">
+                {t('dashboard.overallProgressHint')}
+              </p>
               <ProgressTrendChart
                 data={progressTrendSafe}
                 loading={dataLoading}
@@ -295,6 +317,9 @@ export default function TrainerDashboard() {
                   {t('dashboard.individualProgress')}
                 </h3>
               </div>
+              <p className="text-muted-foreground mb-3 text-xs">
+                {t('dashboard.individualProgressHint')}
+              </p>
               <ModuleProgressChart
                 data={moduleProgressSafe}
                 loading={dataLoading}

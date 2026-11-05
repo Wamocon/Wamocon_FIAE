@@ -371,9 +371,12 @@ export async function GET(
     // Generate default summary if missing
     const traineeName = snapshot.traineeName || 'Trainee';
     const summaryText = cert.customSummary || '';
+    // The fallback names the person and uses no "ihm" or "ihr": the gender of
+    // the certificate is not part of the sentence, as in the neutral default of
+    // the generator (ArbeitszeugnisGenerator)
     const overallAssessmentText =
       snapshot.overallAssessment ||
-      `Person ${traineeName} hat die ihm übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
+      `${traineeName} hat die übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
 
     console.log('PDF Generation params:', {
       logoImage: logoImageBase64

@@ -20,15 +20,19 @@ import {
     profiles,
     activityReports,
     ausbildungBlocks,
-    enablerCompletions,
     enablers,
-    courseMembers,
     courses,
     enablerSubmissions,
     notifications
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgIdStrict, toHaiRole } from '@/lib/auth-helpers';
 import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
+import { loadTraineeProgress } from '@/lib/trainer/trainee-progress';
+import {
+    firstOpenEnabler,
+    loadTraineeCourseFigures,
+    type CourseFigure,
+} from './progressFigures';
 
 // ============================================================================
 // TYPES
@@ -96,9 +100,11 @@ export async function runProactiveChecks(
                 (await getCatalogScopeForUserId(userId))?.activeCatalogId ??
                 null;
             insights.push(...await checkMissingActivityReports(userId, traineeCatalogId));
-            insights.push(...await checkUpcomingExams(userId));
-            insights.push(...await checkLowProgress(userId, traineeCatalogId));
-            insights.push(...await suggestNextSteps(userId, traineeCatalogId));
+            insights.push(...await checkUpcomingExams(userId, traineeCatalogId));
+            // The courses with the figures of the platform, read once for both checks
+            const figures = await loadFiguresOf(userId, traineeCatalogId);
+            insights.push(...checkLowProgress(figures));
+            insights.push(...suggestNextSteps(figures));
         } else if (userRole === 'TRAINER') {
             insights.push(...await checkPendingReviews(userId, catalogId));
             insights.push(...await checkTraineeProgress(userId, catalogId));
@@ -216,12 +222,19 @@ async function checkMissingActivityReports(
 }
 
 /**
- * Check for upcoming exams
+ * Check for upcoming exams of one occupation: an exam of the other training of
+ * a trainee in two trainings is not a reason to remind about this one.
  */
-async function checkUpcomingExams(userId: string): Promise<ProactiveInsight[]> {
+async function checkUpcomingExams(
+    userId: string,
+    catalogId: string | null
+): Promise<ProactiveInsight[]> {
     const insights: ProactiveInsight[] = [];
 
     try {
+        // Fail closed: without an occupation nothing is asked
+        if (!catalogId) return insights;
+
         // Find exams in the next 14 days
         const now = new Date();
         const twoWeeksLater = new Date(now);
@@ -238,6 +251,7 @@ async function checkUpcomingExams(userId: string): Promise<ProactiveInsight[]> {
                 and(
                     // Only the exams of this trainee, never those of others
                     eq(ausbildungBlocks.traineeId, userId),
+                    eq(ausbildungBlocks.trainingCatalogId, catalogId),
                     eq(ausbildungBlocks.blockType, 'EXAM'),
                     gte(ausbildungBlocks.startDate, now),
                     lte(ausbildungBlocks.startDate, twoWeeksLater)
@@ -267,130 +281,66 @@ async function checkUpcomingExams(userId: string): Promise<ProactiveInsight[]> {
 }
 
 /**
- * Check for low progress in the courses of one occupation: the courses of the
- * other training of a trainee in two trainings are not shown here.
+ * The courses of the trainee in ONE occupation with the figures of the platform
+ * (progressFigures.ts). Fail closed: without an occupation nothing is asked, and
+ * a failed lookup is no empty list of courses but no insight (null).
  */
-async function checkLowProgress(
+async function loadFiguresOf(
     userId: string,
     catalogId: string | null
-): Promise<ProactiveInsight[]> {
-    const insights: ProactiveInsight[] = [];
-
+): Promise<CourseFigure[] | null> {
+    if (!catalogId) return [];
     try {
-        // Fail closed: without an occupation nothing is asked
-        if (!catalogId) return insights;
-
-        // Get the courses of this occupation the user is enrolled in
-        const enrollments = await db
-            .select({
-                courseId: courseMembers.courseId,
-                courseTitle: courses.title,
-            })
-            .from(courseMembers)
-            .innerJoin(courses, eq(courseMembers.courseId, courses.id))
-            .where(
-                and(
-                    eq(courseMembers.userId, userId),
-                    eq(courses.trainingCatalogId, catalogId)
-                )
-            );
-
-        for (const enrollment of enrollments) {
-            // Count total enablers in course
-            const totalEnablers = await db
-                .select({ count: sql<number>`count(*)::int` })
-                .from(enablers)
-                .where(
-                    and(
-                        eq(enablers.courseId, enrollment.courseId),
-                        eq(enablers.isActive, true)
-                    )
-                );
-
-            const total = totalEnablers[0]?.count || 0;
-
-            // Count completed enablers
-            const completedEnablers = await db
-                .select({ count: sql<number>`count(*)::int` })
-                .from(enablerCompletions)
-                .innerJoin(enablers, eq(enablerCompletions.enablerId, enablers.id))
-                .where(
-                    and(
-                        eq(enablerCompletions.traineeId, userId),
-                        eq(enablers.courseId, enrollment.courseId)
-                    )
-                );
-
-            const completed = completedEnablers[0]?.count || 0;
-            const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-            // Alert if progress is below 30% and there are more than 5 enablers
-            if (progressPercent < 30 && total > 5) {
-                insights.push({
-                    type: 'warning',
-                    priority: 'medium',
-                    title: 'Niedriger Fortschritt',
-                    message: `Dein Fortschritt in "${enrollment.courseTitle}" ist nur ${progressPercent}%. Zeit, am Ball zu bleiben!`,
-                    actionable: true,
-                    actionText: 'Nächsten Enabler starten',
-                    actionType: 'suggest_next_enabler',
-                    actionParameters: { courseId: enrollment.courseId },
-                });
-            }
-        }
+        return await loadTraineeCourseFigures(userId, [catalogId]);
     } catch (error) {
-        console.error('HAI.ai: Error checking low progress:', error);
+        console.error('HAI.ai: Error loading the course progress:', error);
+        return null;
     }
+}
 
+/**
+ * Check for low progress in the courses of one occupation: the courses of the
+ * other training of a trainee in two trainings are not shown here. The figure is
+ * the one of the course card (enablers by the quiz definition, use cases
+ * weighted), not the rows of enabler_completions.
+ */
+function checkLowProgress(figures: CourseFigure[] | null): ProactiveInsight[] {
+    const insights: ProactiveInsight[] = [];
+    for (const figure of figures ?? []) {
+        // Alert if progress is below 30% and there are more than 5 enablers
+        if (figure.percent < 30 && figure.enablerTotal > 5) {
+            insights.push({
+                type: 'warning',
+                priority: 'medium',
+                title: 'Niedriger Fortschritt',
+                message: `Dein Fortschritt in "${figure.title}" ist nur ${figure.percent}%. Zeit, am Ball zu bleiben!`,
+                actionable: true,
+                actionText: 'Nächsten Enabler starten',
+                actionType: 'suggest_next_enabler',
+                actionParameters: { courseId: figure.courseId },
+            });
+        }
+    }
     return insights;
 }
 
 /**
- * Suggest next learning steps, in the courses of one occupation
+ * Suggest the next learning step, in the courses of one occupation: the first
+ * enabler in the order of the training plan that is not completed and not locked
+ * (the same rule as the "next item" of the dashboard).
  */
-async function suggestNextSteps(
-    userId: string,
-    catalogId: string | null
-): Promise<ProactiveInsight[]> {
-    const insights: ProactiveInsight[] = [];
-
-    try {
-        // Fail closed: without an occupation nothing is suggested
-        if (!catalogId) return insights;
-
-        // Find incomplete enablers in active courses of this occupation
-        const activeEnablers = await db.execute(sql`
-            SELECT DISTINCT ON (e.id)
-                e.id,
-                e.title,
-                c.title as course_title
-            FROM enablers e
-            INNER JOIN courses c ON e.course_id = c.id
-            INNER JOIN course_members cm ON c.id = cm.course_id
-            LEFT JOIN enabler_completions ec ON e.id = ec.enabler_id AND ec.trainee_id = ${userId}
-            WHERE cm.user_id = ${userId}
-                AND c.training_catalog_id = ${catalogId}
-                AND e.is_active = true
-                AND ec.enabler_id IS NULL
-            ORDER BY e.id, e.created_at
-            LIMIT 1
-        `);
-
-        if ((activeEnablers as any[]).length > 0) {
-            const enabler = (activeEnablers as any[])[0];
-            insights.push({
-                type: 'suggestion',
-                priority: 'low',
-                title: 'Nächster Schritt',
-                message: `Bereit für den nächsten Enabler? "${enabler.title}" wartet auf dich!`,
-                actionable: false,
-            });
-        }
-    } catch (error) {
-        console.error('HAI.ai: Error suggesting next steps:', error);
-    }
-
-    return insights;
+function suggestNextSteps(figures: CourseFigure[] | null): ProactiveInsight[] {
+    const next = firstOpenEnabler(figures ?? []);
+    if (!next) return [];
+    return [
+        {
+            type: 'suggestion',
+            priority: 'low',
+            title: 'Nächster Schritt',
+            message: `Bereit für den nächsten Enabler? "${next.enabler.title}" wartet auf dich!`,
+            actionable: false,
+        },
+    ];
 }
 
 // ============================================================================
@@ -474,12 +424,15 @@ async function checkPendingReviews(
 }
 
 /**
- * Check trainee progress (trainer-only), per occupation: the share of the active
- * enablers of the courses of ONE occupation that a trainee has completed. A
- * trainee in two trainings is low in one of them without being low in the
+ * Check trainee progress (trainer-only), per occupation: the progress of a
+ * trainee in the courses of ONE occupation, by the figure of the trainer pages
+ * (loadTraineeProgress: an enabler counts when its required quizzes are passed).
+ * A trainee in two trainings is low in one of them without being low in the
  * other, so the progress of the person as a whole (profiles.overall_progress) is
  * not used. With an occupation only that one is checked; without one every
- * occupation is checked and the name carries the code of the occupation.
+ * occupation is checked and the name carries the code of the occupation. The
+ * rows of enabler_completions are no source (the quiz based completion does not
+ * write them: everybody was "low").
  */
 async function checkTraineeProgress(
     trainerId: string,
@@ -488,34 +441,58 @@ async function checkTraineeProgress(
     const insights: ProactiveInsight[] = [];
 
     try {
-        // Find trainees assigned to this trainer with low progress in an occupation
-        const lowProgressTrainees = await db.execute(sql`
-            SELECT
-                p.id,
-                p.full_name,
-                tc.code AS catalog_code,
-                ROUND(100.0 * COUNT(DISTINCT ec.enabler_id) / COUNT(DISTINCT e.id)) AS progress
-            FROM profiles p
-            INNER JOIN course_members cm ON cm.user_id = p.id
-            INNER JOIN courses c ON c.id = cm.course_id
-            INNER JOIN training_catalogs tc ON tc.id = c.training_catalog_id
-            INNER JOIN enablers e ON e.course_id = c.id AND e.is_active = true
-            LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = p.id
-            WHERE p.assigned_trainer_id = ${trainerId}
-                AND p.role = 'TRAINEE'
-                ${catalogId ? sql`AND c.training_catalog_id = ${catalogId}` : sql``}
-            GROUP BY p.id, p.full_name, tc.code
-            HAVING ROUND(100.0 * COUNT(DISTINCT ec.enabler_id) / COUNT(DISTINCT e.id)) < 30
-            ORDER BY progress ASC
-            LIMIT 3
-        `);
-
-        if ((lowProgressTrainees as any[]).length > 0) {
-            // Without a chosen occupation the code tells which training is meant
-            const traineeNames = (lowProgressTrainees as any[])
-                .map((t: any) =>
-                    catalogId ? t.full_name : `${t.full_name} (${t.catalog_code})`
+        // The active trainees of this trainer, the same list as the overview
+        const trainees = await db
+            .select({ id: profiles.id, fullName: profiles.fullName })
+            .from(profiles)
+            .where(
+                and(
+                    eq(profiles.assignedTrainerId, trainerId),
+                    eq(profiles.role, 'TRAINEE'),
+                    eq(profiles.isActive, true)
                 )
+            );
+        if (trainees.length === 0) return insights;
+        const traineeIds = trainees.map(t => String(t.id));
+
+        // The occupations to check: the chosen one, else every occupation the
+        // trainees have a course in
+        const catalogs = (catalogId
+            ? await db.execute(sql`
+                SELECT id, code FROM training_catalogs WHERE id = ${catalogId}
+            `)
+            : await db.execute(sql`
+                SELECT DISTINCT tc.id, tc.code
+                FROM course_members cm
+                JOIN courses c ON c.id = cm.course_id
+                JOIN training_catalogs tc ON tc.id = c.training_catalog_id
+                WHERE cm.user_id IN (${sql.join(traineeIds.map(id => sql`${id}`), sql`, `)})
+            `)) as unknown as Array<{ id: string; code: string }>;
+
+        const low: Array<{ name: string; code: string; pct: number }> = [];
+        for (const catalog of catalogs) {
+            const loaded = await loadTraineeProgress(traineeIds, {
+                allowedCatalogIds: [String(catalog.id)],
+                activeCatalogId: String(catalog.id),
+                selected: true,
+            });
+            for (const trainee of trainees) {
+                const figure = loaded.byTrainee.get(String(trainee.id));
+                if (!figure || figure.total <= 0 || figure.pct >= 30) continue;
+                low.push({
+                    name: String(trainee.fullName ?? ''),
+                    code: String(catalog.code),
+                    pct: figure.pct,
+                });
+            }
+        }
+        low.sort((a, b) => a.pct - b.pct);
+
+        if (low.length > 0) {
+            // Without a chosen occupation the code tells which training is meant
+            const traineeNames = low
+                .slice(0, 3)
+                .map(t => (catalogId ? t.name : `${t.name} (${t.code})`))
                 .join(', ');
 
             insights.push({

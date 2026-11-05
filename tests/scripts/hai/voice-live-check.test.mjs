@@ -5,7 +5,12 @@
 // that no key and no short lived key ever shows in the output.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { runVoiceCheck } from '../../../scripts/hai/voice-live-check.mjs';
+import { EventEmitter } from 'node:events';
+import {
+  encodeWebmWithFfmpeg,
+  parseArgs,
+  runVoiceCheck,
+} from '../../../scripts/hai/voice-live-check.mjs';
 
 const SONIOX_KEY = 'soniox-real-key-0123456789';
 const HAUS_KEY = 'sk-haus-real-key-abcdef';
@@ -26,6 +31,7 @@ const json = (status, body) =>
  */
 function fakeFetch(options = {}) {
   const calls = [];
+  let issued = 0;
   const impl = async (url, init = {}) => {
     const address = String(url);
     calls.push({ url: address, init });
@@ -34,7 +40,8 @@ function fakeFetch(options = {}) {
       const status = options.sonioxStatus?.[host] ?? 201;
       if (status !== 201) return json(status, { error: 'refused' });
       const usage = JSON.parse(init.body).usage_type;
-      return json(201, { api_key: `TEMP-${usage}-${host}` });
+      issued += 1;
+      return json(201, { api_key: `TEMP-${usage}-${host}-${issued}` });
     }
     if (address.endsWith('/v1/audio/speech')) {
       return (
@@ -58,11 +65,13 @@ function fakeFetch(options = {}) {
 /** A websocket that behaves like the Soniox endpoints (speech output and recognition). */
 function fakeSocketClass(options = {}) {
   const sockets = [];
+  const usedKeys = new Set();
   class FakeSocket {
     constructor(url, protocols) {
       this.url = url;
       this.protocols = protocols;
       this.sent = [];
+      this.binary = 0;
       sockets.push(this);
       setTimeout(() => this.onopen?.(), 0);
     }
@@ -85,7 +94,41 @@ function fakeSocketClass(options = {}) {
         }
         return;
       }
+      // recognition: a key that was used once is refused (option rejectReuse)
+      if (
+        options.rejectReuse &&
+        typeof data === 'string' &&
+        data.startsWith('{')
+      ) {
+        if (usedKeys.has(this.protocols[1])) {
+          this.emit({ error_code: 400, error_message: 'key used' });
+          return;
+        }
+        usedKeys.add(this.protocols[1]);
+      }
+      // the container of the browser: words while the audio comes, the endpoint after the
+      // third slice (option webmEndpoint)
+      if (options.webmEndpoint && typeof data !== 'string') {
+        this.binary += 1;
+        if (this.binary === 1) {
+          this.emit({ tokens: [{ text: 'Was', is_final: false }] });
+        }
+        if (this.binary === 3) {
+          this.endpointSent = true;
+          this.emit({
+            tokens: [
+              { text: options.recognized ?? QUESTION, is_final: true },
+              { text: '<end>', is_final: true },
+            ],
+          });
+        }
+        return;
+      }
       // recognition: the empty text frame ends the audio
+      if (data === '' && this.endpointSent) {
+        this.emit({ tokens: [], finished: true });
+        return;
+      }
       if (data === '') {
         this.emit({
           tokens: [
@@ -101,7 +144,17 @@ function fakeSocketClass(options = {}) {
   return { Class: FakeSocket, sockets };
 }
 
-async function run(env, { argv = [], fetchOptions, socketOptions } = {}) {
+async function run(
+  env,
+  {
+    argv = [],
+    fetchOptions,
+    socketOptions,
+    encodeWebm,
+    endWaitMs = 20,
+    realtime = false,
+  } = {}
+) {
   const fetchDouble = fakeFetch(fetchOptions);
   const socketDouble = fakeSocketClass(socketOptions);
   const lines = [];
@@ -111,6 +164,9 @@ async function run(env, { argv = [], fetchOptions, socketOptions } = {}) {
     fetchImpl: fetchDouble.impl,
     WebSocketImpl: socketDouble.Class,
     write: line => lines.push(line),
+    endWaitMs,
+    realtime,
+    ...(encodeWebm ? { encodeWebm } : {}),
   });
   return {
     ...result,
@@ -391,7 +447,7 @@ test('no key and no short lived key in the output, even if a service repeats the
   const { out } = await run(BOTH_ENV, {
     // a recognized text that contains the keys (a hostile or broken service)
     socketOptions: {
-      recognized: `Primärschlüssel ${SONIOX_KEY} TEMP-transcribe_websocket-api.eu.soniox.com`,
+      recognized: `Primärschlüssel ${SONIOX_KEY} TEMP-transcribe_websocket-api.eu.soniox.com-2`,
     },
     fetchOptions: {
       transcribe: json(200, { text: `Primärschlüssel ${HAUS_KEY}` }),
@@ -399,4 +455,302 @@ test('no key and no short lived key in the output, even if a service repeats the
   });
   assertNoSecret(out);
   assert.match(out, /\[verborgen\]/);
+});
+
+// ---------------------------------------------------------------------------
+// --webm: the way of the browser
+// ---------------------------------------------------------------------------
+
+const WEBM_FILE = Buffer.alloc(5_000, 1);
+const fakeEncode = async pcm => {
+  assert.ok(pcm.length > 0);
+  return WEBM_FILE;
+};
+const WEBM = ['--only', 'soniox', '--webm'];
+const WEBM_SOCKETS = { webmEndpoint: true };
+const isWebmSocket = s =>
+  s.url.includes('stt-rt') && JSON.parse(s.sent[0]).audio_format === 'auto';
+
+test('--webm is an argument of the check, it belongs to Soniox', () => {
+  assert.deepEqual(parseArgs(['--webm']), {
+    providers: ['soniox', 'haus'],
+    webm: true,
+  });
+  assert.deepEqual(parseArgs([]), {
+    providers: ['soniox', 'haus'],
+    webm: false,
+  });
+  assert.match(
+    parseArgs(['--only', 'haus', '--webm']).error,
+    /--webm gehört zu Soniox/
+  );
+});
+
+test('without --webm there is no probe of the browser way and no ffmpeg call', async () => {
+  const { rows } = await run(SONIOX_ENV, {
+    argv: ['--only', 'soniox'],
+    encodeWebm: async () => {
+      throw new Error('must not be called');
+    },
+  });
+  assert.equal(rows.length, 5);
+  assert.ok(rows.every(r => !r.check.includes('Browserweg')));
+});
+
+test('--webm sends the recording as the browser does: container in slices, the config of the app, endpoint', async () => {
+  const { exitCode, rows, out, sockets } = await run(SONIOX_ENV, {
+    argv: WEBM,
+    encodeWebm: fakeEncode,
+    socketOptions: WEBM_SOCKETS,
+  });
+  assert.equal(exitCode, 0, out);
+  assert.ok(
+    rows.every(r => r.outcome === 'ok'),
+    out
+  );
+  assert.match(
+    out,
+    /Soniox Browserweg \(webm\/opus, Endpunkterkennung\)\s+bestanden\s+7 Stücke \(5 KB\), erstes Wort nach [\d,]+ s, Endpunkt [\d,]+ s nach dem Ende der Sprache, erkannt "Was ist ein Primärschlüssel\?"/
+  );
+  assert.match(
+    out,
+    /Soniox zweite Verbindung mit demselben Schlüssel\s+bestanden\s+angenommen/
+  );
+  assert.match(
+    out,
+    /Soniox zweiter Sprach-Strom auf derselben Verbindung\s+bestanden\s+erster Satz nach [\d,]+ s \(mit Verbindungsaufbau\), zweiter Satz nach [\d,]+ s auf der stehenden Verbindung/
+  );
+  // the recognition of the browser way: the config of the app, unchanged, then binary slices
+  const webm = sockets.find(isWebmSocket);
+  const config = JSON.parse(webm.sent[0]);
+  assert.equal(config.audio_format, 'auto');
+  assert.equal(config.enable_endpoint_detection, true);
+  assert.equal(config.endpoint_sensitivity, 0.2);
+  assert.equal(config.endpoint_latency_adjustment_level, 1);
+  assert.equal(config.max_endpoint_delay_ms, 1000);
+  assert.equal(config.sample_rate, undefined);
+  const slices = webm.sent.filter(m => typeof m !== 'string');
+  assert.equal(slices.length, 7);
+  assert.ok(slices.slice(0, -1).every(m => m.length === 800));
+  assert.equal(
+    slices.reduce((n, m) => n + m.length, 0),
+    5_000
+  );
+  // the end of the stream is an empty text frame, sent at the endpoint
+  assert.equal(webm.sent.at(-1), '');
+  assertNoSecret(out);
+});
+
+test('--webm: the browser way gets a fresh key, the second connection reuses that key', async () => {
+  const { sockets, calls } = await run(SONIOX_ENV, {
+    argv: WEBM,
+    encodeWebm: fakeEncode,
+    socketOptions: WEBM_SOCKETS,
+  });
+  const usages = calls
+    .filter(c => c.url.endsWith('/temporary-api-key'))
+    .map(c => JSON.parse(c.init.body).usage_type);
+  // tts and stt of the first probe, a fresh tts key for the two streams, a fresh stt key
+  assert.deepEqual(usages, [
+    'tts_rt',
+    'transcribe_websocket',
+    'tts_rt',
+    'transcribe_websocket',
+  ]);
+  const webmSockets = sockets.filter(isWebmSocket);
+  assert.equal(webmSockets.length, 2);
+  assert.equal(webmSockets[0].protocols[1], webmSockets[1].protocols[1]);
+  // the second connection sends only three slices and ends the stream
+  assert.equal(
+    webmSockets[1].sent.filter(m => typeof m !== 'string').length,
+    3
+  );
+  assert.equal(webmSockets[1].sent.at(-1), '');
+  // one connection with two streams
+  const twoStreams = sockets
+    .filter(s => s.url.includes('tts-rt'))
+    .find(s => s.sent.filter(m => m.includes('text_end')).length === 2);
+  assert.ok(twoStreams);
+  assert.equal(
+    JSON.parse(twoStreams.sent[3]).text,
+    'Das ist die zweite Antwort.'
+  );
+});
+
+test('--webm: a service that refuses a key for a second connection is no failure, it is named', async () => {
+  const { exitCode, out, rows } = await run(SONIOX_ENV, {
+    argv: WEBM,
+    encodeWebm: fakeEncode,
+    socketOptions: { ...WEBM_SOCKETS, rejectReuse: true },
+  });
+  assert.equal(exitCode, 0, out);
+  const second = rows.find(r => r.check.includes('zweite Verbindung'));
+  assert.equal(second.outcome, 'ok');
+  assert.match(second.detail, /abgelehnt \(Soniox meldet den Fehler 400\)/);
+  assert.match(second.detail, /jeden Schlüssel nur einmal aus/);
+});
+
+test('--webm without ffmpeg: a clear note, the two streams on one connection are still measured', async () => {
+  const { exitCode, out, rows } = await run(SONIOX_ENV, {
+    argv: WEBM,
+    encodeWebm: async () => null,
+  });
+  assert.equal(exitCode, 0, out);
+  assert.match(out, /ffmpeg nicht gefunden/);
+  assert.match(out, /winget install Gyan\.FFmpeg/);
+  assert.equal(
+    rows.find(r => r.check.includes('Browserweg')).outcome,
+    'skipped'
+  );
+  assert.equal(
+    rows.find(r => r.check.includes('zweite Verbindung')).outcome,
+    'skipped'
+  );
+  assert.equal(rows.find(r => r.check.includes('Sprach-Strom')).outcome, 'ok');
+});
+
+test('--webm: ffmpeg that fails is an error of the probe', async () => {
+  const { exitCode, rows } = await run(SONIOX_ENV, {
+    argv: WEBM,
+    encodeWebm: async () => {
+      throw new Error('ffmpeg endete mit dem Code 1');
+    },
+  });
+  assert.equal(exitCode, 1);
+  const failed = rows.find(r => r.check.includes('Browserweg'));
+  assert.equal(failed.outcome, 'failed');
+  assert.match(failed.detail, /ffmpeg endete mit dem Code 1/);
+});
+
+test('--webm: a recording that Soniox does not understand is an error with what was heard', async () => {
+  const { exitCode, rows } = await run(SONIOX_ENV, {
+    argv: WEBM,
+    encodeWebm: fakeEncode,
+    socketOptions: { ...WEBM_SOCKETS, recognized: 'Hallo Welt' },
+  });
+  assert.equal(exitCode, 1);
+  const failed = rows.find(r => r.check.includes('Browserweg'));
+  assert.equal(failed.outcome, 'failed');
+  assert.match(failed.detail, /erkannt: "Hallo Welt"/);
+});
+
+test('--webm: when no endpoint comes the stream is ended after a wait', async () => {
+  // this fake reports no <end> before the empty frame
+  const { rows, out } = await run(SONIOX_ENV, {
+    argv: WEBM,
+    encodeWebm: fakeEncode,
+    socketOptions: {},
+  });
+  const probe = rows.find(r => r.check.includes('Browserweg'));
+  assert.ok(probe.detail.includes('7 Stücke'), out);
+});
+
+test('--webm: Soniox not set up gives the probe no ground, and no ffmpeg call', async () => {
+  const { exitCode, rows } = await run(
+    {},
+    {
+      argv: WEBM,
+      encodeWebm: async () => {
+        throw new Error('must not be called');
+      },
+    }
+  );
+  assert.equal(exitCode, 2);
+  assert.equal(
+    rows.find(r => r.check.includes('Browserweg')).outcome,
+    'skipped'
+  );
+});
+
+test('--webm: no key and no short lived key in the output', async () => {
+  const { out } = await run(SONIOX_ENV, {
+    argv: WEBM,
+    encodeWebm: fakeEncode,
+    socketOptions: {
+      ...WEBM_SOCKETS,
+      recognized: `Primärschlüssel ${SONIOX_KEY} TEMP-transcribe_websocket-api.eu.soniox.com-2 TEMP-transcribe_websocket-api.eu.soniox.com-4`,
+    },
+  });
+  assertNoSecret(out);
+});
+
+// ffmpeg itself, with a replaced process
+function fakeSpawn({
+  error,
+  code = 0,
+  output = Buffer.from('webm-bytes'),
+} = {}) {
+  const calls = [];
+  const impl = (command, args) => {
+    calls.push({ command, args });
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stdin = Object.assign(new EventEmitter(), {
+      end() {
+        setTimeout(() => {
+          if (error) {
+            child.emit('error', error);
+            return;
+          }
+          if (output.length > 0) child.stdout.emit('data', output);
+          child.emit('close', code);
+        }, 0);
+      },
+    });
+    return child;
+  };
+  return { impl, calls };
+}
+
+test('ffmpeg is called with raw PCM on stdin and gives webm/opus on stdout', async () => {
+  const spawned = fakeSpawn();
+  const webm = await encodeWebmWithFfmpeg(Buffer.alloc(100), spawned.impl);
+  assert.equal(webm.toString(), 'webm-bytes');
+  assert.equal(spawned.calls[0].command, 'ffmpeg');
+  const args = spawned.calls[0].args.join(' ');
+  assert.match(args, /-f s16le -ar 24000 -ac 1 -i pipe:0/);
+  assert.match(args, /-c:a libopus/);
+  assert.match(args, /-f webm pipe:1/);
+});
+
+test('ffmpeg that is not installed gives null, one that fails gives an error', async () => {
+  const missing = fakeSpawn({
+    error: Object.assign(new Error('x'), { code: 'ENOENT' }),
+  });
+  assert.equal(await encodeWebmWithFfmpeg(Buffer.alloc(1), missing.impl), null);
+  const broken = fakeSpawn({ code: 1 });
+  await assert.rejects(
+    encodeWebmWithFfmpeg(Buffer.alloc(1), broken.impl),
+    /ffmpeg endete mit dem Code 1/
+  );
+  const empty = fakeSpawn({ output: Buffer.alloc(0) });
+  await assert.rejects(encodeWebmWithFfmpeg(Buffer.alloc(1), empty.impl));
+  const crash = fakeSpawn({ error: new Error('boom') });
+  await assert.rejects(
+    encodeWebmWithFfmpeg(Buffer.alloc(1), crash.impl),
+    /ffmpeg lässt sich nicht starten/
+  );
+  const throwing = () => {
+    throw new Error('spawn failed');
+  };
+  assert.equal(await encodeWebmWithFfmpeg(Buffer.alloc(1), throwing), null);
+});
+
+test('--webm in real time: the slices are paced over the length of the recording, like the browser', async () => {
+  const started = Date.now();
+  const { rows, out } = await run(SONIOX_ENV, {
+    argv: WEBM,
+    encodeWebm: fakeEncode,
+    socketOptions: WEBM_SOCKETS,
+    realtime: true,
+  });
+  const elapsed = Date.now() - started;
+  const probe = rows.find(r => r.check.includes('Browserweg'));
+  assert.equal(probe.outcome, 'ok', out);
+  // 1,5 s of speech and 1,5 s of silence, the endpoint comes after the third slice of seven,
+  // so about 1,3 s are spent pacing (and not poured in at once)
+  // timers fire a little early on a loaded runner: 0,7 s still proves the pacing
+  assert.ok(elapsed > 700, `elapsed ${elapsed} ms`);
+  // the endpoint came early: not all seven slices were needed
+  assert.match(probe.detail, /^[1-7] Stücke/);
 });

@@ -13,6 +13,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from 'recharts';
 
@@ -72,9 +73,6 @@ export function ProgressTrendChart({
     progress: Number(item?.progress || 0),
   }));
 
-  // Calculate max for Y-axis domain
-  const maxProgress = Math.max(...safeData.map(d => d.progress), 1);
-
   return (
     <ResponsiveContainer width="100%" height={200}>
       <AreaChart data={safeData}>
@@ -89,17 +87,18 @@ export function ProgressTrendChart({
           fontSize={12}
           tick={{ fill: 'currentColor' }}
         />
+        {/* The progress is a percentage of the completed enablers */}
         <YAxis
           stroke="currentColor"
           fontSize={12}
           tick={{ fill: 'currentColor' }}
+          domain={[0, 100]}
+          ticks={[0, 25, 50, 75, 100]}
+          tickFormatter={(value: number) => `${value}%`}
         />
         <Tooltip
           contentStyle={tooltipStyle}
-          formatter={(value: number) => [
-            `${value} ${t('charts.activities')}`,
-            t('charts.progress'),
-          ]}
+          formatter={(value: number) => [`${value}%`, t('charts.progress')]}
         />
         <Area
           type="monotone"
@@ -123,6 +122,10 @@ interface ModuleProgressChartProps {
   }[];
   loading?: boolean;
 }
+
+/** Course names on the axis: characters shown and the width they need (KFB-1176) */
+const MODULE_NAME_MAX = 30;
+const MODULE_NAME_WIDTH = 170;
 
 export function ModuleProgressChart({
   data,
@@ -172,8 +175,8 @@ export function ModuleProgressChart({
   // Create safe data copy with abbreviated names
   const safeData = data.map(item => ({
     name:
-      String(item?.name || '').length > 15
-        ? String(item?.name || '').substring(0, 15) + '...'
+      String(item?.name || '').length > MODULE_NAME_MAX
+        ? String(item?.name || '').substring(0, MODULE_NAME_MAX - 1) + '…'
         : String(item?.name || ''),
     fullName: String(item?.name || ''),
     completed: Number(item?.completed || 0),
@@ -181,39 +184,70 @@ export function ModuleProgressChart({
     notStarted: Number(item?.notStarted || 0),
   }));
 
-  // Calculate max for Y-axis domain
-  const maxTotal = Math.max(
-    ...safeData.map(d => d.completed + d.inProgress + d.notStarted),
-    1
-  );
+  // One row per course, horizontal bars: the names stay readable and the whole
+  // title is in the tooltip. The chart grows with the number of courses.
+  const rowHeight = 28;
+  const chartHeight = Math.max(200, safeData.length * rowHeight + 40);
 
   return (
-    <ResponsiveContainer width="100%" height={200}>
-      <BarChart data={safeData}>
-        <CartesianGrid
-          strokeDasharray="3 3"
-          stroke="#6b7280"
-          strokeOpacity={0.3}
-        />
-        <XAxis
-          dataKey="name"
-          stroke="currentColor"
-          fontSize={10}
-          angle={-45}
-          textAnchor="end"
-          height={60}
-          tick={{ fill: 'currentColor' }}
-        />
-        <YAxis
-          stroke="currentColor"
-          fontSize={12}
-          tick={{ fill: 'currentColor' }}
-        />
-        <Tooltip contentStyle={tooltipStyle} />
-        <Bar dataKey="completed" stackId="a" fill="#ef4444" />
-        <Bar dataKey="inProgress" stackId="a" fill="#dc2626" />
-        <Bar dataKey="notStarted" stackId="a" fill="#3c2846" />
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="max-h-[320px] overflow-y-auto">
+      <ResponsiveContainer width="100%" height={chartHeight}>
+        <BarChart data={safeData} layout="vertical">
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="#6b7280"
+            strokeOpacity={0.3}
+          />
+          {/* The unit: number of trainees */}
+          <XAxis
+            type="number"
+            allowDecimals={false}
+            stroke="currentColor"
+            fontSize={12}
+            tick={{ fill: 'currentColor' }}
+            label={{
+              value: t('charts.traineesAxis'),
+              position: 'insideBottomRight',
+              offset: -4,
+              fill: 'currentColor',
+              fontSize: 11,
+            }}
+          />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={MODULE_NAME_WIDTH}
+            stroke="currentColor"
+            fontSize={10}
+            tick={{ fill: 'currentColor' }}
+          />
+          <Tooltip
+            contentStyle={tooltipStyle}
+            labelFormatter={(_label, payload) =>
+              String(payload?.[0]?.payload?.fullName ?? '')
+            }
+          />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Bar
+            dataKey="completed"
+            name={t('charts.completed')}
+            stackId="a"
+            fill="#ef4444"
+          />
+          <Bar
+            dataKey="inProgress"
+            name={t('charts.inProgress')}
+            stackId="a"
+            fill="#dc2626"
+          />
+          <Bar
+            dataKey="notStarted"
+            name={t('charts.notStarted')}
+            stackId="a"
+            fill="#3c2846"
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

@@ -23,6 +23,7 @@ import {
   catalogCondition,
   requireCatalogScope,
 } from '@/lib/catalog/scope';
+import { sortCourses } from '@/lib/catalog/course-order';
 
 // GET /api/trainer/courses?trainerProfileId=...
 // Returns ALL courses for any authenticated trainer (shared curriculum model)
@@ -57,13 +58,14 @@ export async function GET(req: NextRequest) {
           whereConditions.push(eq(courses.examPart, Number(examPart)));
 
         // Fetch all courses with optional search/year filters
-        const list = await db
+        const rows = await db
           .select({
             id: courses.id,
             title: courses.title,
             year: courses.year,
             chapter: courses.chapter,
             examPart: courses.examPart,
+            code: courses.code,
           })
           .from(courses)
           .where(
@@ -74,6 +76,9 @@ export async function GET(req: NextRequest) {
               : (undefined as any)
           )
           .orderBy(courses.year, courses.chapter, courses.createdAt);
+        // Natural order of the training plan (component number, numeric, then
+        // code and title), the same as the trainee sees it
+        const list = sortCourses(rows);
 
         if (list.length === 0) return { courses: [] };
         const courseIds = list.map(c => c.id);

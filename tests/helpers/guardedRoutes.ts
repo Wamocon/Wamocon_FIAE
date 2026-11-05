@@ -539,6 +539,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   {
+    route: 'trainer/quiz-submissions/bulk-review',
+    method: 'POST',
+    guard: 'trainer',
+    params: [],
+  },
+  {
     route: 'trainer/quizzes/[quizId]',
     method: 'GET',
     guard: 'trainer',
@@ -565,6 +571,18 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['submissionId'],
   },
   { route: 'trainer/reviews', method: 'GET', guard: 'trainer', params: [] },
+  {
+    route: 'trainer/reviews/use-cases/[submissionId]/file',
+    method: 'GET',
+    guard: 'trainer',
+    params: ['submissionId'],
+  },
+  {
+    route: 'trainer/reviews/use-cases/[submissionId]/file/content',
+    method: 'GET',
+    guard: 'trainer',
+    params: ['submissionId'],
+  },
   {
     route: 'trainer/reviews/use-cases/[submissionId]',
     method: 'PATCH',
@@ -690,6 +708,18 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['catalogId'],
   },
   {
+    route: 'admin/catalogs/[catalogId]/content-check',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-check/files',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
     route: 'admin/catalogs/[catalogId]/content-targets',
     method: 'PUT',
     guard: 'curriculum',
@@ -704,6 +734,36 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'admin/catalogs/[catalogId]/sequence-rule',
     method: 'PUT',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan',
+    method: 'GET',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan',
+    method: 'PUT',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan',
+    method: 'DELETE',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan/parse',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/content-plan/template',
+    method: 'GET',
     guard: 'curriculum',
     params: ['catalogId'],
   },
@@ -783,6 +843,8 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   { route: 'me/catalogs', method: 'GET', guard: 'user', params: [] },
+  // soft skill criteria: any signed-in account (WMCNL, was open without a session)
+  { route: 'softskill-criteria', method: 'GET', guard: 'user', params: [] },
   {
     route: 'notifications',
     method: 'GET',
@@ -964,6 +1026,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   {
+    route: 'trainee/profile-summary',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
     route: 'trainee/enablers/[enablerId]',
     method: 'GET',
     guard: 'user',
@@ -971,6 +1039,13 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   },
   {
     route: 'trainee/enablers/[enablerId]/documents',
+    method: 'GET',
+    guard: 'trainee',
+    params: ['enablerId'],
+  },
+  // the bytes of the single scenario PDF of an enabler, for the viewer of a trainee
+  {
+    route: 'trainee/enablers/[enablerId]/scenario/content',
     method: 'GET',
     guard: 'trainee',
     params: ['enablerId'],
@@ -1084,6 +1159,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   {
+    route: 'trainee/lesson-quizzes',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
     route: 'trainee/quizzes/[quizId]',
     method: 'GET',
     guard: 'trainee',
@@ -1125,6 +1206,37 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     guard: 'user',
     params: ['useCaseId'],
   },
+  {
+    route: 'trainee/use-cases/[useCaseId]/submission-file',
+    method: 'GET',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  {
+    route: 'trainee/use-cases/[useCaseId]/submission-file/content',
+    method: 'GET',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  {
+    route: 'trainee/use-cases/[useCaseId]/submission-file',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  {
+    route: 'trainee/use-cases/[useCaseId]/submission-file/upload-url',
+    method: 'POST',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  {
+    route: 'trainee/use-cases/[useCaseId]/submission-file/complete',
+    method: 'POST',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  { route: 'me/submission-file', method: 'GET', guard: 'user', params: [] },
   {
     route: 'activity-reports',
     method: 'GET',
@@ -1225,6 +1337,8 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     guard: 'user',
     params: [],
   },
+  // warms up the way to Sokrates before a question (no content, limit per person)
+  { route: 'hai/voice/warmup', method: 'POST', guard: 'user', params: [] },
   {
     route: 'hai/voice/haus/transcribe',
     method: 'POST',
@@ -1232,6 +1346,51 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   { route: 'hai/voice/haus/speech', method: 'POST', guard: 'user', params: [] },
+  // the memory of the HAI of the signed-in user (docs/hai-gedaechtnis.md): only the
+  // entries of the session user, no route names another user. Behind the switch
+  // HAI_MEMORY (404 while it is off, GET answers { available: false }), see
+  // tests/integration/api/hai/memory.test.ts
+  { route: 'hai/memory', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/memory', method: 'PATCH', guard: 'user', params: [] },
+  { route: 'hai/memory', method: 'DELETE', guard: 'user', params: [] },
+  {
+    route: 'hai/memory/[id]',
+    method: 'PATCH',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'hai/memory/[id]',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['id'],
+  },
+  // the shared memory of the HAI (for all users): only the platform admin, never
+  // the entries of one person
+  {
+    route: 'admin/hai/memory',
+    method: 'GET',
+    guard: 'superAdmin',
+    params: [],
+  },
+  {
+    route: 'admin/hai/memory',
+    method: 'POST',
+    guard: 'superAdmin',
+    params: [],
+  },
+  {
+    route: 'admin/hai/memory/[id]',
+    method: 'PATCH',
+    guard: 'superAdmin',
+    params: ['id'],
+  },
+  {
+    route: 'admin/hai/memory/suggest',
+    method: 'POST',
+    guard: 'superAdmin',
+    params: [],
+  },
   // the HAI admin page: only the platform admin
   {
     route: 'admin/hai/settings',
@@ -1257,6 +1416,13 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   { route: 'hai/sync', method: 'POST', guard: 'haiIndex', params: [] },
   { route: 'hai/sync', method: 'GET', guard: 'haiIndex', params: [] },
   { route: 'hai/verify-pin', method: 'POST', guard: 'haiIndex', params: [] },
+  // the bytes of the PDF of one learning document, for the viewer of a trainee
+  {
+    route: 'trainee/documents/[documentId]/content',
+    method: 'GET',
+    guard: 'trainee',
+    params: ['documentId'],
+  },
   // the signed address of the file of one document (bucket content)
   {
     route: 'documents/[documentId]/file',

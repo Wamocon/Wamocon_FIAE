@@ -113,6 +113,68 @@ describe('buildScopeCondition', () => {
     );
   });
 
+  // The model solutions of the private bucket (metadata.trainerSolution) are
+  // returned only to a trainer whose access carries the permission
+  // (HAI_TRAINER_SOLUTIONS on). Every other access excludes them in the SQL.
+  describe('chunks of trainer solutions (private bucket)', () => {
+    const EXCLUDED = "COALESCE(metadata->>'trainerSolution', '') <> 'true'";
+
+    it('excludes them for a trainee, with or without the permission', () => {
+      expect(render(trainee())!.text).toContain(EXCLUDED);
+      expect(
+        render(trainee({ includeTrainerSolutions: true }))!.text
+      ).toContain(EXCLUDED);
+    });
+
+    it('excludes them for a trainer without the permission (the default)', () => {
+      expect(render(trainee({ audience: 'trainer' }))!.text).toContain(
+        EXCLUDED
+      );
+      expect(
+        render(
+          trainee({ audience: 'trainer', includeTrainerSolutions: false })
+        )!.text
+      ).toContain(EXCLUDED);
+    });
+
+    it('lets them through only for a trainer with the permission', () => {
+      const out = render(
+        trainee({ audience: 'trainer', includeTrainerSolutions: true })
+      );
+      expect(out!.text).not.toContain('trainerSolution');
+      // the catalog and organization limits stay
+      expect(out!.text).toContain('training_catalog_id IN');
+      expect(out!.text).toContain('organization_id');
+    });
+
+    it('does not trust an odd audience or a value that is not true', () => {
+      for (const scope of [
+        trainee({
+          audience: 'TRAINER' as unknown as 'trainer',
+          includeTrainerSolutions: true,
+        }),
+        trainee({
+          audience: 'trainer',
+          includeTrainerSolutions: 'true' as unknown as boolean,
+        }),
+        trainee({
+          audience: 'trainer',
+          includeTrainerSolutions: 1 as unknown as boolean,
+        }),
+      ]) {
+        expect(render(scope)!.text).toContain(EXCLUDED);
+      }
+    });
+
+    it('adds no parameter (the numbering of the filter stays)', () => {
+      const closed = render(trainee({ audience: 'trainer' }))!;
+      const open = render(
+        trainee({ audience: 'trainer', includeTrainerSolutions: true })
+      )!;
+      expect(closed.params).toEqual(open.params);
+    });
+  });
+
   it('treats anything but the exact value trainer as a trainee', () => {
     const odd = { ...trainee(), audience: 'TRAINER' as unknown as 'trainer' };
     expect(render(odd)!.text).toContain("visibility = 'all'");
@@ -219,6 +281,54 @@ describe('searchSimilar', () => {
       process.env.HAI_HALFVEC_SEARCH = 'true';
       await searchSimilar('frage', trainee(), VECTOR);
       expect(mockExecute).toHaveBeenCalledTimes(1);
+    });
+
+    // The planner underestimates the scope filter and sorts the whole catalog
+    // (22 to 35 s on the Preview database). The broad search makes the sort
+    // expensive so the index delivers the order (2 ms). Only the way to the
+    // order changes, never the filter. docs/hai-geschwindigkeit.md
+    describe('plan of the broad search', () => {
+      beforeEach(() => {
+        process.env.HAI_HALFVEC_SEARCH = 'on';
+        mockExecute.mockResolvedValue([row('a', 0.9)]);
+      });
+
+      it('the broad search (no source type, ids or course) turns the sort off for the transaction only', async () => {
+        await searchSimilar('frage', trainee(), VECTOR);
+        const settings = rendered(0).text;
+        expect(settings).toContain("set_config('enable_sort', 'off', true)");
+        // local to the transaction (third argument true), the other settings stay
+        expect(settings).toContain(
+          "set_config('hnsw.iterative_scan', 'relaxed_order', true)"
+        );
+      });
+
+      it('the search statement of the broad search is the same as before: same filter, same order', async () => {
+        await searchSimilar('frage', trainee(), VECTOR);
+        const search = rendered(1).text;
+        expect(search).toContain('ORDER BY embedding::halfvec(3072) <=> $');
+        expect(search).toContain('training_catalog_id IN');
+        expect(search).toContain("visibility = 'all'");
+        expect(search).not.toContain('enable_sort');
+      });
+
+      it.each([
+        ['a source type', { sourceType: 'learning_technique' as const }],
+        ['source ids', { sourceIds: ['3a0e4e4c-9f1e-4f3e-9c55-2f6a9d6a0001'] }],
+        ['a course', { courseId: '3a0e4e4c-9f1e-4f3e-9c55-2f6a9d6a0002' }],
+      ])('a narrow search with %s keeps the default plan', async (_, extra) => {
+        await searchSimilar('frage', trainee(extra), VECTOR);
+        const settings = rendered(0).text;
+        expect(settings).toContain("set_config('hnsw.max_scan_tuples'");
+        expect(settings).not.toContain('enable_sort');
+      });
+
+      it('without the switch nothing of this applies', async () => {
+        delete process.env.HAI_HALFVEC_SEARCH;
+        await searchSimilar('frage', trainee(), VECTOR);
+        expect(mockExecute).toHaveBeenCalledTimes(1);
+        expect(rendered(0).text).not.toContain('enable_sort');
+      });
     });
   });
 
@@ -407,7 +517,13 @@ describe('searchWithContext', () => {
   it('returns an empty result when embedding fails', async () => {
     mockGenerateEmbedding.mockRejectedValue(new Error('quota'));
     const result = await searchWithContext('frage', context, trainee());
-    expect(result).toEqual({ results: [], query: 'frage', totalResults: 0 });
+    // a search that could not run says so (it is not the same as nothing found)
+    expect(result).toEqual({
+      results: [],
+      query: 'frage',
+      totalResults: 0,
+      unavailable: true,
+    });
   });
 });
 

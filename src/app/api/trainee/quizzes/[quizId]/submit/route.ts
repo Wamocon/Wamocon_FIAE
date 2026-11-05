@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { submissionNoticeText } from '@/lib/notifications/submissionNotice';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
@@ -460,14 +461,19 @@ export async function POST(
             userId: uid,
             actorId: traineeId,
             type: 'LESSON_QUIZ_SUBMITTED',
-            title: 'Lesson-Quiz eingereicht',
-            message: `Trainee hat ein ${link.difficulty}-Quiz abgegeben: ${enabler.title}`,
+            ...submissionNoticeText('LESSON_QUIZ_SUBMITTED', {
+              traineeName: session.fullName,
+              subject: enabler.title,
+              difficulty: link.difficulty,
+            }),
             linkUrl: '/trainer/reviews?view=quizzes&onlyPending=true',
             context: {
               submissionId: submission.id,
               quizId,
               enablerId: enabler.id,
               difficulty: link.difficulty,
+              traineeName: session.fullName,
+              subjectTitle: enabler.title,
             },
             organizationId,
           }))

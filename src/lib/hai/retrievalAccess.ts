@@ -10,6 +10,9 @@
  *  - audience: 'trainer' for TRAINER, TEMP_ADMIN, ADMIN, SUPER_ADMIN,
  *    otherwise 'trainee' (an unknown role is treated as a trainee)
  *  - organization: profiles.organization_id
+ *  - includeTrainerSolutions: only for the trainer audience and only while the
+ *    switch HAI_TRAINER_SOLUTIONS is on (model solutions of the private
+ *    bucket, see trainerSolutions.ts); absent otherwise
  *  - the chosen occupation: when the app sends one (header x-catalog) and it is
  *    one of the occupations of the user, the HAI works only in that one, like
  *    the rest of the platform (and like the quiz mode). A code outside the
@@ -33,6 +36,7 @@ import {
   readCatalogIds,
 } from '@/lib/catalog/scope';
 import type { SearchScope } from './vectorSearch';
+import { isTrainerSolutionsEnabled } from './trainerSolutions';
 
 /** Access of one user to the index; always has at least one catalog. */
 export interface RetrievalAccess extends SearchScope {
@@ -115,16 +119,22 @@ export async function resolveRetrievalAccess(
     if (!choice) return null;
     const { catalogIds } = choice;
 
+    const audience = isTrainerLevelRole(profile.role) ? 'trainer' : 'trainee';
     return {
       catalogIds,
       ...(choice.chosen && choice.allowedCatalogIds.length > catalogIds.length
         ? { allowedCatalogIds: choice.allowedCatalogIds }
         : {}),
-      audience: isTrainerLevelRole(profile.role) ? 'trainer' : 'trainee',
+      audience,
       organizationId: profile.organizationId
         ? String(profile.organizationId)
         : null,
       userId,
+      // Model solutions of the private bucket: trainer level in the database
+      // AND the switch of the server. The key is left out otherwise.
+      ...(audience === 'trainer' && isTrainerSolutionsEnabled()
+        ? { includeTrainerSolutions: true }
+        : {}),
     };
   } catch (error) {
     console.error(

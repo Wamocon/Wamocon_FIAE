@@ -1,13 +1,15 @@
 'use client';
 
 import { authFetch } from '@/lib/authFetch';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { documentTypeLabel } from '@/lib/documentTypeLabel';
+import { FlipbookViewer } from '@/components/ui/FlipbookViewer';
+import { useDocumentParam } from '@/lib/hai/navigation/useDocumentParam';
 import {
   ArrowLeft,
   BookOpen,
@@ -152,6 +154,28 @@ export default function TrainerUseCaseDetailPage() {
     }
   };
 
+  // A link of the HAI (?document=<id>) shows that file in the reader, but only when
+  // it is one of the files the list of this use case gives this person (the route
+  // applies the catalog and organization rules). Anything else, a file that does
+  // not exist and one that is not listed alike, gets the same neutral note.
+  const documentParam = useDocumentParam();
+  const handledDocument = useRef<string | null>(null);
+  const [documentNote, setDocumentNote] = useState(false);
+  const [reading, setReading] = useState<{ title: string; url: string } | null>(
+    null
+  );
+  useEffect(() => {
+    if (!documentParam || handledDocument.current === documentParam) return;
+    if (loading) return;
+    handledDocument.current = documentParam;
+    const listed = documents.find(d => d.id === documentParam);
+    if (listed?.storageUrl) {
+      setReading({ title: listed.title, url: listed.storageUrl });
+    } else {
+      setDocumentNote(true);
+    }
+  }, [documentParam, loading, documents]);
+
   if (loading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
@@ -207,6 +231,16 @@ export default function TrainerUseCaseDetailPage() {
                 <h1 className="text-foreground text-2xl font-bold">
                   {useCase.title}
                 </h1>
+              )}
+
+              {documentNote && (
+                <p
+                  role="status"
+                  data-testid="document-not-found"
+                  className="text-muted-foreground mt-2 text-sm"
+                >
+                  {t('document.notFound')}
+                </p>
               )}
 
               {/* Status Badge */}
@@ -491,6 +525,14 @@ export default function TrainerUseCaseDetailPage() {
             ))}
           </div>
         </div>
+      )}
+      {reading && (
+        <FlipbookViewer
+          pdfUrl={reading.url}
+          title={reading.title}
+          isOpen
+          onClose={() => setReading(null)}
+        />
       )}
     </div>
   );

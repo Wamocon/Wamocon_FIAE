@@ -66,11 +66,18 @@ export class ChatUnavailableError extends Error {
   readonly code = CHAT_UNAVAILABLE_CODE;
   readonly reason: ChatUnavailableReason;
   readonly fallback: FallbackState;
+  /**
+   * The last provider did not answer in time or said it is overloaded (see
+   * isModelBusyError). The caller then tells the person the truth (the model is
+   * busy, try again in a minute) instead of "not reachable".
+   */
+  readonly modelBusy: boolean;
 
   constructor(
     reason: ChatUnavailableReason,
     fallback: FallbackState,
-    detail = ''
+    detail = '',
+    modelBusy = false
   ) {
     super(
       `HAI.ai: chat unavailable (${reason}, fallback ${fallback})` +
@@ -79,7 +86,68 @@ export class ChatUnavailableError extends Error {
     this.name = 'ChatUnavailableError';
     this.reason = reason;
     this.fallback = fallback;
+    this.modelBusy = modelBusy;
   }
+}
+
+/** The code the client tests: the model is busy or too slow, a retry may work. */
+export const MODEL_BUSY_CODE = 'MODEL_BUSY';
+
+/** The i18n key of the message for the user (src/locales/de.json, en.json). */
+export const MODEL_BUSY_I18N_KEY = 'hai.error.modelBusy';
+
+/** What the client is told about when to try again (seconds, a hint only). */
+export const MODEL_BUSY_RETRY_AFTER_SEC = 30;
+
+/** HTTP statuses that mean "too many requests" or "the gateway waited too long". */
+const MODEL_BUSY_STATUSES: ReadonlySet<number> = new Set([
+  429, 502, 503, 504, 524,
+]);
+
+/**
+ * Whether a failure of a chat provider means "busy or too slow" and not "wrong
+ * setup": a time limit (the model server queues requests), 429, 502, 503, 504 or
+ * 524. A key that is refused (401, 403) or a bad request (400) is a different
+ * thing and keeps the general message. An empty answer is not "busy" in itself
+ * (see isEmptyAnswerError): the chain asks again once and, if it stays empty,
+ * marks the ChatUnavailableError as busy. Reads only the kind, the
+ * name and the status, never a message (it could carry parts of the request).
+ */
+export function isModelBusyError(error: unknown): boolean {
+  if (error instanceof ChatProviderError) {
+    if (error.kind === 'timeout') return true;
+    return (
+      error.kind === 'http' &&
+      error.status !== undefined &&
+      MODEL_BUSY_STATUSES.has(error.status)
+    );
+  }
+  if (typeof error === 'object' && error !== null) {
+    const e = error as { name?: unknown; status?: unknown; code?: unknown };
+    if (e.name === 'AbortError' || e.name === 'TimeoutError') return true;
+    const status = typeof e.status === 'number' ? e.status : e.code;
+    return typeof status === 'number' && MODEL_BUSY_STATUSES.has(status);
+  }
+  return false;
+}
+
+/**
+ * The provider answered, but with no text (kind `empty`). A busy host does this
+ * (Sokrates answered empty for minutes under load, golden set 03.11.2026). Not
+ * part of isModelBusyError (a thinking model that spends its whole limit on
+ * thoughts is empty too), but the chain asks again once and then tells the
+ * person the same thing as for a busy model.
+ */
+export function isEmptyAnswerError(error: unknown): boolean {
+  return error instanceof ChatProviderError && error.kind === 'empty';
+}
+
+/** The body fields the client reads for a busy model (no internals, no names). */
+export function modelBusyPayload(): {
+  code: typeof MODEL_BUSY_CODE;
+  retryAfterSec: number;
+} {
+  return { code: MODEL_BUSY_CODE, retryAfterSec: MODEL_BUSY_RETRY_AFTER_SEC };
 }
 
 export function isChatUnavailableError(

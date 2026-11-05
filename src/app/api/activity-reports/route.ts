@@ -11,7 +11,10 @@ import {
 import type { ActivityReport as ActivityReportRow } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
-import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import {
+  isHoursLimited,
+  normalizePlannedHours,
+} from '@/lib/ausbildung/planned-hours';
 import { getISOWeekDates } from '@/lib/date/iso-week';
 import { withDbRetry } from '@/lib/db-retry';
 import { isErrorResponse, requireUser, scopeOrg } from '@/lib/auth/session';
@@ -26,6 +29,10 @@ import {
   requireCatalogScope,
 } from '@/lib/catalog/scope';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
+import {
+  EMPTY_SUBMISSION_CODE,
+  activityReportHasContent,
+} from '@/lib/submission-input';
 
 // GET: List activity reports
 // A trainee gets their own reports (a userId in the query is ignored), of the
@@ -249,6 +256,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Only entries with 0 hours are no hand-in either (WMCNL-3011)
+    if (submit && !activityReportHasContent(entries)) {
+      return NextResponse.json(
+        {
+          error:
+            'Ein Nachweis ohne Tätigkeit kann nicht eingereicht werden. Trage mindestens eine Tätigkeit mit Stunden ein.',
+          code: EMPTY_SUBMISSION_CODE,
+        },
+        { status: 400 }
+      );
+    }
+
     // Validate actualHours are non-negative numbers
     const invalidHours = entries.filter(
       (e: any) => typeof e.actualHours !== 'number' || e.actualHours < 0
@@ -328,6 +347,7 @@ export async function POST(req: NextRequest) {
         id: trainingUseCases.id,
         description: trainingUseCases.description,
         plannedHours: trainingUseCases.plannedHours,
+        catalogId: trainingComponents.trainingCatalogId,
       })
       .from(trainingUseCases)
       .innerJoin(
@@ -345,6 +365,12 @@ export async function POST(req: NextRequest) {
       );
     const plannedMap = new Map(
       masterUseCases.map((uc: any) => [uc.id, normalizePlannedHours(uc)])
+    );
+    // A use case without hours (not FIAE) has no limit, see isHoursLimited
+    const unlimitedIds = new Set<string>(
+      masterUseCases
+        .filter((uc: any) => !isHoursLimited(uc.plannedHours, uc.catalogId))
+        .map((uc: any) => uc.id)
     );
     if (entryUseCaseIds.some((id: string) => !plannedMap.has(id))) {
       return NextResponse.json(
@@ -394,6 +420,7 @@ export async function POST(req: NextRequest) {
     // Validate each entry does not exceed remaining hours
     const violations: string[] = [];
     for (const entry of entries) {
+      if (unlimitedIds.has(entry.useCaseId)) continue;
       const totalHours = plannedMap.get(entry.useCaseId) ?? 0;
       const usedHours = usedMap.get(entry.useCaseId) ?? 0;
       const remaining = totalHours - usedHours;

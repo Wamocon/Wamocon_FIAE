@@ -54,6 +54,14 @@ export interface HaiPersona {
   /** Code of the primary catalog, null for the neutral persona. */
   catalogCode: string | null;
   occupationName: string;
+  /**
+   * The names of the occupations of the user, only set when there are several
+   * (mergePersonas). The topic check of the prompt names them, so a question that
+   * joins the content of two of them is not taken for a question of another
+   * occupation. Absent for one occupation (the prompt of one occupation stays
+   * byte for byte as it was).
+   */
+  occupationNames?: readonly string[];
   /** Text after "der digitale Lernbegleiter " in the first line. */
   intro: string;
   glossary: readonly HaiGlossaryEntry[];
@@ -676,6 +684,7 @@ function mergePersonas(personas: HaiPersona[]): HaiPersona {
   return {
     ...primary,
     occupationName: names,
+    occupationNames: unique(personas.map(p => p.occupationName)),
     intro: `für Auszubildende in den Berufen ${names}`,
     glossary,
     traineeTopics: unique(personas.flatMap(p => [...p.traineeTopics])),

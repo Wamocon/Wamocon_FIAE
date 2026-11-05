@@ -124,10 +124,11 @@ describe('GET /api/trainee/quizzes/[quizId]', () => {
             id: 'q-1',
             questionText: 'First',
             questionType: 'MCQ',
-            options: [
+            // the order of the options is mixed per attempt (see below)
+            options: expect.arrayContaining([
               { id: 'o-a', optionText: 'A' },
               { id: 'o-b', optionText: 'B' },
-            ],
+            ]),
           },
           {
             id: 'q-2',
@@ -137,6 +138,70 @@ describe('GET /api/trainee/quizzes/[quizId]', () => {
           },
         ],
       },
+    });
+  });
+
+  describe('mixed options (KFB-1162)', () => {
+    const manyOptions = ['a', 'b', 'c', 'd', 'e'].map((k, i) => ({
+      id: `o-${k}`,
+      questionId: 'q-1',
+      optionText: `Choice ${k.toUpperCase()}`,
+      isCorrect: k === 'a',
+      explanation: null,
+      orderIndex: i + 1,
+    }));
+    const firstQuestionOptions = async (tables: Record<string, any>) => {
+      const { GET } = await load(tables);
+      const body = await (await GET(request(), ctx())).json();
+      return body.quiz.questions[0].options.map((o: any) => o.id) as string[];
+    };
+
+    it('serves every option once and is stable for the same attempt', async () => {
+      const tables = { ...happyTables(), options: manyOptions };
+      const first = await firstQuestionOptions(tables);
+      const second = await firstQuestionOptions(tables);
+      expect([...first].sort()).toEqual(manyOptions.map(o => o.id));
+      expect(second).toEqual(first);
+    });
+
+    it('does not depend on the order the database returns the rows in', async () => {
+      const first = await firstQuestionOptions({
+        ...happyTables(),
+        options: manyOptions,
+      });
+      const reversed = await firstQuestionOptions({
+        ...happyTables(),
+        options: [...manyOptions].reverse(),
+      });
+      expect(reversed).toEqual(first);
+    });
+
+    it('serves another order for the next attempt', async () => {
+      const orders = new Set<string>();
+      for (let done = 0; done <= 8; done++) {
+        const submissions = Array.from({ length: done }, (_, i) => ({
+          id: `s${i}`,
+          quizId: QUIZ_ID,
+          traineeId: 't1',
+        }));
+        orders.add(
+          (
+            await firstQuestionOptions({
+              ...happyTables(),
+              options: manyOptions,
+              quizSubmissions: submissions,
+            })
+          ).join()
+        );
+      }
+      expect(orders.size).toBeGreaterThan(1);
+    });
+
+    it('still names no solution and no position', async () => {
+      const { GET } = await load({ ...happyTables(), options: manyOptions });
+      const body = await (await GET(request(), ctx())).json();
+      expect(findSolutionKeys(body)).toEqual([]);
+      expect(JSON.stringify(body)).not.toContain('orderIndex');
     });
   });
 

@@ -12,6 +12,10 @@ import { apiCache } from '@/lib/api-cache';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import { ensureContentInScope, requireCatalogScope } from '@/lib/catalog/scope';
 import { notFoundUnlessUuid } from '@/lib/uuid';
+import {
+  FEEDBACK_REQUIRED,
+  hasReviewFeedback,
+} from '@/lib/trainer/review-feedback';
 
 const REVIEW_STATUSES: string[] = ['PENDING', 'APPROVED', 'REJECTED'];
 
@@ -42,6 +46,17 @@ export async function PATCH(
     // The status goes into an enum column
     if (!REVIEW_STATUSES.includes(status as string)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+    }
+
+    // A rejection tells the trainee what to improve: it needs a feedback
+    if (status === 'REJECTED' && !hasReviewFeedback(trainerFeedback)) {
+      return NextResponse.json(
+        {
+          error: 'A rejection needs a feedback',
+          code: FEEDBACK_REQUIRED,
+        },
+        { status: 400 }
+      );
     }
 
     const [sub] = await db

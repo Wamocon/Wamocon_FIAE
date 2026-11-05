@@ -636,109 +636,629 @@ body::-webkit-scrollbar {
   }
 }
 
-/* HAI mascot of the voice mode: the state is shown by motion AND by text. With
-   reduced motion (system setting, or the data attribute set from it) the
-   mascot stands still. */
-@keyframes hai-mascot-float {
-  0%,
+/* HAI figure of the voice mode (HaiCharacter.tsx): the pixel shark of the HAI
+   symbol (public/images/shark-new.gif) as a figure with arms and legs. It
+   stands in the water of the symbol, which is its pond. The colors are the
+   colors of that GIF, read from the file (8 colors in all). The state is shown
+   by pose, mouth and color AND by text. Only transform and opacity are
+   animated. With reduced motion (system setting, or the data attribute set from
+   it) nothing moves: poses, mouth shape and the color of the water stay. */
+.hai-figure {
+  --hf-ink: #000000; /* outline, closed mouth, eyes */
+  --hf-back: #aabbc0; /* back, sides, fins, arms, legs */
+  --hf-face: #eaeeef; /* face, belly, teeth, foam, drops */
+  --hf-shade: #363b4e; /* gills, toes, edge of the water */
+  --hf-mid: #636979; /* waves and outer ring of the water */
+  --hf-night: #242845; /* the water: the color of the symbol */
+  --hf-deep: #23273f; /* the water below the surface */
+  --hf-mouth: #56203e; /* inside of the open mouth */
+  --hf-warn: #f59e0b; /* amber: paused or failed (a warning, not in the GIF) */
+  --l-up: 10deg;
+  --l-fore: -6deg;
+  --r-up: 10deg;
+  --r-fore: -6deg;
+  --tilt: 0deg;
+  display: block;
+}
+
+/* Only the painted figure takes clicks, the empty space of the picture lets
+   them through to the page behind. */
+.hai-figure {
+  pointer-events: none;
+}
+.hai-figure svg * {
+  pointer-events: auto;
+}
+.hai-figure .hf-ripple,
+.hai-figure .hf-warn,
+.hai-figure .hf-under-tint,
+.hai-figure .hf-under,
+.hai-figure .hf-thought,
+.hai-figure .hf-splash,
+.hai-figure .hf-splash *,
+.hai-figure .hf-foam,
+.hai-figure .hf-waves,
+.hai-figure .hf-waves *,
+.hai-figure .hf-rim,
+.hai-figure .hf-water {
+  pointer-events: none;
+}
+
+/* ---- parts ---- */
+.hai-figure .hf-outline {
+  fill: none;
+  stroke: var(--hf-ink);
+  stroke-linecap: round;
+}
+.hai-figure .hf-limb {
+  fill: none;
+  stroke: var(--hf-back);
+  stroke-linecap: round;
+}
+.hai-figure .hf-fin,
+.hai-figure .hf-foot {
+  fill: var(--hf-back);
+  stroke: var(--hf-ink);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+/* head and body: the outline of the whole dome first (thick, black), then the
+   fills on top without a line, so head and body are one shape */
+.hai-figure .hf-sil {
+  fill: var(--hf-ink);
+  stroke: var(--hf-ink);
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+.hai-figure .hf-body {
+  fill: var(--hf-back);
+  stroke: none;
+}
+/* the white front: face and belly, the gray back stays at the sides */
+.hai-figure .hf-belly,
+.hai-figure .hf-face {
+  fill: var(--hf-face);
+}
+.hai-figure .hf-gills,
+.hai-figure .hf-toes,
+.hai-figure .hf-finger {
+  fill: none;
+  stroke: var(--hf-shade);
+  stroke-linecap: round;
+}
+.hai-figure .hf-hand-shape {
+  fill: var(--hf-back);
+  stroke: var(--hf-ink);
+  stroke-width: 2.6;
+}
+.hai-figure .hf-pupil-shape {
+  fill: var(--hf-ink);
+}
+.hai-figure .hf-pupil {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: translate(var(--px, 0), var(--py, 0))
+    scale(var(--sx, 1), calc(var(--sy, 1) * var(--open, 1)));
+  transition: transform 0.3s ease;
+}
+/* the symbol has no brows: they show only when the face needs them */
+.hai-figure .hf-brow {
+  fill: none;
+  stroke: var(--hf-ink);
+  stroke-linecap: round;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.3s ease;
+}
+
+/* ---- mouth: four shapes, switched by data-mouth (set per frame) ---- */
+.hai-figure .hf-mouth {
+  opacity: 0;
+  stroke: var(--hf-ink);
+}
+.hai-figure .hf-mouth-closed {
+  fill: none;
+}
+.hai-figure .hf-mouth-inside {
+  fill: var(--hf-mouth);
+  stroke: var(--hf-ink);
+  stroke-width: 2.6;
+  stroke-linejoin: round;
+}
+.hai-figure .hf-teeth {
+  fill: var(--hf-face);
+  stroke: none;
+}
+.hai-figure[data-mouth='closed'] .hf-mouth-closed,
+.hai-figure[data-mouth='half'] .hf-mouth-half,
+.hai-figure[data-mouth='open'] .hf-mouth-open,
+.hai-figure[data-mouth='round'] .hf-mouth-round {
+  opacity: 1;
+}
+
+/* ---- poses: the arm angles, the head, the eyes ---- */
+.hai-figure[data-arms='loose'] {
+  --l-up: 10deg;
+  --l-fore: -6deg;
+  --r-up: 10deg;
+  --r-fore: -6deg;
+}
+.hai-figure[data-arms='ear'] {
+  --l-up: 110deg;
+  --l-fore: 86deg;
+  --r-up: 12deg;
+  --r-fore: -8deg;
+}
+.hai-figure[data-arms='chin'] {
+  --l-up: 14deg;
+  --l-fore: -8deg;
+  --r-up: -20deg;
+  --r-fore: -132deg;
+}
+.hai-figure[data-arms='gesture'] {
+  --l-up: 30deg;
+  --l-fore: -30deg;
+  --r-up: 30deg;
+  --r-fore: -30deg;
+}
+.hai-figure[data-arms='shrug'] {
+  --l-up: 52deg;
+  --l-fore: -30deg;
+  --r-up: 52deg;
+  --r-fore: -30deg;
+}
+.hai-figure[data-arms='worry'] {
+  --l-up: 20deg;
+  --l-fore: -110deg;
+  --r-up: 20deg;
+  --r-fore: -110deg;
+}
+
+.hai-figure .hf-arm-upper {
+  --a: var(--l-up);
+  transform: rotate(var(--a));
+  transform-origin: 86px 124px;
+  transition: transform 0.5s ease;
+}
+.hai-figure .hf-arm-fore {
+  --a: var(--l-fore);
+  transform: rotate(var(--a));
+  transform-origin: 86px 152px;
+  transition: transform 0.5s ease;
+}
+.hai-figure [data-arm='right'] .hf-arm-upper {
+  --a: var(--r-up);
+}
+.hai-figure [data-arm='right'] .hf-arm-fore {
+  --a: var(--r-fore);
+}
+
+.hai-figure[data-head='tilt'] {
+  --tilt: -7deg;
+}
+.hai-figure[data-head='think'] {
+  --tilt: 5deg;
+}
+.hai-figure[data-head='lean'] {
+  --tilt: 5deg;
+}
+.hai-figure .hf-head {
+  transform: rotate(var(--tilt));
+  transform-origin: 130px 110px;
+  transition: transform 0.5s ease;
+}
+
+/* the eyes are dark blocks: wide, looking up, drooping (sleepy dash), worried;
+   a blink squeezes them to a dash like the closed eyes of the symbol */
+.hai-figure[data-eyes='wide'] {
+  --sx: 1.2;
+  --sy: 1.2;
+}
+.hai-figure[data-eyes='up'] {
+  --px: 4px;
+  --py: -4px;
+}
+.hai-figure[data-eyes='droop'] {
+  --open: 0.4;
+  --py: 3px;
+}
+.hai-figure[data-eyes='worried'] {
+  --sx: 0.88;
+  --sy: 0.88;
+}
+.hai-figure[data-eyes='wide'] .hf-brow,
+.hai-figure[data-eyes='up'] .hf-brow,
+.hai-figure[data-eyes='worried'] .hf-brow {
+  opacity: 1;
+}
+.hai-figure[data-eyes='worried'] .hf-brow-left {
+  transform: rotate(-16deg);
+}
+.hai-figure[data-eyes='worried'] .hf-brow-right {
+  transform: rotate(16deg);
+}
+.hai-figure[data-eyes='up'] .hf-brow-right {
+  transform: translateY(-5px) rotate(-8deg);
+}
+.hai-figure[data-eyes='wide'] .hf-brow {
+  transform: translateY(-3px);
+}
+
+/* ---- thought bubble ---- */
+.hai-figure .hf-thought {
+  opacity: 0;
+}
+.hai-figure .hf-thought circle {
+  fill: var(--hf-face);
+  stroke: var(--hf-ink);
+  stroke-width: 2.4;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.hai-figure[data-state='thinking'] .hf-thought {
+  opacity: 1;
+}
+
+/* ---- the pond: the water of the HAI symbol, thin rings like the symbol ---- */
+.hai-figure .hf-rim {
+  fill: none;
+  stroke: var(--hf-mid);
+  stroke-width: 1.8;
+  opacity: 0.8;
+}
+.hai-figure .hf-water {
+  fill: var(--hf-deep);
+  stroke: var(--hf-shade);
+  stroke-width: 1.8;
+  opacity: 0.9;
+}
+.hai-figure .hf-warn {
+  fill: var(--hf-warn);
+  opacity: 0;
+}
+.hai-figure[data-pool='warn'] .hf-warn {
+  opacity: 0.5;
+}
+.hai-figure[data-pool='warn'] .hf-rim {
+  stroke: var(--hf-warn);
+  opacity: 1;
+}
+.hai-figure .hf-under {
+  opacity: 0.55;
+}
+.hai-figure .hf-under-tint {
+  fill: var(--hf-night);
+  opacity: 0.55;
+}
+.hai-figure .hf-wave {
+  fill: none;
+  stroke: var(--hf-mid);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  opacity: 0.7;
+}
+.hai-figure .hf-foam {
+  fill: none;
+  stroke: var(--hf-face);
+  stroke-width: 2.2;
+  opacity: 0.9;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.hai-figure .hf-ripple {
+  fill: none;
+  stroke: var(--hf-face);
+  stroke-width: 1.8;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  --o: calc(0.45 + var(--hai-level, 0) * 0.5);
+}
+.hai-figure .hf-splash circle {
+  fill: var(--hf-face);
+  stroke: none;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* ---- motion ---- */
+@keyframes hf-rise {
+  0% {
+    transform: translateY(235px);
+    animation-timing-function: cubic-bezier(0.3, 0.1, 0.4, 1);
+  }
+  55% {
+    transform: translateY(40px);
+    animation-timing-function: ease-in-out;
+  }
+  82% {
+    transform: translateY(-8px);
+    animation-timing-function: ease-in-out;
+  }
   100% {
     transform: translateY(0);
   }
-  50% {
-    transform: translateY(-6px);
-  }
 }
-
-@keyframes hai-mascot-swim {
-  0%,
-  100% {
-    transform: translateY(0) rotate(-2deg);
-  }
-  25% {
-    transform: translateY(-5px) rotate(2deg);
-  }
-  50% {
-    transform: translateY(0) rotate(-2deg);
-  }
-  75% {
-    transform: translateY(5px) rotate(2deg);
-  }
-}
-
-@keyframes hai-mascot-think {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(0.96);
-  }
-}
-
-@keyframes hai-mascot-ring {
+@keyframes hf-dive {
   0% {
-    transform: scale(1);
-    opacity: 0.55;
+    transform: translateY(0);
   }
   100% {
-    transform: scale(1.55);
+    transform: translateY(235px);
+  }
+}
+@keyframes hf-splash {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  55% {
+    transform: translate(var(--dx), var(--dy));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(var(--dx) * 1.3), calc(var(--dy) * 0.3));
     opacity: 0;
   }
 }
-
-@keyframes hai-mascot-orbit {
+@keyframes hf-sway {
+  0%,
+  100% {
+    transform: rotate(-1.2deg) scaleY(1);
+  }
+  50% {
+    transform: rotate(1.2deg) scaleY(1.012);
+  }
+}
+@keyframes hf-hop {
+  0%,
+  100% {
+    transform: rotate(-1.6deg) scaleY(1);
+  }
+  25% {
+    transform: rotate(0deg) scaleY(1.022);
+  }
+  50% {
+    transform: rotate(1.6deg) scaleY(1);
+  }
+  75% {
+    transform: rotate(0deg) scaleY(1.022);
+  }
+}
+@keyframes hf-arm-sway {
+  0%,
+  100% {
+    transform: rotate(calc(var(--a) - 3deg));
+  }
+  50% {
+    transform: rotate(calc(var(--a) + 3deg));
+  }
+}
+@keyframes hf-gesture-upper {
+  0%,
+  100% {
+    transform: rotate(26deg);
+  }
+  50% {
+    transform: rotate(82deg);
+  }
+}
+@keyframes hf-gesture-fore {
+  0%,
+  100% {
+    transform: rotate(-24deg);
+  }
+  50% {
+    transform: rotate(-58deg);
+  }
+}
+@keyframes hf-nod {
+  0%,
+  100% {
+    transform: rotate(var(--tilt)) translateY(0);
+  }
+  50% {
+    transform: rotate(calc(var(--tilt) + 2.5deg)) translateY(-1.5px);
+  }
+}
+@keyframes hf-blink {
+  0%,
+  93%,
+  100% {
+    transform: translate(var(--px, 0), var(--py, 0))
+      scale(var(--sx, 1), calc(var(--sy, 1) * var(--open, 1)));
+  }
+  96% {
+    transform: translate(var(--px, 0), var(--py, 0)) scale(var(--sx, 1), 0.14);
+  }
+}
+@keyframes hf-ripple {
+  0% {
+    transform: scale(0.2);
+    opacity: var(--o, 0.5);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+@keyframes hf-wave {
   to {
-    transform: rotate(360deg);
+    transform: translateX(-52px);
+  }
+}
+@keyframes hf-refract {
+  0%,
+  100% {
+    transform: translateX(-1.6px) skewX(2.4deg);
+  }
+  50% {
+    transform: translateX(1.6px) skewX(-2.4deg);
+  }
+}
+@keyframes hf-foam {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.14);
+    opacity: 0.45;
+  }
+}
+@keyframes hf-pop {
+  0%,
+  20% {
+    transform: scale(0.4);
+    opacity: 0.2;
+  }
+  45%,
+  80% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.4);
+    opacity: 0.2;
   }
 }
 
-.hai-mascot-body[data-state='waiting'],
-.hai-mascot-body[data-state='paused'] {
-  animation: hai-mascot-float 5s ease-in-out infinite;
+.hai-figure[data-phase='rising'] .hf-rise {
+  animation: hf-rise 1.4s linear both;
+}
+.hai-figure[data-phase='diving'] .hf-rise {
+  animation: hf-dive 0.8s cubic-bezier(0.5, 0, 0.8, 0.4) both;
+}
+.hai-figure[data-phase='rising'] .hf-splash circle {
+  animation: hf-splash 1s ease-out 0.25s both;
+}
+.hai-figure[data-phase='diving'] .hf-splash circle {
+  animation: hf-splash 0.8s ease-out 0.3s both;
 }
 
-.hai-mascot-body[data-state='listening'] {
-  animation: hai-mascot-float 3.5s ease-in-out infinite;
+/* idle: the body sways around its feet, the arms swing loosely */
+.hai-figure[data-phase='standing'] .hf-bob {
+  transform-origin: 130px 262px;
+  animation: hf-sway 4.2s ease-in-out infinite;
+}
+.hai-figure[data-phase='standing'][data-state='listening'] .hf-bob {
+  animation-duration: 6s;
+}
+.hai-figure[data-phase='standing'][data-state='thinking'] .hf-bob {
+  animation-duration: 5.2s;
+}
+.hai-figure[data-phase='standing'][data-state='speaking'] .hf-bob {
+  animation: hf-hop 0.8s ease-in-out infinite;
+}
+.hai-figure[data-phase='standing'][data-state='paused'] .hf-bob,
+.hai-figure[data-phase='standing'][data-state='error'] .hf-bob {
+  animation: none;
+}
+.hai-figure[data-phase='standing'][data-arms='loose'] .hf-arm-upper {
+  animation: hf-arm-sway 3.4s ease-in-out infinite;
+}
+.hai-figure[data-phase='standing'][data-arms='loose']
+  [data-arm='right']
+  .hf-arm-upper {
+  animation-delay: -1.7s;
+}
+.hai-figure[data-phase='standing'][data-arms='gesture'] .hf-arm-upper {
+  animation: hf-gesture-upper 1.3s ease-in-out infinite;
+}
+.hai-figure[data-phase='standing'][data-arms='gesture'] .hf-arm-fore {
+  animation: hf-gesture-fore 1.3s ease-in-out infinite;
+}
+.hai-figure[data-phase='standing'][data-arms='gesture']
+  [data-arm='right']
+  .hf-arm-upper,
+.hai-figure[data-phase='standing'][data-arms='gesture']
+  [data-arm='right']
+  .hf-arm-fore {
+  animation-delay: -0.65s;
+}
+.hai-figure[data-phase='standing'][data-state='speaking'] .hf-head {
+  animation: hf-nod 0.8s ease-in-out infinite;
+}
+.hai-figure[data-eyes='blink'] .hf-pupil,
+.hai-figure[data-eyes='wide'] .hf-pupil {
+  animation: hf-blink 5.2s ease-in-out infinite;
 }
 
-.hai-mascot-body[data-state='thinking'] {
-  animation: hai-mascot-think 1.6s ease-in-out infinite;
+.hai-figure[data-pool='listen'] .hf-ripple,
+.hai-figure[data-pool='speak'] .hf-ripple {
+  animation: hf-ripple 2.8s ease-out infinite;
+}
+.hai-figure[data-pool='listen'] .hf-ripple-2 {
+  animation-delay: 1.4s;
+}
+.hai-figure[data-pool='speak'] .hf-ripple,
+.hai-figure[data-activity='true'] .hf-ripple {
+  animation-duration: 1.2s;
+}
+.hai-figure[data-pool='speak'] .hf-ripple-2,
+.hai-figure[data-activity='true'] .hf-ripple-2 {
+  animation-delay: 0.6s;
+}
+.hai-figure[data-phase='rising'] .hf-ripple {
+  animation: hf-ripple 1.3s ease-out 0.25s 2 both;
 }
 
-.hai-mascot-body[data-state='speaking'] {
-  animation: hai-mascot-swim 0.9s ease-in-out infinite;
+.hai-figure .hf-wave {
+  animation: hf-wave 5s linear infinite;
+}
+.hai-figure .hf-wave-2 {
+  animation-duration: 7s;
+  animation-direction: reverse;
+}
+.hai-figure .hf-wave-3 {
+  animation-duration: 6s;
+}
+.hai-figure .hf-refract {
+  animation: hf-refract 3.2s ease-in-out infinite;
+  transform-origin: 130px 250px;
+}
+.hai-figure .hf-foam {
+  animation: hf-foam 2.6s ease-in-out infinite;
+}
+.hai-figure[data-state='thinking'] .hf-thought circle {
+  animation: hf-pop 2s ease-in-out infinite;
+}
+.hai-figure[data-state='thinking'] .hf-thought circle:nth-child(2) {
+  animation-delay: 0.3s;
+}
+.hai-figure[data-state='thinking'] .hf-thought circle:nth-child(3) {
+  animation-delay: 0.6s;
 }
 
-.hai-mascot-ring {
-  animation: hai-mascot-ring 2.4s ease-out infinite;
-}
-
-.hai-mascot-ring[data-fast='true'] {
-  animation-duration: 1s;
-}
-
-.hai-mascot-ring[data-delay='true'] {
-  animation-delay: 1.2s;
-}
-
-.hai-mascot-ring[data-fast='true'][data-delay='true'] {
-  animation-delay: 0.5s;
-}
-
-.hai-mascot-orbit {
-  animation: hai-mascot-orbit 2.2s linear infinite;
-}
-
-.hai-mascot[data-motion='reduced'] *,
-.hai-mascot[data-motion='reduced'] {
+.hai-figure[data-motion='reduced'] *,
+.hai-figure[data-motion='reduced'] {
   animation: none !important;
   transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hai-mascot *,
-  .hai-mascot {
+  .hai-figure *,
+  .hai-figure {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/*
+ * Fields the HAI filled in (UI tools, docs/hai-ui-aktionen.md): marked until the
+ * person edits them or closes the bar. The mark is only a display.
+ */
+[data-hai-filled='true'] {
+  outline: 2px solid rgb(139 92 246 / 0.85);
+  outline-offset: 2px;
+  background-image: linear-gradient(
+    rgb(139 92 246 / 0.08),
+    rgb(139 92 246 / 0.08)
+  );
 }

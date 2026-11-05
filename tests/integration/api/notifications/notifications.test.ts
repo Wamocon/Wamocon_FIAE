@@ -66,8 +66,12 @@ describe('GET /api/notifications', () => {
   });
 
   it('returns the own notifications and the unread count', async () => {
+    // the list and the count are two queries; the count is the real number of
+    // unread notifications, not the unread ones inside the (limited) list
     const { mod } = await loadRoute('route', {
-      notifications: [rowOf('n1', ME), rowOf('n2', ME, true)],
+      notifications: {
+        sequence: [[rowOf('n1', ME), rowOf('n2', ME, true)], [{ total: 41 }]],
+      },
     });
     const res = await mod.GET(
       makeRequest('GET', `http://localhost/api/notifications?userId=${ME}`, {
@@ -80,7 +84,110 @@ describe('GET /api/notifications', () => {
     );
     const body = await res.json();
     expect(body.notifications).toHaveLength(2);
-    expect(body.unreadCount).toBe(1);
+    // WMCNL-2963: more than the 30 that the bell loads
+    expect(body.unreadCount).toBe(41);
+  });
+
+  it('counts the unread notifications of the session user only', async () => {
+    const { mod, mock } = await loadRoute('route', {
+      notifications: { sequence: [[rowOf('n1', ME)], [{ total: 1 }]] },
+    });
+    await mod.GET(
+      makeRequest(
+        'GET',
+        `http://localhost/api/notifications?userId=${VICTIM}`,
+        {
+          token: 't',
+        }
+      )
+    );
+    const { sql, params } = mock.filters('select', 'notifications');
+    expect(sql).toContain('"is_read" = $');
+    expect(params).toContain(ME);
+    expect(params).not.toContain(VICTIM);
+  });
+
+  describe('"Quiz bewertet" names the quiz (WMCNL-2963)', () => {
+    const reviewed = (context: Record<string, unknown>, message: string) => ({
+      ...rowOf('n9', ME),
+      type: 'QUIZ_REVIEWED',
+      title: 'Quiz bewertet',
+      message,
+      linkUrl: '/trainee/quizzes',
+      context,
+    });
+
+    it('adds quiz and result to a notification of before', async () => {
+      const { mod, mock } = await loadRoute('route', {
+        notifications: {
+          sequence: [
+            [
+              reviewed(
+                { submissionId: 'sub-1' },
+                'Dein Quiz wurde bewertet. Trainer-Feedback ist verfügbar.'
+              ),
+            ],
+            [{ total: 1 }],
+          ],
+        },
+        quizSubmissions: [
+          { id: 'sub-1', score: 79.6, quizTitle: 'Netzwerktechnik' },
+        ],
+      });
+      const res = await mod.GET(
+        makeRequest('GET', 'http://localhost/api/notifications', { token: 't' })
+      );
+      const [n] = (await res.json()).notifications;
+      expect(n.message).toBe(
+        'Dein Quiz „Netzwerktechnik“ wurde bewertet (Ergebnis: 80 %). Trainer-Feedback ist verfügbar.'
+      );
+      // the click leads to the page with result and feedback
+      expect(n.linkUrl).toBe('/trainee/trainer-feedback');
+      // only the submissions of the person themself are read
+      expect(mock.filters('select', 'quiz_submissions').params).toContain(ME);
+    });
+
+    it('leaves a notification that names the quiz already as it is', async () => {
+      const own = reviewed(
+        { submissionId: 'sub-1', quizTitle: 'Netzwerktechnik' },
+        'Dein Quiz „Netzwerktechnik“ wurde bewertet (Ergebnis: 80 %).'
+      );
+      const { mod, mock } = await loadRoute('route', {
+        notifications: { sequence: [[own], [{ total: 1 }]] },
+      });
+      const res = await mod.GET(
+        makeRequest('GET', 'http://localhost/api/notifications', { token: 't' })
+      );
+      const [n] = (await res.json()).notifications;
+      expect(n.message).toBe(own.message);
+      expect(mock.db.select).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the list when the lookup of the quiz fails', async () => {
+      const { mod, mock } = await loadRoute('route', {
+        notifications: {
+          sequence: [
+            [reviewed({ submissionId: 'sub-1' }, 'Dein Quiz wurde bewertet.')],
+            [{ total: 1 }],
+          ],
+        },
+      });
+      jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const real = mock.db.select.getMockImplementation()!;
+      let calls = 0;
+      mock.db.select.mockImplementation((...args: unknown[]) => {
+        calls += 1;
+        if (calls === 3) throw new Error('db down');
+        return (real as (...a: unknown[]) => unknown)(...args);
+      });
+      const res = await mod.GET(
+        makeRequest('GET', 'http://localhost/api/notifications', { token: 't' })
+      );
+      expect(res.status).toBe(200);
+      expect((await res.json()).notifications[0].message).toBe(
+        'Dein Quiz wurde bewertet.'
+      );
+    });
   });
 
   it('ignores a foreign userId in the query and reads the session user', async () => {
@@ -123,7 +230,8 @@ describe('GET /api/notifications', () => {
         token: 't',
       })
     );
-    expect(mock.db.select).toHaveBeenCalledTimes(2);
+    // per request: the list and the count of the unread ones
+    expect(mock.db.select).toHaveBeenCalledTimes(4);
   });
 
   it('answers 500 when the query fails', async () => {

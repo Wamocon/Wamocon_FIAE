@@ -128,6 +128,80 @@ describe('HAI chat route: no chat provider can answer', () => {
     expect((await en.json()).error).toContain('not reachable');
   });
 
+  describe('a busy model (MODEL_BUSY)', () => {
+    const busy = {
+      response: '',
+      intent: 'question',
+      citations: [],
+      error: 'model_busy',
+      errorKey: 'hai.error.modelBusy',
+      errorCode: 'MODEL_BUSY',
+      retryAfterSec: 30,
+    };
+
+    it('streaming: the error event carries the key, the code and the seconds, then the end event', async () => {
+      const { mod, rec } = await load(busy);
+      const res = await mod.POST(post(true));
+      expect(res.status).toBe(200);
+      const events = (await res.text())
+        .split('\n')
+        .filter((l: string) => l.startsWith('data: '))
+        .map((l: string) => JSON.parse(l.slice(6)));
+
+      const error = events.find((e: any) => e.error);
+      expect(error).toEqual({
+        error: 'hai.error.modelBusy',
+        code: 'MODEL_BUSY',
+        retryAfterSec: 30,
+      });
+      expect(events.some((e: any) => e.done)).toBe(true);
+      expect(events.some((e: any) => typeof e.chunk === 'string')).toBe(false);
+      expect(messageInserts(rec).map(m => m.role)).toEqual(['user']);
+    });
+
+    it('streaming: the plain unavailable error has no code', async () => {
+      const { mod } = await load(unavailable);
+      const res = await mod.POST(post(true));
+      const events = (await res.text())
+        .split('\n')
+        .filter((l: string) => l.startsWith('data: '))
+        .map((l: string) => JSON.parse(l.slice(6)));
+      const error = events.find((e: any) => e.error);
+      expect(error).toEqual({ error: KEY });
+    });
+
+    it('blocking: status 503 with the code, the seconds, Retry-After and a text in the language of the request', async () => {
+      const { mod, rec } = await load(busy);
+      const de = await mod.POST(post(false, 'de'));
+      expect(de.status).toBe(503);
+      expect(de.headers.get('Retry-After')).toBe('30');
+      const deBody = await de.json();
+      expect(deBody.code).toBe('MODEL_BUSY');
+      expect(deBody.retryAfterSec).toBe(30);
+      expect(deBody.errorKey).toBe('hai.error.modelBusy');
+      expect(deBody.error).toContain('stark ausgelastet');
+      expect(deBody.response).toBeUndefined();
+      expect(messageInserts(rec).map(m => m.role)).toEqual(['user']);
+
+      const { mod: modEn } = await load(busy);
+      const en = await modEn.POST(post(false, 'en'));
+      expect(en.status).toBe(503);
+      expect((await en.json()).error).toContain('very busy');
+    });
+
+    it('nothing internal is in the answer: no provider, no address, no stack', async () => {
+      const { mod } = await load(busy);
+      const stream = await (await mod.POST(post(true))).text();
+      const { mod: mod2 } = await load(busy);
+      const json = JSON.stringify(await (await mod2.POST(post(false))).json());
+      for (const text of [stream, json]) {
+        expect(text).not.toMatch(
+          /openai|sokrates|gemini|https?:\/\/|timeout|stack|ChatUnavailable/i
+        );
+      }
+    });
+  });
+
   it('an ordinary answer is unchanged: stored and returned', async () => {
     const { mod, rec } = await load({
       response: 'Antwort',

@@ -6,6 +6,8 @@ import { useParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { authFetch } from '@/lib/authFetch';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { countLabel } from '@/lib/i18n/count-label';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 
 // The detail of a quiz with the marker of the correct option. The data comes
 // from /api/trainer/quizzes/[quizId], which answers a trainer only. This page
@@ -15,6 +17,7 @@ type QuizDetail = {
   id: string;
   title: string;
   quiz_type: 'mini' | 'big';
+  assigned_trainees?: Array<{ id: string; full_name: string }>;
   questions: Array<{
     id: string;
     question_text: string;
@@ -31,6 +34,15 @@ type LoadState =
 
 export default function TrainerQuizDetailPage() {
   const { t } = useLanguage();
+  // the platform admin manages the quizzes, everybody else has an overview
+  // (WMCNL-3026)
+  const canManage = useIsSuperAdmin();
+  const listTitle = t(
+    canManage ? 'quiz.managementTitle' : 'quiz.overviewTitle'
+  );
+  const backLabel = t(
+    canManage ? 'trainer.quizDetail.back' : 'trainer.quizDetail.backOverview'
+  );
   const params = useParams();
   const quizId = params?.quizId as string | undefined;
   const [state, setState] = useState<LoadState>({ status: 'loading' });
@@ -84,13 +96,13 @@ export default function TrainerQuizDetailPage() {
       <div className="mx-auto max-w-5xl p-6">
         <div className="border-accent/30 rounded-3xl border bg-black/30 p-6">
           <h1 className="text-foreground text-lg font-semibold">
-            Quiz not found
+            {t('trainer.quizDetail.notFound')}
           </h1>
           <Link
             href="/trainer/quiz-management"
             className="text-primary underline"
           >
-            Back to Quiz Management
+            {backLabel}
           </Link>
         </div>
       </div>
@@ -103,15 +115,46 @@ export default function TrainerQuizDetailPage() {
       <div className="border-accent/30 rounded-3xl border bg-black/30 p-6">
         <div className="text-muted-foreground mb-2 text-xs">
           <Link href="/trainer/quiz-management" className="underline">
-            Quiz Management
+            {listTitle}
           </Link>
           <span> / </span>
-          <span>Quiz Details</span>
+          <span>{t('trainer.quizDetail.title')}</span>
         </div>
         <h1 className="text-foreground text-2xl font-bold">{quiz.title}</h1>
         <div className="text-muted-foreground mt-1 text-sm">
-          Type: {quiz.quiz_type === 'mini' ? 'LESSON' : 'GLOBAL'}
+          {t('trainer.quizDetail.type')}:{' '}
+          {quiz.quiz_type === 'mini'
+            ? t('trainer.quizDetail.typeLesson')
+            : t('trainer.quizDetail.typeGlobal')}
         </div>
+      </div>
+
+      {/* Who the quiz is assigned to: the number in the list of the quizzes
+          is the number of these rows */}
+      <div className="border-accent/30 rounded-3xl border bg-black/30 p-6">
+        <h2 className="text-foreground mb-2 text-base font-semibold">
+          {`${t('trainer.quizDetail.assigned')} (${countLabel(
+            t,
+            'quiz.managementTraineeCount',
+            quiz.assigned_trainees?.length ?? 0
+          )})`}
+        </h2>
+        {quiz.assigned_trainees && quiz.assigned_trainees.length > 0 ? (
+          <ul className="text-foreground flex flex-wrap gap-2 text-sm">
+            {quiz.assigned_trainees.map(trainee => (
+              <li
+                key={trainee.id}
+                className="bg-accent/20 rounded-full px-3 py-1"
+              >
+                {trainee.full_name || trainee.id}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            {t('trainer.quizDetail.noneAssigned')}
+          </p>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -134,7 +177,7 @@ export default function TrainerQuizDetailPage() {
                     {optionText}
                     {isCorrect && (
                       <span className="text-foreground ml-2 rounded bg-green-600 px-1.5 py-0.5 text-xs">
-                        Correct
+                        {t('trainer.quizDetail.correct')}
                       </span>
                     )}
                   </div>
@@ -145,7 +188,7 @@ export default function TrainerQuizDetailPage() {
         ))}
         {quiz.questions.length === 0 && (
           <div className="border-accent/30 text-muted-foreground rounded-2xl border bg-black/20 p-5 text-sm">
-            No questions.
+            {t('trainer.quizDetail.noQuestions')}
           </div>
         )}
       </div>

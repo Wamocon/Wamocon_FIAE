@@ -19,6 +19,13 @@ import { sendBlockerInvite } from '@/lib/email';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
+import { isoWeekOf } from '@/lib/school/day';
+import { refreshTraineeDashboard } from '@/lib/school/dashboard-cache';
+import {
+  requireSchoolCatalogFilter,
+  resolveSchoolWriteCatalog,
+} from '@/lib/school/catalog-access';
 
 // Helper to calculate the module phase for a block date.
 function calculateAusbildungsjahr(
@@ -70,8 +77,16 @@ export async function GET(req: NextRequest) {
     const access = await requireTraineeAccess(session, traineeId, req);
     if (isErrorResponse(access)) return access;
 
+    // Only the entries of the chosen occupation (a trainee in two trainings
+    // has a calendar per occupation), without a choice all of them
+    const schoolCatalog = await requireSchoolCatalogFilter(session, req);
+    if (isErrorResponse(schoolCatalog)) return schoolCatalog;
+
     // Build query conditions
     const conditions = [eq(ausbildungBlocks.traineeId, traineeId as any)];
+    if (schoolCatalog.blockCondition) {
+      conditions.push(schoolCatalog.blockCondition);
+    }
 
     if (year) {
       // OPTIONAL: Filter by year is tricky for spanning blocks.
@@ -120,7 +135,8 @@ export async function POST(req: NextRequest) {
       title,
       notes,
       description,
-      sendInvitation = true,
+      // No invitation unless the caller asks for it (WMCNL-3017)
+      sendInvitation = false,
       examSubType,
     } = body;
 
@@ -173,7 +189,9 @@ export async function POST(req: NextRequest) {
       .from(profiles)
       .where(eq(profiles.id, trainerId));
 
-    if (!trainer || trainer.role !== 'TRAINER') {
+    // Trainer level: the trainer, the admin and the super admin (the session
+    // guard above lets exactly these in, the role TRAINER alone locked admins out)
+    if (!trainer || !isTrainerLevelRole(trainer.role)) {
       return NextResponse.json(
         { error: 'Unauthorized: Trainer access required' },
         { status: 403 }
@@ -194,6 +212,18 @@ export async function POST(req: NextRequest) {
 
         // The block belongs to the organization of the trainee
         const organizationId = await getUserOrgId(String(tid));
+
+        // ... and to the chosen occupation (the trainee belongs to it, checked
+        // above), without a choice to the default occupation of the trainee
+        const catalogId = await resolveSchoolWriteCatalog(
+          session,
+          req,
+          String(tid)
+        );
+        if (isErrorResponse(catalogId)) {
+          errors.push(`Occupation of trainee ${tid} not available`);
+          continue;
+        }
 
         const [trainee] = await db
           .select({
@@ -222,6 +252,7 @@ export async function POST(req: NextRequest) {
             .where(
               and(
                 eq(ausbildungBlocks.traineeId, tid as any),
+                eq(ausbildungBlocks.trainingCatalogId, catalogId),
                 eq(ausbildungBlocks.blockType, 'EXAM'),
                 eq(ausbildungBlocks.examSubType, examSubType)
               )
@@ -237,7 +268,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Calculate week and year
-        const calendarWeek = getISOWeek(start);
+        const calendarWeek = isoWeekOf(start);
         const year = start.getFullYear();
         const schuljahr = getCurrentSchuljahr();
         // Phase one of the occupation of this trainee (KfBM 15 months, FIAE 18)
@@ -261,6 +292,7 @@ export async function POST(req: NextRequest) {
           .insert(ausbildungBlocks)
           .values({
             traineeId: access.traineeId as any,
+            trainingCatalogId: catalogId,
             schuljahr,
             ausbildungsjahr,
             calendarWeek,
@@ -314,7 +346,7 @@ export async function POST(req: NextRequest) {
             type: 'BLOCK_SCHEDULED',
             title: 'Neuer Block geplant',
             message: `Ein neuer Block "${blockLabel}" wurde für ${startStr} – ${endStr} geplant.`,
-            linkUrl: '/trainee/school?tab=blocks',
+            linkUrl: '/trainee/school?tab=calendar',
             context: {
               blockId: row.id,
               blockType,
@@ -336,6 +368,8 @@ export async function POST(req: NextRequest) {
         errors.push(`Error for ${tid}`);
       }
     }
+
+    if (results.length > 0) refreshTraineeDashboard();
 
     // If at least one succeeded, return 201 (or 207 Multi-Status if strict, but 201 is fine for UI)
     // If single trainee, return the block like before to not break UI if it expects single object

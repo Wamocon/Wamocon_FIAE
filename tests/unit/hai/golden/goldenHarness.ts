@@ -46,15 +46,24 @@ export interface GoldenAccess {
   audience: 'trainee' | 'trainer';
   organizationId: string | null;
   userId: string;
+  /** Model solutions of the private bucket: trainer audience and switch on. */
+  includeTrainerSolutions?: boolean;
 }
 
-/** The access that the database would give the person of a case. */
+/**
+ * The access that the database would give the person of a case. A trainer gets
+ * the permission for the model solutions of the private bucket only while the
+ * switch HAI_TRAINER_SOLUTIONS is on (goldenState.trainerSolutionsOn).
+ */
 export function accessFor(goldenCase: GoldenCase): GoldenAccess {
   return {
     catalogIds: goldenCase.occupations.map(code => CATALOGS[code].id),
     audience: goldenCase.role === 'TRAINER' ? 'trainer' : 'trainee',
     organizationId: null,
     userId: USER,
+    ...(goldenCase.role === 'TRAINER' && goldenState.trainerSolutionsOn
+      ? { includeTrainerSolutions: true }
+      : {}),
   };
 }
 
@@ -62,7 +71,9 @@ export function accessFor(goldenCase: GoldenCase): GoldenAccess {
 export function mayRead(goldenCase: GoldenCase, chunk: GoldenChunk): boolean {
   return (
     goldenCase.occupations.includes(chunk.catalog) &&
-    (goldenCase.role === 'TRAINER' || chunk.visibility === 'all')
+    (goldenCase.role === 'TRAINER' || chunk.visibility === 'all') &&
+    (!chunk.privateSolution ||
+      (goldenCase.role === 'TRAINER' && goldenState.trainerSolutionsOn))
   );
 }
 
@@ -85,7 +96,10 @@ export const goldenState = {
   searchCalls: [] as SearchCall[],
   pageIndexCalls: [] as Array<{ catalogIds: string[]; audience: string }>,
   returnedIds: [] as string[],
+  /** The switch HAI_TRAINER_SOLUTIONS of the server. Default for the tests: on. */
+  trainerSolutionsOn: true,
   reset() {
+    this.trainerSolutionsOn = true;
     this.systemPrompts = [];
     this.searchCalls = [];
     this.pageIndexCalls = [];
@@ -101,7 +115,11 @@ export const goldenState = {
 export function fakeSearchWithContext(
   query: string,
   _context: unknown,
-  options: { catalogIds: string[]; audience: string }
+  options: {
+    catalogIds: string[];
+    audience: string;
+    includeTrainerSolutions?: boolean;
+  }
 ) {
   goldenState.searchCalls.push({
     catalogIds: options.catalogIds,
@@ -111,7 +129,10 @@ export function fakeSearchWithContext(
     .filter(
       chunk =>
         options.catalogIds.includes(CATALOGS[chunk.catalog].id) &&
-        (options.audience === 'trainer' || chunk.visibility === 'all')
+        (options.audience === 'trainer' || chunk.visibility === 'all') &&
+        (!chunk.privateSolution ||
+          (options.audience === 'trainer' &&
+            options.includeTrainerSolutions === true))
     )
     .map(chunk => ({
       id: chunk.id,
@@ -120,7 +141,10 @@ export function fakeSearchWithContext(
       chunkIndex: 0,
       content: chunk.text,
       similarity: 0.9,
-      metadata: { title: chunk.id },
+      metadata: {
+        title: chunk.id,
+        ...(chunk.privateSolution ? { trainerSolution: true } : {}),
+      },
     }));
   goldenState.returnedIds.push(...results.map(r => r.id));
   return Promise.resolve({ results, query, totalResults: results.length });

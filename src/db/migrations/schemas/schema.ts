@@ -612,6 +612,8 @@ export const contentDocuments = pgTable('content_documents', {
   mimeType: text('mime_type').default('application/pdf'),
   storageUrl: text('storage_url').notNull(), // Supabase Storage URL
   storagePath: text('storage_path'), // Path in bucket for deletion
+  // SHA-256 of the stored file (lower case hex), null until scripts/content/hash-documents.ts sets it
+  contentSha256: text('content_sha256'),
 
   // PageIndex support for HAI
   pageCount: integer('page_count'), // Total pages in PDF
@@ -1277,6 +1279,13 @@ export const ausbildungBlocks = pgTable('ausbildung_blocks', {
   organizationId: uuid('organization_id')
     .notNull()
     .references(() => organizations.id, { onDelete: 'cascade' }),
+  // Occupation (training catalog) of the entry. A trainee in several trainings
+  // sees the entries of the chosen occupation only. The default keeps writers
+  // that do not know the column on FIAE.
+  trainingCatalogId: uuid('training_catalog_id')
+    .notNull()
+    .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+    .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
 
   schuljahr: text('schuljahr').notNull(),
   ausbildungsjahr: integer('ausbildungsjahr').notNull(), // 1, 2, or 3
@@ -1321,7 +1330,12 @@ export const ausbildungBlocks = pgTable('ausbildung_blocks', {
   updatedAt: timestamp('updated_at')
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}, table => ({
+  traineeCatalogIdx: index('ausbildung_blocks_trainee_catalog_idx').on(
+    table.traineeId,
+    table.trainingCatalogId
+  ),
+}));
 
 // === SCHOOL EXAMS ===
 // Tracks exam dates with subject/Lernfeld mapping
@@ -1333,6 +1347,13 @@ export const schoolExams = pgTable('school_exams', {
   organizationId: uuid('organization_id')
     .notNull()
     .references(() => organizations.id, { onDelete: 'cascade' }),
+  // Occupation (training catalog) of the exam. A trainee in several trainings
+  // sees the exams of the chosen occupation only. The default keeps writers
+  // that do not know the column on FIAE.
+  trainingCatalogId: uuid('training_catalog_id')
+    .notNull()
+    .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+    .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
 
   schuljahr: text('schuljahr').notNull(),
   ausbildungsjahr: integer('ausbildungsjahr').notNull(),
@@ -1355,7 +1376,12 @@ export const schoolExams = pgTable('school_exams', {
   updatedAt: timestamp('updated_at')
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}, table => ({
+  traineeCatalogIdx: index('school_exams_trainee_catalog_idx').on(
+    table.traineeId,
+    table.trainingCatalogId
+  ),
+}));
 
 // === SCHOOL EXAM RESULTS ===
 // Records exam outcomes with German grading
@@ -2180,6 +2206,180 @@ export const haiSettings = pgTable(
 );
 
 export type HaiSetting = typeof haiSettings.$inferSelect;
+
+// --- HAI MEMORY (docs/hai-gedaechtnis.md) ---
+// The memory of the HAI. Created by supabase/migrations/20261103000300_hai_memory.sql,
+// which documents the rules the database keeps. Server only: the app reads and writes
+// through Drizzle as the role postgres, no privilege for anon and authenticated.
+// user_id is declared as a plain id on purpose: the foreign key to profiles (on delete
+// cascade, so deleting the account deletes the memory) exists in the migration only. A
+// pre-created profile never talked to the HAI, so the merge of two profiles
+// (src/lib/profile-identity.ts) has nothing to move, and the sign-in must not touch a
+// table that is missing where the migration is not applied yet.
+
+/** The kinds of an entry of the memory of one user. */
+export const HAI_USER_MEMORY_KINDS = [
+  'preference',
+  'learning_style',
+  'learning_state',
+  'weakness',
+] as const;
+export const HAI_USER_MEMORY_SOURCES = ['stated', 'derived'] as const;
+export const HAI_USER_MEMORY_STATUSES = [
+  'proposed',
+  'active',
+  'rejected',
+] as const;
+export const HAI_GLOBAL_MEMORY_STATUSES = [
+  'proposed',
+  'approved',
+  'rejected',
+] as const;
+export const HAI_GLOBAL_MEMORY_ORIGINS = ['auto', 'manual'] as const;
+
+const sqlList = (values: readonly string[]) =>
+  sql.raw(values.map(value => `'${value}'`).join(', '));
+
+// Memory of ONE user and occupation. Only the user sees and changes it.
+export const haiUserMemories = pgTable(
+  'hai_user_memories',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull(),
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .references(() => trainingCatalogs.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    // stable key of what was proposed, unique per user and occupation (a rejected
+    // proposal never comes back)
+    proposalKey: text('proposal_key').notNull(),
+    content: text('content').notNull(),
+    source: text('source').notNull(),
+    status: text('status').notNull().default('proposed'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+  },
+  table => ({
+    kindCheck: check(
+      'hai_user_memories_kind_check',
+      sql`${table.kind} in (${sqlList(HAI_USER_MEMORY_KINDS)})`
+    ),
+    sourceCheck: check(
+      'hai_user_memories_source_check',
+      sql`${table.source} in (${sqlList(HAI_USER_MEMORY_SOURCES)})`
+    ),
+    statusCheck: check(
+      'hai_user_memories_status_check',
+      sql`${table.status} in (${sqlList(HAI_USER_MEMORY_STATUSES)})`
+    ),
+    contentLength: check(
+      'hai_user_memories_content_length',
+      sql`char_length(${table.content}) between 1 and 300`
+    ),
+    keyLength: check(
+      'hai_user_memories_key_length',
+      sql`char_length(${table.proposalKey}) between 1 and 120`
+    ),
+    activeConfirmed: check(
+      'hai_user_memories_active_confirmed',
+      sql`${table.status} <> 'active' or ${table.confirmedAt} is not null`
+    ),
+    userCatalogKeyUnique: unique(
+      'hai_user_memories_user_catalog_key_unique'
+    ).on(table.userId, table.trainingCatalogId, table.proposalKey),
+    userCatalogStatusIdx: index('hai_user_memories_user_catalog_status_idx').on(
+      table.userId,
+      table.trainingCatalogId,
+      table.status
+    ),
+    catalogKeyStatusIdx: index('hai_user_memories_catalog_key_status_idx').on(
+      table.trainingCatalogId,
+      table.proposalKey,
+      table.status
+    ),
+  })
+);
+
+// Shared memory for all users (catalog null: all occupations). Proposed from
+// counters without any person, approved by a platform admin.
+export const haiGlobalMemories = pgTable(
+  'hai_global_memories',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    trainingCatalogId: uuid('training_catalog_id').references(
+      () => trainingCatalogs.id,
+      { onDelete: 'cascade' }
+    ),
+    proposalKey: text('proposal_key'),
+    content: text('content').notNull(),
+    status: text('status').notNull().default('proposed'),
+    origin: text('origin').notNull(),
+    // number of different users a proposal rests on, never the users
+    supportCount: integer('support_count').notNull().default(0),
+    // plain ids (audit notes, they must not hold up the deletion of a profile)
+    createdBy: uuid('created_by'),
+    approvedBy: uuid('approved_by'),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    statusCheck: check(
+      'hai_global_memories_status_check',
+      sql`${table.status} in (${sqlList(HAI_GLOBAL_MEMORY_STATUSES)})`
+    ),
+    originCheck: check(
+      'hai_global_memories_origin_check',
+      sql`${table.origin} in (${sqlList(HAI_GLOBAL_MEMORY_ORIGINS)})`
+    ),
+    contentLength: check(
+      'hai_global_memories_content_length',
+      sql`char_length(${table.content}) between 1 and 400`
+    ),
+    supportCountCheck: check(
+      'hai_global_memories_support_count_check',
+      sql`${table.supportCount} >= 0`
+    ),
+    keyLength: check(
+      'hai_global_memories_key_length',
+      sql`${table.proposalKey} is null or char_length(${table.proposalKey}) between 1 and 120`
+    ),
+    approvedCheck: check(
+      'hai_global_memories_approved_check',
+      sql`${table.status} <> 'approved' or (${table.approvedBy} is not null and ${table.approvedAt} is not null)`
+    ),
+    catalogKeyUnique: uniqueIndex('hai_global_memories_catalog_key_unique')
+      .on(table.trainingCatalogId, table.proposalKey)
+      .where(sql`${table.proposalKey} is not null`),
+    statusCatalogIdx: index('hai_global_memories_status_catalog_idx').on(
+      table.status,
+      table.trainingCatalogId
+    ),
+  })
+);
+
+// The switch of one user for the memory (a missing row counts as on).
+export const haiUserMemorySettings = pgTable('hai_user_memory_settings', {
+  userId: uuid('user_id').primaryKey(),
+  enabled: boolean('enabled').notNull().default(true),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export type HaiUserMemory = typeof haiUserMemories.$inferSelect;
+export type NewHaiUserMemory = typeof haiUserMemories.$inferInsert;
+export type HaiGlobalMemory = typeof haiGlobalMemories.$inferSelect;
+export type NewHaiGlobalMemory = typeof haiGlobalMemories.$inferInsert;
 
 // --- CONTENT UPLOAD (package U1 of docs/ki-upload-konzept.md) ---
 // Process data of the AI assisted content upload: runs, announced files (also

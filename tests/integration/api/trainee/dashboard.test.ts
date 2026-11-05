@@ -85,4 +85,27 @@ describe('API: Trainee Dashboard', () => {
 
     expect(body.skillRadar).toContainEqual({ skill: 'Skill 1', value: 100 });
   });
+
+  it('lists the modules in the order of the training plan, numeric (KFB-1175)', async () => {
+    const chapters = [4, 5, 10, 1, 2, 3, 25];
+    const { db } = createTableDb({
+      courseMembers: chapters.map(n => ({
+        id: `c${n}`,
+        title: `Komponente ${n}`,
+        year: 1,
+        chapter: n,
+        code: `K${n}`,
+      })),
+      enablers: [],
+      courses: [],
+    });
+    const GET = await importHandlerWithDb(db);
+    const res = await GET(
+      makeGet('http://localhost/api/trainee/dashboard?userId=t1')
+    );
+    const body = await res.json();
+    expect(body.modules.map((m: any) => m.title)).toEqual(
+      [1, 2, 3, 4, 5, 10, 25].map(n => `Komponente ${n}`)
+    );
+  });
 });

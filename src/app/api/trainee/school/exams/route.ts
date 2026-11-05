@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, asc, desc, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lt } from 'drizzle-orm';
 import {
   schoolExams,
   schoolExamResults,
@@ -18,6 +18,12 @@ import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { daysFromToday, startOfToday } from '@/lib/school/day';
+import { refreshTraineeDashboard } from '@/lib/school/dashboard-cache';
+import {
+  requireSchoolCatalogFilter,
+  resolveSchoolWriteCatalog,
+} from '@/lib/school/catalog-access';
 
 // Helper to get current Schuljahr
 function getCurrentSchuljahr(): string {
@@ -38,6 +44,8 @@ function calculateAusbildungsjahr(
 }
 
 // GET /api/trainee/school/exams?upcoming=true&schuljahr=...
+// upcoming=true: from the start of today on, upcoming=false: before today (the
+// past), without the parameter: every exam (calendar, results).
 // The exams of the session user. A traineeId in the query (sent by older
 // clients) is ignored, the session is the only identity.
 export async function GET(req: NextRequest) {
@@ -48,20 +56,32 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const schuljahr = searchParams.get('schuljahr');
-    const upcoming = searchParams.get('upcoming') === 'true';
+    const upcomingParam = searchParams.get('upcoming');
+    const upcoming = upcomingParam === 'true';
+    const past = upcomingParam === 'false';
+    // The split is the start of today (calendar day of Germany), not the
+    // current instant: an exam of today is a date without a time and still
+    // lies ahead
+    const todayStart = startOfToday();
     const limit = parseInt(searchParams.get('limit') || '50', 10);
+
+    // The exams of the occupation the trainee works in (a trainee in two
+    // trainings never sees the exams of the other one)
+    const schoolCatalog = await requireSchoolCatalogFilter(session, req);
+    if (isErrorResponse(schoolCatalog)) return schoolCatalog;
 
     // Build query conditions
     const conditions = [eq(schoolExams.traineeId, traineeId as any)];
+    if (schoolCatalog.examCondition) {
+      conditions.push(schoolCatalog.examCondition);
+    }
 
     if (schuljahr) {
       conditions.push(eq(schoolExams.schuljahr, schuljahr));
     }
 
-    if (upcoming) {
-      const now = new Date();
-      conditions.push(gte(schoolExams.examDate, now));
-    }
+    if (upcoming) conditions.push(gte(schoolExams.examDate, todayStart));
+    if (past) conditions.push(lt(schoolExams.examDate, todayStart));
 
     // Get exams with optional result join
     const rows = await db
@@ -82,10 +102,13 @@ export async function GET(req: NextRequest) {
       eq(ausbildungBlocks.traineeId, traineeId as any),
       eq(ausbildungBlocks.blockType, 'EXAM'),
     ];
-    if (upcoming) {
-      const now2 = new Date();
-      blockConditions.push(gte(ausbildungBlocks.startDate, now2));
+    if (schoolCatalog.blockCondition) {
+      blockConditions.push(schoolCatalog.blockCondition);
     }
+    if (upcoming) {
+      blockConditions.push(gte(ausbildungBlocks.startDate, todayStart));
+    }
+    if (past) blockConditions.push(lt(ausbildungBlocks.startDate, todayStart));
 
     const examBlocks = await db
       .select()
@@ -164,22 +187,10 @@ export async function GET(req: NextRequest) {
       return upcoming ? dateA - dateB : dateB - dateA;
     });
 
-    const examsWithMeta = allExams.map(exam => {
-      const examDate = new Date(exam.examDate);
-      const daysUntil = Math.ceil(
-        (examDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      return {
-        ...exam,
-        meta: {
-          daysUntil,
-          isPast: daysUntil < 0,
-          isToday: daysUntil === 0,
-          isSoon: daysUntil >= 0 && daysUntil <= 7,
-        },
-      };
-    });
+    const examsWithMeta = allExams.map(exam => ({
+      ...exam,
+      meta: daysFromToday(new Date(exam.examDate), now),
+    }));
 
     return NextResponse.json({
       exams: examsWithMeta,
@@ -227,6 +238,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'subject required' }, { status: 400 });
 
     const organizationId = await getUserOrgId(traineeId);
+
+    // The exam belongs to the occupation the trainee works in (the tab)
+    const catalogId = await resolveSchoolWriteCatalog(session, req, traineeId);
+    if (isErrorResponse(catalogId)) return catalogId;
 
     // Get trainee profile for defaults
     const [trainee] = await db
@@ -284,6 +299,7 @@ export async function POST(req: NextRequest) {
       .values({
         traineeId: traineeId as any,
         organizationId,
+        trainingCatalogId: catalogId,
         schuljahr: calculatedSchuljahr,
         ausbildungsjahr: calculatedAusbildungsjahr,
         examDate: new Date(examDate),
@@ -298,6 +314,7 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
+    refreshTraineeDashboard();
     return NextResponse.json({ id: row.id, exam: row }, { status: 201 });
   } catch (e) {
     console.error('Create exam error:', e);

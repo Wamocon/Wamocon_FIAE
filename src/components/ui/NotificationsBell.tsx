@@ -9,11 +9,17 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { DB_SCHEMA } from '@/lib/db-schema';
 import { authFetch } from '@/lib/authFetch';
+import {
+  formatNotification,
+  sortNewestFirst,
+} from '@/lib/notifications/format';
 
 export type UINotification = {
   id: string;
   userId: string;
   actorId: string | null;
+  /** Name of the person behind actorId (the API adds it). */
+  actorName?: string | null;
   type: string;
   title: string;
   message: string | null;
@@ -32,8 +38,18 @@ export default function NotificationsBell() {
   const [items, setItems] = useState<UINotification[]>([]);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+  // The number of unread notifications of the server. The list holds only the
+  // newest 30, so counting inside it stopped the bell at 30 (WMCNL-2963).
+  const [serverUnread, setServerUnread] = useState<number | null>(null);
+  const itemsRef = useRef<UINotification[]>([]);
+  itemsRef.current = items;
 
-  const unread = useMemo(() => items.filter(i => !i.isRead).length, [items]);
+  const unread = useMemo(
+    () => serverUnread ?? items.filter(i => !i.isRead).length,
+    [serverUnread, items]
+  );
+  const lowerUnread = () =>
+    setServerUnread(n => (n === null ? null : Math.max(0, n - 1)));
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -47,7 +63,12 @@ export default function NotificationsBell() {
         );
         if (res.ok) {
           const data = await res.json();
-          if (mounted) setItems(data.notifications || []);
+          if (mounted) {
+            setItems(data.notifications || []);
+            setServerUnread(
+              typeof data.unreadCount === 'number' ? data.unreadCount : null
+            );
+          }
         }
       } finally {
         setLoading(false);
@@ -71,6 +92,7 @@ export default function NotificationsBell() {
             if (!mounted) return;
             if (payload.eventType === 'INSERT') {
               const row = payload.new as any;
+              if (!row.is_read) setServerUnread(n => (n === null ? n : n + 1));
               setItems(prev =>
                 [
                   {
@@ -91,6 +113,11 @@ export default function NotificationsBell() {
               );
             } else if (payload.eventType === 'UPDATE') {
               const row = payload.new as any;
+              const known = itemsRef.current.find(i => i.id === row.id);
+              if (known && !known.isRead && row.is_read) lowerUnread();
+              // one that is not in the list (older than the newest 30) cannot be
+              // counted here: ask the server again
+              if (!known) void load();
               setItems(prev =>
                 prev.map(i =>
                   i.id === row.id
@@ -129,7 +156,9 @@ export default function NotificationsBell() {
 
   const markAsRead = async (id: string) => {
     const prevItems = items;
+    const prevUnread = serverUnread;
     // Optimistic update
+    if (items.find(i => i.id === id && !i.isRead)) lowerUnread();
     setItems(prev =>
       prev.map(i =>
         i.id === id
@@ -146,14 +175,16 @@ export default function NotificationsBell() {
       if (!res.ok) throw new Error('Failed');
     } catch {
       setItems(prevItems);
+      setServerUnread(prevUnread);
     }
   };
 
   const markAllAsRead = async () => {
     if (!profile?.id) return;
     const unreadItems = items.filter(i => !i.isRead);
-    if (unreadItems.length === 0) return;
+    if (unreadItems.length === 0 && !unread) return;
     // Optimistic update
+    setServerUnread(0);
     setItems(prev =>
       prev.map(i => ({
         ...i,
@@ -178,6 +209,9 @@ export default function NotificationsBell() {
         if (res.ok) {
           const data = await res.json();
           setItems(data.notifications || []);
+          setServerUnread(
+            typeof data.unreadCount === 'number' ? data.unreadCount : null
+          );
         }
       } catch {}
     }
@@ -204,7 +238,7 @@ export default function NotificationsBell() {
         <Bell className="h-5 w-5" />
         {unread > 0 && (
           <span className="bg-accent text-accent-foreground absolute -top-1 -right-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-xs">
-            {unread}
+            {unread > 99 ? '99+' : unread}
           </span>
         )}
       </button>
@@ -240,34 +274,41 @@ export default function NotificationsBell() {
             {(() => {
               const unreadItems = items.filter(i => !i.isRead);
               const readItems = items.filter(i => i.isRead);
-              const visible = [...unreadItems, ...readItems.slice(0, 5)];
+              // All unread and the five newest read ones, newest first
+              const visible = sortNewestFirst([
+                ...unreadItems,
+                ...sortNewestFirst(readItems).slice(0, 5),
+              ]);
 
-              return visible.map(n => (
-                <button
-                  key={n.id}
-                  onClick={() => onItemClick(n)}
-                  className={`border-border/30 hover:bg-muted w-full border-b px-4 py-3 text-left text-sm transition-colors ${n.isRead ? 'opacity-60' : 'bg-accent/10 font-medium'}`}
-                >
-                  <div className="flex items-start gap-2">
-                    {!n.isRead && (
-                      <span className="bg-accent mt-1.5 h-2 w-2 shrink-0 rounded-full" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="text-foreground line-clamp-1">
-                        {n.title}
-                      </div>
-                      {n.message && (
-                        <div className="text-muted-foreground line-clamp-2 text-xs font-normal">
-                          {n.message}
-                        </div>
+              return visible.map(n => {
+                const text = formatNotification(n, t);
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => onItemClick(n)}
+                    className={`border-border/30 hover:bg-muted w-full border-b px-4 py-3 text-left text-sm transition-colors ${n.isRead ? 'opacity-60' : 'bg-accent/10 font-medium'}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {!n.isRead && (
+                        <span className="bg-accent mt-1.5 h-2 w-2 shrink-0 rounded-full" />
                       )}
-                      <div className="text-muted-foreground mt-1 text-[10px] font-normal">
-                        {new Date(n.createdAt).toLocaleString()}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-foreground line-clamp-1">
+                          {text.title}
+                        </div>
+                        {text.message && (
+                          <div className="text-muted-foreground line-clamp-3 text-xs font-normal">
+                            {text.message}
+                          </div>
+                        )}
+                        <div className="text-muted-foreground mt-1 text-[10px] font-normal">
+                          {new Date(n.createdAt).toLocaleString()}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
-              ));
+                  </button>
+                );
+              });
             })()}
           </div>
         </div>

@@ -93,6 +93,12 @@ async function loadRoute(
   return { mod, mock };
 }
 
+// The settings lookup of a phase plan is the only read of training_catalogs
+// with a limit (the catalog scope lists them all)
+const isSettingsLookup = (mock: {
+  calls: { table?: string; limit?: unknown }[];
+}) => mock.calls.some(c => c.table === 'training_catalogs' && c.limit === 1);
+
 const call = (method: string, url: string, body?: unknown) =>
   makeRequest(method, `http://localhost${url}`, { token: 'tok', body });
 const withId = (id: string) => ({ params: Promise.resolve({ id }) });
@@ -168,13 +174,16 @@ describe('school routes of a trainee use the phase plan of the occupation', () =
       expect(mock.writes('insert', 'ausbildung_blocks')[0]).toMatchObject({
         ausbildungsjahr: 2,
       });
-      expect(mock.calls.some(c => c.table === 'training_catalogs')).toBe(false);
+      expect(isSettingsLookup(mock)).toBe(false);
     });
 
     it('still works when the phase plan cannot be read (previous 18 months)', async () => {
-      // no catalog row: the scope fails closed, the plan falls back
+      // the catalog has no usable settings: the plan falls back (the occupation
+      // itself is known, a new block needs it)
       const tables: Record<string, any> = tablesFor('KFBM');
-      tables.trainingCatalogs = [];
+      tables.trainingCatalogs = [
+        { id: KFBM, code: 'KFBM', isActive: true, settings: null },
+      ];
       const { mod, mock } = await loadRoute('blocks', tables);
       const res = await mod.POST(
         call('POST', '/api/trainee/school/blocks', {
@@ -216,7 +225,7 @@ describe('school routes of a trainee use the phase plan of the occupation', () =
         withId('b1')
       );
       expect(res.status).toBe(200);
-      expect(mock.calls.some(c => c.table === 'training_catalogs')).toBe(false);
+      expect(isSettingsLookup(mock)).toBe(false);
     });
   });
 
@@ -262,12 +271,13 @@ describe('school routes of a trainee use the phase plan of the occupation', () =
       };
       await mod.POST(call('POST', '/api/trainee/school/blocks/import', many));
       expect(mock.writes('insert', 'ausbildung_blocks')).toHaveLength(3);
-      // one catalog settings lookup for the plan, one list of catalogs in the scope
+      // one catalog settings lookup for the plan, two lists of catalogs in the
+      // scope (the occupation of the new entries, the default occupation of the plan)
       expect(
         mock.calls.filter(
           c => c.op === 'select' && c.table === 'training_catalogs'
         )
-      ).toHaveLength(2);
+      ).toHaveLength(3);
     });
   });
 

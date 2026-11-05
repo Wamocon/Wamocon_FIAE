@@ -10,10 +10,27 @@ import db from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { schoolExams, schoolExamResults, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
-import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { isErrorResponse, requireUser, type SessionUser } from '@/lib/auth/session';
+import { ensureSchoolRowInChosenCatalog } from '@/lib/school/catalog-access';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
+}
+
+// The exam of a result lies inside the occupation the trainee works in, the
+// result of an exam of the other occupation counts as missing. Null if it does.
+async function examOutsideChosenCatalog(
+    session: SessionUser,
+    req: NextRequest,
+    examId: string,
+    notFound: () => NextResponse
+): Promise<NextResponse | null> {
+    const [exam] = await db
+        .select({ trainingCatalogId: schoolExams.trainingCatalogId })
+        .from(schoolExams)
+        .where(eq(schoolExams.id, examId as any));
+    if (!exam) return null;
+    return ensureSchoolRowInChosenCatalog(session, req, exam, notFound);
 }
 
 // Helper to determine if passed based on grade/points
@@ -47,13 +64,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
         // Validate exam exists and belongs to the session user
         const [exam] = await db
-            .select({ id: schoolExams.id, traineeId: schoolExams.traineeId })
+            .select({ id: schoolExams.id, traineeId: schoolExams.traineeId, trainingCatalogId: schoolExams.trainingCatalogId })
             .from(schoolExams)
             .where(eq(schoolExams.id, examId as any));
 
+        const examNotFound = () => NextResponse.json({ error: 'Exam not found' }, { status: 404 });
         if (!exam || String(exam.traineeId) !== session.id) {
-            return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+            return examNotFound();
         }
+        const outsideCatalog = await ensureSchoolRowInChosenCatalog(session, req, exam, examNotFound);
+        if (outsideCatalog) return outsideCatalog;
 
         // Check if result already exists
         const [existing] = await db
@@ -136,11 +156,14 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             .from(schoolExamResults)
             .where(eq(schoolExamResults.examId, examId as any));
 
+        const resultNotFound = () => NextResponse.json({
+            error: 'No result found for this exam. Use POST to create.'
+        }, { status: 404 });
         if (!existing || String(existing.traineeId) !== session.id) {
-            return NextResponse.json({
-                error: 'No result found for this exam. Use POST to create.'
-            }, { status: 404 });
+            return resultNotFound();
         }
+        const outsideCatalog = await examOutsideChosenCatalog(session, req, examId, resultNotFound);
+        if (outsideCatalog) return outsideCatalog;
 
         // Build update object
         const updateData: Record<string, any> = {};
@@ -193,6 +216,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         if (!result || String(result.traineeId) !== session.id) {
             return NextResponse.json({ result: null });
         }
+        const outsideCatalog = await examOutsideChosenCatalog(
+            session, req, examId, () => NextResponse.json({ result: null })
+        );
+        if (outsideCatalog) return outsideCatalog;
 
         return NextResponse.json({ result });
     } catch (e) {

@@ -10,6 +10,8 @@
  * @module lib/hai/voice/speech
  */
 
+import { classifySignal } from './signalWords';
+
 // ============================================================================
 // WHAT IS READ ALOUD
 // ============================================================================
@@ -199,34 +201,14 @@ export function markDayStart(
 // WHAT ENDS THE CONVERSATION
 // ============================================================================
 
-const STOP_WORDS = [
-  'stopp',
-  'stop',
-  'beenden',
-  'sprachmodus beenden',
-  'gespräch beenden',
-  'tschüss',
-  'tschuess',
-  'auf wiedersehen',
-  'das war es',
-  "das war's",
-  'das war alles',
-];
-
-/** A whole short utterance that ends the conversation. A question that only contains the word does not. */
+/**
+ * A whole short utterance that ends the conversation ("Gespräch beenden",
+ * "Tschüss", ...). A question that only contains the word does not. "Stopp" is
+ * no longer one of them: it makes the HAI stop talking and keeps the
+ * conversation open (see signalWords.ts, where all the word lists are).
+ */
 export function isStopCommand(utterance: string): boolean {
-  const text = utterance
-    .toLowerCase()
-    .replace(/[.!?,;]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!text) return false;
-  if (text.split(' ').length > 5) return false;
-  const core = text
-    .replace(/\b(bitte|jetzt|hai|danke|ok|okay|also)\b/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return STOP_WORDS.includes(core);
+  return classifySignal(utterance)?.kind === 'end';
 }
 
 // ============================================================================

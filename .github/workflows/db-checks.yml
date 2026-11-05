@@ -13,6 +13,7 @@ on:
   pull_request:
     branches:
       - master
+      - preview
     paths:
       - 'supabase/**'
       - 'scripts/db/**'
@@ -47,9 +48,11 @@ jobs:
       - name: Unit tests of the database scripts
         run: node --test "tests/scripts/**/*.test.mjs"
 
-      - name: Migration files against master
+      - name: Migration files against the base branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git fetch --no-tags origin master
+          git fetch --no-tags origin "$BASE_REF"
           BASE=$(git merge-base HEAD FETCH_HEAD)
           node scripts/db/migration-check.mjs --base "$BASE"
 

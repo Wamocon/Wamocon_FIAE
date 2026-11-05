@@ -69,9 +69,12 @@ describe('resolveHaiPersona: KfBM (draft from settings.hai)', () => {
     expect(prompt).not.toContain('Shopping');
   });
 
-  it('writes the source rule and the refusal from the settings', () => {
+  it('writes the source rule into the prompt and the refusal only into the refusal that the pipeline sends', () => {
     expect(prompt).toContain('Rahmenlehrplan der KMK');
-    expect(prompt).toContain(`"${KFBM_HAI_DRAFT.refusal_text}"`);
+    // the system prompt of a question that passed the gate carries no fixed
+    // refusal sentence (the model copied it, golden set 03.11.2026)
+    expect(prompt).not.toContain(KFBM_HAI_DRAFT.refusal_text);
+    expect(prompt).toContain('Diese Frage wurde bereits als fachlich geprüft');
     expect(prompts.getOffTopicResponse(persona)).toBe(
       KFBM_HAI_DRAFT.refusal_text
     );

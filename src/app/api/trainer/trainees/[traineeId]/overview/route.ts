@@ -13,12 +13,21 @@ import {
   quizAssignments,
   quizSubmissions,
   enablerQuizLinks,
+  enablerSubmissions,
   traineeEnablerOverrides,
   traineeUseCaseOverrides,
 } from '@/db/migrations/schemas/schema';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { catalogCondition } from '@/lib/catalog/scope';
+import { requireProgressScope } from '@/lib/trainer/trainee-progress';
 import { loadCourseProgressions } from '@/lib/catalog/progression-db';
+import { byCourseOrder } from '@/lib/catalog/progression';
 import type { EnablerProgression } from '@/lib/catalog/progression';
+import { sortCourses } from '@/lib/catalog/course-order';
+
+// The order of the lesson quizzes inside one enabler (the order the trainee
+// works in: low, medium, high)
+const DIFFICULTY_RANK: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
 
 export async function GET(
   req: NextRequest,
@@ -49,14 +58,20 @@ export async function GET(
       .limit(1);
     if (!p) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Courses trainee belongs to
+    // Courses the trainee belongs to, inside the chosen occupation: a trainee
+    // in two trainings is shown with the courses (and the figures) of the tab
+    // that is open, the same set the lists and the dashboard count
+    const scope = await requireProgressScope(session, req);
+    if (isErrorResponse(scope)) return scope;
     const memberCourseRows = await db
       .select({ courseId: courseMembers.courseId })
       .from(courseMembers)
+      .innerJoin(courses, eq(courseMembers.courseId, courses.id))
       .where(
         and(
           eq(courseMembers.userId, traineeId as any),
-          eq(courseMembers.role, 'TRAINEE')
+          eq(courseMembers.role, 'TRAINEE'),
+          scope ? catalogCondition(courses.trainingCatalogId, scope) : undefined
         )
       );
     const courseIds = memberCourseRows.map(r => r.courseId);
@@ -229,13 +244,79 @@ export async function GET(
     );
     const courseRows = courseIds.length
       ? await db
-          .select({ id: courses.id, title: courses.title })
+          .select({
+            id: courses.id,
+            title: courses.title,
+            chapter: courses.chapter,
+            code: courses.code,
+          })
           .from(courses)
           .where(inArray(courses.id, courseIds as any))
       : [];
     const courseTitleMap = new Map(
       courseRows.map(c => [String(c.id), c.title])
     );
+    const courseCodeMap = new Map(
+      courseRows.map(c => [String(c.id), c.code ?? null])
+    );
+    // The courses in the order of the training plan, the order the trainee
+    // sees (the database returns the rows in no particular order)
+    const courseRank = new Map(
+      sortCourses(courseRows).map((c, index) => [String(c.id), index])
+    );
+    const rankOfCourse = (courseId: unknown) =>
+      courseRank.get(String(courseId)) ?? Number.MAX_SAFE_INTEGER;
+    const inPlanOrder = (
+      a: { courseId: unknown; orderIndex: number; id: unknown },
+      b: { courseId: unknown; orderIndex: number; id: unknown }
+    ) =>
+      rankOfCourse(a.courseId) - rankOfCourse(b.courseId) ||
+      byCourseOrder(
+        { orderIndex: a.orderIndex, id: String(a.id) },
+        { orderIndex: b.orderIndex, id: String(b.id) }
+      );
+    const enablerPosition = new Map(
+      [...enablerRows]
+        .sort(inPlanOrder)
+        .map((e, index) => [String(e.id), index])
+    );
+    const enablerCourseId = new Map(
+      enablerRows.map(e => [String(e.id), String(e.courseId)])
+    );
+
+    // The latest summary (Zusammenfassung with reflection) of the trainee per
+    // enabler: the trainer reviews it, so the detail page shows its status
+    const summaryRows = enablerIds.length
+      ? await db
+          .select({
+            enablerId: enablerSubmissions.enablerId,
+            status: enablerSubmissions.status,
+            attemptNumber: enablerSubmissions.attemptNumber,
+            submittedAt: enablerSubmissions.submittedAt,
+          })
+          .from(enablerSubmissions)
+          .where(
+            and(
+              eq(enablerSubmissions.traineeId, traineeId as any),
+              inArray(enablerSubmissions.enablerId, enablerIds as any)
+            )
+          )
+          .orderBy(desc(enablerSubmissions.submittedAt))
+      : [];
+    const latestSummaryByEnabler = new Map<
+      string,
+      (typeof summaryRows)[number]
+    >();
+    for (const row of summaryRows) {
+      const key = String(row.enablerId);
+      if (!latestSummaryByEnabler.has(key))
+        latestSummaryByEnabler.set(key, row);
+    }
+    // A submission without a status waits for the review
+    const summaryStatusOf = (enablerId: unknown) => {
+      const row = latestSummaryByEnabler.get(String(enablerId));
+      return row ? (row.status ?? 'PENDING') : null;
+    };
 
     // Pending counts
     const pendingUseCases = Array.from(latestUseCaseById.values()).filter(
@@ -286,17 +367,22 @@ export async function GET(
             r.isActive === null ? null : Boolean(r.isActive)
           )
         );
-        return enablerRows.map(e => {
+        return [...enablerRows].sort(inPlanOrder).map(e => {
           const state = stateOf.get(String(e.id));
           return {
             id: e.id,
             title: e.title,
             courseId: e.courseId,
             courseTitle: courseTitleMap.get(String(e.courseId)) || '',
+            courseCode: courseCodeMap.get(String(e.courseId)) ?? null,
             // the master switch of the enabler (inactive: not there for the trainee)
             isActive: Boolean(e.isActive),
             orderIndex: e.orderIndex,
             completed: state?.completed ?? false,
+            // status of the latest summary of the trainee (PENDING, APPROVED,
+            // REJECTED), null without one: a rejected summary has to be
+            // reworked, the quiz based "completed" above does not say that
+            summaryStatus: summaryStatusOf(e.id),
             // order of work: locked, open or completed (none when inactive)
             state: state?.state ?? null,
             lockReason: state?.lockReason ?? null,
@@ -335,7 +421,7 @@ export async function GET(
             r.isActive === null ? null : Boolean(r.isActive)
           )
         );
-        return useCaseRows.map(u => {
+        return [...useCaseRows].sort(inPlanOrder).map(u => {
           const latest = latestUseCaseById.get(String(u.id));
           const override = oMap.get(String(u.id));
           const effectiveActive =
@@ -343,6 +429,9 @@ export async function GET(
           return {
             id: u.id,
             title: u.title,
+            courseId: u.courseId,
+            courseTitle: courseTitleMap.get(String(u.courseId)) || '',
+            courseCode: courseCodeMap.get(String(u.courseId)) ?? null,
             isActive: effectiveActive,
             status: latest?.status || null,
             attemptNumber: latest?.attemptNumber || null,
@@ -351,19 +440,51 @@ export async function GET(
           };
         });
       })(),
-      enablerQuizzes: enablerQuizRows.map(r => {
-        const latest = latestQuizSubByQuizId.get(String(r.quizId));
-        return {
-          enablerId: r.enablerId,
-          enablerTitle: enablerTitleMap.get(String(r.enablerId)) || '',
-          quizId: r.quizId,
-          difficulty: r.difficulty,
-          lastScore: latest?.score ?? null,
-          attemptNumber: latest?.attemptNumber ?? null,
-          isReviewed: latest?.isReviewed ?? null,
-          link: `/trainee/enablers/${r.enablerId}/quiz`,
-        };
-      }),
+      // The summaries (with reflection) the trainee handed in, per enabler, in
+      // the order of the course plan. Only enablers with a submission appear.
+      summaries: [...enablerRows]
+        .sort(inPlanOrder)
+        .filter(e => latestSummaryByEnabler.has(String(e.id)))
+        .map(e => {
+          const row = latestSummaryByEnabler.get(String(e.id))!;
+          return {
+            enablerId: e.id,
+            enablerTitle: e.title,
+            courseId: e.courseId,
+            courseTitle: courseTitleMap.get(String(e.courseId)) || '',
+            courseCode: courseCodeMap.get(String(e.courseId)) ?? null,
+            status: row.status ?? 'PENDING',
+            attemptNumber: row.attemptNumber ?? null,
+            submittedAt: row.submittedAt ?? null,
+          };
+        }),
+      // In the order of the course plan, then low, medium, high (the database
+      // returns the links in no particular order)
+      enablerQuizzes: [...enablerQuizRows]
+        .sort(
+          (a, b) =>
+            (enablerPosition.get(String(a.enablerId)) ?? 0) -
+              (enablerPosition.get(String(b.enablerId)) ?? 0) ||
+            (DIFFICULTY_RANK[String(a.difficulty)] ?? 9) -
+              (DIFFICULTY_RANK[String(b.difficulty)] ?? 9)
+        )
+        .map(r => {
+          const latest = latestQuizSubByQuizId.get(String(r.quizId));
+          const courseId = enablerCourseId.get(String(r.enablerId)) ?? '';
+          return {
+            enablerId: r.enablerId,
+            enablerTitle: enablerTitleMap.get(String(r.enablerId)) || '',
+            courseId,
+            courseTitle: courseTitleMap.get(courseId) || '',
+            courseCode: courseCodeMap.get(courseId) ?? null,
+            quizId: r.quizId,
+            difficulty: r.difficulty,
+            lastScore: latest?.score ?? null,
+            attemptNumber: latest?.attemptNumber ?? null,
+            isReviewed: latest?.isReviewed ?? null,
+            link: `/trainee/enablers/${r.enablerId}/quiz`,
+          };
+        }),
       globalQuizzes: assignedQuizzes.map(q => {
         const latest = latestGlobalQuizById.get(String(q.id));
         return {

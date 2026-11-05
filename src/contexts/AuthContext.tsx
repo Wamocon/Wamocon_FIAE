@@ -35,6 +35,11 @@ import {
   type SessionEnd,
 } from '@/lib/auth/access-state';
 import { passwordProblem } from '@/lib/auth/password-policy';
+import {
+  PasswordChangeError,
+  isPasswordChangeCode,
+} from '@/lib/auth/password-change';
+import { authFetch } from '@/lib/authFetch';
 import { EmailNotConfirmedError } from '@/lib/auth/email-confirmation';
 import {
   PREVIEW_ACCOUNT_REJECTED_CODE,
@@ -123,7 +128,15 @@ interface AuthContextType {
     training_start_date?: string | null;
   }) => Promise<void>;
   refreshProfile: () => Promise<void>;
-  changePassword: (newPassword: string) => Promise<void>;
+  /**
+   * Changes the own password. The server checks the current one first
+   * (POST /api/auth/change-password); a failure is a PasswordChangeError with
+   * a code, never a text of the authentication.
+   */
+  changePassword: (
+    currentPassword: string,
+    newPassword: string
+  ) => Promise<void>;
   isPlatformOwner: boolean;
   isAdmin: boolean;
   subscriptionPlan: SubscriptionPlan;
@@ -1021,20 +1034,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) await loadProfile(user.id);
   }, [user]);
 
-  const changePassword = useCallback(async (newPassword: string) => {
-    const problem = passwordProblem(newPassword);
-    if (problem) throw new Error(problem);
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      if (!currentPassword) {
+        throw new PasswordChangeError('CURRENT_PASSWORD_REQUIRED');
+      }
+      if (passwordProblem(newPassword)) {
+        throw new PasswordChangeError('PASSWORD_INVALID');
+      }
 
-    const timeoutPromise = new Promise<{ data: any; error: null }>(resolve => {
-      setTimeout(() => resolve({ data: null, error: null }), 3000);
-    });
+      // The browser no longer calls auth.updateUser itself: that call needs no
+      // current password. The server checks it and then changes the password.
+      let res: Response;
+      try {
+        res = await authFetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+      } catch {
+        throw new PasswordChangeError('UNAVAILABLE');
+      }
+      if (res.ok) return;
 
-    const updatePromise = supabase.auth.updateUser({ password: newPassword });
-    const { error } = await Promise.race([updatePromise, timeoutPromise]);
-    if (error) {
-      throw new Error(error.message || 'Passwort konnte nicht geändert werden');
-    }
-  }, []);
+      let code: unknown;
+      let retryAfterSec: unknown;
+      try {
+        const data = await res.json();
+        code = data?.code;
+        retryAfterSec = data?.retryAfterSec;
+      } catch {
+        /* no readable answer */
+      }
+      throw new PasswordChangeError(
+        isPasswordChangeCode(code) ? code : 'FAILED',
+        typeof retryAfterSec === 'number' ? retryAfterSec : undefined
+      );
+    },
+    []
+  );
 
   const isPlatformOwner = useMemo(
     () => profile?.organization?.isPlatformOwner === true,

@@ -13,6 +13,8 @@ import React from 'react';
 import { HaiMessage as MessageType, useHai } from './HaiProvider';
 import { HaiActionCard } from './HaiActionCard';
 import { HaiNavigationCard } from './HaiNavigationCard';
+import { HaiMemoryCard } from './HaiMemoryCard';
+import { useHaiQuizMode } from './HaiQuizMode';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { MarkdownText } from '@/components/ui/MarkdownText';
 import { isDocumentId, openDocumentFile } from '@/lib/documentFileLink';
@@ -24,6 +26,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  RotateCcw,
 } from 'lucide-react';
 
 interface HaiMessageProps {
@@ -39,11 +42,25 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
     setActiveVersion,
     confirmPendingAction,
     cancelPendingAction,
+    answerMemoryProposal,
     openNavigation,
+    openNavigationChoice,
+    retryMessage,
+    messages,
   } = useHai();
+  // the memory never asks in the middle of a quiz round: the card waits (and
+  // shows up when the quiz card is closed)
+  const { active: quizActive } = useHaiQuizMode();
   const isUser = message.role === 'user';
   const hasCitations = message.citations && message.citations.length > 0;
   const isThinking = isStreaming && !message.content;
+  // no text yet: only "thinking" is shown (an empty message or its placeholder)
+  const waitingForText =
+    isStreaming &&
+    (!message.content ||
+      message.content === (t('hai.loading.thinking') || 'Thinking...'));
+  // only the last message of the chat can be asked again
+  const isLastMessage = messages?.[messages.length - 1]?.id === message.id;
   const hasVersions = !!message.versions && message.versions.length > 1;
   const activeIndex = message.activeVersionIndex ?? 0;
 
@@ -148,12 +165,47 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
           )}
         </div>
 
+        {/* What HAI does while no text has come (search, answer, busy). The
+            region stays in the page while the message waits, so a screen reader
+            announces each change politely. */}
+        {!isUser && waitingForText && (
+          <p
+            aria-live="polite"
+            data-testid="hai-stage"
+            className="pl-0 text-xs text-gray-400"
+          >
+            {message.stage ? t(`hai.loading.stage.${message.stage}`) : ''}
+          </p>
+        )}
+
+        {/* A failed turn (busy model, network, something else): ask again */}
+        {!isUser && !isStreaming && message.failure && isLastMessage && (
+          <button
+            type="button"
+            onClick={() => void retryMessage(message.id)}
+            className="inline-flex items-center gap-1 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-300 transition-colors hover:bg-cyan-500/20"
+          >
+            <RotateCcw className="h-3 w-3" />
+            {t('hai.error.retry')}
+          </button>
+        )}
+
         {/* Proposed write: nothing happens before the person confirms */}
         {!isUser && !isStreaming && message.pendingAction && (
           <HaiActionCard
             action={message.pendingAction}
             onConfirm={() => void confirmPendingAction(message.id)}
             onCancel={() => cancelPendingAction(message.id)}
+          />
+        )}
+
+        {/* Question of the memory: nothing is saved before the person says yes */}
+        {!isUser && !isStreaming && !quizActive && message.memoryProposal && (
+          <HaiMemoryCard
+            proposal={message.memoryProposal}
+            onAnswer={(decision, content) =>
+              void answerMemoryProposal(message.id, decision, content)
+            }
           />
         )}
 
@@ -164,6 +216,25 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
             onOpen={() => openNavigation(message.id)}
           />
         )}
+
+        {/* A question back: the nearest targets as cards (at most three), each waits for a tap */}
+        {!isUser &&
+          !isStreaming &&
+          message.navigationChoices &&
+          message.navigationChoices.length > 0 && (
+            <div
+              data-testid="hai-navigation-choices"
+              className="mt-1 flex w-full flex-col"
+            >
+              {message.navigationChoices.map((choice, index) => (
+                <HaiNavigationCard
+                  key={`${choice.path}-${index}`}
+                  offer={choice}
+                  onOpen={() => openNavigationChoice(message.id, index)}
+                />
+              ))}
+            </div>
+          )}
 
         {/* Edit button & version navigation for user messages */}
         {isUser && !isStreaming && !isEditing && (

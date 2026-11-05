@@ -385,6 +385,20 @@ export default function Quiz({ quiz }: QuizProps) {
           </div>
         )}
 
+        {/* The button below stays disabled until the question is answered, the
+            hint says why */}
+        {!isAnswered(question) && (
+          <p
+            role="status"
+            data-testid="quiz-answer-hint"
+            className="text-muted mt-4 text-sm"
+          >
+            {isTextQuestion(question)
+              ? t('enablerPage.answerRequiredText')
+              : t('enablerPage.answerRequired')}
+          </p>
+        )}
+
         {error && (
           <p role="alert" className="mt-4 text-sm text-red-600">
             {error}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { catalogDisplayTitle } from '@/lib/catalog/display-title';
 
 /** One active occupation as the public list `/api/catalogs` delivers it. */
 export interface PublicCatalogSummary {
@@ -103,7 +104,7 @@ export function CatalogSelection() {
           <li key={catalog.code}>
             <article className="border-accent/30 glass-effect-enhanced flex h-full flex-col rounded-2xl border-2 p-6 shadow-xl">
               <h2 className="text-foreground text-xl font-bold">
-                {catalog.title}
+                {catalogDisplayTitle(t, catalog.code, catalog.title)}
               </h2>
               {catalog.description && (
                 <p className="text-muted-foreground mt-2 text-sm">
@@ -131,7 +132,10 @@ export function CatalogSelection() {
                 className="bg-primary text-primary-foreground hover:bg-primary/90 mt-6 inline-block rounded-xl px-5 py-3 text-center text-sm font-semibold"
               >
                 {t('catalogs.signIn')}
-                <span className="sr-only"> {catalog.title}</span>
+                <span className="sr-only">
+                  {' '}
+                  {catalogDisplayTitle(t, catalog.code, catalog.title)}
+                </span>
               </Link>
             </article>
           </li>

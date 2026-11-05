@@ -166,8 +166,6 @@ describe('the start of the day', () => {
 
 describe('isStopCommand', () => {
   it.each([
-    'Stopp',
-    'stopp!',
     'Sprachmodus beenden',
     'Gespräch beenden, bitte',
     'Danke, das war es.',
@@ -178,6 +176,9 @@ describe('isStopCommand', () => {
 
   it.each([
     '',
+    // "Stopp" stops the HAI talking, it no longer ends the conversation
+    'Stopp',
+    'stopp!',
     'Was bedeutet Stopp bei einem Netzplan?',
     'Wie beende ich eine Transaktion in SQL?',
     'Erkläre mir den Unterschied zwischen stop und halt in der Programmierung',

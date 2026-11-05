@@ -34,40 +34,41 @@ import {
     activityReports,
     notifications,
     trainingCatalogs,
+    TRAINING_CATALOG_IDS,
 } from '@/db/migrations/schemas/schema';
 import { toHaiRole } from '@/lib/auth-helpers';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { buildHaiTrainingScope } from './trainingScope';
-import { isLearningTechniqueQuestion } from './learningTechniques/detect';
-import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
+import { getCatalogScopeForUserId, type CatalogScope } from '@/lib/catalog/scope';
+import { loadTraineeProgress } from '@/lib/trainer/trainee-progress';
+import { loadTraineeCourseFigures } from './progressFigures';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 import { traineeSearchNotFoundLine } from './denial';
-import { foldUmlauts, isDayBriefingMessage } from './dayQuestion';
 import { formatDayProgress, loadDayProgress } from './dayProgress';
 import type { DayProgress } from './dayProgress';
 import type { HaiTrainingScope } from './trainingScope';
+import {
+    answerDocumentQuestion,
+    type DocumentAccess,
+    type DocumentScope,
+} from './documentQuery';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export type UserRole = 'TRAINER' | 'TRAINEE';
+import {
+    extractPotentialTraineeName,
+    isTraineeListQuestion,
+    resolveDataIntent,
+} from './dataIntent';
+import type {
+    DataIntent,
+    HistoryTurnMessage,
+    UserRole,
+} from './dataIntent';
+export * from './dataIntent';
 
-export type DataIntent =
-    | 'progress_query'      // "Wie ist mein Fortschritt?"
-    | 'calendar_query'      // "Wann habe ich Berufsschule?"
-    | 'exam_query'          // "Wann ist meine naechste Pruefung?"
-    | 'exam_results_query'  // "Welche Note habe ich?" / "Habe ich bestanden?"
-    | 'report_query'        // "Wie ist der Stand meiner Nachweise?"
-    | 'submission_query'    // "Was habe ich abgegeben?" / "Welche Abgaben sind offen?"
-    | 'use_case_query'      // "Welche Use Cases habe ich erledigt?"
-    | 'notification_query'  // "Habe ich neue Benachrichtigungen?"
-    | 'review_query'        // Trainer: "Was muss ich bewerten?"
-    | 'trainee_overview'    // Trainer: "Wie stehen meine Azubis?"
-    | 'trainee_detail_query' // Trainer: "Wie steht [Name]?" / "Noten von [Name]"
-    | 'learning_query'      // Trainee: tips on learning (quiz scores, next exams)
-    | 'day_briefing'        // "Was steht heute an?" / "Guten Morgen" (day companion)
-    | 'none';               // No data intent detected
 
 export interface LiveDataContext {
     /** Formatted German text ready for system prompt injection */
@@ -76,6 +77,8 @@ export interface LiveDataContext {
     tokenEstimate: number;
     /** Which data intent was detected */
     dataIntent: DataIntent;
+    /** document_query: files whose pages the PageIndex loads (a named file) */
+    documentIds?: string[];
 }
 
 /** What the pipeline knows about the turn, only used for the day companion. */
@@ -84,6 +87,19 @@ export interface DataContextOptions {
     preferredCatalogCode?: string | null;
     /** Training scope of the trainee (phase plan), for the next step. */
     trainingScope?: Pick<HaiTrainingScope, 'currentPhase' | 'allowedComponentPhases'>;
+    /**
+     * What the person may read (from the database, never from the request): the
+     * occupations, the audience and the organization. Without it a question about
+     * files gets the neutral answer (fail closed).
+     */
+    documentAccess?: DocumentAccess | null;
+    /** Records of the page the person is on (ids already checked by the page context). */
+    page?: DocumentScope | null;
+    /**
+     * The earlier messages of the session (server side): a short follow-up of a
+     * trainer ("Welche mit Namen?") asks for the list of the own trainees again.
+     */
+    previousMessages?: readonly HistoryTurnMessage[];
 }
 
 export interface UserSnapshot {
@@ -182,130 +198,63 @@ export interface TrainerPendingReviews {
     pendingTraineeNames: string[];
 }
 
+/** One occupation of an assigned trainee (a trainee can be in several). */
+export interface TrainerTraineeOccupation {
+    title: string;
+    /** Short code of the occupation (FIAE, KFBM), used in the compact list. */
+    code: string | null;
+    /** Year of training (1 to 3), from the block calendar or the start date. */
+    trainingYear: number | null;
+    /** Block type of today in the block calendar of this occupation. */
+    currentBlockType: string | null;
+}
+
+/**
+ * One assigned, active trainee in the overview of a trainer. Metadata only:
+ * no e-mail address, no date of birth, no grades.
+ */
 export interface TrainerTraineeInfo {
     fullName: string;
     progressPercent: number;
-}
-
-// ============================================================================
-// DATA INTENT CLASSIFIER
-// ============================================================================
-
-// Broadened keyword sets for intent classification (natural German phrasing)
-const KW_PROGRESS = ['fortschritt', 'wie weit', 'status', 'abgeschlossen', 'erledigt', 'progress', 'geschafft', 'wie viel', 'noch offen', 'wie stehe ich', 'mein stand', 'schaffe ich', 'bin ich fertig', 'komme ich voran', 'was fehlt noch'];
-const KW_CALENDAR = ['kalender', 'woche', 'berufsschule', 'schulblock', 'betrieb', 'urlaub', 'ferien', 'wann habe ich', 'naechste woche', 'diese woche', 'block', 'zeitplan', 'stundenplan', 'schultag', 'frei', 'wann bin ich'];
-const KW_EXAM_RESULTS = ['note', 'noten', 'bestanden', 'durchgefallen', 'ergebnis', 'punkte', 'prozent', 'wie habe ich abgeschnitten', 'klausurergebnis', 'pruefungsergebnis', 'zeugnis', 'welche note', 'meine noten', 'notenspiegel', 'notenuebersicht', 'schnitt'];
-const KW_EXAM = ['pruefung', 'klausur', 'ihk', 'abschlusspruefung', 'examen', 'naechste pruefung', 'wann schreibe ich', 'ap1', 'ap2', 'teil 1', 'teil 2', 'zwischenpruefung', 'pruefungstermin'];
-const KW_SUBMISSION = ['abgabe', 'abgaben', 'eingereicht', 'einreichung', 'submission', 'abgegeben', 'was habe ich abgegeben', 'feedback', 'bewertung meiner', 'rueckmeldung', 'rückmeldung', 'meine loesung', 'meine abgabe', 'korrektur', 'bewertet'];
-const KW_USE_CASE = ['use case', 'use-case', 'usecase', 'fallstudie', 'praktische aufgabe', 'praxisaufgabe'];
-const KW_REPORT = ['nachweis', 'taetigkeitsnachweis', 'bericht', 'berichtsheft', 'wochenbericht', 'activity report', 'nachweise', 'ausbildungsnachweis', 'wie viele berichte', 'taetigkeit'];
-const KW_NOTIFICATION = ['benachrichtigung', 'neuigkeiten', 'notification', 'neue nachrichten', 'was gibt es neues', 'updates', 'ungelesen', 'inbox'];
-const KW_REVIEW = ['bewerten', 'ausstehend', 'korrigieren', 'review', 'eingereicht', 'submissions', 'pruefe', 'zu bewerten', 'offene abgaben', 'pending', 'was muss ich'];
-// The day at a glance (day companion, voice or chat) is recognized by dayQuestion.ts:
-// fixed phrases and natural questions about the own tasks, with folded umlauts. It is
-// checked first: "was muss ich heute" would otherwise land in the review list of the
-// trainers.
-
-/** Lower case with ae, oe, ue, ss: a spoken or typed "für" meets the keyword "fuer". */
-export { foldUmlauts };
-
-const KW_OVERVIEW =['ueberblick', 'meine azubis', 'wie stehen', 'fortschritt meiner', 'alle azubis', 'azubi-uebersicht', 'meine auszubildenden'];
-
-// ============================================================================
-// NAME EXTRACTION (for trainer → trainee queries)
-// ============================================================================
-
-/** Common German words that look like names but aren't */
-const NOT_NAMES = new Set([
-    'wie', 'was', 'wer', 'hat', 'von', 'der', 'die', 'das', 'ist', 'bei',
-    'mit', 'nach', 'stand', 'note', 'noten', 'use', 'case', 'progress',
-    'enabler', 'quiz', 'klausur', 'schulblock', 'block', 'alle', 'meine',
-    'sich', 'und', 'oder', 'nicht', 'auch', 'noch', 'schon', 'mal',
-    'den', 'dem', 'des', 'ein', 'eine', 'einem', 'einen', 'einer',
-    'kann', 'hat', 'habe', 'haben', 'wird', 'sind', 'sein', 'seine',
-    'fortschritt', 'abgaben', 'berichte', 'noten', 'ergebnis',
-]);
-
-/**
- * Extract a potential trainee name from a trainer's message.
- * Matches patterns like "von Max", "fuer Max Mustermann", "Wie steht Max?"
- */
-function extractPotentialTraineeName(message: string): string | null {
-    // Pattern 1: "von [Name]" / "fuer [Name]" / "zu [Name]" / "ueber [Name]"
-    const prepMatch = message.match(/\b(?:von|fuer|für|zu|ueber|über)\s+([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)?)/);
-    if (prepMatch) {
-        const candidate = prepMatch[1].trim();
-        if (!NOT_NAMES.has(candidate.toLowerCase())) return candidate;
-    }
-
-    // Pattern 2: Capitalized words that aren't at sentence start and aren't keywords
-    const words = message.split(/\s+/);
-    for (let i = 1; i < words.length; i++) {
-        const w = words[i].replace(/[?!.,;:]$/, '');
-        if (/^[A-ZÄÖÜ][a-zäöüß]{2,}$/.test(w) && !NOT_NAMES.has(w.toLowerCase())) {
-            // Check if next word is also capitalized (full name)
-            const next = words[i + 1]?.replace(/[?!.,;:]$/, '');
-            if (next && /^[A-ZÄÖÜ][a-zäöüß]{2,}$/.test(next) && !NOT_NAMES.has(next.toLowerCase())) {
-                return `${w} ${next}`;
-            }
-            return w;
-        }
-    }
-
-    return null;
-}
-
-/**
- * Classify the data intent from a user message.
- * Uses German keyword matching to detect when the user asks about live data.
- *
- * @param message - The user's chat message
- * @param userRole - The user's role (TRAINER or TRAINEE)
- * @returns The detected DataIntent
- */
-export function classifyDataIntent(message: string, userRole: UserRole): DataIntent {
-    const lower = message.toLowerCase();
-
-    // The day at a glance, for both roles. Only this recognition reads the message
-    // with folded umlauts (a spoken "für" must meet "fuer"); the older lists keep
-    // their behavior, so a learning question with the word "Prüfung" stays a
-    // learning one.
-    if (isDayBriefingMessage(message)) return 'day_briefing';
-
-    // Trainer-only intents first (more specific)
-    if (userRole === 'TRAINER') {
-        if (KW_REVIEW.some(k => lower.includes(k))) return 'review_query';
-
-        // Trainee detail query: trainer mentions a specific trainee name
-        const nameCandidate = extractPotentialTraineeName(message);
-        if (nameCandidate) return 'trainee_detail_query';
-
-        // "azubi" without a specific name → overview
-        if (KW_OVERVIEW.some(k => lower.includes(k)) || lower.includes('azubi') || lower.includes('trainee')) {
-            return 'trainee_overview';
-        }
-    }
-
-    // Shared intents (both roles)
-    if (KW_PROGRESS.some(k => lower.includes(k))) return 'progress_query';
-    if (KW_CALENDAR.some(k => lower.includes(k))) return 'calendar_query';
-    if (KW_EXAM_RESULTS.some(k => lower.includes(k))) return 'exam_results_query';
-    if (KW_EXAM.some(k => lower.includes(k))) return 'exam_query';
-    if (KW_SUBMISSION.some(k => lower.includes(k))) return 'submission_query';
-    if (KW_USE_CASE.some(k => lower.includes(k))) return 'use_case_query';
-    if (KW_REPORT.some(k => lower.includes(k))) return 'report_query';
-    if (KW_NOTIFICATION.some(k => lower.includes(k))) return 'notification_query';
-
-    // Tips on learning and memorizing (package B): the trainee's own quiz
-    // scores and upcoming exams, nothing else. Only when no other intent matched.
-    if (userRole === 'TRAINEE' && isLearningTechniqueQuestion(message)) return 'learning_query';
-
-    return 'none';
+    occupations: TrainerTraineeOccupation[];
+    /** Open items waiting for the trainer to review (submissions, reports). */
+    pendingSubmissions: number;
 }
 
 // ============================================================================
 // ALWAYS-ON: USER SNAPSHOT
 // ============================================================================
+
+/** How long the overall progress of the snapshot is kept (a quiz passed shows up within this time). */
+export const OVERALL_PROGRESS_TTL_MS = 30_000;
+const OVERALL_PROGRESS_CACHE_MAX = 500;
+const overallProgressCache = new Map<string, { at: number; pct: number }>();
+
+export function clearOverallProgressCache(): void {
+    overallProgressCache.clear();
+}
+
+/**
+ * The overall progress of one person over the occupations of the scope: the
+ * figure of the trainer pages (loadTraineeProgress), kept for a short time. A
+ * failed calculation is thrown and never kept.
+ */
+async function loadOverallProgressPercent(
+    userId: string,
+    scope: CatalogScope
+): Promise<number> {
+    const key = `${userId}|${scope.allowedCatalogIds.join(',')}|${scope.selected ? scope.activeCatalogId : ''}`;
+    const now = Date.now();
+    const hit = overallProgressCache.get(key);
+    if (hit && now - hit.at < OVERALL_PROGRESS_TTL_MS) return hit.pct;
+    const loaded = await loadTraineeProgress([userId], scope);
+    const pct = loaded.byTrainee.get(userId)?.pct ?? 0;
+    if (overallProgressCache.size >= OVERALL_PROGRESS_CACHE_MAX) {
+        overallProgressCache.delete(overallProgressCache.keys().next().value as string);
+    }
+    overallProgressCache.set(key, { at: now, pct });
+    return pct;
+}
 
 /**
  * Fetch a compact snapshot of the user (~100-150 tokens).
@@ -350,27 +299,18 @@ export async function fetchUserSnapshot(userId: string): Promise<UserSnapshot | 
             phaseOneMonths: phasePlan?.phaseMonths[0],
         });
 
-        const snapshotCatalogIds = sql.join(
-            (catalogScope?.allowedCatalogIds ?? []).map(id => sql`${id}::uuid`),
-            sql`, `
-        );
-
-        // Get overall progress (completed enablers / total active enablers across enrolled courses)
-        const progressResult = catalogScope ? await db.execute(sql`
-            SELECT
-                COUNT(DISTINCT ec.enabler_id) AS completed,
-                COUNT(DISTINCT e.id) AS total
-            FROM course_members cm
-            JOIN enablers e ON e.course_id = cm.course_id AND e.is_active = true
-                AND e.training_catalog_id IN (${snapshotCatalogIds})
-            LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = ${userId}
-            WHERE cm.user_id = ${userId}
-        `) : [];
-
-        const row = (progressResult as any[])[0] || { completed: 0, total: 0 };
-        const completed = Number(row.completed) || 0;
-        const total = Number(row.total) || 0;
-        const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+        // Overall progress: the one figure of the platform (an enabler counts when
+        // its required quizzes are passed), over the occupations of the person.
+        // Not the rows of enabler_completions (the quiz based completion does not
+        // write them, so this was 0 % for everybody). Started now, read after the
+        // two small queries below, so it adds no waiting of its own. The figure is
+        // kept for a short time (the snapshot is read with every message, the
+        // calculation reads the quiz attempts of the person).
+        const overallProgress = catalogScope
+            ? loadOverallProgressPercent(String(userId), catalogScope)
+            : Promise.resolve(null);
+        // a failed lookup is no 0 %: the snapshot goes on without the figure
+        overallProgress.catch(() => undefined);
 
         // Get unread notification count
         const unreadResult = await db
@@ -395,6 +335,13 @@ export async function fetchUserSnapshot(userId: string): Promise<UserSnapshot | 
             .limit(1);
 
         const currentBlock = currentWeekBlocks.length > 0 ? currentWeekBlocks[0].blockType : null;
+
+        let progressPercent = 0;
+        try {
+            progressPercent = (await overallProgress) ?? 0;
+        } catch (error) {
+            console.error('HAI.ai DataContext: Error fetching overall progress:', error);
+        }
 
         return {
             fullName: displayName,
@@ -425,90 +372,56 @@ export async function fetchTraineeProgress(userId: string): Promise<CourseProgre
         const catalogScope = await getCatalogScopeForUserId(userId);
         if (!catalogScope) return [];
 
-        // Get all courses the trainee is enrolled in
-        const enrolledCourses = await db
-            .select({
-                courseId: courseMembers.courseId,
-                courseTitle: courses.title,
-            })
-            .from(courseMembers)
-            .innerJoin(courses, eq(courses.id, courseMembers.courseId))
-            .where(and(
-                eq(courseMembers.userId, userId),
-                eq(courses.isActive, true),
-                inArray(courses.trainingCatalogId, catalogScope.allowedCatalogIds),
-            ));
-
-        if (enrolledCourses.length === 0) return [];
-
-        const results: CourseProgress[] = [];
-
-        for (const course of enrolledCourses) {
-            // Get all active enablers in this course
-            const courseEnablers = await db
-                .select({
-                    id: enablers.id,
-                    title: enablers.title,
-                    orderIndex: enablers.orderIndex,
-                })
-                .from(enablers)
-                .where(and(
-                    eq(enablers.courseId, course.courseId),
-                    eq(enablers.isActive, true),
-                ))
-                .orderBy(enablers.orderIndex);
-
-            if (courseEnablers.length === 0) continue;
-
-            const enablerIds = courseEnablers.map(e => e.id);
-
-            // Count completed enablers
-            const completedResult = await db
-                .select({ cnt: count() })
-                .from(enablerCompletions)
-                .where(and(
-                    eq(enablerCompletions.traineeId, userId),
-                    inArray(enablerCompletions.enablerId, enablerIds),
-                ));
-            const completedCount = Number(completedResult[0]?.cnt) || 0;
-
-            // Get latest quiz score for this course
-            const latestQuiz = await db.execute(sql`
-                SELECT qs.score
+        // The courses and the figures of the platform (course list and dashboard
+        // of the trainee): completed enablers by the quiz definition, the
+        // percentage of the course card, the next enabler the trainee may work on
+        // (not completed, not locked). Not the rows of enabler_completions: the
+        // quiz based completion does not write them (0 % and always the first
+        // enabler as "next").
+        // The latest quiz score per course is read at the same time (it needs the
+        // courses of the person, not the figures): a superset of the courses of
+        // the figures, only those are looked up below.
+        const catalogList = sql.join(
+            catalogScope.allowedCatalogIds.map(id => sql`${id}::uuid`),
+            sql`, `
+        );
+        const [figures, latestRows] = (await Promise.all([
+            loadTraineeCourseFigures(userId, catalogScope.allowedCatalogIds),
+            db.execute(sql`
+                SELECT DISTINCT ON (e.course_id) e.course_id AS course_id, qs.score AS score
                 FROM quiz_submissions qs
                 JOIN enabler_quiz_links eql ON eql.quiz_id = qs.quiz_id
-                JOIN enablers e ON e.id = eql.enabler_id AND e.course_id = ${course.courseId}
+                JOIN enablers e ON e.id = eql.enabler_id
                 WHERE qs.trainee_id = ${userId}
-                ORDER BY qs.submitted_at DESC
-                LIMIT 1
-            `);
+                  AND e.training_catalog_id IN (${catalogList})
+                  AND e.course_id IN (SELECT cm.course_id FROM course_members cm WHERE cm.user_id = ${userId})
+                ORDER BY e.course_id, qs.submitted_at DESC
+            `),
+        ])) as unknown as [
+            Awaited<ReturnType<typeof loadTraineeCourseFigures>>,
+            Array<{ course_id: string; score: number | string | null }>,
+        ];
+        if (figures.length === 0) return [];
 
-            const latestScore = (latestQuiz as any[]).length > 0
-                ? ((latestQuiz as any[])[0].score === null
-                    ? null
-                    : Number((latestQuiz as any[])[0].score))
-                : null;
-
-            // Find next incomplete enabler
-            const completedIds = await db
-                .select({ enablerId: enablerCompletions.enablerId })
-                .from(enablerCompletions)
-                .where(and(
-                    eq(enablerCompletions.traineeId, userId),
-                    inArray(enablerCompletions.enablerId, enablerIds),
-                ));
-            const completedSet = new Set(completedIds.map(c => c.enablerId));
-            const nextEnabler = courseEnablers.find(e => !completedSet.has(e.id));
-
-            results.push({
-                courseTitle: course.courseTitle,
-                totalEnablers: courseEnablers.length,
-                completedEnablers: completedCount,
-                progressPercent: Math.round((completedCount / courseEnablers.length) * 100),
-                latestQuizScore: latestScore,
-                nextEnablerTitle: nextEnabler?.title || null,
-            });
+        const latestScoreOf = new Map<string, number | null>();
+        for (const row of latestRows) {
+            latestScoreOf.set(
+                String(row.course_id),
+                row.score === null || row.score === undefined ? null : Number(row.score)
+            );
         }
+
+        const results: CourseProgress[] = figures.map(figure => {
+            const next = figure.enablers.find(e => !e.completed && !e.locked);
+            return {
+                courseTitle: figure.title,
+                totalEnablers: figure.enablerTotal,
+                completedEnablers: figure.enablerDone,
+                progressPercent: figure.percent,
+                latestQuizScore: latestScoreOf.get(figure.courseId) ?? null,
+                nextEnablerTitle: next?.title || null,
+            };
+        });
 
         return results;
     } catch (error) {
@@ -962,17 +875,48 @@ export async function fetchTrainerPendingReviews(trainerId: string): Promise<Tra
 }
 
 /**
- * Fetch overview of all trainees assigned to a trainer.
+ * Year of training (1 to the duration) from a start date, null when the start
+ * is unknown, invalid or still in the future.
+ */
+export function trainingYearFrom(
+    start: Date | string | null | undefined,
+    now: Date,
+    durationYears: number | null | undefined
+): number | null {
+    if (!start) return null;
+    const startDate = start instanceof Date ? start : new Date(start);
+    if (Number.isNaN(startDate.getTime()) || startDate.getTime() > now.getTime()) {
+        return null;
+    }
+    const months =
+        (now.getFullYear() - startDate.getFullYear()) * 12 +
+        (now.getMonth() - startDate.getMonth());
+    const maxYears = durationYears && durationYears > 0 ? durationYears : 3;
+    return Math.min(Math.max(Math.floor(months / 12) + 1, 1), maxYears);
+}
+
+/** Block types that say where the trainee is today (no private appointments). */
+const OVERVIEW_BLOCK_TYPES = ['SCHOOL', 'COMPANY', 'HOLIDAY', 'EXAM'] as const;
+
+/**
+ * Fetch the overview of the active trainees assigned to a trainer
+ * (profiles.assigned_trainer_id): name, occupation per enrollment, year of
+ * training, block of today, progress in percent and the number of open items
+ * waiting for the review. Metadata only: no e-mail address, no date of birth,
+ * no grades. One query per fact for all trainees together (no query per
+ * trainee).
  */
 export async function fetchTrainerTraineeOverview(trainerId: string): Promise<TrainerTraineeInfo[]> {
     try {
-        // Get all trainees assigned to this trainer
+        // Get all active trainees assigned to this trainer
         const trainees = await db
             .select({
                 id: profiles.id,
                 fullName: profiles.fullName,
                 firstName: profiles.firstName,
                 lastName: profiles.lastName,
+                startOfTrainingDate: profiles.startOfTrainingDate,
+                durationYears: profiles.ausbildungDurationYears,
             })
             .from(profiles)
             .where(and(
@@ -984,35 +928,106 @@ export async function fetchTrainerTraineeOverview(trainerId: string): Promise<Tr
 
         if (trainees.length === 0) return [];
 
-        const results: TrainerTraineeInfo[] = [];
+        const idList = sql.join(trainees.map(t => sql`${t.id}`), sql`, `);
+        const now = new Date();
+        // a raw query cannot bind a Date (postgres.js needs a column type): an ISO
+        // string cast to the type of the columns (timestamp, written as UTC)
+        const nowIso = now.toISOString();
 
-        for (const trainee of trainees) {
-            // Calculate overall progress for each trainee
-            const progressResult = await db.execute(sql`
-                SELECT
-                    COUNT(DISTINCT ec.enabler_id) AS completed,
-                    COUNT(DISTINCT e.id) AS total
-                FROM course_members cm
-                JOIN enablers e ON e.course_id = cm.course_id AND e.is_active = true
-                LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = ${trainee.id}
-                WHERE cm.user_id = ${trainee.id}
-            `);
+        // Everything else in one query per fact, for all trainees at once
+        // The progress is the ONE figure of the platform (an enabler counts when
+        // its required quizzes are passed). The rows of enabler_completions are
+        // not it: the quiz based completion does not write them, so counting them
+        // showed 0 % for every trainee (found on the real Preview).
+        const [progressLoaded, enrollmentRows, catalogRows, blockRows, pendingRows] =
+            (await Promise.all([
+                loadTraineeProgress(trainees.map(t => String(t.id)), null),
+                db.execute(sql`
+                    SELECT te.trainee_id, te.training_catalog_id, te.start_date, te.duration_years
+                    FROM trainee_enrollments te
+                    WHERE te.trainee_id IN (${idList})
+                `),
+                db.execute(sql`SELECT id, code, title FROM training_catalogs`),
+                db.execute(sql`
+                    SELECT DISTINCT ON (b.trainee_id, b.training_catalog_id)
+                           b.trainee_id, b.training_catalog_id, b.block_type, b.ausbildungsjahr
+                    FROM ausbildung_blocks b
+                    WHERE b.trainee_id IN (${idList})
+                      AND b.block_type IN (${sql.join(OVERVIEW_BLOCK_TYPES.map(t => sql`${t}`), sql`, `)})
+                      AND b.start_date <= ${nowIso}::timestamp
+                      AND b.end_date >= ${nowIso}::timestamp
+                    ORDER BY b.trainee_id, b.training_catalog_id, b.start_date DESC
+                `),
+                db.execute(sql`
+                    SELECT p.id AS trainee_id,
+                           (
+                             (SELECT COUNT(*) FROM enabler_submissions es WHERE es.trainee_id = p.id AND es.status = 'PENDING')
+                             + (SELECT COUNT(*) FROM use_case_submissions ucs WHERE ucs.trainee_id = p.id AND ucs.status = 'PENDING')
+                             + (SELECT COUNT(*) FROM quiz_submissions qs WHERE qs.trainee_id = p.id AND qs.is_reviewed = false)
+                             + (SELECT COUNT(*) FROM activity_reports ar WHERE ar.trainee_id = p.id AND ar.status = 'SUBMITTED')
+                           ) AS pending
+                    FROM profiles p
+                    WHERE p.id IN (${idList})
+                `),
+            ])) as [Awaited<ReturnType<typeof loadTraineeProgress>>, any[], any[], any[], any[]];
 
-            const row = (progressResult as any[])[0] || { completed: 0, total: 0 };
-            const completed = Number(row.completed) || 0;
-            const total = Number(row.total) || 0;
-            const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-            results.push({
-                fullName: trainee.fullName || `${trainee.firstName || ''} ${trainee.lastName || ''}`.trim() || 'Unbekannt',
-                progressPercent,
+        const pendingById = new Map<string, number>();
+        for (const r of pendingRows ?? []) {
+            pendingById.set(String(r.trainee_id), Number(r.pending) || 0);
+        }
+        const catalogById = new Map<string, { code: string | null; title: string }>();
+        for (const r of catalogRows ?? []) {
+            catalogById.set(String(r.id), { code: r.code ?? null, title: r.title ?? 'Beruf unbekannt' });
+        }
+        const enrollmentsById = new Map<string, any[]>();
+        for (const r of enrollmentRows ?? []) {
+            const list = enrollmentsById.get(String(r.trainee_id)) ?? [];
+            list.push(r);
+            enrollmentsById.set(String(r.trainee_id), list);
+        }
+        const blockByKey = new Map<string, { blockType: string | null; year: number | null }>();
+        for (const r of blockRows ?? []) {
+            blockByKey.set(`${r.trainee_id}:${r.training_catalog_id}`, {
+                blockType: r.block_type ?? null,
+                year: r.ausbildungsjahr != null ? Number(r.ausbildungsjahr) : null,
             });
         }
 
-        return results;
+        return trainees.map(trainee => {
+            const id = String(trainee.id);
+            const progressPercent = progressLoaded.byTrainee.get(id)?.pct ?? 0;
+
+            // No enrollment at all: the standard occupation (FIAE), like the catalog scope
+            const enrollments = enrollmentsById.get(id) ?? [
+                { training_catalog_id: TRAINING_CATALOG_IDS.FIAE, start_date: null, duration_years: trainee.durationYears },
+            ];
+            const occupations: TrainerTraineeOccupation[] = enrollments.map(en => {
+                const catalogId = String(en.training_catalog_id);
+                const catalog = catalogById.get(catalogId);
+                const block = blockByKey.get(`${id}:${catalogId}`);
+                const duration = Number(en.duration_years) || trainee.durationYears || 3;
+                return {
+                    title: catalog?.title ?? 'Beruf unbekannt',
+                    code: catalog?.code ?? null,
+                    trainingYear:
+                        block?.year ??
+                        trainingYearFrom(en.start_date ?? trainee.startOfTrainingDate, now, duration),
+                    currentBlockType: block?.blockType ?? null,
+                };
+            });
+
+            return {
+                fullName: trainee.fullName || `${trainee.firstName || ''} ${trainee.lastName || ''}`.trim() || 'Unbekannt',
+                progressPercent,
+                occupations,
+                pendingSubmissions: pendingById.get(id) ?? 0,
+            };
+        });
     } catch (error) {
+        // Not an empty list: "no trainees" would be a false statement. The
+        // caller treats a failed fetch as non-fatal (snapshot only).
         console.error('HAI.ai DataContext: Error fetching trainee overview:', error);
-        return [];
+        throw error;
     }
 }
 
@@ -1069,9 +1084,10 @@ async function findTraineeByName(
  */
 async function fetchTraineeDetailForTrainer(
     trainerId: string,
-    nameQuery: string
+    nameQuery: string,
+    found?: { id: string; fullName: string } | null
 ): Promise<string> {
-    const trainee = await findTraineeByName(trainerId, nameQuery);
+    const trainee = found ?? (await findTraineeByName(trainerId, nameQuery));
     if (!trainee) {
         // ZUSTAENDIGKEIT: only the own trainees count, a person of another
         // trainer answers like a person that does not exist (denial.ts)
@@ -1081,44 +1097,48 @@ async function fetchTraineeDetailForTrainer(
     const parts: string[] = [`**Azubi-Detail: ${trainee.fullName}**`];
 
     try {
-        // 1. Overall progress
-        const progressResult = await db.execute(sql`
-            SELECT
-                c.title as course_title,
-                COUNT(DISTINCT e.id) AS total,
-                COUNT(DISTINCT ec.enabler_id) AS completed
-            FROM course_members cm
-            JOIN courses c ON c.id = cm.course_id
-            JOIN enablers e ON e.course_id = cm.course_id AND e.is_active = true
-            LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = ${trainee.id}
-            WHERE cm.user_id = ${trainee.id}
-            GROUP BY c.id, c.title
-        `);
+        // 1. Overall progress per course: the figure of the platform (required
+        // quizzes passed), not the rows of enabler_completions (always empty for
+        // the quiz based completion)
+        const loadedProgress = await loadTraineeProgress([String(trainee.id)], null);
+        const ownProgress = loadedProgress.byTrainee.get(String(trainee.id));
+        const courseProgress = [...(ownProgress?.courses ?? new Map())]
+            .map(([courseId, figure]) => ({
+                course: loadedProgress.courses.get(courseId),
+                completed: figure.completed,
+                total: figure.total,
+            }))
+            .filter(row => row.course && row.total > 0)
+            .sort(
+                (a, b) =>
+                    (a.course!.chapter ?? 0) - (b.course!.chapter ?? 0) ||
+                    a.course!.title.localeCompare(b.course!.title, 'de')
+            );
 
-        if ((progressResult as any[]).length > 0) {
+        if (courseProgress.length > 0) {
             parts.push('**Kursfortschritt:**');
-            for (const row of progressResult as any[]) {
-                const pct = Number(row.total) > 0 ? Math.round((Number(row.completed) / Number(row.total)) * 100) : 0;
-                parts.push(`- ${row.course_title}: ${row.completed}/${row.total} Enabler (${pct}%)`);
+            for (const row of courseProgress) {
+                const pct = Math.round((row.completed / row.total) * 100);
+                parts.push(`- ${row.course!.title}: ${row.completed}/${row.total} Enabler (${pct}%)`);
             }
         }
 
         // 2. Recent submissions (last 10)
         const submissions = await db.execute(sql`
             (
-                SELECT 'enabler' as type, e.title, es.status, es.created_at as submitted_at, es.trainer_feedback
+                SELECT 'enabler' as type, e.title, es.status, es.submitted_at, es.trainer_feedback
                 FROM enabler_submissions es
                 JOIN enablers e ON e.id = es.enabler_id
                 WHERE es.trainee_id = ${trainee.id}
-                ORDER BY es.created_at DESC LIMIT 5
+                ORDER BY es.submitted_at DESC LIMIT 5
             )
             UNION ALL
             (
-                SELECT 'use_case' as type, uc.title, ucs.status, ucs.created_at as submitted_at, ucs.trainer_feedback
+                SELECT 'use_case' as type, uc.title, ucs.status, ucs.submitted_at, ucs.trainer_feedback
                 FROM use_case_submissions ucs
                 JOIN use_cases uc ON uc.id = ucs.use_case_id
                 WHERE ucs.trainee_id = ${trainee.id}
-                ORDER BY ucs.created_at DESC LIMIT 5
+                ORDER BY ucs.submitted_at DESC LIMIT 5
             )
             ORDER BY submitted_at DESC LIMIT 10
         `);
@@ -1140,7 +1160,7 @@ async function fetchTraineeDetailForTrainer(
         const exams = await db.execute(sql`
             SELECT se.subject, ser.grade, ser.percentage, ser.passed, se.exam_date
             FROM school_exam_results ser
-            JOIN school_exams se ON se.id = ser.school_exam_id
+            JOIN school_exams se ON se.id = ser.exam_id
             WHERE ser.trainee_id = ${trainee.id}
             ORDER BY se.exam_date DESC LIMIT 5
         `);
@@ -1486,21 +1506,81 @@ function formatTrainerReviews(reviews: TrainerPendingReviews): string {
     return lines.join('\n');
 }
 
-function formatTraineeOverview(trainees: TrainerTraineeInfo[]): string {
+/** From this number on the list is written compactly (short codes, one line each). */
+export const TRAINEE_OVERVIEW_COMPACT_FROM = 31;
+/** More trainees than this are counted but not listed one by one. */
+export const TRAINEE_OVERVIEW_MAX_LINES = 100;
+
+export function formatTraineeOverview(trainees: TrainerTraineeInfo[]): string {
     if (trainees.length === 0) {
-        return '**Azubi-Uebersicht:** Keine Azubis zugewiesen.';
+        return '**Azubi-Übersicht:** Dir sind keine aktiven Azubis zugeordnet.';
     }
 
+    const compact = trainees.length >= TRAINEE_OVERVIEW_COMPACT_FROM;
     const lines: string[] = [
-        `**Azubi-Uebersicht (${trainees.length} Azubis):**`,
+        `**Azubi-Übersicht (${trainees.length} aktive Azubis, die dir zugeordnet sind):**`,
+        'Nur Metadaten: keine Noten, keine Kontaktdaten. Details zu einer Person nur auf Nachfrage mit Namen.',
     ];
 
-    for (const t of trainees) {
-        const bar = t.progressPercent >= 75 ? '+++' : t.progressPercent >= 50 ? '++' : t.progressPercent >= 25 ? '+' : '-';
-        lines.push(`- ${t.fullName}: ${t.progressPercent}% ${bar}`);
+    const listed = trainees.slice(0, TRAINEE_OVERVIEW_MAX_LINES);
+    for (const t of listed) {
+        const occupations = t.occupations.length > 0 ? t.occupations : [];
+        if (compact) {
+            const occ = occupations
+                .map(o => {
+                    const bits = [
+                        o.code || o.title,
+                        o.trainingYear ? `J${o.trainingYear}` : null,
+                        o.currentBlockType ? formatBlockType(o.currentBlockType) : null,
+                    ].filter(Boolean);
+                    return bits.join(' ');
+                })
+                .join(' / ');
+            lines.push(
+                `- ${t.fullName} (${[occ, `${t.progressPercent} %`, `${t.pendingSubmissions} offen`]
+                    .filter(Boolean)
+                    .join(', ')})`
+            );
+            continue;
+        }
+        const occText = occupations
+            .map(o => {
+                const bits = [
+                    o.trainingYear ? `Ausbildungsjahr ${o.trainingYear}` : null,
+                    o.currentBlockType ? `aktuell ${formatBlockType(o.currentBlockType)}` : null,
+                ].filter(Boolean);
+                return bits.length > 0 ? `${o.title} (${bits.join(', ')})` : o.title;
+            })
+            .join(' und ');
+        const open =
+            t.pendingSubmissions === 0
+                ? 'keine offenen Abgaben zur Prüfung'
+                : `${t.pendingSubmissions} offene Abgabe${t.pendingSubmissions === 1 ? '' : 'n'} zur Prüfung`;
+        lines.push(
+            `- ${t.fullName} | Beruf: ${occText || 'unbekannt'} | Fortschritt ${t.progressPercent} % | ${open}`
+        );
+    }
+
+    if (trainees.length > listed.length) {
+        lines.push(
+            `... und ${trainees.length - listed.length} weitere Azubis (Liste gekürzt). Frage nach einem Namen für Details.`
+        );
     }
 
     return lines.join('\n');
+}
+
+/**
+ * The live data of an intent could not be loaded (a failed query). A line for
+ * the prompt that names it as a technical failure, never as a missing right,
+ * and keeps the model from naming a number or a name from memory.
+ */
+export function dataUnavailableLine(intent: DataIntent): string {
+    const what =
+        intent === 'trainee_overview'
+            ? '**Azubi-Übersicht:** Die Liste konnte gerade nicht geladen werden.'
+            : '**Hinweis:** Die Daten zu dieser Frage konnten gerade nicht geladen werden.';
+    return `${what} Das ist eine technische Störung und keine fehlende Berechtigung. Nenne dazu keine Zahlen, Namen oder Werte und sage kurz, dass die Daten gerade nicht geladen werden konnten. Bitte darum, die Frage gleich noch einmal zu stellen.`;
 }
 
 // ============================================================================
@@ -1537,11 +1617,12 @@ export async function fetchDataContext(
         }
 
         // Step 2: Classify data intent
-        const dataIntent = classifyDataIntent(message, userRole);
+        const dataIntent = resolveDataIntent(message, userRole, options.previousMessages);
 
         // Step 3: Build summary parts
         const parts: string[] = [formatSnapshot(snapshot)];
         let intentTokenEstimate = 0;
+        let documentIds: string[] | undefined;
 
         // Step 4: Fetch intent-specific data
         if (dataIntent !== 'none') {
@@ -1650,6 +1731,18 @@ export async function fetchDataContext(
                         }
                         break;
                     }
+                    case 'document_query': {
+                        // From the database, limited to the files the person may see
+                        const answer = await answerDocumentQuestion({
+                            message,
+                            access: options.documentAccess,
+                            page: options.page,
+                        });
+                        parts.push(answer.text);
+                        if (answer.documentIds.length > 0) documentIds = answer.documentIds;
+                        intentTokenEstimate = 150 + Math.min(answer.total, 20) * 40;
+                        break;
+                    }
                     case 'review_query': {
                         if (userRole === 'TRAINER') {
                             const reviews = await fetchTrainerPendingReviews(userId);
@@ -1662,7 +1755,7 @@ export async function fetchDataContext(
                         if (userRole === 'TRAINER') {
                             const overview = await fetchTrainerTraineeOverview(userId);
                             parts.push(formatTraineeOverview(overview));
-                            intentTokenEstimate = 200 + overview.length * 20;
+                            intentTokenEstimate = 200 + Math.min(overview.length, TRAINEE_OVERVIEW_MAX_LINES) * (overview.length >= TRAINEE_OVERVIEW_COMPACT_FROM ? 25 : 45);
                         }
                         break;
                     }
@@ -1670,9 +1763,29 @@ export async function fetchDataContext(
                         if (userRole === 'TRAINER') {
                             const nameCandidate = extractPotentialTraineeName(message);
                             if (nameCandidate) {
-                                const detail = await fetchTraineeDetailForTrainer(userId, nameCandidate);
-                                parts.push(detail);
-                                intentTokenEstimate = 400;
+                                const trainee = await findTraineeByName(userId, nameCandidate);
+                                if (trainee) {
+                                    const detail = await fetchTraineeDetailForTrainer(userId, nameCandidate, trainee);
+                                    parts.push(detail);
+                                    intentTokenEstimate = 400;
+                                } else if (
+                                    isTraineeListQuestion(message) &&
+                                    !nameCandidate.includes(' ')
+                                ) {
+                                    // No such person among the own trainees, but the
+                                    // message asks for the group ("Welche Azubis ...")
+                                    // and holds one word only: that word was no name,
+                                    // answer with the overview. A first and last name
+                                    // that is not found stays a neutral "not found".
+                                    const overview = await fetchTrainerTraineeOverview(userId);
+                                    parts.push(formatTraineeOverview(overview));
+                                    intentTokenEstimate = 200 + overview.length * 30;
+                                } else {
+                                    // ZUSTAENDIGKEIT: neutral answer, a person of another
+                                    // trainer answers like a person that does not exist
+                                    parts.push(traineeSearchNotFoundLine(nameCandidate));
+                                    intentTokenEstimate = 100;
+                                }
                             }
                         }
                         break;
@@ -1681,6 +1794,10 @@ export async function fetchDataContext(
             } catch (intentError) {
                 // Non-fatal: intent-specific fetch failed, still return snapshot
                 console.warn(`HAI.ai DataContext: Intent fetch failed for ${dataIntent}:`, intentError);
+                // Say it plainly instead of leaving the snapshot alone: without
+                // this the model only sees a few numbers and answers "no names
+                // available", which reads like a missing right
+                parts.push(dataUnavailableLine(dataIntent));
             }
         }
 
@@ -1694,6 +1811,7 @@ export async function fetchDataContext(
             summary,
             tokenEstimate,
             dataIntent,
+            ...(documentIds ? { documentIds } : {}),
         };
     } catch (error) {
         console.error('HAI.ai DataContext: Fatal error:', error);

@@ -14,6 +14,9 @@
  *     enablerId?: string;      // Current enabler context
  *     courseId?: string;       // Current course context
  *     scenarioText?: string;   // Ignored: never copied into the prompt
+ *     page?: {                 // The page of the user (docs/hai-ui-kontext.md):
+ *       path, kind, title, ids, visibleLabels  // data only, validated strictly
+ *     };
  *   };
  *   stream?: boolean;          // Enable streaming response
  * }
@@ -50,6 +53,16 @@ import { canManageHaiIndex } from '@/lib/hai/indexAccess';
 import { isVoiceAssistantEnabled } from '@/lib/hai/voiceAccess';
 import { DENIAL_CODES } from '@/lib/hai/denial';
 import { badRequestUnlessUuid } from '@/lib/uuid';
+import {
+  TRAINER_KNOWLEDGE_PATCH,
+  mergeSessionMetadata,
+  mayReadTrainerKnowledgeHistory,
+  mayUseTrainerKnowledgeInPrompt,
+  sessionVisibilityCondition,
+} from '@/lib/hai/chatHistoryAccess';
+import { hasTrainerKnowledge } from '@/lib/hai/trainerSolutions';
+import { resolvePageContext } from '@/lib/hai/pageContext/server';
+import { uiActionMeta } from '@/lib/hai/uiActions/event';
 
 // ============================================================================
 // TYPES
@@ -63,6 +76,8 @@ interface ChatRequestBody {
     enablerId?: string;
     courseId?: string;
     scenarioText?: string;
+    /** Untrusted: validated by resolvePageContext, dropped when it does not pass. */
+    page?: unknown;
   };
   stream?: boolean;
   /**
@@ -71,6 +86,12 @@ interface ChatRequestBody {
    * route decides, the text of the message never does.
    */
   voice?: boolean;
+  /**
+   * The client wants the waiting stages of a streamed turn as events
+   * (`{ stage: 'search' | 'answer' | 'busy' }`, data only). Off by default: a client
+   * that does not know them must not get an event before the first chunk.
+   */
+  stageEvents?: boolean;
 }
 
 // ============================================================================
@@ -145,14 +166,26 @@ async function getOrCreateSession(
  */
 async function getPreviousMessages(
   sessionId: string,
-  limit: number = 10
-): Promise<{ messages: ChatMessage[]; summary?: string }> {
+  limit: number = 10,
+  // false (the default) = a session that holds trainer knowledge (answers built
+  // with model solutions) gives no messages and no summary: it is no context
+  allowTrainerKnowledge: boolean = false
+): Promise<{
+  messages: ChatMessage[];
+  summary?: string;
+  /** The history handed back comes from a session with trainer knowledge. */
+  holdsTrainerKnowledge?: boolean;
+}> {
   // Check if session has a stored summary
   const session = await db
     .select({ metadata: haiChatSessions.metadata })
     .from(haiChatSessions)
     .where(eq(haiChatSessions.id, sessionId))
     .limit(1);
+
+  if (!allowTrainerKnowledge && hasTrainerKnowledge(session[0]?.metadata)) {
+    return { messages: [] };
+  }
 
   const storedSummary =
     session.length > 0 &&
@@ -180,6 +213,9 @@ async function getPreviousMessages(
       parts: [{ text: m.content }],
     })),
     summary: storedSummary,
+    ...(hasTrainerKnowledge(session[0]?.metadata)
+      ? { holdsTrainerKnowledge: true }
+      : {}),
   };
 }
 
@@ -286,8 +322,10 @@ function extractKeyFacts(userMessages: string[]): string[] {
  */
 async function loadUserMemory(
   userId: string,
-  currentSessionId: string
-): Promise<string | undefined> {
+  currentSessionId: string,
+  // false = sessions that hold trainer knowledge are not part of the memory
+  allowTrainerKnowledge: boolean = false
+): Promise<{ memory?: string; holdsTrainerKnowledge?: boolean }> {
   try {
     // Get recent sessions with their metadata (last 15 sessions, excluding current)
     const recentSessions = await db
@@ -302,36 +340,47 @@ async function loadUserMemory(
         and(
           eq(haiChatSessions.userId, userId),
           eq(haiChatSessions.isActive, true),
-          sql`${haiChatSessions.id} != ${currentSessionId}`
+          sql`${haiChatSessions.id} != ${currentSessionId}`,
+          sessionVisibilityCondition(allowTrainerKnowledge)
         )
       )
       .orderBy(desc(haiChatSessions.lastMessageAt))
       .limit(15);
 
-    if (recentSessions.length === 0) return undefined;
+    if (recentSessions.length === 0) return {};
 
     const memoryParts: string[] = [];
+    // a summary of a session with trainer knowledge is part of the memory
+    let holdsTrainerKnowledge = false;
 
     for (const session of recentSessions) {
       if (!session.metadata || typeof session.metadata !== 'object') continue;
+      // the SQL condition above does this already, the check is the second guard
+      if (!allowTrainerKnowledge && hasTrainerKnowledge(session.metadata)) {
+        continue;
+      }
 
       const meta = session.metadata as Record<string, unknown>;
       const summary = meta.conversationSummary as string | undefined;
 
       if (!summary) continue;
+      if (hasTrainerKnowledge(session.metadata)) holdsTrainerKnowledge = true;
 
       const sessionTitle = session.title || 'Untitled';
       const date = new Date(session.createdAt).toLocaleDateString('de-DE');
       memoryParts.push(`[${date} — "${sessionTitle}"]: ${summary}`);
     }
 
-    if (memoryParts.length === 0) return undefined;
+    if (memoryParts.length === 0) return {};
 
     // Cap total memory to avoid bloating the prompt
-    return memoryParts.join('\n').slice(0, 1500);
+    return {
+      memory: memoryParts.join('\n').slice(0, 1500),
+      ...(holdsTrainerKnowledge ? { holdsTrainerKnowledge: true } : {}),
+    };
   } catch (error) {
     console.warn('Failed to load user memory:', error);
-    return undefined;
+    return {};
   }
 }
 
@@ -346,33 +395,41 @@ async function saveSessionSummary(
   keyFacts?: string[]
 ): Promise<void> {
   try {
-    // Get existing metadata
-    const session = await db
-      .select({ metadata: haiChatSessions.metadata })
-      .from(haiChatSessions)
-      .where(eq(haiChatSessions.id, sessionId))
-      .limit(1);
-
-    const existingMetadata =
-      session.length > 0 && session[0].metadata
-        ? (session[0].metadata as Record<string, unknown>)
-        : {};
-
+    // One atomic merge of the keys of the summary: the rest of the metadata
+    // (the marker of trainer knowledge among it) is never read and written back
     await db
       .update(haiChatSessions)
       .set({
-        metadata: {
-          ...existingMetadata,
+        metadata: mergeSessionMetadata({
           conversationSummary: summary,
           summaryUpdatedAt: new Date().toISOString(),
           ...(keyFacts && keyFacts.length > 0 ? { keyFacts } : {}),
-        },
+        }),
         updatedAt: new Date(),
       })
       .where(eq(haiChatSessions.id, sessionId));
   } catch (error) {
     console.warn('Failed to save session summary:', error);
   }
+}
+
+/**
+ * Mark a session as one that holds trainer knowledge (an answer was built with
+ * text of a model solution of the private bucket). Such a session is hidden
+ * from every role that is not trainer level, and is no context for the model
+ * unless the switch HAI_TRAINER_SOLUTIONS is on (see chatHistoryAccess.ts).
+ * Awaited by the caller: a failure must not pass silently, the marker is the
+ * protection of the history.
+ */
+async function markSessionTrainerKnowledge(sessionId: string): Promise<void> {
+  // atomic merge, a concurrent summary write can not drop the marker
+  await db
+    .update(haiChatSessions)
+    .set({
+      metadata: mergeSessionMetadata(TRAINER_KNOWLEDGE_PATCH),
+      updatedAt: new Date(),
+    })
+    .where(eq(haiChatSessions.id, sessionId));
 }
 
 /**
@@ -551,16 +608,41 @@ async function getContextTitles(
   return { enablerTitle, courseTitle, inScope: true };
 }
 
+/**
+ * Time after which a streamed turn without a first word counts as "the model
+ * server is busy". An idle Sokrates answers in about 1.5 s, the search in about
+ * 1 s: 12 s is clearly more (docs/hai-geschwindigkeit.md).
+ */
+const STAGE_BUSY_AFTER_MS = 12_000;
+
+/**
+ * One log line with the time of the stages of a turn (milliseconds, numbers
+ * only, no content). The runtime log is the only place to see how long the
+ * stages of a real turn took, so every turn writes it.
+ */
+function logTurnTiming(
+  timings: Record<string, number>,
+  fields: Record<string, number | string | null>
+): void {
+  const parts = Object.entries({ ...fields, ...timings })
+    .filter(([, value]) => value !== null && value !== undefined)
+    .map(([key, value]) => `${key}=${value}`);
+  console.log(`HAI.ai chat timing: ${parts.join(' ')}`);
+}
+
 // ============================================================================
 // ROUTE HANDLERS
 // ============================================================================
 
 export async function POST(req: NextRequest) {
+  // timing of the stages for the voice assistant (numbers only, Server-Timing)
+  const startedAt = Date.now();
   try {
     // The person is the session, a userId in the query is ignored
     const me = await requireUser(req);
     if (isErrorResponse(me)) return me;
     const userId = me.id;
+    const authMs = Date.now() - startedAt;
 
     if (!(await requireProPlan(userId))) {
       return NextResponse.json(
@@ -870,9 +952,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Get previous messages for context (with stored summary if available)
-    const { messages: previousMessages, summary: storedSummary } =
-      await getPreviousMessages(sessionId);
+    // Trainer knowledge (answers built with model solutions of the private
+    // bucket) is context only for a trainer level role with the switch on. The
+    // role is the one of the database, never one from the request.
+    const allowTrainerKnowledge = mayUseTrainerKnowledgeInPrompt(user[0].role);
 
     // NOTE: Conversation summary is NO LONGER fetched here.
     // It was making an OpenRouter API call on every message (even "Hi"),
@@ -880,33 +963,63 @@ export async function POST(req: NextRequest) {
     // complex questions with >10 messages — those are handled inside
     // the pipeline only when the intent requires an actual LLM call.
 
-    // Load cross-session memory (key facts + summaries from other chats)
-    const crossSessionMemory = await loadUserMemory(userId, sessionId);
+    const userRole = toHaiRole(user[0].role);
+    // The four reads do not depend on each other, so they run together (each
+    // was a round trip to the database one after the other):
+    //  - previous messages for context (with stored summary if available)
+    //  - cross-session memory (key facts + summaries from other chats)
+    //  - the occupation chosen in the app: it limits the titles below like it
+    //    limits the search (a code outside the occupations is ignored)
+    //  - phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
+    const prepStartedAt = Date.now();
+    const [history, memoryResult, catalogChoice, phasePlan] = await Promise.all(
+      [
+        getPreviousMessages(sessionId, 10, allowTrainerKnowledge),
+        loadUserMemory(userId, sessionId, allowTrainerKnowledge),
+        resolveCatalogChoice(userId, requestedCatalogCode(req)),
+        userRole === 'TRAINEE' && user[0].startOfTrainingDate
+          ? loadPhasePlanForUser(userId, user[0].ausbildungDurationYears)
+          : Promise.resolve(null),
+      ]
+    );
+    const {
+      messages: previousMessages,
+      summary: storedSummary,
+      holdsTrainerKnowledge,
+    } = history;
+    const { memory: crossSessionMemory, holdsTrainerKnowledge: memoryHolds } =
+      memoryResult;
 
     // Get context titles (only for an enabler or course of the user's occupation)
     // The occupation chosen in the app limits the titles too: an enabler of
     // another occupation of the user is dropped like one of a foreign occupation
     // (same rule as the search, a code outside the occupations is ignored)
-    const catalogChoice = await resolveCatalogChoice(
-      userId,
-      requestedCatalogCode(req)
-    );
     const { enablerTitle, courseTitle, inScope } = await getContextTitles(
       context?.enablerId,
       context?.courseId,
       catalogChoice?.catalogIds
     );
 
+    // The page of the user (page context): shape, kind, labels and ids are
+    // checked here, ids against the same catalogs as enablerId and courseId.
+    // A page that does not pass is dropped without an error. Nothing of it is a
+    // right, it only resolves "this page" and "this file" (docs/hai-ui-kontext.md).
+    const page = await resolvePageContext(context?.page, {
+      userId,
+      role: user[0].role,
+      catalogIds: catalogChoice?.catalogIds,
+    });
+
     // Build pipeline context (Phase 1: pass userRole for live data context)
-    const userRole = toHaiRole(user[0].role);
-    // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
-    const phasePlan =
-      userRole === 'TRAINEE' && user[0].startOfTrainingDate
-        ? await loadPhasePlanForUser(userId, user[0].ausbildungDurationYears)
-        : null;
+    // The stages are always measured (numbers only, for the log line), the
+    // voice assistant gets them in the end event as well
+    const timings: Record<string, number> = {
+      context: Date.now() - prepStartedAt,
+    };
     const pipelineContext: PipelineContext = {
       userId,
       sessionId,
+      timings,
       // the occupation chosen in the app comes first in the persona
       preferredCatalogCode: requestedCatalogCode(req),
       currentEnablerId: inScope ? context?.enablerId : undefined,
@@ -914,6 +1027,7 @@ export async function POST(req: NextRequest) {
       // an open enabler or course outside the occupations of the person was
       // dropped: only a hint of the reason (UMFANG) for the model
       contextDropped: !inScope && !!(context?.enablerId || context?.courseId),
+      ...(page ? { page } : {}),
       enablerTitle,
       courseTitle,
       // scenarioText of the request is not used: it would reach the system
@@ -924,6 +1038,11 @@ export async function POST(req: NextRequest) {
       userRole,
       conversationSummary: storedSummary,
       crossSessionMemory,
+      // history from a session with trainer knowledge (allowed above): with
+      // HAI_TRAINER_SOLUTIONS_CHAT=sokrates the turn goes to Sokrates only
+      ...(holdsTrainerKnowledge || memoryHolds
+        ? { holdsTrainerKnowledge: true }
+        : {}),
       voice: wantsVoice,
       // the admin level comes from the session, only for the navigation pages
       isAdmin: me.isAdmin,
@@ -935,26 +1054,69 @@ export async function POST(req: NextRequest) {
       }),
     };
 
-    // Save user message (skip if we are editing an existing message)
-    if (!validEditMessageId) {
-      await saveMessage(sessionId, 'user', message.trim());
-    }
+    // Save user message (skip if we are editing an existing message). The write
+    // runs while the pipeline works: the history was read above, and the answer
+    // is stored only after this write is done (the order of the two messages
+    // stays), a failure is raised there.
+    const userMessageSaved: Promise<Error | null> = validEditMessageId
+      ? Promise.resolve(null)
+      : saveMessage(sessionId, 'user', message.trim()).then(
+          () => null,
+          (error: unknown) =>
+            error instanceof Error ? error : new Error(String(error))
+        );
+    const ensureUserMessageSaved = async () => {
+      const failure = await userMessageSaved;
+      if (failure) throw failure;
+    };
 
     // Handle streaming response
     if (stream) {
       const encoder = new TextEncoder();
+      // what happened before the stream starts (the header can only say this much)
+      const prepMs = Date.now() - startedAt - authMs;
+      let firstChunkMs: number | null = null;
+      // the client gets the waiting stages only if it asked for them (an early
+      // event ends the "thinking" text of clients that do not know them)
+      const wantsStages = body.stageEvents === true;
       const readableStream = new ReadableStream({
         async start(controller) {
+          // no first word after STAGE_BUSY_AFTER_MS: the model server is busy.
+          // Said once, so the client can tell the person the truth ("Der Server
+          // ist gerade ausgelastet") instead of showing dots for a minute.
+          const busyTimer = wantsStages
+            ? setTimeout(() => {
+                if (firstChunkMs !== null) return;
+                try {
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({ stage: 'busy' })}\n\n`
+                    )
+                  );
+                } catch {
+                  // the stream is already closed
+                }
+              }, STAGE_BUSY_AFTER_MS)
+            : null;
           try {
             const result = await processMessageStream(
               message.trim(),
               pipelineContext,
               chunk => {
+                if (firstChunkMs === null)
+                  firstChunkMs = Date.now() - startedAt;
                 controller.enqueue(
                   encoder.encode(`data: ${JSON.stringify({ chunk })}\n\n`)
                 );
-              }
+              },
+              wantsStages
+                ? stage =>
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({ stage })}\n\n`)
+                    )
+                : undefined
             );
+            await ensureUserMessageSaved();
 
             // No chat provider could answer (the primary failed and there is no
             // Sokrates fallback): send the key of the message for the user and
@@ -963,7 +1125,17 @@ export async function POST(req: NextRequest) {
             if (result.errorKey) {
               controller.enqueue(
                 encoder.encode(
-                  `data: ${JSON.stringify({ error: result.errorKey })}\n\n`
+                  `data: ${JSON.stringify({
+                    error: result.errorKey,
+                    // MODEL_BUSY: the model is slow or overloaded, a retry may
+                    // work (code and seconds only, nothing internal)
+                    ...(result.errorCode
+                      ? {
+                          code: result.errorCode,
+                          retryAfterSec: result.retryAfterSec,
+                        }
+                      : {}),
+                  })}\n\n`
                 )
               );
               controller.enqueue(
@@ -980,13 +1152,32 @@ export async function POST(req: NextRequest) {
               return;
             }
 
-            // Save assistant response — UPDATE existing or INSERT new
+            // Save assistant response — UPDATE existing or INSERT new. An
+            // answer built with trainer solutions is marked, and so is the
+            // session (before anything else is sent to the client).
+            const answerMeta = {
+              intent: result.intent,
+              ...(result.usedTrainerSolutions
+                ? { trainerKnowledge: true }
+                : {}),
+              // the id only (no text): so a conversation asks at most once
+              ...(result.memoryProposal
+                ? { memoryProposalId: result.memoryProposal.id }
+                : {}),
+              // identifiers of a UI action (tool, form, field ids), never a value
+              ...(result.uiAction
+                ? { uiAction: uiActionMeta(result.uiAction) }
+                : {}),
+            };
+            if (result.usedTrainerSolutions) {
+              await markSessionTrainerKnowledge(sessionId);
+            }
             if (validEditMessageId && existingAssistantId) {
               await updateAssistantMessage(
                 existingAssistantId,
                 result.response,
                 result.citations,
-                { intent: result.intent }
+                answerMeta
               );
             } else {
               await saveMessage(
@@ -994,7 +1185,7 @@ export async function POST(req: NextRequest) {
                 'assistant',
                 result.response,
                 result.citations,
-                { intent: result.intent }
+                answerMeta
               );
             }
 
@@ -1016,7 +1207,7 @@ export async function POST(req: NextRequest) {
             // Periodically generate and save conversation summary (every 10 messages)
             const msgCount = await getMessageCount(sessionId);
             if (msgCount > 0 && msgCount % 10 === 0) {
-              const allMsgs = await getPreviousMessages(sessionId, 20);
+              const allMsgs = await getPreviousMessages(sessionId, 20, true);
               const allUserTexts = allMsgs.messages
                 .filter(m => m.role === 'user')
                 .map(m => m.parts[0]?.text || '')
@@ -1030,7 +1221,7 @@ export async function POST(req: NextRequest) {
             } else if (msgCount <= 4) {
               // Early fact extraction for new sessions — save key facts
               // immediately so cross-session memory works from the start
-              const earlyMsgs = await getPreviousMessages(sessionId, 10);
+              const earlyMsgs = await getPreviousMessages(sessionId, 10, true);
               const earlyTexts = earlyMsgs.messages
                 .filter(m => m.role === 'user')
                 .map(m => m.parts[0]?.text || '')
@@ -1044,6 +1235,15 @@ export async function POST(req: NextRequest) {
               }
             }
 
+            logTurnTiming(timings, {
+              mode: 'stream',
+              intent: result.intent,
+              auth: authMs,
+              prep: prepMs,
+              first: firstChunkMs,
+              total: Date.now() - startedAt,
+            });
+
             // Send final event with metadata
             controller.enqueue(
               encoder.encode(
@@ -1054,7 +1254,27 @@ export async function POST(req: NextRequest) {
                   intent: result.intent,
                   pendingAction: result.pendingAction,
                   navigationOffer: result.navigationOffer,
+                  navigationChoices: result.navigationChoices,
+                  navigationOutcome: result.navigationOutcome,
+                  // a checked form action for the browser (switch HAI_UI_ACTIONS)
+                  uiAction: result.uiAction,
                   quizMode: result.quizMode,
+                  // the question of the memory (card with yes, no, change)
+                  memoryProposal: result.memoryProposal,
+                  // the stages of the voice assistant, in milliseconds (no content)
+                  ...(wantsVoice
+                    ? {
+                        timing: {
+                          auth: authMs,
+                          prep: prepMs,
+                          ...timings,
+                          ...(firstChunkMs !== null
+                            ? { first: firstChunkMs }
+                            : {}),
+                          total: Date.now() - startedAt,
+                        },
+                      }
+                    : {}),
                 })}\n\n`
               )
             );
@@ -1071,6 +1291,8 @@ export async function POST(req: NextRequest) {
               encoder.encode(`data: ${JSON.stringify({ error: errorMsg })}\n\n`)
             );
             controller.close();
+          } finally {
+            if (busyTimer) clearTimeout(busyTimer);
           }
         },
       });
@@ -1080,16 +1302,42 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           Connection: 'keep-alive',
+          // voice only: the time before the stream starts (the later stages
+          // search and first token come with the done event, a header is sent first)
+          ...(wantsVoice
+            ? { 'Server-Timing': `auth;dur=${authMs}, prep;dur=${prepMs}` }
+            : {}),
         },
       });
     }
 
     // Non-streaming response
     const result = await processMessage(message.trim(), pipelineContext);
+    await ensureUserMessageSaved();
 
     // No chat provider could answer: a clear error, nothing stored as an answer
     if (result.errorKey) {
       const lang = req.headers.get('x-language') || 'de';
+      // The model is slow or overloaded (timeout, 429, 502, 503, 504, 524):
+      // say that, with the code the client tests and when to try again
+      if (result.errorCode) {
+        return NextResponse.json(
+          {
+            error:
+              lang === 'en'
+                ? 'HAI is very busy right now and answers more slowly than usual. Please try again in a minute.'
+                : 'Die HAI ist gerade stark ausgelastet und antwortet langsamer als sonst. Bitte versuche es in einer Minute noch einmal.',
+            errorKey: result.errorKey,
+            code: result.errorCode,
+            retryAfterSec: result.retryAfterSec,
+            sessionId,
+          },
+          {
+            status: 503,
+            headers: { 'Retry-After': String(result.retryAfterSec ?? 30) },
+          }
+        );
+      }
       return NextResponse.json(
         {
           error:
@@ -1103,13 +1351,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Save assistant response — UPDATE existing or INSERT new
+    // Save assistant response — UPDATE existing or INSERT new. An answer built
+    // with trainer solutions is marked, and so is the session.
+    const answerMeta = {
+      intent: result.intent,
+      ...(result.usedTrainerSolutions ? { trainerKnowledge: true } : {}),
+      // the id only (no text): so a conversation asks at most once
+      ...(result.memoryProposal
+        ? { memoryProposalId: result.memoryProposal.id }
+        : {}),
+      // identifiers of a UI action (tool, form, field ids), never a value
+      ...(result.uiAction ? { uiAction: uiActionMeta(result.uiAction) } : {}),
+    };
+    if (result.usedTrainerSolutions) {
+      await markSessionTrainerKnowledge(sessionId);
+    }
     if (validEditMessageId && existingAssistantId) {
       await updateAssistantMessage(
         existingAssistantId,
         result.response,
         result.citations,
-        { intent: result.intent }
+        answerMeta
       );
     } else {
       await saveMessage(
@@ -1117,7 +1379,7 @@ export async function POST(req: NextRequest) {
         'assistant',
         result.response,
         result.citations,
-        { intent: result.intent }
+        answerMeta
       );
     }
 
@@ -1138,7 +1400,7 @@ export async function POST(req: NextRequest) {
     // Periodically generate and save conversation summary (every 10 messages)
     const msgCountNonStream = await getMessageCount(sessionId);
     if (msgCountNonStream > 0 && msgCountNonStream % 10 === 0) {
-      const allMsgsNonStream = await getPreviousMessages(sessionId, 20);
+      const allMsgsNonStream = await getPreviousMessages(sessionId, 20, true);
       const allUserTextsNS = allMsgsNonStream.messages
         .filter(m => m.role === 'user')
         .map(m => m.parts[0]?.text || '')
@@ -1151,7 +1413,7 @@ export async function POST(req: NextRequest) {
       saveSessionSummary(sessionId, summaryNonStream, factsNS).catch(() => {});
     } else if (msgCountNonStream <= 4) {
       // Early fact extraction for new sessions
-      const earlyMsgsNS = await getPreviousMessages(sessionId, 10);
+      const earlyMsgsNS = await getPreviousMessages(sessionId, 10, true);
       const earlyTextsNS = earlyMsgsNS.messages
         .filter(m => m.role === 'user')
         .map(m => m.parts[0]?.text || '')
@@ -1165,6 +1427,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    logTurnTiming(timings, {
+      mode: 'blocking',
+      intent: result.intent,
+      total: Date.now() - startedAt,
+    });
+
     return NextResponse.json({
       success: true,
       sessionId,
@@ -1174,7 +1442,11 @@ export async function POST(req: NextRequest) {
       quizState: result.quizState,
       pendingAction: result.pendingAction,
       navigationOffer: result.navigationOffer,
+      navigationChoices: result.navigationChoices,
+      navigationOutcome: result.navigationOutcome,
+      uiAction: result.uiAction,
       quizMode: result.quizMode,
+      memoryProposal: result.memoryProposal,
     });
   } catch (error) {
     console.error('HAI.ai chat error:', error);
@@ -1321,7 +1593,13 @@ export async function GET(req: NextRequest) {
         createdAt: haiChatSessions.createdAt,
       })
       .from(haiChatSessions)
-      .where(eq(haiChatSessions.userId, userId))
+      .where(
+        and(
+          eq(haiChatSessions.userId, userId),
+          // chats with trainer knowledge belong to trainer level roles only
+          sessionVisibilityCondition(mayReadTrainerKnowledgeHistory(me.role))
+        )
+      )
       .orderBy(desc(haiChatSessions.lastMessageAt))
       .limit(20);
 

@@ -13,6 +13,12 @@ import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { isoWeekOf } from '@/lib/school/day';
+import { refreshTraineeDashboard } from '@/lib/school/dashboard-cache';
+import {
+  requireSchoolCatalogFilter,
+  resolveSchoolWriteCatalog,
+} from '@/lib/school/catalog-access';
 
 // Helper to calculate the module phase for a block date.
 function calculateAusbildungsjahr(
@@ -61,8 +67,16 @@ export async function GET(req: NextRequest) {
     const year = searchParams.get('year');
     const ausbildungsjahr = searchParams.get('ausbildungsjahr');
 
+    // The calendar of the occupation the trainee works in (a trainee in two
+    // trainings never sees the entries of the other one)
+    const schoolCatalog = await requireSchoolCatalogFilter(session, req);
+    if (isErrorResponse(schoolCatalog)) return schoolCatalog;
+
     // Build query conditions
     const conditions = [eq(ausbildungBlocks.traineeId, session.id as any)];
+    if (schoolCatalog.blockCondition) {
+      conditions.push(schoolCatalog.blockCondition);
+    }
 
     if (schuljahr) {
       conditions.push(eq(ausbildungBlocks.schuljahr, schuljahr));
@@ -130,12 +144,6 @@ export async function POST(req: NextRequest) {
     } = body;
 
     // Validation
-    if (!calendarWeek || calendarWeek < 1 || calendarWeek > 53) {
-      return NextResponse.json(
-        { error: 'Valid calendarWeek (1-53) required' },
-        { status: 400 }
-      );
-    }
     if (!year)
       return NextResponse.json({ error: 'year required' }, { status: 400 });
     if (!startDate)
@@ -143,6 +151,26 @@ export async function POST(req: NextRequest) {
         { error: 'startDate required' },
         { status: 400 }
       );
+    // The week is derived from the start date when the client sends none (a
+    // week of 0 is what older clients computed for the first days of January)
+    // and refused only when it cannot exist
+    if (
+      calendarWeek &&
+      (!Number.isInteger(calendarWeek) || calendarWeek < 1 || calendarWeek > 53)
+    ) {
+      return NextResponse.json(
+        { error: 'Valid calendarWeek (1-53) required' },
+        { status: 400 }
+      );
+    }
+    const startInstant = new Date(startDate);
+    if (Number.isNaN(startInstant.getTime())) {
+      return NextResponse.json(
+        { error: 'Valid startDate required' },
+        { status: 400 }
+      );
+    }
+    const week: number = calendarWeek || isoWeekOf(startInstant);
     if (!endDate)
       return NextResponse.json({ error: 'endDate required' }, { status: 400 });
 
@@ -172,6 +200,10 @@ export async function POST(req: NextRequest) {
     }
 
     const organizationId = await getUserOrgId(traineeId);
+
+    // The entry belongs to the occupation the trainee works in (the tab)
+    const catalogId = await resolveSchoolWriteCatalog(session, req, traineeId);
+    if (isErrorResponse(catalogId)) return catalogId;
 
     // Get trainee profile to calculate the phase from the block date.
     let calculatedAusbildungsjahr = ausbildungsjahr;
@@ -210,9 +242,10 @@ export async function POST(req: NextRequest) {
       .values({
         traineeId: traineeId as any,
         organizationId,
+        trainingCatalogId: catalogId,
         schuljahr: calculatedSchuljahr,
         ausbildungsjahr: calculatedAusbildungsjahr,
-        calendarWeek,
+        calendarWeek: week,
         year,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
@@ -230,6 +263,8 @@ export async function POST(req: NextRequest) {
 
     // TODO: Send email invitations if inviteeEmails is provided
     // This will be handled by the email service module
+
+    refreshTraineeDashboard();
 
     return NextResponse.json({ id: row.id, block: row }, { status: 201 });
   } catch (e) {

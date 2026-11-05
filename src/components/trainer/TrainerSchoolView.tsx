@@ -4,6 +4,8 @@ import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCatalog } from '@/contexts/CatalogContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
     Calendar,
@@ -49,9 +51,14 @@ const TABS: TabConfig[] = [
 export function TrainerSchoolView() {
     const { profile } = useAuth();
     const { t } = useLanguage();
+    // "verwalten" only for somebody who can change the curriculum, the others
+    // see the learning fields and their use cases (view only)
+    const canEditCurriculum = useIsSuperAdmin();
     const searchParams = useSearchParams();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<TabId>('lernfelder');
+    // The numbers follow the occupation tab (an exam belongs to one occupation)
+    const { activeCode: catalog } = useCatalog();
     const [stats, setStats] = useState({ pendingReports: 0, upcomingExams: 0, trainees: 0 });
 
     useEffect(() => {
@@ -77,7 +84,7 @@ export function TrainerSchoolView() {
             }
         }
         loadStats();
-    }, [profile?.id]);
+    }, [profile?.id, catalog]);
 
     const handleTabChange = (tabId: TabId) => {
         setActiveTab(tabId);
@@ -178,7 +185,9 @@ export function TrainerSchoolView() {
                     })}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2 px-1">
-                    {t(TABS.find(tab => tab.id === activeTab)?.descriptionKey || '')}
+                    {activeTab === 'lernfelder' && !canEditCurriculum
+                        ? t('trainer.school.tabs.lernfelderDescReadOnly')
+                        : t(TABS.find(tab => tab.id === activeTab)?.descriptionKey || '')}
                 </p>
             </div>
 

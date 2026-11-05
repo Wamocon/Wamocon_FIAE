@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { Check, Clock, X as XIcon, ChevronRight } from 'lucide-react';
 import { PageLoader } from '@/components/ui/PageLoader';
+import { capitalizeFirst } from '@/lib/display-text';
 import {
   EnablerStateBadge,
   type EnablerLockReasonValue,
@@ -38,6 +39,7 @@ export default function TraineeModuleDetailPage() {
     }>;
     useCases: Array<{
       id: string;
+      code?: string | null;
       title: string;
       attemptNumber?: number | null;
       status?: string | null;
@@ -94,15 +96,27 @@ export default function TraineeModuleDetailPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <div className="border-accent/30 bg-card/50 rounded-3xl border-5 p-6">
-        <h1 className="text-foreground text-2xl font-bold">{course.title}</h1>
-        <div className="text-muted-foreground mt-1 text-sm">
-          {course.year
-            ? t('courses.year').replace('{year}', String(course.year))
-            : '—'}{' '}
-          {course.chapter
-            ? `• ${t('courses.chapter').replace('{chapter}', String(course.chapter))}`
-            : ''}
-        </div>
+        <h1 className="text-foreground text-2xl font-bold">
+          {capitalizeFirst(course.title)}
+        </h1>
+        {/* Phase and ID only when there is one (no dash for a missing phase) */}
+        {(course.year || course.chapter) && (
+          <div className="text-muted-foreground mt-1 text-sm">
+            {[
+              course.year
+                ? t('courses.year').replace('{year}', String(course.year))
+                : null,
+              course.chapter
+                ? t('courses.chapter').replace(
+                    '{chapter}',
+                    String(course.chapter)
+                  )
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' • ')}
+          </div>
+        )}
       </div>
 
       <div className="space-y-5">
@@ -138,7 +152,7 @@ export default function TraineeModuleDetailPage() {
                       <StatusIndicator status={e.status} />
                       <div className="flex min-w-0 flex-col gap-1">
                         <span className="group-hover:text-accent transition-colors duration-200">
-                          {e.title}
+                          {capitalizeFirst(e.title)}
                         </span>
                         <EnablerStateBadge
                           state={e.state ?? 'open'}
@@ -191,7 +205,13 @@ export default function TraineeModuleDetailPage() {
                     <div className="flex min-w-0 flex-1 items-start gap-3">
                       <StatusIndicator status={u.status} />
                       <span className="group-hover:text-accent transition-colors duration-200">
-                        {u.title}
+                        {/* The code tells a use case from the Themenkreis of the same name */}
+                        {u.code && (
+                          <span className="text-accent mr-2 text-xs font-semibold">
+                            {t('useCase.label').replace('{code}', u.code)}
+                          </span>
+                        )}
+                        {capitalizeFirst(u.title)}
                       </span>
                       {u.attemptNumber && !u.status ? (
                         <span className="border-accent/30 ml-2 shrink-0 rounded-full border px-2 py-0.5 text-xs">

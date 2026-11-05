@@ -196,10 +196,24 @@ bashTest('an invalid catalog code stops the step before node starts', () => {
   }
 });
 
-test('the release workflow is not touched by the input: it never passes --catalog', () => {
+test('the release workflow limits the content sync to the occupation KFBM (decision D18)', () => {
   const release = readFileSync(
     '.github/workflows/release-production.yml',
     'utf8'
+  )
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter(line => !/^\s*#/.test(line))
+    .join('\n');
+  // exactly one call of the sync, and it carries --catalog KFBM as a fixed value
+  assert.equal(release.match(/content-sync\.mjs/g).length, 1);
+  assert.equal(release.match(/--catalog/g).length, 1);
+  assert.match(
+    release,
+    /content-sync\.mjs --linked --apply --direction preview-to-production --update never --catalog KFBM$/m
   );
-  assert.ok(!release.includes('--catalog'));
+  // the code is fixed in the file, never taken from an input or a variable
+  assert.doesNotMatch(release, /--catalog\s+["']?\$/);
+  // the release is started by a release event, so it has no input at all
+  assert.doesNotMatch(release, /inputs\./);
 });

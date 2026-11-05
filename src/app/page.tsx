@@ -33,6 +33,16 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
+import {
+  UNIVERSE_PLANETS,
+  describeUniversePlanet,
+  isExplorable,
+} from '@/lib/landing/universePlanets';
+import {
+  KFBM_UNIVERSE_FIELDS,
+  layoutUniverseFields,
+  type UniverseLearningFieldDef,
+} from '@/lib/landing/universeLearningFields';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 type PlanId = 'Light' | 'Pro' | 'Enterprise';
@@ -471,9 +481,35 @@ const LF_DATA = [
   },
 ];
 
+// A learning field on its orbit around the opened planet (FIAE or KfBM)
+type LfItem = UniverseLearningFieldDef & {
+  orbitR0: number;
+  r0: number;
+  speed: number;
+  angle: number;
+  _sx: number;
+  _sy: number;
+};
+
+function buildLfItems(defs: readonly UniverseLearningFieldDef[]): LfItem[] {
+  const layout = layoutUniverseFields(defs.length);
+  return defs.map((lf, i) => ({
+    ...lf,
+    orbitR0: 90 + layout[i].ring * 95, // rings at 90 / 185 / 280
+    r0: 13,
+    speed: 0.00025 - layout[i].ring * 0.00004,
+    angle: layout[i].angle,
+    _sx: 0,
+    _sy: 0,
+  }));
+}
+
 // ─── Interactive Solar System Canvas ─────────────────────────────────────────
 function SolarSystemCanvas() {
   const { t } = useLanguage();
+  // The canvas handlers are set up once, they must not keep an old language
+  const tRef = useRef(t);
+  tRef.current = t;
   const canRef = useRef<HTMLCanvasElement>(null);
   const [tip, setTip] = useState<{
     text: string;
@@ -518,19 +554,10 @@ function SolarSystemCanvas() {
       _sx: number;
       _sy: number;
     }[];
-    lfs: {
-      id: number;
-      short: string;
-      nameKey: string;
-      komps: number;
-      uc: number;
-      orbitR0: number;
-      r0: number;
-      speed: number;
-      angle: number;
-      _sx: number;
-      _sy: number;
-    }[];
+    // the learning fields of the opened planet, and the sets of both planets
+    lfs: LfItem[];
+    lfSets: Record<string, LfItem[]>;
+    focus: string;
     hovered: string | null;
     modeStr: 'solar' | 'lf';
   }>({
@@ -543,60 +570,13 @@ function SolarSystemCanvas() {
     stars: [],
     comets: [],
     nextComet: 0,
-    planets: [
-      {
-        abbr: 'FIAE',
-        orbitR0: 120,
-        r0: 26,
-        speed: 0.00035,
-        angle: Math.PI * 0.25,
-        active: true,
-        _sx: 0,
-        _sy: 0,
-      },
-      {
-        abbr: 'FISI',
-        orbitR0: 200,
-        r0: 22,
-        speed: 0.00022,
-        angle: Math.PI * 1.6,
-        active: false,
-        _sx: 0,
-        _sy: 0,
-      },
-      {
-        abbr: 'IT-Kfm',
-        orbitR0: 270,
-        r0: 20,
-        speed: 0.00016,
-        angle: Math.PI * 0.9,
-        active: false,
-        _sx: 0,
-        _sy: 0,
-      },
-      {
-        abbr: 'IT-Sys',
-        orbitR0: 340,
-        r0: 20,
-        speed: 0.00011,
-        angle: Math.PI * 2.4,
-        active: false,
-        _sx: 0,
-        _sy: 0,
-      },
-    ],
-    lfs: LF_DATA.map((lf, i) => {
-      const ring = Math.floor(i / 4);
-      return {
-        ...lf,
-        orbitR0: 90 + ring * 95, // rings at 90 / 185 / 280
-        r0: 13,
-        speed: 0.00025 - ring * 0.00004,
-        angle: ((Math.PI * 2) / 4) * (i % 4) + ring * 0.5 + 0.3,
-        _sx: 0,
-        _sy: 0,
-      };
-    }),
+    planets: UNIVERSE_PLANETS.map(p => ({ ...p, _sx: 0, _sy: 0 })),
+    lfs: [],
+    lfSets: {
+      FIAE: buildLfItems(LF_DATA),
+      KfBM: buildLfItems(KFBM_UNIVERSE_FIELDS),
+    },
+    focus: 'FIAE',
     hovered: null,
     modeStr: 'solar',
   });
@@ -864,14 +844,14 @@ function SolarSystemCanvas() {
             : 'rgba(255,255,255,.78)';
           ctx.fillText(p.abbr, px, py);
           ctx.shadowBlur = 0;
-          if (p.active && isHov) {
+          if (isExplorable(p) && isHov) {
             ctx.font = `${Math.max(7, Math.round(9 * st.sc))}px Inter,sans-serif`;
             ctx.fillStyle = 'rgba(255,255,255,.88)';
             ctx.fillText('Klicken →', px, py + pr + 14 * st.sc);
           }
         }
       } else {
-        // ── Lernfelder mode: FIAE as center ──
+        // ── Lernfelder mode: the opened planet (FIAE or KfBM) as center ──
         const fp = 0.5 + 0.5 * Math.sin(ts * 0.0018);
         const fiaR = (36 + fp * 4) * st.sc;
         let fg: CanvasGradient = ctx.createRadialGradient(
@@ -904,7 +884,7 @@ function SolarSystemCanvas() {
         ctx.shadowColor = 'rgba(0,0,0,.8)';
         ctx.shadowBlur = 6;
         ctx.fillStyle = '#fff';
-        ctx.fillText('FIAE', st.cx, st.cy);
+        ctx.fillText(st.focus, st.cx, st.cy);
         ctx.shadowBlur = 0;
 
         for (const lf of st.lfs) {
@@ -937,18 +917,23 @@ function SolarSystemCanvas() {
           // Sub-orbit ring circles (move WITH the LF planet)
           ctx.lineWidth = 0.5;
           ctx.setLineDash([1, 4]);
+          // (a field without use cases or components has no ring for them)
           ctx.strokeStyle = isLight
             ? 'rgba(56,189,248,.36)'
             : 'rgba(56,189,248,.20)'; // UC ring — sky blue
-          ctx.beginPath();
-          ctx.arc(px, py, ucR, 0, 6.2832);
-          ctx.stroke();
+          if (lf.uc > 0) {
+            ctx.beginPath();
+            ctx.arc(px, py, ucR, 0, 6.2832);
+            ctx.stroke();
+          }
           ctx.strokeStyle = isLight
             ? 'rgba(120,130,150,.28)'
             : 'rgba(226,232,240,.13)'; // Komp ring — slate
-          ctx.beginPath();
-          ctx.arc(px, py, kpR, 0, 6.2832);
-          ctx.stroke();
+          if (lf.komps > 0) {
+            ctx.beginPath();
+            ctx.arc(px, py, kpR, 0, 6.2832);
+            ctx.stroke();
+          }
           ctx.setLineDash([]);
 
           // hover glow
@@ -1044,18 +1029,11 @@ function SolarSystemCanvas() {
           const dx = mx - p._sx;
           const dy = my - p._sy;
           if (Math.sqrt(dx * dx + dy * dy) < p.r0 * st.sc + 12) {
+            const info = describeUniversePlanet(p);
             found = {
               abbr: p.abbr,
-              name: p.active
-                ? 'FIAE – Fachinformatiker Anwendungsentwicklung'
-                : p.abbr === 'FISI'
-                  ? 'FISI – Systemintegration'
-                  : p.abbr === 'IT-Kfm'
-                    ? 'IT-Kaufmann/-frau'
-                    : 'IT-Systemelektroniker/-in',
-              sub: p.active
-                ? '✦ Klicken zum Erkunden der 12 Lernfelder'
-                : 'Bald verfügbar',
+              name: tRef.current(info.nameKey),
+              sub: tRef.current(info.subKey),
               sx: p._sx,
               sy: p._sy,
             };
@@ -1069,8 +1047,13 @@ function SolarSystemCanvas() {
           if (Math.sqrt(dx * dx + dy * dy) < lf.r0 * st.sc + 8) {
             found = {
               abbr: lf.short,
-              name: `${lf.short} – ${t(lf.nameKey)}`,
-              sub: `${lf.komps} Komponenten · ${lf.uc} Use Cases`,
+              name: `${lf.short} – ${lf.nameKey ? tRef.current(lf.nameKey) : (lf.name ?? '')}`,
+              sub: lf.hours
+                ? tRef.current('landing.universe.lfHours', {
+                    hours: lf.hours,
+                    year: lf.year ?? '',
+                  })
+                : `${lf.komps} Komponenten · ${lf.uc} Use Cases`,
               sx: lf._sx,
               sy: lf._sy,
             };
@@ -1091,14 +1074,20 @@ function SolarSystemCanvas() {
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
       if (st.modeStr === 'solar') {
-        const fiae = st.planets[0];
-        const dx = mx - fiae._sx;
-        const dy = my - fiae._sy;
-        if (Math.sqrt(dx * dx + dy * dy) < fiae.r0 * st.sc + 14) {
-          st.modeStr = 'lf';
-          setMode('lf');
-          st.hovered = null;
-          setTip(null);
+        // Every explorable planet (FIAE, KfBM) opens its own learning fields
+        for (const p of st.planets) {
+          if (!isExplorable(p)) continue;
+          const dx = mx - p._sx;
+          const dy = my - p._sy;
+          if (Math.sqrt(dx * dx + dy * dy) < p.r0 * st.sc + 14) {
+            st.focus = p.abbr;
+            st.lfs = st.lfSets[p.abbr] ?? [];
+            st.modeStr = 'lf';
+            setMode('lf');
+            st.hovered = null;
+            setTip(null);
+            break;
+          }
         }
       }
     }
@@ -1142,8 +1131,11 @@ function SolarSystemCanvas() {
 
       {mode === 'solar' && (
         <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/25 bg-black/60 px-4 py-1.5 text-xs whitespace-nowrap text-white/85 backdrop-blur-sm">
-          Klicke auf <span className="font-medium text-white">FIAE</span> ·
-          Erkunde die 12 Lernfelder
+          {t('landing.universe.hint.pre')}{' '}
+          <span className="font-medium text-white">FIAE</span>{' '}
+          {t('landing.universe.or')}{' '}
+          <span className="font-medium text-white">KfBM</span>{' '}
+          {t('landing.universe.hint.post')}
         </div>
       )}
 
@@ -2062,6 +2054,8 @@ export default function LandingPage() {
               <p className="text-muted-foreground mx-auto mb-10 max-w-145 text-lg leading-relaxed">
                 {t('landing.universe.subtitlePre')}{' '}
                 <strong className="text-[#ff6060]">FIAE</strong>{' '}
+                {t('landing.universe.or')}{' '}
+                <strong className="text-[#ff6060]">KfBM</strong>{' '}
                 {t('landing.universe.subtitlePost')}
               </p>
             </Reveal>

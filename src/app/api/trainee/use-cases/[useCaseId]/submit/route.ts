@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { submissionNoticeText } from '@/lib/notifications/submissionNotice';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
@@ -7,6 +8,15 @@ import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks, no
 import { requireEnablerOpen } from '@/lib/catalog/progression-db';
 import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import {
+  EMPTY_SUBMISSION_CODE,
+  INVALID_LINK_CODE,
+  firstInvalidLinkIndex,
+  handInOfUseCaseHasContent,
+} from '@/lib/submission-input';
+import { isSubmissionFileEnabled } from '@/lib/submission-file/availability';
+import { openStorage } from '@/lib/submission-file/access';
+import { getFile } from '@/lib/submission-file/service';
 
 // POST submit or update a use-case submission
 // Body: { submissionText?: string, links?: Array<{ url: string, description?: string }> }
@@ -50,6 +60,42 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
         });
         if (locked) return locked;
       }
+    }
+
+    // A link must be an http or https address of sensible length (a row
+    // without an address is no link and is skipped below)
+    if (firstInvalidLinkIndex(links) !== -1) {
+      return NextResponse.json(
+        { error: 'Invalid link', code: INVALID_LINK_CODE },
+        { status: 400 }
+      );
+    }
+
+    // A hand-in needs a text, a link with an address or a file. Only white
+    // space counts as empty. The file lives in the storage, so it is asked only
+    // when neither text nor link is there (the page checks the same)
+    let hasFile = false;
+    const hasTextOrLink = handInOfUseCaseHasContent({ submissionText, links });
+    if (!hasTextOrLink && isSubmissionFileEnabled()) {
+      // A storage that does not answer is no file: the hand-in stays refused
+      try {
+        const storage = openStorage();
+        if (!(storage instanceof Response)) {
+          const found = await getFile(
+            { storage },
+            { organizationId: session.organizationId, traineeId, useCaseId }
+          );
+          hasFile = found.ok && !!found.value;
+        }
+      } catch (fileErr) {
+        console.warn('Could not look up the file of the hand-in', fileErr);
+      }
+    }
+    if (!hasTextOrLink && !hasFile) {
+      return NextResponse.json(
+        { error: 'Empty submission', code: EMPTY_SUBMISSION_CODE },
+        { status: 400 }
+      );
     }
 
     const result = await db.transaction(async (tx) => {
@@ -102,10 +148,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
           userId: uid,
           actorId: traineeId,
           type: 'USE_CASE_SUBMITTED',
-          title: 'Use Case eingereicht',
-          message: `Ein Trainee hat einen Use Case eingereicht: ${u.title}`,
+          ...submissionNoticeText('USE_CASE_SUBMITTED', {
+            traineeName: session.fullName,
+            subject: u.title,
+          }),
           linkUrl: '/trainer/reviews?view=usecases&onlyPending=true',
-          context: { useCaseId, submissionId: result },
+          context: {
+            useCaseId,
+            submissionId: result,
+            traineeName: session.fullName,
+            subjectTitle: u.title,
+          },
           organizationId,
         }));
         await db.insert(notifications).values(values);

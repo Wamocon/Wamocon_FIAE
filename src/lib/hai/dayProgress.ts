@@ -102,29 +102,39 @@ export async function loadDayProgress(
       options.preferredCatalogCode
     );
 
+    // The occupations do not depend on each other: they are read side by side
+    // (the order of the result is the order of the catalogs, as before)
+    const loaded = await Promise.all(
+      catalogs.map(async (catalog): Promise<OccupationProgress | 'failed' | null> => {
+        try {
+          const entries = await loadNextStepEntries(userId, [
+            String(catalog.id),
+          ]);
+          if (entries.length === 0) return null;
+          const completed = entries.filter(e => e.completed).length;
+          return {
+            catalogId: String(catalog.id),
+            code: String(catalog.code),
+            title: String(catalog.title),
+            totalEnablers: entries.length,
+            completedEnablers: completed,
+            progressPercent: Math.round((completed / entries.length) * 100),
+            nextStep: pickNextStep(entries, options.plan),
+          };
+        } catch (error) {
+          console.warn(
+            'HAI.ai DayProgress: occupation could not be loaded:',
+            error
+          );
+          return 'failed';
+        }
+      })
+    );
     const occupations: OccupationProgress[] = [];
     let failed = false;
-    for (const catalog of catalogs) {
-      try {
-        const entries = await loadNextStepEntries(userId, [String(catalog.id)]);
-        if (entries.length === 0) continue;
-        const completed = entries.filter(e => e.completed).length;
-        occupations.push({
-          catalogId: String(catalog.id),
-          code: String(catalog.code),
-          title: String(catalog.title),
-          totalEnablers: entries.length,
-          completedEnablers: completed,
-          progressPercent: Math.round((completed / entries.length) * 100),
-          nextStep: pickNextStep(entries, options.plan),
-        });
-      } catch (error) {
-        failed = true;
-        console.warn(
-          'HAI.ai DayProgress: occupation could not be loaded:',
-          error
-        );
-      }
+    for (const result of loaded) {
+      if (result === 'failed') failed = true;
+      else if (result) occupations.push(result);
     }
     return { occupations, failed };
   } catch (error) {

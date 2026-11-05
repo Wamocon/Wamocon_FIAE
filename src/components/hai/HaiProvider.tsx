@@ -20,18 +20,29 @@ import React, {
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { authFetch } from '@/lib/authFetch';
+import { markServerDone, markServerTiming } from '@/lib/hai/voice/client/trace';
 import {
   isOpenConfirmation,
   isOpenDecline,
 } from '@/lib/hai/navigation/confirm';
 import {
+  toNavigationChoices,
   toNavigationOffer,
   type NavigationOffer,
 } from '@/lib/hai/navigation/offer';
 import { isAllowedNavigationPath } from '@/lib/hai/navigation/targets';
 import { chatFailureKey } from '@/lib/hai/denial';
 import { toQuizStartScope } from '@/lib/hai/quizMode/session';
+import { decideMemory } from '@/lib/hai/memory/client';
 import { useHaiQuizMode } from './HaiQuizMode';
+import { currentPageContext } from '@/lib/hai/pageContext/collect';
+import {
+  confirmPendingUiAction,
+  discardPendingUiAction,
+  hasPendingUiAction,
+  runUiAction,
+} from './uiActionExecutor';
+import { HaiUiActionBar } from './HaiUiActionBar';
 
 // ============================================================================
 // TYPES
@@ -77,6 +88,117 @@ export interface HaiMessage {
   pendingAction?: HaiPendingAction;
   /** A page HAI offers, shown as a card with the button "Open" (never a write) */
   navigationOffer?: HaiNavigationOffer;
+  /** The nearest targets as cards (a question back), each waits for a tap */
+  navigationChoices?: HaiNavigationOffer[];
+  /** A question of the memory (yes, no, change), shown as a card */
+  memoryProposal?: HaiMemoryProposal;
+  /**
+   * What HAI does right now while no text has come yet (stage events of the
+   * server, opt-in). Shown as a small line below "thinking", gone with the
+   * first piece of text.
+   */
+  stage?: HaiStage;
+  /**
+   * The turn failed in a way a second try may fix: the model is busy, the
+   * network is gone, or something else went wrong once. The message shows the
+   * button "Try again".
+   */
+  failure?: HaiFailure;
+}
+
+/**
+ * The question of the HAI memory: "Soll ich mir das merken?" with the buttons
+ * yes, no and change. The entry exists on the server as a proposal and acts only
+ * after the person said yes (PATCH /api/hai/memory/[id]).
+ */
+export interface HaiMemoryProposal {
+  id: string;
+  kind: 'preference' | 'learning_style' | 'learning_state' | 'weakness';
+  content: string;
+  status: 'open' | 'running' | 'saved' | 'rejected' | 'error';
+  /** Suffix of the i18n key hai.memory.card.error.<key> */
+  errorKey?: string;
+}
+
+const MEMORY_KINDS = [
+  'preference',
+  'learning_style',
+  'learning_state',
+  'weakness',
+] as const;
+
+/** The proposal of the server as card state, or undefined if it is malformed. */
+export function toMemoryProposal(raw: unknown): HaiMemoryProposal | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const { id, kind, content } = raw as Record<string, unknown>;
+  if (
+    typeof id !== 'string' ||
+    typeof content !== 'string' ||
+    !(MEMORY_KINDS as readonly unknown[]).includes(kind)
+  ) {
+    return undefined;
+  }
+  return {
+    id,
+    kind: kind as HaiMemoryProposal['kind'],
+    content,
+    status: 'open',
+  };
+}
+
+/** The stages the server reports while it works (SSE `{"stage": ...}`). */
+export type HaiStage = 'search' | 'answer' | 'busy';
+
+/** Why a turn failed, for the text and the button "Try again". */
+export type HaiFailure = 'busy' | 'network' | 'generic';
+
+/** The client waits this long for the first byte of the answer (the server's limit is up to 150 s). */
+const CHAT_RESPONSE_TIMEOUT_MS = 180_000;
+
+/** The stage of a server event, or undefined for anything else. */
+function toStage(raw: unknown): HaiStage | undefined {
+  return raw === 'search' || raw === 'answer' || raw === 'busy'
+    ? raw
+    : undefined;
+}
+
+/** "busy" stays: a later "answer" must not hide that the model is slow. */
+function nextStage(current: HaiStage | undefined, incoming: HaiStage) {
+  return current === 'busy' ? 'busy' : incoming;
+}
+
+/** The text of a failed turn, on the message and on its active version. */
+function withFailure(
+  message: HaiMessage,
+  text: string,
+  failure?: HaiFailure
+): HaiMessage {
+  return {
+    ...message,
+    content: text,
+    stage: undefined,
+    failure,
+    versions: message.versions
+      ? message.versions.map((v, idx) =>
+          idx === (message.activeVersionIndex ?? 0)
+            ? { ...v, content: text }
+            : v
+        )
+      : message.versions,
+  };
+}
+
+/**
+ * Only a failed fetch without any answer is a problem of the person's network
+ * ("Failed to fetch", "Load failed", "NetworkError ..."). Everything else, also
+ * a broken stream after the answer began (the server may have been cut off),
+ * is not blamed on the connection.
+ */
+function isNetworkFailure(error: unknown, gotResponse: boolean): boolean {
+  if (gotResponse || !(error instanceof TypeError)) return false;
+  return /failed to fetch|load failed|network ?error|network request failed|fetch failed/i.test(
+    error.message
+  );
 }
 
 /**
@@ -159,7 +281,7 @@ export function actionErrorKey(
 async function chatFailureText(
   response: Response,
   t: (key: string) => string
-): Promise<string> {
+): Promise<{ text: string; failure?: HaiFailure }> {
   let code: unknown;
   try {
     // a copy, so a caller that reads the body too is not affected
@@ -172,7 +294,13 @@ async function chatFailureText(
   } catch {
     code = undefined;
   }
-  return t(chatFailureKey(response.status, code));
+  // a busy model may answer on the second try: the message gets the button
+  return {
+    text: t(chatFailureKey(response.status, code)),
+    ...(response.status === 503 && code === 'MODEL_BUSY'
+      ? { failure: 'busy' as const }
+      : {}),
+  };
 }
 
 export interface HaiContext {
@@ -211,12 +339,28 @@ interface HaiProviderState {
     options?: { voice?: boolean }
   ) => Promise<void>;
   stopGeneration: () => void;
+  /**
+   * Ask the same question again after a failed turn (button "Try again" of the
+   * error message). Only the last message can be retried.
+   */
+  retryMessage: (assistantMessageId: string) => Promise<void>;
   updateMessage: (messageId: string, newContent: string) => Promise<void>;
   regenerateFromEdit: (messageId: string, newContent: string) => Promise<void>;
   confirmPendingAction: (messageId: string) => Promise<void>;
   cancelPendingAction: (messageId: string) => void;
+  /**
+   * The answer to the question of the memory: yes (with a changed text, the
+   * "change" of the card) or no. Only the click calls the server.
+   */
+  answerMemoryProposal: (
+    messageId: string,
+    decision: 'confirm' | 'reject',
+    content?: string
+  ) => Promise<void>;
   /** Open the page of a navigation offer (tap on "Open" of the card) */
   openNavigation: (messageId: string) => void;
+  /** Open one card of a question back (a tap on the card). */
+  openNavigationChoice: (messageId: string, index: number) => void;
   setActiveVersion: (messageId: string, versionIndex: number) => void;
   loadSession: (sessionId: string) => Promise<void>;
   newSession: () => void;
@@ -708,6 +852,84 @@ export function HaiProvider({
     [patchPendingAction]
   );
 
+  const attachMemoryProposal = useCallback(
+    (messageId: string, raw: unknown) => {
+      const proposal = toMemoryProposal(raw);
+      if (!proposal) return;
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId ? { ...m, memoryProposal: proposal } : m
+        )
+      );
+    },
+    []
+  );
+
+  const patchMemoryProposal = useCallback(
+    (messageId: string, patch: Partial<HaiMemoryProposal>) => {
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId && m.memoryProposal
+            ? { ...m, memoryProposal: { ...m.memoryProposal, ...patch } }
+            : m
+        )
+      );
+    },
+    []
+  );
+
+  const answeringMemoryRef = React.useRef<Set<string>>(new Set());
+
+  const answerMemoryProposal = useCallback(
+    async (
+      messageId: string,
+      decision: 'confirm' | 'reject',
+      content?: string
+    ) => {
+      const proposal = messagesRef.current.find(
+        m => m.id === messageId
+      )?.memoryProposal;
+      if (
+        !proposal ||
+        (proposal.status !== 'open' && proposal.status !== 'error')
+      ) {
+        return;
+      }
+      // One click, one call
+      if (answeringMemoryRef.current.has(messageId)) return;
+      answeringMemoryRef.current.add(messageId);
+      patchMemoryProposal(messageId, {
+        status: 'running',
+        errorKey: undefined,
+      });
+      try {
+        const result = await decideMemory(proposal.id, decision, content);
+        if (result.ok) {
+          patchMemoryProposal(messageId, {
+            status: decision === 'confirm' ? 'saved' : 'rejected',
+            content:
+              decision === 'confirm' && result.data?.entry?.content
+                ? result.data.entry.content
+                : proposal.content,
+          });
+        } else {
+          patchMemoryProposal(messageId, {
+            status: 'error',
+            errorKey:
+              result.status === 422
+                ? 'content'
+                : result.status === 404 || result.status === 409
+                  ? 'gone'
+                  : 'generic',
+          });
+        }
+      } finally {
+        answeringMemoryRef.current.delete(messageId);
+      }
+    },
+    [patchMemoryProposal]
+  );
+
   const cancelPendingAction = useCallback(
     (messageId: string) => {
       const pending = messagesRef.current.find(
@@ -723,20 +945,53 @@ export function HaiProvider({
   // NAVIGATION OFFERS (card "Open", spoken "yes")
   // ========================================================================
 
+  /** Go to the page. The open chat panel must not hide it. */
+  const goToOffer = useCallback(
+    (offer: HaiNavigationOffer) => {
+      if (!isAllowedNavigationPath(offer.path)) return false;
+      // On a phone the panel is the whole screen and would hide the page that
+      // was just opened, so it steps away (typed, tapped or spoken alike). On a
+      // wide screen the large chat gives way to the panel next to the page.
+      const phone =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(max-width: 767px)').matches;
+      setViewModeState(prev =>
+        phone ? 'hidden' : prev === 'full' ? 'widget' : prev
+      );
+      router.push(offer.path);
+      return true;
+    },
+    [router]
+  );
+
   const attachNavigationOffer = useCallback(
     (messageId: string, raw: unknown, spoken: boolean) => {
       // the path must be on the allow list, otherwise there is no card
       const offer = toNavigationOffer(raw);
       if (!offer) return;
+      // A clear command ("Öffne ...", "Bring mich zu ...") is carried out right
+      // away, typed and spoken: the card only reports it. A spoken
+      // conversation goes on (the voice mode keeps listening). The server
+      // decides this from the command, the path is checked once more here.
+      const opened =
+        offer.auto === true && goToOffer({ ...offer, status: 'open', spoken });
       setMessages(prev =>
         prev.map(m =>
           m.id === messageId
-            ? { ...m, navigationOffer: { ...offer, status: 'open', spoken } }
+            ? {
+                ...m,
+                navigationOffer: {
+                  ...offer,
+                  status: opened ? 'opened' : 'open',
+                  spoken,
+                },
+              }
             : m
         )
       );
     },
-    []
+    [goToOffer]
   );
 
   const patchNavigationOffer = useCallback(
@@ -752,15 +1007,48 @@ export function HaiProvider({
     []
   );
 
-  /** Go to the page. The open chat panel must not hide it. */
-  const goToOffer = useCallback(
-    (offer: HaiNavigationOffer) => {
-      if (!isAllowedNavigationPath(offer.path)) return false;
-      setViewModeState(prev => (prev === 'full' ? 'widget' : prev));
-      router.push(offer.path);
-      return true;
+  /** The cards of a question back: only valid ones, never opened by themselves. */
+  const attachNavigationChoices = useCallback(
+    (messageId: string, raw: unknown) => {
+      const choices = toNavigationChoices(raw);
+      if (choices.length === 0) return;
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId
+            ? {
+                ...m,
+                navigationChoices: choices.map(card => ({
+                  ...card,
+                  status: 'open' as const,
+                  spoken: false,
+                })),
+              }
+            : m
+        )
+      );
     },
-    [router]
+    []
+  );
+
+  const openNavigationChoice = useCallback(
+    (messageId: string, index: number) => {
+      const choice = messagesRef.current.find(m => m.id === messageId)
+        ?.navigationChoices?.[index];
+      if (!choice || !goToOffer(choice)) return;
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId && m.navigationChoices
+            ? {
+                ...m,
+                navigationChoices: m.navigationChoices.map((c, i) =>
+                  i === index ? { ...c, status: 'opened' as const } : c
+                ),
+              }
+            : m
+        )
+      );
+    },
+    [goToOffer]
   );
 
   const openNavigation = useCallback(
@@ -819,6 +1107,57 @@ export function HaiProvider({
     },
     [goToOffer, patchNavigationOffer]
   );
+
+  /**
+   * A checked form action of the server (switch HAI_UI_ACTIONS): the executor
+   * checks it again and sets the values in the form of the page, or, in a spoken
+   * turn, only shows them and waits for the person. It never clicks and never
+   * sends. A full screen chat steps aside so the page with the marked fields is
+   * visible (like for a navigation).
+   */
+  const attachUiAction = useCallback((raw: unknown) => {
+    if (raw === undefined || raw === null) return;
+    const outcome = runUiAction(raw);
+    if (outcome.status !== 'rejected') {
+      setViewModeState(prev => (prev === 'full' ? 'widget' : prev));
+    }
+  }, []);
+
+  /**
+   * The typed reply to a pending entry of a spoken turn: "ja" enters it, "nein"
+   * drops it, any other message drops it too (so a later "ja" enters nothing).
+   * Only typed text counts, a spoken "ja" never enters anything. Answered here
+   * without a call to the server. Returns true when the reply was handled.
+   */
+  const answerUiActionConfirmation = useCallback((text: string): boolean => {
+    if (!hasPendingUiAction()) return false;
+    const yes = isOpenConfirmation(text);
+    const no = !yes && isOpenDecline(text);
+    if (!yes && !no) {
+      discardPendingUiAction();
+      return false;
+    }
+    if (yes) confirmPendingUiAction();
+    else discardPendingUiAction();
+    const now = new Date().toISOString();
+    const stamp = Date.now();
+    const userId = `temp-${stamp}`;
+    setMessages(prev => [
+      ...prev,
+      { id: userId, role: 'user', content: text, createdAt: now },
+      {
+        id: `msg-${stamp}`,
+        role: 'assistant',
+        content: yes
+          ? 'Ich habe die Eingabe eingetragen. Gespeichert ist noch nichts, bitte prüfe sie und speichere selbst.'
+          : 'In Ordnung, ich trage nichts ein.',
+        createdAt: now,
+        baseUserMessageId: userId,
+      },
+    ]);
+    if (yes) setViewModeState(prev => (prev === 'full' ? 'widget' : prev));
+    return true;
+  }, []);
 
   const regenerateFromEdit = useCallback(
     async (messageId: string, newContent: string) => {
@@ -925,6 +1264,8 @@ export function HaiProvider({
             citations: [],
             pendingAction: undefined,
             navigationOffer: undefined,
+            navigationChoices: undefined,
+            memoryProposal: undefined,
             versions,
             activeVersionIndex: newIndex,
             baseUserMessageId: messageId,
@@ -953,10 +1294,13 @@ export function HaiProvider({
 
       setStreamingMessageId(assistantId);
 
-      // Add a timeout to the fetch request (60 seconds)
+      // Time limit until the answer starts (see sendMessage)
+      let timedOut = false;
+      let gotResponse = false;
       const timeoutId = setTimeout(() => {
+        timedOut = true;
         abortController.abort('TIMEOUT');
-      }, 60000);
+      }, CHAT_RESPONSE_TIMEOUT_MS);
 
       try {
         const response = await authFetch('/api/hai/chat', {
@@ -973,6 +1317,8 @@ export function HaiProvider({
               enablerId: context.enablerId,
               courseId: context.courseId,
               scenarioText: context.scenarioText,
+              // the page of the user (data only, the server validates it)
+              page: currentPageContext(),
             },
             stream: true,
           }),
@@ -980,6 +1326,7 @@ export function HaiProvider({
         });
 
         // Clear timeout once response headers arrive
+        gotResponse = true;
         clearTimeout(timeoutId);
 
         if (response.ok && response.body) {
@@ -1021,20 +1368,8 @@ export function HaiProvider({
               break;
             }
 
-            if (!hasReceivedFirstChunk) {
-              hasReceivedFirstChunk = true;
-              clearTimeout(thinkingTimeoutId);
-              // Clear 'Thinking...' text if present before first chunk
-              setMessages(prev =>
-                prev.map(m =>
-                  m.id === assistantId &&
-                  m.content === (t('hai.loading.thinking') || 'Thinking...')
-                    ? { ...m, content: '' }
-                    : m
-                )
-              );
-            }
-
+            // A stage event is no text: the first byte does not end "thinking",
+            // only the first piece of text does (handled with the event below)
             buffer += decoder.decode(value, { stream: true });
 
             const lines = buffer.split('\n');
@@ -1048,7 +1383,23 @@ export function HaiProvider({
               try {
                 const event = JSON.parse(jsonStr);
 
+                // What HAI does while no text has come (search, answer, busy)
+                const stage = toStage(event.stage);
+                if (stage && !hasReceivedFirstChunk) {
+                  setMessages(prev =>
+                    prev.map(m =>
+                      m.id === assistantId
+                        ? { ...m, stage: nextStage(m.stage, stage) }
+                        : m
+                    )
+                  );
+                }
+
                 if (event.chunk) {
+                  if (!hasReceivedFirstChunk) {
+                    hasReceivedFirstChunk = true;
+                    clearTimeout(thinkingTimeoutId);
+                  }
                   fullText += event.chunk;
                   setMessages(prev =>
                     prev.map(m =>
@@ -1056,6 +1407,7 @@ export function HaiProvider({
                         ? {
                             ...m,
                             content: fullText,
+                            stage: undefined,
                             versions: m.versions
                               ? m.versions.map((v, idx) =>
                                   idx === (m.activeVersionIndex ?? 0)
@@ -1071,11 +1423,14 @@ export function HaiProvider({
 
                 if (event.done) {
                   attachPendingAction(assistantId, event.pendingAction);
+                  attachMemoryProposal(assistantId, event.memoryProposal);
                   attachNavigationOffer(
                     assistantId,
                     event.navigationOffer,
                     false
                   );
+                  attachNavigationChoices(assistantId, event.navigationChoices);
+                  attachUiAction(event.uiAction);
                   startQuizFromSignal(event.quizMode);
                   if (event.sessionId && event.sessionId !== currentSessionId) {
                     setCurrentSessionId(event.sessionId);
@@ -1103,10 +1458,20 @@ export function HaiProvider({
                 }
 
                 if (event.error) {
-                  const errorMsg = t(event.error) || event.error;
+                  // MODEL_BUSY: the model is slow or overloaded, a second try
+                  // may work (the message gets the button "Try again")
+                  const busy = event.code === 'MODEL_BUSY';
+                  const errorMsg = busy
+                    ? t('hai.error.modelBusy')
+                    : t(event.error) || event.error;
+                  clearTimeout(thinkingTimeoutId);
                   setMessages(prev =>
                     prev.map(m =>
-                      m.id === assistantId ? { ...m, content: errorMsg } : m
+                      m.id === assistantId
+                        ? busy
+                          ? withFailure(m, errorMsg, 'busy')
+                          : { ...m, content: errorMsg, stage: undefined }
+                        : m
                     )
                   );
                   setStreamingMessageId(null);
@@ -1121,6 +1486,9 @@ export function HaiProvider({
         } else if (response.ok) {
           const data = await response.json();
           attachNavigationOffer(assistantId, data.navigationOffer, false);
+          attachNavigationChoices(assistantId, data.navigationChoices);
+          attachUiAction(data.uiAction);
+          attachMemoryProposal(assistantId, data.memoryProposal);
           startQuizFromSignal(data.quizMode);
 
           if (data.sessionId && data.sessionId !== currentSessionId) {
@@ -1155,68 +1523,53 @@ export function HaiProvider({
           await refreshSessions();
         } else {
           // the reason in plain words (plan, release, switch), not "error"
-          const failureText = await chatFailureText(response, t);
+          const { text: failureText, failure } = await chatFailureText(
+            response,
+            t
+          );
           setMessages(prev =>
             prev.map(m =>
-              m.id === assistantId
-                ? {
-                    ...m,
-                    content: failureText,
-                    versions: m.versions
-                      ? m.versions.map((v, idx) =>
-                          idx === (m.activeVersionIndex ?? 0)
-                            ? { ...v, content: failureText }
-                            : v
-                        )
-                      : m.versions,
-                  }
-                : m
+              m.id === assistantId ? withFailure(m, failureText, failure) : m
             )
           );
           setStreamingMessageId(null);
         }
       } catch (error: any) {
-        if (error.name === 'AbortError' || error.message === 'TIMEOUT') {
+        // A timeout aborts with the reason 'TIMEOUT', a plain string: the flag
+        // tells it, `error.name` and `error.message` are empty then (that is
+        // how it used to end up as "connection error").
+        if (timedOut || error?.name === 'AbortError') {
           console.log('HAI.ai: Stream aborted or timed out');
-          // If it was a timeout, show the timeout error message
           if (
-            error.message === 'TIMEOUT' ||
+            timedOut ||
             (abortController.signal.aborted && !activeStreamSessionRef.current)
           ) {
             setMessages(prev =>
               prev.map(m =>
                 m.id === assistantId
-                  ? {
-                      ...m,
-                      content: t('hai.error.timeout'),
-                      versions: m.versions?.map((v, idx) =>
-                        idx === (m.activeVersionIndex ?? 0)
-                          ? { ...v, content: t('hai.error.timeout') }
-                          : v
-                      ),
-                    }
+                  ? withFailure(m, t('hai.error.timeout'), 'generic')
                   : m
               )
             );
+            setStreamingMessageId(null);
           }
           return;
         }
 
         console.error('Failed to regenerate message:', error);
+        // Only a fetch that got no answer at all is the person's network. Every
+        // other failure is not blamed on the connection.
+        const network = isNetworkFailure(error, gotResponse);
         setMessages(prev =>
           prev.map(m =>
             m.id === assistantId
-              ? {
-                  ...m,
-                  content: t('hai.error.connectionError'),
-                  versions: m.versions
-                    ? m.versions.map((v, idx) =>
-                        idx === (m.activeVersionIndex ?? 0)
-                          ? { ...v, content: t('hai.error.connectionError') }
-                          : v
-                      )
-                    : m.versions,
-                }
+              ? withFailure(
+                  m,
+                  t(
+                    network ? 'hai.error.connectionError' : 'hai.error.generic'
+                  ),
+                  network ? 'network' : 'generic'
+                )
               : m
           )
         );
@@ -1239,6 +1592,7 @@ export function HaiProvider({
       t,
       attachPendingAction,
       attachNavigationOffer,
+      attachUiAction,
       startQuizFromSignal,
     ]
   );
@@ -1249,6 +1603,10 @@ export function HaiProvider({
 
       // The spoken "yes" to "Soll ich sie öffnen?" opens the page, no call
       if (options?.voice === true && answerSpokenNavigation(message)) return;
+
+      // The typed reply to a pending entry of a spoken turn ("ja" enters it)
+      if (options?.voice !== true && answerUiActionConfirmation(message))
+        return;
 
       // Abort any previous in-flight stream
       if (abortControllerRef.current) {
@@ -1292,10 +1650,16 @@ export function HaiProvider({
       setMessages(prev => [...prev, assistantMessage]);
       setStreamingMessageId(assistantId);
 
-      // Add a timeout to the fetch request (60 seconds)
+      // Time limit until the answer starts. The model server can need more than
+      // a minute under load and the server waits up to 90 seconds (150 at most)
+      // for the first character, so the client must not give up before it.
+      let timedOut = false;
+      // no answer at all (fetch failed) is the only case of a network failure
+      let gotResponse = false;
       const timeoutId = setTimeout(() => {
+        timedOut = true;
         abortController.abort('TIMEOUT');
-      }, 60000);
+      }, CHAT_RESPONSE_TIMEOUT_MS);
 
       try {
         const response = await authFetch('/api/hai/chat', {
@@ -1311,13 +1675,28 @@ export function HaiProvider({
               enablerId: context.enablerId,
               courseId: context.courseId,
               scenarioText: context.scenarioText,
+              // the page of the user (data only, the server validates it)
+              page: currentPageContext(),
             },
             stream: true,
             // only the voice assistant sends it; the server checks the organization
-            ...(options?.voice === true ? { voice: true } : {}),
+            ...(options?.voice === true
+              ? { voice: true }
+              : // the text chat shows what HAI does while it waits (search,
+                // answer, busy); the voice assistant never gets these events
+                { stageEvents: true }),
           }),
           signal: abortController.signal,
         });
+        gotResponse = true;
+        // The answer has started. The limit above only guards the wait for it:
+        // it used to run on and cut every answer that took longer than a minute
+        // in total (shown as a connection error).
+        clearTimeout(timeoutId);
+        // measuring point of the voice assistant (numbers only, off by default)
+        if (options?.voice === true) {
+          markServerTiming(response.headers?.get?.('server-timing'));
+        }
 
         if (response.ok && response.body) {
           const reader = response.body.getReader();
@@ -1359,20 +1738,8 @@ export function HaiProvider({
               break;
             }
 
-            if (!hasReceivedFirstChunk) {
-              hasReceivedFirstChunk = true;
-              clearTimeout(thinkingTimeoutId);
-              // Clear 'Thinking...' text if present before first chunk
-              setMessages(prev =>
-                prev.map(m =>
-                  m.id === assistantId &&
-                  m.content === (t('hai.loading.thinking') || 'Thinking...')
-                    ? { ...m, content: '' }
-                    : m
-                )
-              );
-            }
-
+            // A stage event is no text: the first byte does not end "thinking",
+            // only the first piece of text does (handled with the event below)
             buffer += decoder.decode(value, { stream: true });
 
             // Process SSE lines
@@ -1387,7 +1754,23 @@ export function HaiProvider({
               try {
                 const event = JSON.parse(jsonStr);
 
+                // What HAI does while no text has come (search, answer, busy)
+                const stage = toStage(event.stage);
+                if (stage && !hasReceivedFirstChunk) {
+                  setMessages(prev =>
+                    prev.map(m =>
+                      m.id === assistantId
+                        ? { ...m, stage: nextStage(m.stage, stage) }
+                        : m
+                    )
+                  );
+                }
+
                 if (event.chunk) {
+                  if (!hasReceivedFirstChunk) {
+                    hasReceivedFirstChunk = true;
+                    clearTimeout(thinkingTimeoutId);
+                  }
                   fullText += event.chunk;
                   // Update message content incrementally
                   setMessages(prev =>
@@ -1396,6 +1779,7 @@ export function HaiProvider({
                         ? {
                             ...m,
                             content: fullText,
+                            stage: undefined,
                             versions: m.versions
                               ? m.versions.map((v, idx) =>
                                   idx === (m.activeVersionIndex ?? 0)
@@ -1410,12 +1794,16 @@ export function HaiProvider({
                 }
 
                 if (event.done) {
+                  if (options?.voice === true) markServerDone(event.timing);
                   attachPendingAction(assistantId, event.pendingAction);
+                  attachMemoryProposal(assistantId, event.memoryProposal);
                   attachNavigationOffer(
                     assistantId,
                     event.navigationOffer,
                     options?.voice === true
                   );
+                  attachNavigationChoices(assistantId, event.navigationChoices);
+                  attachUiAction(event.uiAction);
                   startQuizFromSignal(event.quizMode);
                   // Final event — update with citations and sessionId
                   if (event.sessionId && event.sessionId !== currentSessionId) {
@@ -1444,10 +1832,20 @@ export function HaiProvider({
                 }
 
                 if (event.error) {
-                  const errorMsg = t(event.error) || event.error;
+                  // MODEL_BUSY: the model is slow or overloaded, a second try
+                  // may work (the message gets the button "Try again")
+                  const busy = event.code === 'MODEL_BUSY';
+                  const errorMsg = busy
+                    ? t('hai.error.modelBusy')
+                    : t(event.error) || event.error;
+                  clearTimeout(thinkingTimeoutId);
                   setMessages(prev =>
                     prev.map(m =>
-                      m.id === assistantId ? { ...m, content: errorMsg } : m
+                      m.id === assistantId
+                        ? busy
+                          ? withFailure(m, errorMsg, 'busy')
+                          : { ...m, content: errorMsg, stage: undefined }
+                        : m
                     )
                   );
                   setStreamingMessageId(null);
@@ -1468,7 +1866,10 @@ export function HaiProvider({
             data.navigationOffer,
             options?.voice === true
           );
+          attachNavigationChoices(assistantId, data.navigationChoices);
+          attachUiAction(data.uiAction);
           startQuizFromSignal(data.quizMode);
+          attachMemoryProposal(assistantId, data.memoryProposal);
 
           if (data.sessionId && data.sessionId !== currentSessionId) {
             setCurrentSessionId(data.sessionId);
@@ -1503,68 +1904,54 @@ export function HaiProvider({
           await refreshSessions();
         } else {
           // Error response: the reason in plain words (plan, release, switch)
-          const failureText = await chatFailureText(response, t);
+          const { text: failureText, failure } = await chatFailureText(
+            response,
+            t
+          );
           setMessages(prev =>
             prev.map(m =>
-              m.id === assistantId
-                ? {
-                    ...m,
-                    content: failureText,
-                    versions: m.versions
-                      ? m.versions.map((v, idx) =>
-                          idx === (m.activeVersionIndex ?? 0)
-                            ? { ...v, content: failureText }
-                            : v
-                        )
-                      : m.versions,
-                  }
-                : m
+              m.id === assistantId ? withFailure(m, failureText, failure) : m
             )
           );
           setStreamingMessageId(null);
         }
       } catch (error: any) {
         // Handle stop/abort or timeout
-        if (error.name === 'AbortError' || error.message === 'TIMEOUT') {
+        // A timeout aborts with the reason 'TIMEOUT', a plain string: the flag
+        // tells it, `error.name` and `error.message` are empty then (that is
+        // how it used to end up as "connection error").
+        if (timedOut || error?.name === 'AbortError') {
           console.log('HAI.ai: Stream aborted or timed out');
           if (
-            error.message === 'TIMEOUT' ||
+            timedOut ||
             (abortController.signal.aborted && !activeStreamSessionRef.current)
           ) {
             setMessages(prev =>
               prev.map(m =>
                 m.id === assistantId
-                  ? {
-                      ...m,
-                      content: t('hai.error.timeout'),
-                      versions: m.versions?.map((v, idx) =>
-                        idx === (m.activeVersionIndex ?? 0)
-                          ? { ...v, content: t('hai.error.timeout') }
-                          : v
-                      ),
-                    }
+                  ? withFailure(m, t('hai.error.timeout'), 'generic')
                   : m
               )
             );
+            setStreamingMessageId(null);
           }
           return;
         }
 
         console.error('Failed to send message:', error);
+        // Only a fetch that got no answer at all is the person's network. Every
+        // other failure is not blamed on the connection.
+        const network = isNetworkFailure(error, gotResponse);
         setMessages(prev =>
           prev.map(m =>
             m.id === assistantId
-              ? {
-                  ...m,
-                  content: t('hai.error.connectionError'),
-                  versions: m.versions
-                    ? m.versions.map((v, idx) =>
-                        idx === (m.activeVersionIndex ?? 0)
-                          ? { ...v, content: t('hai.error.connectionError') }
-                          : v
-                      )
-                    : m.versions,
-                }
+              ? withFailure(
+                  m,
+                  t(
+                    network ? 'hai.error.connectionError' : 'hai.error.generic'
+                  ),
+                  network ? 'network' : 'generic'
+                )
               : m
           )
         );
@@ -1589,9 +1976,40 @@ export function HaiProvider({
       t,
       attachPendingAction,
       attachNavigationOffer,
+      attachUiAction,
       answerSpokenNavigation,
+      answerUiActionConfirmation,
       startQuizFromSignal,
     ]
+  );
+
+  /**
+   * Ask the same question again after a failed turn (button "Try again" of the
+   * error message): the failed answer and its question leave the list and the
+   * question is sent as a new one. regenerateFromEdit is for edits and needs the
+   * stored id of the question (a fresh question only has a temporary one), so
+   * the retry goes the normal way. Only the last message of the chat can be
+   * retried, and only while nothing else is running.
+   */
+  const retryMessage = useCallback(
+    async (assistantMessageId: string) => {
+      const list = messagesRef.current;
+      const index = list.findIndex(
+        m => m.id === assistantMessageId && m.role === 'assistant'
+      );
+      if (index < 0 || index !== list.length - 1) return;
+      if (!list[index].failure || abortControllerRef.current) return;
+      const question = [...list.slice(0, index)]
+        .reverse()
+        .find(m => m.role === 'user');
+      if (!question?.content.trim()) return;
+
+      setMessages(prev =>
+        prev.filter(m => m.id !== assistantMessageId && m.id !== question.id)
+      );
+      await sendMessage(question.content);
+    },
+    [sendMessage]
   );
 
   // ========================================================================
@@ -1633,11 +2051,14 @@ export function HaiProvider({
     clearContext,
     sendMessage,
     stopGeneration,
+    retryMessage,
     updateMessage,
     regenerateFromEdit,
     confirmPendingAction,
     cancelPendingAction,
+    answerMemoryProposal,
     openNavigation,
+    openNavigationChoice,
     setActiveVersion,
     loadSession,
     newSession,
@@ -1647,7 +2068,12 @@ export function HaiProvider({
     searchSessions,
   };
 
-  return <HaiContext.Provider value={value}>{children}</HaiContext.Provider>;
+  return (
+    <HaiContext.Provider value={value}>
+      {children}
+      <HaiUiActionBar />
+    </HaiContext.Provider>
+  );
 }
 
 export default HaiProvider;

@@ -28,8 +28,15 @@
 
 import type { VoiceFunction, VoiceProviderId } from '../settings';
 import { browserPieceEngine, type PieceEngine } from './browserSpeech';
+import {
+  categorizeReason,
+  isPermanentReason,
+  reasonCode,
+  type ProviderFallback,
+} from './fallback';
 import { HausRecognition, HausSpeaker, type HausDeps } from './haus';
 import { SonioxRecognition, SonioxSpeaker, type SonioxDeps } from './soniox';
+import { mark } from './trace';
 import type {
   RecognitionLike,
   SpeakerHandlers,
@@ -53,7 +60,20 @@ export interface ChainOptions {
   deps: VoiceClientDeps | null;
   /** The provider that listens now (for the text of the settings). */
   onActiveProvider?: (id: VoiceProviderId) => void;
+  /**
+   * A function (listening or speaking) was taken over by another provider, with
+   * the reason. The loop shows it, so a silent fallback is never invisible.
+   */
+  onFallback?: (fallback: ProviderFallback) => void;
+  /**
+   * Wait before the one retry of a provider that failed (default 500 ms). `null`
+   * switches the retry off (the provider is given up at the first failure).
+   */
+  retryDelayMs?: number | null;
 }
+
+/** A provider that failed gets one more try after this long, before the next one takes over. */
+export const RETRY_DELAY_MS = 500;
 
 type CreatedRecognition = { rec: RecognitionLike; local: boolean };
 
@@ -70,18 +90,30 @@ class ChainedRecognition implements RecognitionLike {
   onresult: RecognitionLike['onresult'] = null;
   onerror: RecognitionLike['onerror'] = null;
   onend: RecognitionLike['onend'] = null;
+  onaudiostart: RecognitionLike['onaudiostart'] = null;
+  onlevel: RecognitionLike['onlevel'] = null;
+  onutterance: RecognitionLike['onutterance'] = null;
+
+  /** The inner recognition works in live mode (the head of the chain can, and it was asked to). */
+  get live(): boolean {
+    return this.inner?.live === true;
+  }
 
   private inner: RecognitionLike | null = null;
   private generation = 0;
   private stopped = false;
+  // a provider gets one more try per round before the next one takes over
+  private retried = new Set<VoiceProviderId>();
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly create: (
       id: VoiceProviderId
     ) => Promise<CreatedRecognition | null>,
     private readonly next: () => VoiceProviderId | null,
-    private readonly markFailed: (id: VoiceProviderId) => void,
-    private readonly announce: (id: VoiceProviderId) => void
+    private readonly markFailed: (id: VoiceProviderId, reason: string) => void,
+    private readonly announce: (id: VoiceProviderId) => void,
+    private readonly retryDelayMs: number | null = RETRY_DELAY_MS
   ) {}
 
   start(): void {
@@ -96,7 +128,13 @@ class ChainedRecognition implements RecognitionLike {
   abort(): void {
     this.stopped = true;
     this.generation += 1;
+    this.clearRetry();
     this.detach();
+  }
+
+  private clearRetry(): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
   }
 
   private detach(): void {
@@ -106,6 +144,9 @@ class ChainedRecognition implements RecognitionLike {
     inner.onresult = null;
     inner.onerror = null;
     inner.onend = null;
+    inner.onaudiostart = null;
+    inner.onlevel = null;
+    inner.onutterance = null;
     try {
       inner.abort();
     } catch {
@@ -116,6 +157,7 @@ class ChainedRecognition implements RecognitionLike {
   /** Starts a round with the first provider that is left, or reports that none is. */
   private async begin(): Promise<void> {
     const generation = ++this.generation;
+    this.clearRetry();
     this.detach();
     for (;;) {
       const id = this.next();
@@ -131,21 +173,58 @@ class ChainedRecognition implements RecognitionLike {
       }
       if (generation !== this.generation || this.stopped) return;
       if (!made) {
-        this.markFailed(id);
+        this.markFailed(id, 'not-available');
         continue;
       }
       const rec = made.rec;
       rec.lang = this.lang;
-      rec.continuous = this.continuous;
+      // only Soniox can stay open over several utterances (live mode)
+      rec.continuous = this.continuous && id === 'soniox';
       rec.interimResults = this.interimResults;
       rec.maxAlternatives = this.maxAlternatives;
       rec.onresult = event => {
         if (generation === this.generation) this.onresult?.(event);
       };
+      rec.onaudiostart = () => {
+        if (generation === this.generation) this.onaudiostart?.();
+      };
+      rec.onlevel = value => {
+        if (generation === this.generation) this.onlevel?.(value);
+      };
+      rec.onutterance = (text, info) => {
+        if (generation === this.generation) this.onutterance?.(text, info);
+      };
       rec.onerror = event => {
         if (generation !== this.generation) return;
         if (event.error === 'provider-unavailable') {
-          this.markFailed(id);
+          if (
+            this.retryDelayMs !== null &&
+            !this.retried.has(id) &&
+            !isPermanentReason(event.reason)
+          ) {
+            // a short break of the connection: one more try, then the next provider
+            this.retried.add(id);
+            mark('stt.retry', {
+              provider: id,
+              reason: reasonCode(event.reason),
+            });
+            this.detach();
+            this.retryTimer = setTimeout(() => {
+              this.retryTimer = null;
+              if (!this.stopped && generation === this.generation) {
+                void this.begin();
+              }
+            }, this.retryDelayMs);
+            return;
+          }
+          this.markFailed(id, event.reason ?? 'provider-unavailable');
+          if (event.established) {
+            // a live session that ran and broke: the loop starts the next round itself
+            // (it may be speaking now, the microphone must not open under its voice)
+            this.detach();
+            this.onend?.();
+            return;
+          }
           void this.begin();
           return;
         }
@@ -159,7 +238,7 @@ class ChainedRecognition implements RecognitionLike {
       try {
         rec.start();
       } catch {
-        this.markFailed(id);
+        this.markFailed(id, 'start-failed');
         this.detach();
         continue;
       }
@@ -175,6 +254,8 @@ class ChainedRecognition implements RecognitionLike {
 interface Entry {
   text: string;
   done: boolean;
+  /** The generation of the engine the piece was handed to (-1: not yet). */
+  sent: number;
 }
 
 class ChainedSpeaker implements SpeakerLike {
@@ -183,16 +264,36 @@ class ChainedSpeaker implements SpeakerLike {
   private generation = 0;
   private ended = false;
   private finished = false;
+  // a provider gets one more try per answer before the next one takes over
+  private retried = new Set<VoiceProviderId>();
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly handlers: SpeakerHandlers,
     private readonly makeEngine: () => PieceEngine | null,
-    private readonly markFailed: (id: VoiceProviderId) => void
+    private readonly markFailed: (id: VoiceProviderId) => void,
+    private readonly report: (
+      from: VoiceProviderId,
+      to: VoiceProviderId | null,
+      reason: string
+    ) => void,
+    private readonly retryDelayMs: number | null = RETRY_DELAY_MS
   ) {}
+
+  /** An answer is coming: let the provider open its connection already. */
+  warm(): void {
+    if (this.finished) return;
+    if (!this.engine) this.engine = this.makeEngine();
+    try {
+      this.engine?.warm?.();
+    } catch {
+      // warming up is optional
+    }
+  }
 
   say(piece: string): void {
     if (this.finished) return;
-    const entry: Entry = { text: piece, done: false };
+    const entry: Entry = { text: piece, done: false, sent: -1 };
     this.entries.push(entry);
     if (!this.engine) {
       this.engine = this.makeEngine();
@@ -214,6 +315,7 @@ class ChainedSpeaker implements SpeakerLike {
   cancel(): void {
     this.finished = true;
     this.generation += 1;
+    this.clearRetry();
     try {
       this.engine?.cancel();
     } catch {
@@ -226,30 +328,67 @@ class ChainedSpeaker implements SpeakerLike {
     const engine = this.engine;
     if (!engine) return;
     const generation = this.generation;
+    entry.sent = generation;
     engine.speak(entry.text).then(
       () => {
         if (generation !== this.generation) return;
         entry.done = true;
         this.check();
       },
-      () => {
+      error => {
         if (generation !== this.generation) return;
-        this.failOver(engine);
+        this.failOver(engine, (error as { message?: string } | null)?.message);
       }
     );
   }
 
-  /** The provider failed: the pieces that are not spoken yet go to the next one. */
-  private failOver(failed: PieceEngine): void {
-    this.markFailed(failed.id);
+  private clearRetry(): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+  }
+
+  /**
+   * The provider failed. A short break gets one more try with the same
+   * provider (after a moment, with a new connection); only the second failure,
+   * or one that will not go away, hands the pieces that are not spoken yet to
+   * the next provider.
+   */
+  private failOver(failed: PieceEngine, reason?: string): void {
     this.generation += 1;
     try {
       failed.cancel();
     } catch {
       // already stopped
     }
+    if (
+      this.retryDelayMs !== null &&
+      failed.id !== 'browser' &&
+      !this.retried.has(failed.id) &&
+      !isPermanentReason(reason)
+    ) {
+      this.retried.add(failed.id);
+      mark('tts.retry', { provider: failed.id, reason: reasonCode(reason) });
+      this.engine = null;
+      this.clearRetry();
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = null;
+        if (this.finished) return;
+        if (!this.engine) this.engine = this.makeEngine();
+        this.handOver(false);
+      }, this.retryDelayMs);
+      return;
+    }
+    this.markFailed(failed.id);
     this.engine = this.makeEngine();
-    const open = this.entries.filter(entry => !entry.done);
+    this.report(failed.id, this.engine?.id ?? null, reason ?? 'unknown');
+    this.handOver(true);
+  }
+
+  /** Gives the pieces that are not spoken yet to the engine (or gives up on speaking). */
+  private handOver(all: boolean): void {
+    const open = this.entries.filter(
+      entry => !entry.done && (all || entry.sent !== this.generation)
+    );
     if (!this.engine) {
       for (const entry of open) entry.done = true;
       this.check();
@@ -262,6 +401,7 @@ class ChainedSpeaker implements SpeakerLike {
     if (this.finished || !this.ended) return;
     if (!this.entries.every(entry => entry.done)) return;
     this.finished = true;
+    this.clearRetry();
     try {
       this.engine?.close();
     } catch {
@@ -292,9 +432,35 @@ export function createVoiceEnv(options: ChainOptions): VoiceEnv {
 
   const failedListening = new Set<VoiceProviderId>();
   const failedSpeaking = new Set<VoiceProviderId>();
+  const retryDelayMs =
+    options.retryDelayMs === undefined ? RETRY_DELAY_MS : options.retryDelayMs;
 
   const nextOf = (ids: VoiceProviderId[], failed: Set<VoiceProviderId>) => () =>
     ids.find(id => !failed.has(id)) ?? null;
+
+  // a function runs on another provider now: to the measuring points and the loop
+  const reportFallback = (
+    fn: VoiceFunction,
+    from: VoiceProviderId,
+    to: VoiceProviderId | null,
+    reason: string
+  ) => {
+    const fallback: ProviderFallback = {
+      function: fn,
+      from,
+      to,
+      reason: categorizeReason(reason),
+      code: reasonCode(reason),
+    };
+    mark('fallback', {
+      function: fn,
+      from,
+      to: to ?? 'none',
+      reason: fallback.reason,
+      code: fallback.code,
+    });
+    options.onFallback?.(fallback);
+  };
 
   const createRecognition = async (id: VoiceProviderId) => {
     if (id === 'soniox') {
@@ -314,23 +480,61 @@ export function createVoiceEnv(options: ChainOptions): VoiceEnv {
 
   return {
     ...base,
+    live: listenChain.includes('soniox'),
+    micSignal: true,
     async createRecognition() {
+      const nextListening = nextOf(listenChain, failedListening);
       const rec = new ChainedRecognition(
         createRecognition,
-        nextOf(listenChain, failedListening),
-        id => failedListening.add(id),
-        id => onActiveProvider?.(id)
+        nextListening,
+        (id, reason) => {
+          failedListening.add(id);
+          reportFallback('stt', id, nextListening(), reason);
+        },
+        id => {
+          mark('stt.provider', { provider: id });
+          onActiveProvider?.(id);
+        },
+        retryDelayMs
       );
       return { rec, local: false };
     },
     createSpeaker(handlers) {
-      return new ChainedSpeaker(handlers, makeEngine, id =>
-        failedSpeaking.add(id)
+      return new ChainedSpeaker(
+        handlers,
+        makeEngine,
+        id => failedSpeaking.add(id),
+        (from, to, reason) => reportFallback('tts', from, to, reason),
+        retryDelayMs
       );
+    },
+    prefetch(purpose) {
+      if (purpose === 'server') {
+        // the chat and the search run on the own server: warm the way there
+        try {
+          deps.warmServer?.();
+        } catch {
+          // the chat call asks itself
+        }
+        return;
+      }
+      const listening = purpose !== 'tts';
+      const ids = listening ? listenChain : speakChain;
+      const failed = listening ? failedListening : failedSpeaking;
+      if (nextOf(ids, failed)() !== 'soniox') return;
+      try {
+        deps.prefetchToken?.(purpose);
+      } catch {
+        // the real call asks again
+      }
     },
     unlockAudio() {
       try {
-        void deps.audioContext().resume();
+        const ctx = deps.audioContext();
+        void Promise.resolve(ctx.resume()).then(
+          () => mark('audio.unlock', { ctx: ctx.state ?? 'unknown' }),
+          () => mark('audio.unlock', { ctx: 'error' })
+        );
       } catch {
         // audio stays locked, the chain then falls back at the first piece
       }

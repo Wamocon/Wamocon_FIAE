@@ -8,10 +8,12 @@ import {
   enablerQuizLinks,
   options,
   questions,
+  quizSubmissions,
   quizzes,
 } from '@/db/migrations/schemas/schema';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import { requireQuizOpen } from '@/lib/catalog/progression-db';
+import { attemptSeed, orderOptionsForAttempt } from '@/lib/quiz/option-order';
 
 // GET: quiz content for a specific difficulty if unlocked and active
 // The data of the session user, a traineeId or userId in the query is ignored.
@@ -27,7 +29,12 @@ export async function GET(
     const { enablerId, difficulty } = await params;
 
     // The content must lie inside the catalog scope of the trainee
-    const catalogScope = await requireContentScopeForUser(traineeId, req, 'enabler', enablerId);
+    const catalogScope = await requireContentScopeForUser(
+      traineeId,
+      req,
+      'enabler',
+      enablerId
+    );
     if (catalogScope instanceof Response) return catalogScope;
 
     const [enabler] = await db
@@ -105,6 +112,26 @@ export async function GET(
           .from(options)
           .where(inArray(options.questionId, qIds))
       : [];
+
+    // The options are mixed per attempt, so the right one does not sit on the
+    // same place every time. The seed is the number of the attempt that is
+    // about to start: the same for every load of it, another for the next one.
+    // The grading runs on the option id, never on the position.
+    const previousAttempts = await db
+      .select({ id: quizSubmissions.id })
+      .from(quizSubmissions)
+      .where(
+        and(
+          eq(quizSubmissions.quizId, quiz.id),
+          eq(quizSubmissions.traineeId, traineeId)
+        )
+      );
+    const seed = attemptSeed(
+      traineeId,
+      String(quiz.id),
+      previousAttempts.length + 1
+    );
+
     return NextResponse.json({
       quiz: {
         id: quiz.id,
@@ -114,16 +141,17 @@ export async function GET(
           id: q.id,
           questionText: q.questionText,
           questionType: q.questionType || 'MCQ',
-          // The order of the author. Without a stored position (old rows) the
-          // stored order stays, the sort is stable.
-          options: opts
-            .filter(o => String(o.questionId) === String(q.id))
-            .sort(
-              (a, b) =>
-                (a.orderIndex ?? Number.MAX_SAFE_INTEGER) -
-                (b.orderIndex ?? Number.MAX_SAFE_INTEGER)
-            )
-            .map(o => ({ id: o.id, optionText: o.optionText })),
+          options: orderOptionsForAttempt(
+            opts
+              .filter(o => String(o.questionId) === String(q.id))
+              .map(o => ({
+                id: String(o.id),
+                optionText: o.optionText,
+                orderIndex: o.orderIndex,
+              })),
+            seed,
+            String(q.id)
+          ).map(o => ({ id: o.id, optionText: o.optionText })),
         })),
       },
     });

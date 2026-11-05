@@ -68,10 +68,15 @@ describe('API: Trainer Dashboard', () => {
         },
       ],
       courses: [{ id: 'c1', title: 'Course 1' }],
-      courseMembers: [],
+      // both trainees are members of the course (the progress counts the
+      // courses of the trainee, not the ones of the trainer)
+      courseMembers: [
+        { userId: 't1', courseId: 'c1', title: 'Course 1', chapter: 1 },
+        { userId: 't2', courseId: 'c1', title: 'Course 1', chapter: 1 },
+      ],
       enablers: [
-        { id: 'e1', courseId: 'c1', scenarioPdfUrl: null },
-        { id: 'e2', courseId: 'c1', scenarioPdfUrl: null },
+        { id: 'e1', courseId: 'c1', isActive: true },
+        { id: 'e2', courseId: 'c1', isActive: true },
       ],
       useCases: [],
       // e2 needs a passed quiz: t1 passed it, t2 did not
@@ -114,8 +119,22 @@ describe('API: Trainer Dashboard', () => {
 
     expect(body.counts.pendingQuiz).toBe(1);
     expect(body.counts.pendingReviews).toBe(1);
+    // t1 finished the course, t2 is half way
     expect(body.charts.moduleProgress).toEqual([
-      { name: 'Course 1', completed: 0, inProgress: 0, notStarted: 2 },
+      { name: 'Course 1', completed: 1, inProgress: 1, notStarted: 0 },
+    ]);
+    // The trend is a percentage (never above 100): the average of t1 (50 %
+    // before the quiz was passed, 100 % since) and t2 (50 %)
+    expect(body.charts.progressTrend.map((p: any) => p.week)).toEqual([
+      'W1',
+      'W2',
+      'W3',
+      'W4',
+      'W5',
+      'W6',
+    ]);
+    expect(body.charts.progressTrend.map((p: any) => p.progress)).toEqual([
+      50, 50, 50, 50, 50, 75,
     ]);
   });
 });

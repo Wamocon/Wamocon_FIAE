@@ -34,7 +34,13 @@ async function aggregate(rows: unknown[]) {
   mockTraineeAccess('ok');
   const mock = createTableDb({
     activityReportUseCaseEntries: rows,
-    profiles: [{ id: 'trainee-123', fullName: 'Test Azubi' }],
+    profiles: [
+      {
+        id: 'trainee-123',
+        fullName: 'Test Azubi',
+        startDate: new Date(2025, 7, 1),
+      },
+    ],
   });
   jest.doMock('@/db', () => ({ __esModule: true, default: mock.db }));
   const mod =

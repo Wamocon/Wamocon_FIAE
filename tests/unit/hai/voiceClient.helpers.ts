@@ -62,9 +62,12 @@ export class FakeRecorder implements RecorderLike {
   onstop: RecorderLike['onstop'] = null;
   started = false;
   stopped = false;
+  /** The slice (ms) the recorder was started with. */
+  slice: number | undefined;
   mimeType = 'audio/webm';
-  start() {
+  start(timeslice?: number) {
     this.started = true;
+    this.slice = timeslice;
   }
   stop() {
     this.stopped = true;
@@ -85,6 +88,16 @@ export class FakeStream implements MediaStreamLike {
         stop: () => {
           this.stopped += 1;
         },
+        getSettings: () => ({
+          sampleRate: 48_000,
+          channelCount: 1,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: true,
+        }),
+        muted: false,
+        readyState: 'live',
+        label: 'Test-Mikrofon (Headset)',
       },
     ];
   }
@@ -151,6 +164,10 @@ export class FakeAudioContext implements AudioContextLike {
 export interface FakeDepsOptions {
   /** fetchToken fails (Soniox not available). */
   tokenFails?: boolean;
+  /** The reason code of the failed token (default token-503). */
+  tokenReason?: string;
+  /** fetchToken never answers (the server hangs). */
+  tokenHangs?: boolean;
   /** The microphone is refused. */
   micDenied?: boolean;
   /** The recognition on Sokrates fails. */
@@ -167,6 +184,9 @@ export function makeDeps(options: FakeDepsOptions = {}) {
   const ctx = new FakeAudioContext();
   const calls = {
     tokens: [] as string[],
+    prefetched: [] as string[],
+    profiles: [] as Array<string | undefined>,
+    warmServer: 0,
     transcribe: 0,
     speak: [] as string[],
     getUserMedia: 0,
@@ -174,16 +194,19 @@ export function makeDeps(options: FakeDepsOptions = {}) {
   const deps: VoiceClientDeps = {
     async fetchToken(purpose): Promise<TokenGrant> {
       calls.tokens.push(purpose);
-      if (options.tokenFails) throw new ProviderUnavailableError('token-503');
+      if (options.tokenHangs) return new Promise<TokenGrant>(() => undefined);
+      if (options.tokenFails) {
+        throw new ProviderUnavailableError(options.tokenReason ?? 'token-503');
+      }
       return {
         apiKey: 'temp-key',
         wsUrl:
-          purpose === 'stt'
+          purpose !== 'tts'
             ? 'wss://stt-rt.eu.soniox.com/transcribe-websocket'
             : 'wss://tts-rt.eu.soniox.com/tts-websocket',
         expiresInSeconds: 90,
         config:
-          purpose === 'stt'
+          purpose !== 'tts'
             ? { model: 'stt-rt-v5', audio_format: 'auto' }
             : {
                 model: 'tts-rt-v2',
@@ -199,8 +222,15 @@ export function makeDeps(options: FakeDepsOptions = {}) {
       sockets.push(socket);
       return socket;
     },
-    async getUserMedia() {
+    prefetchToken(purpose) {
+      calls.prefetched.push(purpose);
+    },
+    warmServer() {
+      calls.warmServer += 1;
+    },
+    async getUserMedia(profile) {
       calls.getUserMedia += 1;
+      calls.profiles.push(profile);
       if (options.micDenied) {
         throw Object.assign(new Error('denied'), { name: 'NotAllowedError' });
       }

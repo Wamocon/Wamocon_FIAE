@@ -16,6 +16,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
+import { countLabel } from '@/lib/i18n/count-label';
+import { sortQuizzesByNumber } from '@/lib/trainer/quiz-order';
 
 // Minimal shadcn-like primitives for this self-contained demo
 function Dialog({
@@ -256,6 +258,7 @@ export function QuizManagement() {
   const canEditCurriculum = useIsSuperAdmin();
   const { t } = useLanguage();
   const [quizzes, setQuizzes] = useState<QuizListItem[]>([]);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -457,7 +460,9 @@ export function QuizManagement() {
       const items: QuizListItem[] = (data.quizzes || []).filter(
         (q: any) => q.quiz_type === 'big'
       );
-      setQuizzes(items);
+      // By the number in the title (K1, K2, K6.1, K10), not as the database
+      // returns them (last changed first)
+      setQuizzes(sortQuizzesByNumber(items));
     } catch (e) {
       console.error(e);
     } finally {
@@ -550,13 +555,20 @@ export function QuizManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);
 
+  const visibleQuizzes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? quizzes.filter(x => x.title.toLowerCase().includes(q)) : quizzes;
+  }, [quizzes, search]);
+
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
       {/* Header */}
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="flex items-center justify-between">
           <h2 className="text-foreground text-2xl font-bold">
-            {t('quiz.managementTitle')}
+            {t(
+              canEditCurriculum ? 'quiz.managementTitle' : 'quiz.overviewTitle'
+            )}
           </h2>
           {canEditCurriculum && (
             <Button
@@ -571,6 +583,22 @@ export function QuizManagement() {
 
       {/* Table */}
       <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
+        {!canEditCurriculum && (
+          <p className="text-muted-foreground mb-4 text-sm">
+            {t('quiz.managementReadOnlyHint')}
+          </p>
+        )}
+        <div className="relative mb-4 max-w-sm">
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+          <Input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder={t('quiz.managementSearch')}
+            aria-label={t('quiz.managementSearch')}
+            className="pl-9"
+          />
+        </div>
         <div className="overflow-x-auto">
           <table className="divide-border min-w-full divide-y">
             <thead className="divide-border divide-y">
@@ -593,12 +621,13 @@ export function QuizManagement() {
               </tr>
             </thead>
             <tbody className="divide-border divide-y">
-              {quizzes.map(q => (
+              {visibleQuizzes.map(q => (
                 <tr key={q.id} className="hover:bg-accent/10 transition-colors">
-                  <td className="text-foreground max-w-[250px] px-4 py-3 text-sm font-medium">
+                  <td className="text-foreground max-w-[420px] min-w-[220px] px-4 py-3 text-sm font-medium">
                     <a
                       href={`/trainer/quiz-management/${q.id}`}
-                      className="hover:text-primary block truncate underline"
+                      title={q.title}
+                      className="hover:text-primary line-clamp-2 break-words underline"
                     >
                       {q.title}
                     </a>
@@ -615,7 +644,7 @@ export function QuizManagement() {
                     )}
                   </td>
                   <td className="text-foreground px-4 py-3 text-sm">
-                    {q.assigned_count} {t('quiz.managementTrainees')}
+                    {countLabel(t, 'quiz.managementTraineeCount', q.assigned_count)}
                   </td>
                   <td className="text-foreground px-4 py-3 text-sm">
                     {new Date(q.created_at).toLocaleDateString()}

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, ne } from 'drizzle-orm';
 import {
+  ausbildungBlocks,
+  schoolExams,
   courseMembers,
   courses,
   enablers,
@@ -28,7 +30,16 @@ import {
   loadPhasePlan,
 } from '@/lib/catalog/phase-plan-db';
 import { loadCourseProgressions } from '@/lib/catalog/progression-db';
-import type { EnablerProgression } from '@/lib/catalog/progression';
+import { startOfToday } from '@/lib/school/day';
+import {
+  PASS_THRESHOLD,
+  type EnablerProgression,
+  type ProgressionEnabler,
+  type ProgressionQuizLink,
+} from '@/lib/catalog/progression';
+import { weeklyProgressPercent } from '@/lib/catalog/weekly-progress';
+import { sortCourses } from '@/lib/catalog/course-order';
+import { courseProgressPercent } from '@/lib/catalog/course-progress';
 import {
   getPhaseDeadline,
   getPhaseMonthRange,
@@ -86,6 +97,8 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
           id: courses.id,
           title: courses.title,
           year: courses.year,
+          chapter: courses.chapter,
+          code: courses.code,
         })
         .from(courseMembers)
         .innerJoin(courses, eq(courseMembers.courseId, courses.id))
@@ -118,7 +131,9 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         .select({ skillId: traineeAchievedSkills.skillId })
         .from(traineeAchievedSkills)
         .where(eq(traineeAchievedSkills.traineeId, userId as any)),
-      // Recent quiz with title (for achievements, LIMIT 1)
+      // Recent PASSED quiz of the occupation with title (for achievements,
+      // LIMIT 1). A quiz below the passing score is no success, and a quiz of
+      // the other occupation of the trainee is not shown on this tab.
       db
         .select({
           score: quizSubmissions.score,
@@ -127,10 +142,17 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         })
         .from(quizSubmissions)
         .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
-        .where(eq(quizSubmissions.traineeId, userId as any))
+        .where(
+          and(
+            eq(quizSubmissions.traineeId, userId as any),
+            gte(quizSubmissions.score, PASS_THRESHOLD),
+            catalogCondition(quizzes.trainingCatalogId, scope)
+          )
+        )
         .orderBy(desc(quizSubmissions.submittedAt))
         .limit(1),
-      // Recent enabler completion with title (for achievements, LIMIT 1)
+      // Recent enabler completion of the occupation with title (for
+      // achievements, LIMIT 1)
       db
         .select({
           completedAt: enablerCompletions.completedAt,
@@ -138,7 +160,13 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         })
         .from(enablerCompletions)
         .innerJoin(enablers, eq(enablerCompletions.enablerId, enablers.id))
-        .where(eq(enablerCompletions.traineeId, userId as any))
+        .innerJoin(courses, eq(enablers.courseId, courses.id))
+        .where(
+          and(
+            eq(enablerCompletions.traineeId, userId as any),
+            catalogCondition(courses.trainingCatalogId, scope)
+          )
+        )
         .orderBy(desc(enablerCompletions.completedAt))
         .limit(1),
     ]);
@@ -147,9 +175,24 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
     const achievedSet = new Set(achievedSkillsRaw.map(a => String(a.skillId)));
 
     // ── Phase 2: courseId-dependent queries in PARALLEL ──
-    const modules: Array<{ id: string; title: string; progress: number }> = [];
+    const modules: Array<{
+      id: string;
+      title: string;
+      progress: number;
+      enablerCount: number;
+      completedCount: number;
+      useCaseCount: number;
+      approvedUseCaseCount: number;
+    }> = [];
     let nextItem: any = null;
     let skillRadar: Array<{ skill: string; value: number }> = [];
+    // The enablers of the occupation (the completions of another occupation do
+    // not count for the streak) and the data of the weekly progress
+    const scopeEnablerIds = new Set<string>();
+    let weeklyCourses: Array<{
+      enablers: ProgressionEnabler[];
+      quizLinks: ProgressionQuizLink[];
+    }> = [];
 
     if (courseIds.length > 0) {
       // ── Phase 2: courseId-dependent (3 queries, was 4 – merged enabler queries) ──
@@ -192,6 +235,7 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
 
       // Filter to active enablers for the next item
       const allEnablers = allEnablerData.filter(e => e.isActive);
+      allEnablerData.forEach(e => scopeEnablerIds.add(String(e.id)));
       const useCaseIds = useCaseRows.map(u => u.id);
 
       // The completion of every enabler, by the one definition (quizzes
@@ -200,6 +244,7 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         userId,
         courseIds.map(String)
       );
+      weeklyCourses = Array.from(progressions.values());
       const enablerStates = new Map<string, EnablerProgression>();
       for (const p of progressions.values()) {
         for (const e of p.progression.enablers) {
@@ -233,7 +278,8 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       }
 
       // Calculate progress per course
-      for (const c of memberCourses) {
+      // In the order of the training plan, not as the database returns them
+      for (const c of sortCourses(memberCourses)) {
         const cId = String(c.id);
         const own = progressions.get(cId)?.progression;
         const totalEnablers = own?.totalCount ?? 0;
@@ -249,26 +295,23 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
           }
         }
 
-        // Calculate weighted progress
-        const enablerProgress =
-          totalEnablers > 0 ? completedCount / totalEnablers : 1;
-        const useCaseProgress =
-          totalUseCases > 0 ? approvedUseCaseCount / totalUseCases : 1;
+        // Weighted progress, the same function as the list of the courses
+        const pct = courseProgressPercent({
+          enablerTotal: totalEnablers,
+          enablerDone: completedCount,
+          useCaseTotal: totalUseCases,
+          useCaseDone: approvedUseCaseCount,
+        });
 
-        let pct: number;
-        if (totalEnablers > 0 && totalUseCases > 0) {
-          pct = Math.round(
-            (enablerProgress * 0.7 + useCaseProgress * 0.3) * 100
-          );
-        } else if (totalEnablers > 0) {
-          pct = Math.round(enablerProgress * 100);
-        } else if (totalUseCases > 0) {
-          pct = Math.round(useCaseProgress * 100);
-        } else {
-          pct = 0;
-        }
-
-        modules.push({ id: cId, title: c.title, progress: pct });
+        modules.push({
+          id: cId,
+          title: c.title,
+          progress: pct,
+          enablerCount: totalEnablers,
+          completedCount,
+          useCaseCount: totalUseCases,
+          approvedUseCaseCount,
+        });
       }
 
       // Next item: the first active enabler that is not completed and that the
@@ -302,35 +345,23 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         }));
     }
 
-    // ── Compute weekly progress from Phase 1 results (no DB) ──
-    const weeks = 6;
-    const now = new Date();
-    const weeklyBuckets: Array<{ week: string; progress: number }> = [];
-    for (let i = weeks - 1; i >= 0; i--) {
-      weeklyBuckets.push({ week: `W${weeks - i}`, progress: 0 });
-    }
-    const addToBucket = (dt: Date | null) => {
-      if (!dt) return;
-      const diffDays = Math.floor(
-        (now.getTime() - dt.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      const bucketIndex = Math.floor(diffDays / 7);
-      if (bucketIndex >= 0 && bucketIndex < weeks) {
-        weeklyBuckets[weeks - 1 - bucketIndex].progress += 1;
-      }
-    };
-    // Reuse allCompletionsRaw (has completedAt) – no separate compRows query needed
-    allCompletionsRaw.forEach(r =>
-      addToBucket(r.completedAt ? new Date(r.completedAt as any) : null)
-    );
-    allQuizSubs.forEach(r =>
-      addToBucket(r.submittedAt ? new Date(r.submittedAt as any) : null)
-    );
+    // ── Weekly progress of the occupation, in percent (0 to 100), computed
+    // from the quiz attempts of Phase 1 (no DB) ──
+    const weeklyBuckets = weeklyProgressPercent({
+      now: new Date(),
+      weeks: 6,
+      courses: weeklyCourses,
+      attempts: allQuizSubs,
+    });
 
     // ── Achievements from Phase 1 results (no DB) ──
+    // text is the German sentence (kept for old clients); code and params let
+    // the page write the sentence in the language of the trainee
     const achievements: Array<{
       kind: 'quiz' | 'module' | 'streak';
       text: string;
+      code: 'quizPassed' | 'enablerDone' | 'streak';
+      params: Record<string, string | number>;
       at?: string | null;
     }> = [];
 
@@ -338,11 +369,13 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       const sub = recentQuizWithTitle[0];
       achievements.push({
         kind: 'quiz',
-        // A quiz without a score was not graded automatically
-        text:
-          sub.score === null || sub.score === undefined
-            ? `Quiz "${sub.quizTitle || 'Quiz'}" abgegeben`
-            : `${Math.round(sub.score)}% im Quiz "${sub.quizTitle || 'Quiz'}"`,
+        // Only a passed quiz is an achievement (the query asks for it)
+        text: `${Math.round(sub.score ?? 0)}% im Quiz "${sub.quizTitle || 'Quiz'}"`,
+        code: 'quizPassed',
+        params: {
+          score: Math.round(sub.score ?? 0),
+          title: sub.quizTitle || 'Quiz',
+        },
         at: sub.submittedAt?.toISOString?.() || null,
       });
     }
@@ -352,6 +385,8 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       achievements.push({
         kind: 'module',
         text: `Enabler "${en.enablerTitle || 'Modul'}" abgeschlossen`,
+        code: 'enablerDone',
+        params: { title: en.enablerTitle || 'Modul' },
         at: (en.completedAt as any)?.toISOString?.() || null,
       });
     }
@@ -367,6 +402,7 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       dayEnd.setDate(dayStart.getDate() + 1);
       const rows = allCompletionsRaw.filter(r => {
         if (!r.completedAt) return false;
+        if (!scopeEnablerIds.has(String(r.enablerId))) return false;
         const d = new Date(r.completedAt as any);
         return d >= dayStart && d < dayEnd;
       });
@@ -377,6 +413,8 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       achievements.push({
         kind: 'streak',
         text: `${streak} Tage in Folge gelernt`,
+        code: 'streak',
+        params: { days: streak },
         at: new Date().toISOString(),
       });
     }
@@ -451,6 +489,19 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
           );
           deadlines.push({
             label: getPhaseLabel(year as ContentStage),
+            // The page writes the label in the language of the trainee
+            labelCode: year === 3 ? 'phaseIntegrative' : 'phase',
+            labelParams:
+              year === 3
+                ? { months: durationYears * 12 }
+                : {
+                    stage: year,
+                    ...getPhaseMonthRange(
+                      durationYears,
+                      year as TrainingPhase,
+                      phaseOneMonths
+                    ),
+                  },
             dueDate: dueDate.toISOString(),
             year,
           });
@@ -458,6 +509,17 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       }
     } catch (deadlineErr) {
       console.error('Dashboard deadlines computation error', deadlineErr);
+    }
+
+    // Next appointments of the calendar (blocks and exams of the trainee), the
+    // card "Anstehende Termine" shows them next to the phase deadlines and
+    // opens the calendar. Counted from the start of today, so an appointment
+    // of today is still upcoming.
+    let appointments: Appointment[] = [];
+    try {
+      appointments = await loadNextAppointments(userId, scope);
+    } catch (appointmentErr) {
+      console.error('Dashboard appointments error', appointmentErr);
     }
 
     // Skill radar fallback
@@ -474,9 +536,111 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       skillRadar,
       achievements,
       deadlines,
+      appointments,
     };
   } catch (e) {
     console.error('Dashboard API data fetch error', e);
     throw e;
   }
+}
+
+const APPOINTMENT_LIMIT = 5;
+
+type Appointment = {
+  id: string;
+  /** Free text of the entry, null for a block without one (the page names it by kind). */
+  label: string | null;
+  /** EXAM, or the block type (SCHOOL, HOLIDAY, PERSONAL, ...). */
+  kind: string;
+  source: 'block' | 'exam';
+  startDate: string;
+  endDate: string | null;
+};
+
+/**
+ * The next appointments of the calendar of a trainee: school blocks, exams and
+ * personal entries that have not ended before today. The long phases in the
+ * company are no appointment and stay out. Blocks and exams belong to one
+ * occupation: a trainee in several trainings sees the appointments of the
+ * occupation of the tab only (a trainee with one occupation is not filtered).
+ */
+async function loadNextAppointments(
+  userId: string,
+  scope: CatalogScope
+): Promise<Appointment[]> {
+  const todayStart = startOfToday();
+  const blockCatalog = scope.selected
+    ? catalogCondition(ausbildungBlocks.trainingCatalogId, scope)
+    : undefined;
+  const examCatalog = scope.selected
+    ? catalogCondition(schoolExams.trainingCatalogId, scope)
+    : undefined;
+  const [blockRows, examRows] = await Promise.all([
+    db
+      .select({
+        id: ausbildungBlocks.id,
+        blockType: ausbildungBlocks.blockType,
+        title: ausbildungBlocks.title,
+        description: ausbildungBlocks.description,
+        notes: ausbildungBlocks.notes,
+        startDate: ausbildungBlocks.startDate,
+        endDate: ausbildungBlocks.endDate,
+      })
+      .from(ausbildungBlocks)
+      .where(
+        and(
+          eq(ausbildungBlocks.traineeId, userId as any),
+          ne(ausbildungBlocks.blockType, 'COMPANY' as any),
+          gte(ausbildungBlocks.endDate, todayStart),
+          blockCatalog
+        )
+      )
+      .orderBy(asc(ausbildungBlocks.startDate))
+      .limit(APPOINTMENT_LIMIT),
+    db
+      .select({
+        id: schoolExams.id,
+        subject: schoolExams.subject,
+        examDate: schoolExams.examDate,
+      })
+      .from(schoolExams)
+      .where(
+        and(
+          eq(schoolExams.traineeId, userId as any),
+          gte(schoolExams.examDate, todayStart),
+          examCatalog
+        )
+      )
+      .orderBy(asc(schoolExams.examDate))
+      .limit(APPOINTMENT_LIMIT),
+  ]);
+
+  const day = (date: Date) => new Date(date).toISOString().slice(0, 10);
+  // An exam entered in the calendar and in the exam list is one appointment
+  const examDays = new Set(examRows.map(e => day(e.examDate as Date)));
+
+  const fromBlocks: Appointment[] = blockRows
+    .filter(
+      b => !(b.blockType === 'EXAM' && examDays.has(day(b.startDate as Date)))
+    )
+    .map(b => ({
+      id: String(b.id),
+      label: b.title || b.description || b.notes || null,
+      kind: String(b.blockType),
+      source: 'block' as const,
+      startDate: new Date(b.startDate as Date).toISOString(),
+      endDate: new Date(b.endDate as Date).toISOString(),
+    }));
+  const fromExams: Appointment[] = examRows.map(e => ({
+    id: String(e.id),
+    label: e.subject ? String(e.subject) : null,
+    kind: 'EXAM',
+    source: 'exam' as const,
+    startDate: new Date(e.examDate as Date).toISOString(),
+    endDate: null,
+  }));
+
+  return [...fromBlocks, ...fromExams]
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+    .slice(0, APPOINTMENT_LIMIT);
 }

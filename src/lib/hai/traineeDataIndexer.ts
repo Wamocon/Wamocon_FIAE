@@ -16,13 +16,12 @@
  */
 
 import haiDb from '@/db/haiDb';
-import { sql, eq, and, desc, gte, lte, count, inArray } from 'drizzle-orm';
+import { sql, eq, and, desc, gte, lte, count } from 'drizzle-orm';
 import {
   profiles,
   courses,
   courseMembers,
   enablers,
-  enablerCompletions,
   enablerSubmissions,
   quizSubmissions,
   ausbildungBlocks,
@@ -36,6 +35,7 @@ import {
 import { indexContent, type SourceType } from './embeddings';
 import type { IndexScope } from './indexScope';
 import { loadPhasePlansForUsers } from '@/lib/catalog/phase-plan-db';
+import { loadTraineeCourseFigures } from './progressFigures';
 import {
   getPhaseMonthRange,
   getTrainingEndDate,
@@ -215,10 +215,13 @@ async function buildTraineeProfileText(
 // ============================================================================
 
 /**
- * Serialize trainee schedule (ausbildung blocks + school exams) into embeddable text
+ * Serialize trainee schedule (ausbildung blocks + school exams) into embeddable
+ * text. Blocks and exams belong to one occupation: the chunk holds those of the
+ * occupation it belongs to (like the progress chunk).
  */
 async function buildTraineeScheduleText(
-  traineeId: string
+  traineeId: string,
+  catalogId: string
 ): Promise<string | null> {
   try {
     // Get profile name for context
@@ -240,7 +243,12 @@ async function buildTraineeScheduleText(
         examSubType: ausbildungBlocks.examSubType,
       })
       .from(ausbildungBlocks)
-      .where(eq(ausbildungBlocks.traineeId, traineeId))
+      .where(
+        and(
+          eq(ausbildungBlocks.traineeId, traineeId),
+          eq(ausbildungBlocks.trainingCatalogId, catalogId)
+        )
+      )
       .orderBy(ausbildungBlocks.startDate);
 
     // Get ALL school exams (sorted by date)
@@ -253,7 +261,12 @@ async function buildTraineeScheduleText(
         notes: schoolExams.notes,
       })
       .from(schoolExams)
-      .where(eq(schoolExams.traineeId, traineeId))
+      .where(
+        and(
+          eq(schoolExams.traineeId, traineeId),
+          eq(schoolExams.trainingCatalogId, catalogId)
+        )
+      )
       .orderBy(schoolExams.examDate);
 
     // Get exam results
@@ -376,20 +389,16 @@ async function buildTraineeProgressText(
       .limit(1);
     const name = profile[0]?.fullName || 'Auszubildende/r';
 
-    // Get enrolled courses with enabler progress
-    const enrolledCourses = await haiDb
-      .select({
-        courseId: courseMembers.courseId,
-        courseTitle: courses.title,
-        year: courses.year,
-      })
-      .from(courseMembers)
-      .innerJoin(courses, eq(courses.id, courseMembers.courseId))
-      .where(
-        and(eq(courseMembers.userId, traineeId), eq(courses.isActive, true))
-      );
+    // The courses of THIS occupation with the figures of the platform (the
+    // course list and the dashboard of the trainee): enablers completed by the
+    // quiz definition, the percentage of the course card. Not the rows of
+    // enabler_completions (the quiz based completion does not write them, so
+    // the text said 0 %), and not the courses of the other occupation (the
+    // chunk carries one occupation). Loaded with the main connection, like the
+    // pages.
+    const figures = await loadTraineeCourseFigures(traineeId, [catalogId]);
 
-    if (enrolledCourses.length === 0) return null;
+    if (figures.length === 0) return null;
 
     const lines: string[] = [
       `# Lernfortschritt: ${name}`,
@@ -401,44 +410,23 @@ async function buildTraineeProgressText(
     let totalCompleted = 0;
     let totalEnablers = 0;
 
-    for (const course of enrolledCourses) {
-      const courseEnablers = await haiDb
-        .select({ id: enablers.id, title: enablers.title })
-        .from(enablers)
-        .where(
-          and(
-            eq(enablers.courseId, course.courseId),
-            eq(enablers.isActive, true)
-          )
-        )
-        .orderBy(enablers.orderIndex);
+    for (const course of figures) {
+      if (course.enablerTotal === 0) continue;
 
-      if (courseEnablers.length === 0) continue;
+      totalCompleted += course.enablerDone;
+      totalEnablers += course.enablerTotal;
 
-      const enablerIds = courseEnablers.map(e => e.id);
-      const completed = await haiDb
-        .select({ enablerId: enablerCompletions.enablerId })
-        .from(enablerCompletions)
-        .where(
-          and(
-            eq(enablerCompletions.traineeId, traineeId),
-            inArray(enablerCompletions.enablerId, enablerIds)
-          )
-        );
-      const completedSet = new Set(completed.map(c => c.enablerId));
-
-      const completedCount = completedSet.size;
-      totalCompleted += completedCount;
-      totalEnablers += courseEnablers.length;
-      const pct = Math.round((completedCount / courseEnablers.length) * 100);
-
-      lines.push(`## ${course.courseTitle} (Jahr ${course.year})`);
       lines.push(
-        `Fortschritt: ${completedCount}/${courseEnablers.length} Enabler (${pct}%)`
+        course.year != null
+          ? `## ${course.title} (Jahr ${course.year})`
+          : `## ${course.title}`
+      );
+      lines.push(
+        `Fortschritt: ${course.enablerDone}/${course.enablerTotal} Enabler (${course.percent}%)`
       );
 
       // Show incomplete enablers
-      const incomplete = courseEnablers.filter(e => !completedSet.has(e.id));
+      const incomplete = course.enablers.filter(e => !e.completed);
       if (incomplete.length > 0 && incomplete.length <= 10) {
         lines.push(`Noch offen:`);
         for (const e of incomplete) {
@@ -564,7 +552,10 @@ export async function indexTraineeData(
     }
 
     // 2. Index schedule & exams
-    const scheduleText = await buildTraineeScheduleText(traineeId);
+    const scheduleText = await buildTraineeScheduleText(
+      traineeId,
+      scope.trainingCatalogId ?? TRAINING_CATALOG_IDS.FIAE
+    );
     if (scheduleText) {
       const scheduleIndexResult = await indexContent({
         sourceType: 'trainee_schedule' as SourceType,

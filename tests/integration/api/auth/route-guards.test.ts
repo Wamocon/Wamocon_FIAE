@@ -101,6 +101,7 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
             .replace(/\/route\.ts$/, '');
           if (
             route.startsWith('notifications') ||
+            route === 'softskill-criteria' ||
             route.startsWith('trainee/') ||
             route.startsWith('activity-reports') ||
             route.startsWith('weekly-evaluations') ||
@@ -137,7 +138,8 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
     // Master data without personal data, open without a session: the
     // Lernfelder of an occupation (list and detail, the catalog comes from the
     // optional session or ?catalog=) and the public list of the softskill
-    // criteria. They answer the same for everybody who asks for one catalog.
+    // ratings of the trainee. They answer the same for everybody who asks for
+    // one catalog. (/api/softskill-criteria needs a session and is in the table.)
     const open = [
       'GET trainee/school/lernfelder',
       'GET trainee/lernfelder',

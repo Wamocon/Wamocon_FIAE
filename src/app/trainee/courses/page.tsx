@@ -6,6 +6,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { BookOpen, ArrowRight, Play, CheckCircle2 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { capitalizeFirst } from '@/lib/display-text';
+import { ENABLER_WEIGHT, USE_CASE_WEIGHT } from '@/lib/catalog/course-progress';
 
 type CourseItem = {
   id: string;
@@ -15,6 +17,9 @@ type CourseItem = {
   progress: number;
   enablerCount: number;
   completedCount: number;
+  /** Use cases of the course and the ones that are approved */
+  useCaseCount?: number;
+  approvedUseCaseCount?: number;
 };
 
 export default function TraineeCoursesPage() {
@@ -102,16 +107,27 @@ export default function TraineeCoursesPage() {
               {/* Course Title & Info */}
               <div className="mb-4">
                 <h3 className="text-foreground group-hover:text-accent mb-2 text-xl font-bold transition-colors">
-                  {c.title}
+                  {capitalizeFirst(c.title)}
                 </h3>
-                <div className="text-muted-foreground text-sm">
-                  {c.year
-                    ? t('courses.year').replace('{year}', String(c.year))
-                    : '—'}{' '}
-                  {c.chapter
-                    ? `• ${t('courses.chapter').replace('{chapter}', String(c.chapter))}`
-                    : ''}
-                </div>
+                {/* Phase and ID only when there is one (a component without a
+                    phase shows no dash) */}
+                {(c.year || c.chapter) && (
+                  <div className="text-muted-foreground text-sm">
+                    {[
+                      c.year
+                        ? t('courses.year').replace('{year}', String(c.year))
+                        : null,
+                      c.chapter
+                        ? t('courses.chapter').replace(
+                            '{chapter}',
+                            String(c.chapter)
+                          )
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' • ')}
+                  </div>
+                )}
               </div>
 
               {/* Progress Bar with Badge */}
@@ -147,6 +163,29 @@ export default function TraineeCoursesPage() {
                     style={{ width: `${c.progress}%` }}
                   />
                 </div>
+                {/* How the percentage is made up: the counts of both parts and
+                    the weights */}
+                {(c.useCaseCount ?? 0) > 0 && (
+                  <div
+                    data-testid="course-progress-explain"
+                    className="text-muted-foreground mt-2 space-y-0.5 text-xs"
+                  >
+                    <div>
+                      {t('courseProgress.useCases', {
+                        completed: c.approvedUseCaseCount ?? 0,
+                        total: c.useCaseCount ?? 0,
+                      })}
+                    </div>
+                    {c.enablerCount > 0 && (
+                      <div>
+                        {t('courseProgress.explain', {
+                          enabler: Math.round(ENABLER_WEIGHT * 100),
+                          useCase: Math.round(USE_CASE_WEIGHT * 100),
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Continue Button */}

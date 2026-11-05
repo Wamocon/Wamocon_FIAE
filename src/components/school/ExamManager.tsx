@@ -3,8 +3,11 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCatalog } from '@/contexts/CatalogContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { authFetch } from '@/lib/authFetch';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useEscapeKey } from '@/lib/hooks/useEscapeKey';
 import {
   FileText,
   Plus,
@@ -73,19 +76,23 @@ const EXAM_TYPES = {
   },
 };
 
-export function ExamManager() {
+export function ExamManager({ onChanged }: { onChanged?: () => void } = {}) {
   const { profile } = useAuth();
   const { t } = useLanguage();
+  // An exam belongs to one occupation: a switch of the occupation tab loads the
+  // list again (the server answers for the chosen occupation)
+  const { activeCode: catalog } = useCatalog();
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [activeView, setActiveView] = useState<'upcoming' | 'past'>('upcoming');
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile?.id) return;
     loadExams();
-  }, [profile?.id, activeView]);
+  }, [profile?.id, activeView, catalog]);
 
   const loadExams = async () => {
     if (!profile?.id) return;
@@ -131,13 +138,16 @@ export function ExamManager() {
       setShowAddModal(false);
       // Background refresh to ensure data consistency
       loadExams();
+      // The overview cards above the tabs count the exams too
+      onChanged?.();
     } catch (e: any) {
       setError(e.message);
     }
   };
 
+  // Deleting asks in the dialog of the platform, the same everywhere
   const handleDeleteExam = async (examId: string) => {
-    if (!confirm(t('exams.deleteConfirm'))) return;
+    setDeleteTarget(null);
 
     // Optimistic: remove from state immediately
     setExams(prev => prev.filter(e => e.id !== examId));
@@ -149,6 +159,7 @@ export function ExamManager() {
       if (!res.ok) throw new Error(t('exams.error.delete'));
       // Background refresh
       loadExams();
+      onChanged?.();
     } catch (e: any) {
       setError(e.message);
       // Revert on error — re-fetch the full list
@@ -201,11 +212,9 @@ export function ExamManager() {
             {t('exams.title')}
           </h2>
           <p className="text-muted-foreground text-sm">
-            {exams.length}{' '}
-            {activeView === 'upcoming'
-              ? t('exams.upcomingCount')
-              : t('exams.pastCount')}{' '}
-            {t('exams.examsLabel')}
+            {t(
+              `exams.summary.${activeView === 'upcoming' ? 'upcoming' : 'past'}.${exams.length === 1 ? 'one' : 'other'}`
+            ).replace('{count}', String(exams.length))}
           </p>
         </div>
 
@@ -352,7 +361,8 @@ export function ExamManager() {
 
                     {/* Delete */}
                     <button
-                      onClick={() => handleDeleteExam(exam.id)}
+                      onClick={() => setDeleteTarget(exam.id)}
+                      aria-label={t('common.delete')}
                       className="hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg p-2 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -372,6 +382,14 @@ export function ExamManager() {
           onAdd={handleAddExam}
         />
       )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          message={t('exams.deleteConfirm')}
+          onConfirm={() => handleDeleteExam(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -385,6 +403,7 @@ function AddExamModal({
   onAdd: (data: Partial<Exam>) => void;
 }) {
   const { t } = useLanguage();
+  useEscapeKey(onClose);
   const [examDate, setExamDate] = useState('');
   const [subject, setSubject] = useState('');
   const [examType, setExamType] = useState('');

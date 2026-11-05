@@ -66,12 +66,92 @@ describe('API: Trainee Courses', () => {
     expect((res as any).status).toBe(200);
     expect(body).toEqual({
       courses: [
-        { id: 'c1', title: 'Course 1', year: 2024, chapter: 'A', progress: 100, enablerCount: 2, completedCount: 2 },
-        { id: 'c2', title: 'Course 2', year: 2025, chapter: 'B', progress: 100, enablerCount: 1, completedCount: 1 },
+        { id: 'c1', title: 'Course 1', year: 2024, chapter: 'A', progress: 100, enablerCount: 2, completedCount: 2, useCaseCount: 0, approvedUseCaseCount: 0 },
+        { id: 'c2', title: 'Course 2', year: 2025, chapter: 'B', progress: 100, enablerCount: 1, completedCount: 1, useCaseCount: 0, approvedUseCaseCount: 0 },
       ],
     });
     // Courses that are not active are not listed (the page "Lernen")
     expect(filters('select', 'courses').sql).toContain('"is_active" = $');
+  });
+
+  it('GET /api/trainee/courses lists the courses in the order of the training plan, numeric (KFB-1175)', async () => {
+    const chapters = [4, 5, 10, 1, 2, 3, 25, 9];
+    const { db } = createTableDb({
+      courseMembers: chapters.map(n => ({ userId: 't1', courseId: `c${n}` })),
+      // the database returns them in this arbitrary order
+      courses: chapters.map(n => ({
+        id: `c${n}`,
+        title: `Komponente ${n}`,
+        year: 1,
+        chapter: n,
+        code: `K${n}`,
+      })),
+      enablers: [],
+    });
+    const GET = await importListHandlerWithDb(db);
+    const res = await GET(makeGet('http://localhost/api/trainee/courses'));
+    const body = await (res as any).json();
+    expect(body.courses.map((c: any) => c.chapter)).toEqual([
+      1, 2, 3, 4, 5, 9, 10, 25,
+    ]);
+  });
+
+  describe('the percentage is explained by the counts next to it (WMCNL-2930)', () => {
+    // six enablers, three of them done (their quiz is passed), one use case
+    const world = (approved: boolean) => ({
+      courseMembers: [{ userId: 't1', courseId: 'c1' }],
+      courses: [{ id: 'c1', title: 'Course 1', year: 1, chapter: 1 }],
+      enablers: [1, 2, 3, 4, 5, 6].map(n => ({
+        id: `e${n}`,
+        courseId: 'c1',
+        orderIndex: n,
+        isActive: true,
+      })),
+      enablerQuizLinks: [1, 2, 3, 4, 5, 6].map(n => ({
+        enablerId: `e${n}`,
+        quizId: `q${n}`,
+        difficulty: 'LOW',
+      })),
+      quizzes: [1, 2, 3, 4, 5, 6].map(n => ({ id: `q${n}`, isActive: true })),
+      questions: [1, 2, 3, 4, 5, 6].map(n => ({
+        id: `qq${n}`,
+        quizId: `q${n}`,
+        questionType: 'MCQ',
+      })),
+      quizSubmissions: [1, 2, 3].map(n => ({ quizId: `q${n}`, score: 80 })),
+      useCases: [{ id: 'u1', courseId: 'c1', isActive: true }],
+      useCaseSubmissions: approved
+        ? [{ useCaseId: 'u1', status: 'APPROVED' }]
+        : [],
+    });
+
+    it('3 of 6 enablers and no approved use case is 35 percent, and says so with both counts', async () => {
+      const { db } = createTableDb(world(false));
+      const GET = await importListHandlerWithDb(db);
+      const body = await (
+        (await GET(makeGet('http://localhost/api/trainee/courses'))) as any
+      ).json();
+      expect(body.courses[0]).toMatchObject({
+        enablerCount: 6,
+        completedCount: 3,
+        useCaseCount: 1,
+        approvedUseCaseCount: 0,
+        progress: 35,
+      });
+    });
+
+    it('an approved use case raises it to 65 percent', async () => {
+      const { db } = createTableDb(world(true));
+      const GET = await importListHandlerWithDb(db);
+      const body = await (
+        (await GET(makeGet('http://localhost/api/trainee/courses'))) as any
+      ).json();
+      expect(body.courses[0]).toMatchObject({
+        useCaseCount: 1,
+        approvedUseCaseCount: 1,
+        progress: 65,
+      });
+    });
   });
 
   it('GET /api/trainee/courses counts a failed quiz as not done and a scenario as no condition', async () => {
@@ -180,7 +260,7 @@ describe('API: Trainee Courses', () => {
         { id: 'e2', title: 'E2', attemptNumber: null, status: null, state: 'completed', lockReason: null, lockedBy: null }
       ],
       useCases: [
-        { id: 'u1', title: 'UC1', attemptNumber: null, status: null }
+        { id: 'u1', code: null, title: 'UC1', attemptNumber: null, status: null }
       ],
     });
   });

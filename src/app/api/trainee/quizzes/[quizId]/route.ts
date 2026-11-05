@@ -5,8 +5,10 @@ import {
   options,
   questions,
   quizAssignments,
+  quizSubmissions,
   quizzes,
 } from '@/db/migrations/schemas/schema';
+import { attemptSeed, orderOptionsForAttempt } from '@/lib/quiz/option-order';
 import { isErrorResponse } from '@/lib/auth/session';
 import { requireTraineeSession } from '@/lib/auth/activity-report-access';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
@@ -95,6 +97,23 @@ export async function GET(
           .where(inArray(options.questionId, qIds))
       : [];
 
+    // The options are mixed per attempt (the number of the attempt that is
+    // about to start), the grading runs on the option id, not the position
+    const previousAttempts = await db
+      .select({ id: quizSubmissions.id })
+      .from(quizSubmissions)
+      .where(
+        and(
+          eq(quizSubmissions.quizId, quiz.id),
+          eq(quizSubmissions.traineeId, traineeId)
+        )
+      );
+    const seed = attemptSeed(
+      traineeId,
+      String(quiz.id),
+      previousAttempts.length + 1
+    );
+
     return NextResponse.json({
       quiz: {
         id: quiz.id,
@@ -103,16 +122,17 @@ export async function GET(
           id: q.id,
           questionText: q.questionText,
           questionType: q.questionType || 'MCQ',
-          // The order of the author. Without a stored position (old rows) the
-          // stored order stays, the sort is stable.
-          options: opts
-            .filter(o => String(o.questionId) === String(q.id))
-            .sort(
-              (a, b) =>
-                (a.orderIndex ?? Number.MAX_SAFE_INTEGER) -
-                (b.orderIndex ?? Number.MAX_SAFE_INTEGER)
-            )
-            .map(o => ({ id: o.id, optionText: o.optionText })),
+          options: orderOptionsForAttempt(
+            opts
+              .filter(o => String(o.questionId) === String(q.id))
+              .map(o => ({
+                id: String(o.id),
+                optionText: o.optionText,
+                orderIndex: o.orderIndex,
+              })),
+            seed,
+            String(q.id)
+          ).map(o => ({ id: o.id, optionText: o.optionText })),
         })),
       },
     });

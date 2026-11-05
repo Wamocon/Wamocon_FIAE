@@ -15,6 +15,10 @@ import { eq } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
 import { notFoundUnlessUuid } from '@/lib/uuid';
 import { PG_FOREIGN_KEY_VIOLATION, pgErrorCode } from '@/lib/pg-error';
+import {
+  removeSubmissionFiles,
+  submissionFileTargetsOfTrainee,
+} from '@/lib/submission-file/on-delete';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 
@@ -196,6 +200,13 @@ export async function DELETE(
       );
     }
 
+    // The files of the submissions of the user lie in the private bucket, the delete of the
+    // profile does not reach them: find them first, remove them once the delete went through
+    const fileTargets = await submissionFileTargetsOfTrainee(
+      userId,
+      targetUser.organizationId ? String(targetUser.organizationId) : null
+    );
+
     try {
       await db.delete(profiles).where(eq(profiles.id, userId as any));
     } catch (deleteErr) {
@@ -240,6 +251,9 @@ export async function DELETE(
         await supabaseAdmin.auth.admin.deleteUser(userId);
       }
     }
+
+    // Last, so that a slow storage can not keep the auth account from going. Never throws.
+    await removeSubmissionFiles(fileTargets);
 
     if (IS_PREVIEW_SCHEMA) {
       return NextResponse.json(

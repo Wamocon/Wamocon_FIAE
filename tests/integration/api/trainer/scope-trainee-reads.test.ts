@@ -112,14 +112,18 @@ const readCases: ReadCase[] = [
     table: 'use_case_submissions',
     inSelect: true,
   },
-  {
-    name: 'GET /profile (activity)',
-    route: 'trainer/profile/route',
-    url: `${API}/profile`,
-    tables: { profiles: [traineeRow] },
-    table: 'activity_log',
-    inSelect: true,
-  },
+  // the activities of the profile come from the work of the trainees (WMCNL-3030),
+  // each of the three sources is scoped by the trainees of the caller
+  ...['enabler_completions', 'quiz_submissions', 'use_case_submissions'].map(
+    table => ({
+      name: `GET /profile (activity, ${table})`,
+      route: 'trainer/profile/route',
+      url: `${API}/profile`,
+      tables: { profiles: [traineeRow] },
+      table,
+      inSelect: true,
+    })
+  ),
   {
     name: 'GET /evaluations',
     route: 'trainer/evaluations/route',
