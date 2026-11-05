@@ -17,7 +17,6 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { sendBlockerInvite } from '@/lib/email';
 import { getUserOrgId } from '@/lib/auth-helpers';
-import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { isoWeekOf } from '@/lib/school/day';
@@ -26,39 +25,7 @@ import {
   requireSchoolCatalogFilter,
   resolveSchoolWriteCatalog,
 } from '@/lib/school/catalog-access';
-
-// Helper to calculate the module phase for a block date.
-function calculateAusbildungsjahr(
-  startDate: Date,
-  durationYears?: number | null,
-  atDate: Date = new Date(),
-  phaseOneMonths?: number | null
-): number {
-  return getTrainingPhase(startDate, durationYears, atDate, phaseOneMonths);
-}
-
-// Helper to get current Schuljahr (e.g., "2026/2027")
-function getCurrentSchuljahr(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-
-  if (month >= 8) {
-    return `${year}/${year + 1}`;
-  }
-  return `${year - 1}/${year}`;
-}
-
-// Helper to get ISO week number
-function getISOWeek(date: Date): number {
-  const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
+import { getCurrentSchuljahr, calculateAusbildungsjahr, getISOWeek } from '@/lib/school/schuljahr';
 
 // GET /api/trainer/blocks?traineeId=...&year=...
 export async function GET(req: NextRequest) {

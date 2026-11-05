@@ -46,6 +46,7 @@ import {
   type RecognitionLike,
   type UtteranceInfo,
 } from './types';
+import { isPermissionError } from '@/lib/hai/voice/client/permission-error';
 
 // ============================================================================
 // WHAT COMES IN FROM OUTSIDE
@@ -286,11 +287,6 @@ export const RECORDER_SLICE_MS = 100;
 const LEVEL_MS = 100;
 /** Speech has an RMS of about 0.02 to 0.2, the mascot wants 0 to 1. */
 const LEVEL_GAIN = 5;
-
-function isPermissionError(error: unknown): boolean {
-  const name = (error as { name?: string } | null)?.name;
-  return name === 'NotAllowedError' || name === 'SecurityError';
-}
 
 /** The stable reason code of an error (ProviderUnavailableError carries one). */
 function reasonOf(error: unknown, fallback: string): string {

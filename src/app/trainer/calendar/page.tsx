@@ -24,6 +24,7 @@ import {
   Users,
   Send,
 } from 'lucide-react';
+import { getDaysInMonth, getFirstDayOfMonth, isDateInBlock } from '@/lib/school/calendar';
 
 // Types
 interface Block {
@@ -142,24 +143,6 @@ const MONTH_KEYS = [
   'trainer.calendar.months.november',
   'trainer.calendar.months.december',
 ];
-
-// Helper functions
-function getDaysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
-}
-
-function getFirstDayOfMonth(year: number, month: number) {
-  const day = new Date(year, month, 1).getDay();
-  return day === 0 ? 6 : day - 1;
-}
-
-function isDateInBlock(date: Date, block: Block): boolean {
-  const start = new Date(block.startDate);
-  const end = new Date(block.endDate);
-  start.setHours(0, 0, 0, 0);
-  end.setHours(23, 59, 59, 999);
-  return date >= start && date <= end;
-}
 
 export default function TrainerCalendarPage() {
   const { profile } = useAuth();

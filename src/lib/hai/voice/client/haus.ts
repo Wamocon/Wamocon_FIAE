@@ -28,6 +28,7 @@ import type { PieceEngine } from './browserSpeech';
 import type { MediaStreamLike, RecorderLike } from './soniox';
 import { ProviderUnavailableError, type RecognitionLike } from './types';
 import { recognitionEvent } from './soniox';
+import { isPermissionError } from '@/lib/hai/voice/client/permission-error';
 
 export interface HausDeps {
   /** The recognized text of one utterance. Throws ProviderUnavailableError. */
@@ -40,11 +41,6 @@ export interface HausDeps {
 }
 
 const POLL_MS = 80;
-
-function isPermissionError(error: unknown): boolean {
-  const name = (error as { name?: string } | null)?.name;
-  return name === 'NotAllowedError' || name === 'SecurityError';
-}
 
 /**
  * Speech recognition on Sokrates, in the shape of SpeechRecognition. One

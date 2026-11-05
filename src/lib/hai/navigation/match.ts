@@ -9,6 +9,7 @@
 
 import { foldText } from './fold';
 import type { ContentReference } from './intent';
+import { escapeRegExp } from '@/lib/regex-escape';
 
 /** A record of the person (enabler or use case) as the matching needs it. */
 export interface ContentCandidate {
@@ -24,10 +25,6 @@ export type MatchResult =
   | { status: 'one'; item: ContentCandidate }
   | { status: 'many'; items: ContentCandidate[] }
   | { status: 'none' };
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /** "007" and "7" are the same number, "1a" stays as it is. */
 function normalizeNumber(value: string): string {

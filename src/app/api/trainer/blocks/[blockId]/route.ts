@@ -14,18 +14,10 @@ import { ausbildungBlocks, profiles, notifications } from '@/db/migrations/schem
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { notFoundUnlessUuid } from '@/lib/uuid';
 import { ensureSchoolRowInChosenCatalog } from '@/lib/school/catalog-access';
+import { getISOWeek } from '@/lib/school/schuljahr';
 
 // A block of another chosen occupation is answered like a missing one
 const blockNotFound = () => NextResponse.json({ error: 'Block not found' }, { status: 404 });
-
-// Helper to get ISO week number
-function getISOWeek(date: Date): number {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-}
 
 // DELETE /api/trainer/blocks/[blockId]
 export async function DELETE(

@@ -13,6 +13,7 @@ import { authFetch } from '@/lib/authFetch';
 import { DENIAL_CODES } from '../denial';
 import type { QuizQuestionPublic } from './logic';
 import type { QuizEmptyReason, QuizFeedback } from './session';
+import { isRecord } from '@/lib/type-guards';
 
 export type NextQuestionResult =
   | {
@@ -33,10 +34,6 @@ export type NextQuestionResult =
 export type AnswerResult =
   | { kind: 'ok'; feedback: QuizFeedback }
   | { kind: 'error'; errorKey: string };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 /** The key of the error text for a failed call. */
 export function errorKeyFor(status: number, code?: unknown): string {

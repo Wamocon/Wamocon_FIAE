@@ -36,6 +36,7 @@ import {
   type AusbildungDurationYears,
   type TrainingPhase,
 } from '@/lib/ausbildung/duration';
+import { getDaysInMonth, getFirstDayOfMonth, isDateInBlock } from '@/lib/school/calendar';
 
 interface Block {
   id: string;
@@ -171,26 +172,6 @@ const WEEKDAY_KEYS = [
   'time.weekdays.sa',
   'time.weekdays.su',
 ];
-
-// Helper to get days in a month
-function getDaysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
-}
-
-// Helper to get first day of month (0 = Sunday, adjusted to Monday = 0)
-function getFirstDayOfMonth(year: number, month: number) {
-  const day = new Date(year, month, 1).getDay();
-  return day === 0 ? 6 : day - 1; // Adjust so Monday = 0
-}
-
-// Helper to check if a date is within a block's range
-function isDateInBlock(date: Date, block: Block): boolean {
-  const start = new Date(block.startDate);
-  const end = new Date(block.endDate);
-  start.setHours(0, 0, 0, 0);
-  end.setHours(23, 59, 59, 999);
-  return date >= start && date <= end;
-}
 
 // Helper to format date as YYYY-MM-DD for comparison
 function formatDateKey(date: Date): string {
