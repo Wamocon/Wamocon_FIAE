@@ -23,7 +23,10 @@ import {
   requireSchoolCatalogFilter,
   resolveSchoolWriteCatalog,
 } from '@/lib/school/catalog-access';
-import { getCurrentSchuljahr, calculateAusbildungsjahr } from '@/lib/school/schuljahr';
+import {
+  getCurrentSchuljahr,
+  calculateAusbildungsjahr,
+} from '@/lib/school/schuljahr';
 
 // GET /api/trainee/school/exams?upcoming=true&schuljahr=...
 // upcoming=true: from the start of today on, upcoming=false: before today (the

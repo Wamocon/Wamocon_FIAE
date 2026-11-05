@@ -25,7 +25,11 @@ import {
   requireSchoolCatalogFilter,
   resolveSchoolWriteCatalog,
 } from '@/lib/school/catalog-access';
-import { getCurrentSchuljahr, calculateAusbildungsjahr, getISOWeek } from '@/lib/school/schuljahr';
+import {
+  getCurrentSchuljahr,
+  calculateAusbildungsjahr,
+  getISOWeek,
+} from '@/lib/school/schuljahr';
 
 // GET /api/trainer/blocks?traineeId=...&year=...
 export async function GET(req: NextRequest) {

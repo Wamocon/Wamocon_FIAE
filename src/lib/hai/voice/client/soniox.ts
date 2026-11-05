@@ -46,7 +46,7 @@ import {
   type RecognitionLike,
   type UtteranceInfo,
 } from './types';
-import { isPermissionError } from '@/lib/hai/voice/client/permission-error';
+import { isPermissionError } from './permission-error';
 
 // ============================================================================
 // WHAT COMES IN FROM OUTSIDE

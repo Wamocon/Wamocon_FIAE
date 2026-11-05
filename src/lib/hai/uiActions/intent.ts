@@ -70,4 +70,3 @@ export function detectUiIntent(message: unknown): UiIntent {
     open: OPEN_PATTERNS.some(pattern => pattern.test(folded)),
   };
 }
-
