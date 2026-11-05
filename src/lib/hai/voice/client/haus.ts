@@ -28,7 +28,7 @@ import type { PieceEngine } from './browserSpeech';
 import type { MediaStreamLike, RecorderLike } from './soniox';
 import { ProviderUnavailableError, type RecognitionLike } from './types';
 import { recognitionEvent } from './soniox';
-import { isPermissionError } from '@/lib/hai/voice/client/permission-error';
+import { isPermissionError } from './permission-error';
 
 export interface HausDeps {
   /** The recognized text of one utterance. Throws ProviderUnavailableError. */

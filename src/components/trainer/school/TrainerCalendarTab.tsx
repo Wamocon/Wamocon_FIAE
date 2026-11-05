@@ -32,7 +32,11 @@ import {
   Edit3,
   Clock,
 } from 'lucide-react';
-import { getDaysInMonth, getFirstDayOfMonth, isDateInBlock } from '@/lib/school/calendar';
+import {
+  getDaysInMonth,
+  getFirstDayOfMonth,
+  isDateInBlock,
+} from '@/lib/school/calendar';
 
 interface Block {
   id: string;

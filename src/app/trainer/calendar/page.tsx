@@ -24,7 +24,11 @@ import {
   Users,
   Send,
 } from 'lucide-react';
-import { getDaysInMonth, getFirstDayOfMonth, isDateInBlock } from '@/lib/school/calendar';
+import {
+  getDaysInMonth,
+  getFirstDayOfMonth,
+  isDateInBlock,
+} from '@/lib/school/calendar';
 
 // Types
 interface Block {

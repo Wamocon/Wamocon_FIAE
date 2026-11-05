@@ -19,7 +19,10 @@ import { getUserOrgId } from '@/lib/auth-helpers';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { resolveSchoolWriteCatalog } from '@/lib/school/catalog-access';
-import { getCurrentSchuljahr, calculateAusbildungsjahr } from '@/lib/school/schuljahr';
+import {
+  getCurrentSchuljahr,
+  calculateAusbildungsjahr,
+} from '@/lib/school/schuljahr';
 
 // Helper to parse German date format "10.08." or "10.08. - 14.08."
 function parseGermanDateRange(

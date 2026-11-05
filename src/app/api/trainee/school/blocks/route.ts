@@ -18,7 +18,11 @@ import {
   requireSchoolCatalogFilter,
   resolveSchoolWriteCatalog,
 } from '@/lib/school/catalog-access';
-import { getCurrentSchuljahr, calculateAusbildungsjahr, getISOWeek } from '@/lib/school/schuljahr';
+import {
+  getCurrentSchuljahr,
+  calculateAusbildungsjahr,
+  getISOWeek,
+} from '@/lib/school/schuljahr';
 
 // GET /api/trainee/school/blocks?schuljahr=...&year=...
 // The blocks of the session user. A traineeId in the query (sent by older

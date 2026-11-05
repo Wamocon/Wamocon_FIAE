@@ -36,7 +36,11 @@ import {
   type AusbildungDurationYears,
   type TrainingPhase,
 } from '@/lib/ausbildung/duration';
-import { getDaysInMonth, getFirstDayOfMonth, isDateInBlock } from '@/lib/school/calendar';
+import {
+  getDaysInMonth,
+  getFirstDayOfMonth,
+  isDateInBlock,
+} from '@/lib/school/calendar';
 
 interface Block {
   id: string;
