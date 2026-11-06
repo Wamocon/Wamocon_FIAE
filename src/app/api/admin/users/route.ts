@@ -278,7 +278,13 @@ export async function POST(req: NextRequest) {
 
     if (createError) {
       return NextResponse.json(
-        { error: createUserFailureMessage(createError) },
+        {
+          error: createUserFailureMessage(
+            createError,
+            undefined,
+            session.isSuperAdmin
+          ),
+        },
         { status: 400 }
       );
     }

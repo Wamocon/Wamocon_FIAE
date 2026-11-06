@@ -26,6 +26,14 @@ const admin = fakeSession({
   isAdmin: true,
 });
 
+const platformAdmin = fakeSession({
+  id: '88888888-8888-4888-8888-888888888888',
+  role: 'SUPER_ADMIN',
+  organizationId: ORG,
+  isAdmin: true,
+  isSuperAdmin: true,
+});
+
 const flagged = { app_metadata: { preview_only: true } };
 const shared = { app_metadata: { provider: 'email', providers: ['email'] } };
 
@@ -40,6 +48,8 @@ type LoadOptions = {
   targetEmail?: string;
   /** The first read of profiles is the delete target, not the e-mail check. */
   forDelete?: boolean;
+  /** Who acts: an administrator of one organization (default) or a platform administrator. */
+  actor?: 'admin' | 'platform';
 };
 
 async function load(options: LoadOptions) {
@@ -80,7 +90,7 @@ async function load(options: LoadOptions) {
     },
   });
   jest.doMock('@/db', () => ({ __esModule: true, default: mock.db }));
-  mockSession(admin);
+  mockSession(options.actor === 'platform' ? platformAdmin : admin);
 
   const lookup = options.lookup ?? {};
   const getUserById = jest.fn(async (_id: string) => {
@@ -220,7 +230,7 @@ describe('POST /api/admin/users in Preview', () => {
 describe('POST /api/admin/users outside of Preview (unchanged)', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('still answers the text of the auth server when the account cannot be created', async () => {
+  it('tells an administrator of an organization in German that the address is taken, without the architecture', async () => {
     const { create } = await load({
       preview: false,
       createUserError:
@@ -228,7 +238,33 @@ describe('POST /api/admin/users outside of Preview (unchanged)', () => {
     });
     const res = await create.POST(post(body()));
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/already been registered/);
+    const json: any = await res.json();
+    expect(json.error).toMatch(/bereits vergeben/);
+    expect(json.error).not.toMatch(/Preview|registered/);
+  });
+
+  it('adds the cause for a platform administrator', async () => {
+    const { create } = await load({
+      preview: false,
+      actor: 'platform',
+      createUserError:
+        'A user with this email address has already been registered',
+    });
+    const res = await create.POST(post(body()));
+    expect(res.status).toBe(400);
+    const json: any = await res.json();
+    expect(json.error).toMatch(/Testkonto aus der Preview/);
+    expect(json.error).not.toMatch(/registered/);
+  });
+
+  it('still answers the text of the auth server for any other failure', async () => {
+    const { create } = await load({
+      preview: false,
+      createUserError: 'Password should be at least 6 characters',
+    });
+    const res = await create.POST(post(body()));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/at least 6 characters/);
   });
 
   it('sets no app_metadata and no other new field', async () => {
@@ -354,7 +390,9 @@ describe('DELETE /api/admin/users/[userId] in Preview', () => {
 
   it('keeps the rule that nobody deletes themselves', async () => {
     const ctx = await loadDelete({ preview: true, lookup: { user: flagged } });
-    const res = await ctx.remove.DELETE(...del('77777777-7777-4777-8777-777777777777'));
+    const res = await ctx.remove.DELETE(
+      ...del('77777777-7777-4777-8777-777777777777')
+    );
     expect(res.status).toBe(400);
     expect(ctx.getUserById).not.toHaveBeenCalled();
     expect(ctx.deleteUser).not.toHaveBeenCalled();
