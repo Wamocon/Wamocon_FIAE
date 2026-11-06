@@ -337,7 +337,7 @@ export function castExpression(alias, srcCol, dstCol) {
  * Builds the sync script (pure).
  * @param {{
  *   config: object,
- *   meta: Record<string, Record<string, { name: string, dataType: string, udtSchema: string, udtName: string, generated: boolean }[]>>,
+ *   meta: Record<string, Record<string, { name: string, dataType: string, udtSchema: string, udtName: string, generated: boolean, notNull?: boolean }[]>>,
  *   from: string, to: string, ownerEmail?: string|null, rollback: boolean, only?: string[]|null,
  *   updateMode?: 'never'|'configured', fks?: Record<string, Record<string, { column: string, refSchema: string, refTable: string }[]>>,
  *   catalog?: string|null   limit the run to the rows of this training catalog (code)
@@ -511,8 +511,15 @@ export function buildScript({
         : sub;
     };
     const exprByName = new Map(common.map(c => [c.name, exprOf(c)]));
+    // NOT NULL in the target: "= X" is the same as "is not distinct from X" in every
+    // filter and join (a NULL X matches nothing either way), but it allows hash joins
+    // and btree indexes. "is not distinct from" on a big table was a nested loop over
+    // source x target and ran into the 2 minute limit of the release (questions).
+    // Nullable key columns keep "is not distinct from", the NULL rule does not change.
+    const eqOp = k =>
+      dstByName.get(k)?.notNull === true ? '=' : 'is not distinct from';
     const keyMatch = key
-      .map(k => `d.${ident(k)} is not distinct from ${exprByName.get(k)}`)
+      .map(k => `d.${ident(k)} ${eqOp(k)} ${exprByName.get(k)}`)
       .join(' and ');
     const skipFilters = remaps
       .filter(([, spec]) => (spec.onMissing ?? 'skip') !== 'null')
@@ -607,7 +614,9 @@ export function buildScript({
         continue;
       }
       body.push(
-        `  create temp table _map_${T} on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from ${from}.${T} s join ${to}.${T} d on ${keyMatch}${scopeS ? ` where ${scopeS}` : ''} order by s.id, d.id;`
+        `  create temp table _map_${T} on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from ${from}.${T} s join ${to}.${T} d on ${keyMatch}${scopeS ? ` where ${scopeS}` : ''} order by s.id, d.id;`,
+        // src_id is unique (distinct on): index and statistics for the lookups below
+        `  create unique index on _map_${T} (src_id); analyze _map_${T};`
       );
     }
     planned.set(t.name, { key: key });
@@ -621,7 +630,8 @@ export function buildScript({
       .map(c => `lower(sp.${ident(c)}::text) = lower(d.${ident(c)}::text)`)
       .join(' and ');
     head.push(
-      `  create temp table _map_${ident(name)} on commit drop as select distinct on (sp.id) sp.id as src_id, d.id as dst_id from ${from}.${ident(name)} sp join ${to}.${ident(name)} d on ${match} order by sp.id, d.id;`
+      `  create temp table _map_${ident(name)} on commit drop as select distinct on (sp.id) sp.id as src_id, d.id as dst_id from ${from}.${ident(name)} sp join ${to}.${ident(name)} d on ${match} order by sp.id, d.id;`,
+      `  create unique index on _map_${ident(name)} (src_id); analyze _map_${ident(name)};`
     );
   }
   const catalogChecks = catalog
@@ -717,7 +727,8 @@ function loadMeta(target, config, from, to) {
   const rows = query(
     target,
     `select table_schema, table_name, column_name, data_type, udt_schema, udt_name,
-            (is_generated = 'ALWAYS' or generation_expression is not null) as generated
+            (is_generated = 'ALWAYS' or generation_expression is not null) as generated,
+            (is_nullable = 'NO') as not_null
        from information_schema.columns
       where table_schema in (${q(from)}, ${q(to)}) and table_name in (${names.map(q).join(', ')})
       order by table_schema, table_name, ordinal_position`
@@ -751,6 +762,8 @@ function loadMeta(target, config, from, to) {
       udtSchema: r.udt_schema,
       udtName: r.udt_name,
       generated: Boolean(r.generated),
+      // a missing or unreadable value counts as nullable: the old behaviour
+      notNull: r.not_null === true || r.not_null === 't' || r.not_null === 'true',
     });
   }
   return { meta, fks };

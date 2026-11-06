@@ -783,3 +783,66 @@ test('report is read out of the error message and summarised', () => {
   assert.equal(s.updated, 1);
   assert.equal(parseReport('ERROR: something else'), null);
 });
+
+// --- Key match: "=" for NOT NULL target keys (index and hash join friendly) ---
+// "is not distinct from" cannot use an index or a hash join. On the big table
+// questions it ran as a nested loop and hit the 2 minute limit of the release run.
+
+const withNotNull = (cols, names) =>
+  cols.map(c => (names.includes(c.name) ? { ...c, notNull: true } : c));
+const metaWith = (target, source = meta.public_preview) => ({
+  public_preview: source,
+  public: target,
+});
+
+test('key match: a NOT NULL key column of the target uses "=", a nullable one keeps "is not distinct from"', () => {
+  const m = metaWith({
+    ...meta.public,
+    enablers: withNotNull(enablerCols('public'), ['course_id']),
+  });
+  const { sql } = build({ meta: m });
+  assert.match(sql, /d\.course_id = \(select m\.dst_id from _map_courses m/);
+  assert.match(sql, /d\.title is not distinct from s\.title/);
+  assert.ok(!/d\.course_id is not distinct from/.test(sql));
+});
+
+test('key match: without nullability information nothing changes (is not distinct from)', () => {
+  const { sql } = build();
+  assert.match(sql, /d\.course_id is not distinct from/);
+  assert.ok(!/d\.course_id = /.test(sql));
+});
+
+test('key match: only the nullability of the TARGET counts, not that of the source', () => {
+  const source = {
+    ...meta.public_preview,
+    enablers: withNotNull(enablerCols('public_preview'), ['course_id']),
+  };
+  const { sql } = build({ meta: metaWith(meta.public, source) });
+  assert.match(sql, /d\.course_id is not distinct from/);
+  assert.ok(!/d\.course_id = /.test(sql));
+});
+
+test('key match: the dry run and the apply script use the same operator', () => {
+  const m = metaWith({
+    ...meta.public,
+    enablers: withNotNull(enablerCols('public'), ['course_id']),
+  });
+  const keys = sql =>
+    sql.match(/d\.(course_id|title) (=|is not distinct from) /g);
+  const dry = build({ meta: m, rollback: true }).sql;
+  const apply = build({ meta: m, rollback: false }).sql;
+  assert.ok(keys(dry).length > 0);
+  assert.deepEqual(keys(dry), keys(apply));
+});
+
+test('the mapping temp tables get a unique index and statistics', () => {
+  const { sql } = build();
+  assert.match(
+    sql,
+    /create unique index on _map_courses \(src_id\); analyze _map_courses;/
+  );
+  assert.match(
+    sql,
+    /create unique index on _map_profiles \(src_id\); analyze _map_profiles;/
+  );
+});
