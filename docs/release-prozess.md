@@ -4,6 +4,8 @@ WAMOCON GmbH, Mergenthalerallee 79-81, 65760 Eschborn
 
 Stand: Oktober 2026. Gilt für das Repository Wamocon_FIAE (Next.js, Drizzle, Supabase, Vercel).
 
+**Vor jedem Release mit Migrationen die Checkliste in `docs/release-lessons-2026-11.md` abarbeiten.** Sie stammt aus den Fehlern des ersten Produktivgangs (v2.0.0).
+
 ## 1. Kurzfassung
 
 Production und Preview teilen sich eine Supabase-Datenbank, aber nicht das Schema.

@@ -3,7 +3,9 @@ declare rep jsonb := '{}'::jsonb; n_ins bigint; n_upd bigint; n_skip bigint;
 begin
   perform pg_advisory_xact_lock(hashtext('content_sync'));
   create temp table _map_profiles on commit drop as select distinct on (sp.id) sp.id as src_id, d.id as dst_id from public_preview.profiles sp join public.profiles d on lower(sp.email::text) = lower(d.email::text) order by sp.id, d.id;
+  create unique index on _map_profiles (src_id); analyze _map_profiles;
   create temp table _map_organizations on commit drop as select distinct on (sp.id) sp.id as src_id, d.id as dst_id from public_preview.organizations sp join public.organizations d on lower(sp.slug::text) = lower(d.slug::text) order by sp.id, d.id;
+  create unique index on _map_organizations (src_id); analyze _map_organizations;
   -- training_catalogs
   if exists (select 1 from public_preview.training_catalogs s group by s.code having count(*) > 1) then raise exception 'content-sync: key (code) is not unique in public_preview.training_catalogs'; end if;
   if exists (select 1 from public.training_catalogs d group by d.code having count(*) > 1) then raise exception 'content-sync: key (code) is not unique in public.training_catalogs'; end if;
@@ -13,6 +15,7 @@ begin
   select count(*) into n_skip from public_preview.training_catalogs s where not exists (select 1 from public.training_catalogs d where d.code is not distinct from s.code);
   rep := rep || jsonb_build_object('training_catalogs', jsonb_build_object('inserted', n_ins, 'updated', n_upd, 'unmatched', n_skip));
   create temp table _map_training_catalogs on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from public_preview.training_catalogs s join public.training_catalogs d on d.code is not distinct from s.code order by s.id, d.id;
+  create unique index on _map_training_catalogs (src_id); analyze _map_training_catalogs;
   -- courses
   if exists (select 1 from public_preview.courses s group by s.title, s.year, s.chapter having count(*) > 1) then raise exception 'content-sync: key (title, year, chapter) is not unique in public_preview.courses'; end if;
   if exists (select 1 from public.courses d group by d.title, d.year, d.chapter having count(*) > 1) then raise exception 'content-sync: key (title, year, chapter) is not unique in public.courses'; end if;
@@ -22,6 +25,7 @@ begin
   select count(*) into n_skip from public_preview.courses s where not exists (select 1 from public.courses d where d.title is not distinct from s.title and d.year is not distinct from s.year and d.chapter is not distinct from s.chapter);
   rep := rep || jsonb_build_object('courses', jsonb_build_object('inserted', n_ins, 'updated', n_upd, 'unmatched', n_skip));
   create temp table _map_courses on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from public_preview.courses s join public.courses d on d.title is not distinct from s.title and d.year is not distinct from s.year and d.chapter is not distinct from s.chapter order by s.id, d.id;
+  create unique index on _map_courses (src_id); analyze _map_courses;
   -- enablers
   if exists (select 1 from public_preview.enablers s group by s.course_id, s.title having count(*) > 1) then raise exception 'content-sync: key (course_id, title) is not unique in public_preview.enablers'; end if;
   if exists (select 1 from public.enablers d group by d.course_id, d.title having count(*) > 1) then raise exception 'content-sync: key (course_id, title) is not unique in public.enablers'; end if;
@@ -31,6 +35,7 @@ begin
   select count(*) into n_skip from public_preview.enablers s where not exists (select 1 from public.enablers d where d.course_id is not distinct from (select m.dst_id from _map_courses m where m.src_id = s.course_id) and d.title is not distinct from s.title);
   rep := rep || jsonb_build_object('enablers', jsonb_build_object('inserted', n_ins, 'updated', n_upd, 'unmatched', n_skip));
   create temp table _map_enablers on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from public_preview.enablers s join public.enablers d on d.course_id is not distinct from (select m.dst_id from _map_courses m where m.src_id = s.course_id) and d.title is not distinct from s.title order by s.id, d.id;
+  create unique index on _map_enablers (src_id); analyze _map_enablers;
   -- use_cases
   if exists (select 1 from public_preview.use_cases s group by s.course_id, s.title having count(*) > 1) then raise exception 'content-sync: key (course_id, title) is not unique in public_preview.use_cases'; end if;
   if exists (select 1 from public.use_cases d group by d.course_id, d.title having count(*) > 1) then raise exception 'content-sync: key (course_id, title) is not unique in public.use_cases'; end if;
@@ -40,6 +45,7 @@ begin
   select count(*) into n_skip from public_preview.use_cases s where not exists (select 1 from public.use_cases d where d.course_id is not distinct from (select m.dst_id from _map_courses m where m.src_id = s.course_id) and d.title is not distinct from s.title);
   rep := rep || jsonb_build_object('use_cases', jsonb_build_object('inserted', n_ins, 'updated', n_upd, 'unmatched', n_skip));
   create temp table _map_use_cases on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from public_preview.use_cases s join public.use_cases d on d.course_id is not distinct from (select m.dst_id from _map_courses m where m.src_id = s.course_id) and d.title is not distinct from s.title order by s.id, d.id;
+  create unique index on _map_use_cases (src_id); analyze _map_use_cases;
   -- content_documents
   if exists (select 1 from public_preview.content_documents s group by s.enabler_id, s.use_case_id, s.course_id, s.title, s.file_name, s.document_type having count(*) > 1) then raise exception 'content-sync: key (enabler_id, use_case_id, course_id, title, file_name, document_type) is not unique in public_preview.content_documents'; end if;
   if exists (select 1 from public.content_documents d group by d.enabler_id, d.use_case_id, d.course_id, d.title, d.file_name, d.document_type having count(*) > 1) then raise exception 'content-sync: key (enabler_id, use_case_id, course_id, title, file_name, document_type) is not unique in public.content_documents'; end if;
@@ -57,6 +63,7 @@ begin
   select count(*) into n_skip from public_preview.quizzes s where not exists (select 1 from public.quizzes d where d.title is not distinct from s.title and d.quiz_type is not distinct from s.quiz_type and d.created_at is not distinct from s.created_at);
   rep := rep || jsonb_build_object('quizzes', jsonb_build_object('inserted', n_ins, 'updated', n_upd, 'unmatched', n_skip));
   create temp table _map_quizzes on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from public_preview.quizzes s join public.quizzes d on d.title is not distinct from s.title and d.quiz_type is not distinct from s.quiz_type and d.created_at is not distinct from s.created_at order by s.id, d.id;
+  create unique index on _map_quizzes (src_id); analyze _map_quizzes;
   -- enabler_quizzes
   if exists (select 1 from public_preview.enabler_quizzes s group by s.enabler_id having count(*) > 1) then raise exception 'content-sync: key (enabler_id) is not unique in public_preview.enabler_quizzes'; end if;
   if exists (select 1 from public.enabler_quizzes d group by d.enabler_id having count(*) > 1) then raise exception 'content-sync: key (enabler_id) is not unique in public.enabler_quizzes'; end if;
@@ -82,6 +89,7 @@ begin
   select count(*) into n_skip from public_preview.questions s where not exists (select 1 from public.questions d where d.quiz_id is not distinct from (select m.dst_id from _map_quizzes m where m.src_id = s.quiz_id) and d.order_index is not distinct from s.order_index);
   rep := rep || jsonb_build_object('questions', jsonb_build_object('inserted', n_ins, 'updated', n_upd, 'unmatched', n_skip));
   create temp table _map_questions on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from public_preview.questions s join public.questions d on d.quiz_id is not distinct from (select m.dst_id from _map_quizzes m where m.src_id = s.quiz_id) and d.order_index is not distinct from s.order_index order by s.id, d.id;
+  create unique index on _map_questions (src_id); analyze _map_questions;
   -- options
   if exists (select 1 from public_preview.options s group by s.question_id, s.option_text, s.is_correct having count(*) > 1) then raise exception 'content-sync: key (question_id, option_text, is_correct) is not unique in public_preview.options'; end if;
   if exists (select 1 from public.options d group by d.question_id, d.option_text, d.is_correct having count(*) > 1) then raise exception 'content-sync: key (question_id, option_text, is_correct) is not unique in public.options'; end if;
@@ -99,6 +107,7 @@ begin
   select count(*) into n_skip from public_preview.lernfelder s where not exists (select 1 from public.lernfelder d where d.code is not distinct from s.code);
   rep := rep || jsonb_build_object('lernfelder', jsonb_build_object('inserted', n_ins, 'updated', n_upd, 'unmatched', n_skip));
   create temp table _map_lernfelder on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from public_preview.lernfelder s join public.lernfelder d on d.code is not distinct from s.code order by s.id, d.id;
+  create unique index on _map_lernfelder (src_id); analyze _map_lernfelder;
   -- lernfeld_mappings
   if exists (select 1 from public_preview.lernfeld_mappings s group by s.lernfeld_id, s.enabler_id, s.use_case_id having count(*) > 1) then raise exception 'content-sync: key (lernfeld_id, enabler_id, use_case_id) is not unique in public_preview.lernfeld_mappings'; end if;
   if exists (select 1 from public.lernfeld_mappings d group by d.lernfeld_id, d.enabler_id, d.use_case_id having count(*) > 1) then raise exception 'content-sync: key (lernfeld_id, enabler_id, use_case_id) is not unique in public.lernfeld_mappings'; end if;
@@ -116,6 +125,7 @@ begin
   select count(*) into n_skip from public_preview.training_components s where not exists (select 1 from public.training_components d where d.code is not distinct from s.code);
   rep := rep || jsonb_build_object('training_components', jsonb_build_object('inserted', n_ins, 'updated', n_upd, 'unmatched', n_skip));
   create temp table _map_training_components on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from public_preview.training_components s join public.training_components d on d.code is not distinct from s.code order by s.id, d.id;
+  create unique index on _map_training_components (src_id); analyze _map_training_components;
   -- training_use_cases
   if exists (select 1 from public_preview.training_use_cases s group by s.component_id, s.letter having count(*) > 1) then raise exception 'content-sync: key (component_id, letter) is not unique in public_preview.training_use_cases'; end if;
   if exists (select 1 from public.training_use_cases d group by d.component_id, d.letter having count(*) > 1) then raise exception 'content-sync: key (component_id, letter) is not unique in public.training_use_cases'; end if;
@@ -133,6 +143,7 @@ begin
   select count(*) into n_skip from public_preview.training_catalog_learning_fields s where not exists (select 1 from public.training_catalog_learning_fields d where d.training_catalog_id is not distinct from (select m.dst_id from _map_training_catalogs m where m.src_id = s.training_catalog_id) and d.code is not distinct from s.code);
   rep := rep || jsonb_build_object('training_catalog_learning_fields', jsonb_build_object('inserted', n_ins, 'updated', n_upd, 'unmatched', n_skip));
   create temp table _map_training_catalog_learning_fields on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from public_preview.training_catalog_learning_fields s join public.training_catalog_learning_fields d on d.training_catalog_id is not distinct from (select m.dst_id from _map_training_catalogs m where m.src_id = s.training_catalog_id) and d.code is not distinct from s.code order by s.id, d.id;
+  create unique index on _map_training_catalog_learning_fields (src_id); analyze _map_training_catalog_learning_fields;
   -- training_catalog_content_mappings
   if exists (select 1 from public_preview.training_catalog_content_mappings s group by s.learning_field_id, s.enabler_id, s.use_case_id having count(*) > 1) then raise exception 'content-sync: key (learning_field_id, enabler_id, use_case_id) is not unique in public_preview.training_catalog_content_mappings'; end if;
   if exists (select 1 from public.training_catalog_content_mappings d group by d.learning_field_id, d.enabler_id, d.use_case_id having count(*) > 1) then raise exception 'content-sync: key (learning_field_id, enabler_id, use_case_id) is not unique in public.training_catalog_content_mappings'; end if;
