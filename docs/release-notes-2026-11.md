@@ -14,7 +14,7 @@ Die Lernplattform führt jetzt zwei Ausbildungsberufe in einem System: Fachinfor
 | Verwaltung | Berufe je Organisation, Plätze und Rollengrenzen, Freigabe- und Zuweisungswerkzeug, Inhaltsstatistik mit Soll |
 | HAI | Berufstrennung, Lösungsschutz, Lernkarten, Tagesbegleiter, Sprachassistent, Einbettung und Chat über Sokrates |
 | Sicherheit | Server-Sitzung für alle Routen, Zeilenschutz, Speicherrechte, Passwortregel, Bucket mit signierten Links |
-| Betrieb | 39 Migrationen mit Freigabetor, Release-Strecke mit zwei Schemas, Inhaltsübertragung per Id |
+| Betrieb | 43 Migrationen mit Freigabetor, Release-Strecke mit zwei Schemas, Inhaltsübertragung per Id |
 
 ## 2. Neu für Auszubildende
 
