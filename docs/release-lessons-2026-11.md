@@ -35,6 +35,7 @@ Bezug: `docs/release-prozess.md` (Ablauf), `docs/kfbm-production-rollout.md` (Ru
 
 - Der Generator des Abgleichs (`scripts/db/content-sync.mjs`) nutzt für NOT NULL-Schlüssel `=` und legt auf den Mapping-Tabellen Index und Statistik an. Tests in `tests/scripts/db/content-sync.test.mjs`.
 - **Probelauf auf einer Kopie von Production.** Dump zurückspielen (Runbook, Abschnitt 8 und 8b), Migrationen und Abgleich dort vollständig laufen lassen, einschließlich `--apply` und zweitem Trockenlauf. Das hätte die Fehler 3 und 10 vor dem Release gezeigt.
-- Das Skript sollte im Release **abbrechen**, wenn `CONTENT_SYNC_OWNER_EMAIL` fehlt und Zeilen übersprungen würden, statt nur zu warnen.
-- Das Rollout-Gate könnte die manuellen Tore selbst melden ("Tor in Datei X, Freigabe fehlt"), statt erst mitten im Lauf anzuhalten.
-- Der Inhaltsabgleich für FIAE (ohne `--catalog`) ist separat zu entscheiden, siehe `docs/release-prozess.md`, Abschnitt 8.
+- Erledigt: Der Abgleich bricht beim **Anwenden** ab, wenn `CONTENT_SYNC_OWNER_EMAIL` fehlt (ein Trockenlauf warnt weiter nur). Er bricht außerdem vor dem Schreiben ab, wenn Quellzeilen im Ziel fehlen würden ("unmatched" größer 0), und nach dem Schreiben, wenn der zweite Trockenlauf noch etwas findet oder Zeilen fehlen. Eine unlesbare CLI-Antwort beim Anwenden bricht nicht mehr ab, der zweite Trockenlauf entscheidet. `parseReport` nimmt die letzte Markierung.
+- Offen: Ein Test, der `main()` mit `--apply` gegen eine nachgebaute CLI durchspielt (Antwort einer erfolgreichen `DO`-Anweisung mit `--linked`, unlesbare Antwort, zweiter Trockenlauf). Bisher sind nur die einzelnen Bausteine getestet.
+- Offen: Das Rollout-Gate könnte die manuellen Tore selbst melden ("Tor in Datei X, Freigabe fehlt"), statt erst mitten im Lauf anzuhalten.
+- Der Inhaltsabgleich für FIAE wurde am 06.11.2026 über den Workflow "Content Sync" angewendet (5.315 Zeilen). Künftige Abgleiche laufen mit dem schnellen Generator in Sekunden.

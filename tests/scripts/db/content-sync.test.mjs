@@ -7,6 +7,7 @@ import {
   buildScript,
   castExpression,
   ownerCheck,
+  applyProblems,
   parseReport,
   summarize,
   validateConfig,
@@ -897,4 +898,71 @@ test('report: a message without a report or with a broken one gives null', () =>
   assert.equal(parseReport('CONTENT_SYNC_REPORT:{"a": '), null);
   assert.equal(parseReport('CONTENT_SYNC_REPORT:{not json}'), null);
   assert.equal(parseReport('{"courses": {}} no marker'), null);
+});
+
+// --- Hardening after the production release (see docs/release-lessons-2026-11.md) ---
+
+test('owner: without CONTENT_SYNC_OWNER_EMAIL a dry run warns, an apply refuses', () => {
+  const dry = ownerCheck({
+    config,
+    ownerEmail: null,
+    ownerFound: false,
+    to: 'public',
+  });
+  assert.equal(dry.errors.length, 0);
+  assert.equal(dry.warnings.length, 1);
+  const apply = ownerCheck({
+    config,
+    ownerEmail: null,
+    ownerFound: false,
+    to: 'public',
+    apply: true,
+  });
+  assert.equal(apply.warnings.length, 0);
+  assert.match(apply.errors[0], /^Refusing to apply\./);
+  assert.match(apply.errors[0], /CONTENT_SYNC_OWNER_EMAIL is not set/);
+});
+
+test('summarize adds up the rows that stay missing in the target', () => {
+  const s = summarize({
+    a: { inserted: 1, updated: 0, unmatched: 2 },
+    b: { inserted: 3, updated: 1, unmatched: 0 },
+  });
+  assert.deepEqual(
+    { i: s.inserted, u: s.updated, m: s.unmatched },
+    { i: 4, u: 1, m: 2 }
+  );
+});
+
+test('apply problems: skipped rows stop the apply before and after, a second dry run must be empty', () => {
+  const clean = { inserted: 0, updated: 0, unmatched: 0 };
+  assert.deepEqual(applyProblems({ ...clean, inserted: 5 }, 'before'), []);
+  assert.deepEqual(applyProblems(clean, 'after'), []);
+  assert.match(
+    applyProblems({ ...clean, unmatched: 3 }, 'before')[0],
+    /^Refusing to apply: 3 source row/
+  );
+  assert.match(
+    applyProblems({ ...clean, unmatched: 3 }, 'after')[0],
+    /incomplete: 3 source row/
+  );
+  assert.match(
+    applyProblems({ ...clean, inserted: 2, updated: 1 }, 'after')[0],
+    /did not converge.*2 inserts and 1 updates/
+  );
+  assert.equal(
+    applyProblems({ inserted: 2, updated: 0, unmatched: 1 }, 'after').length,
+    2
+  );
+});
+
+test('report: an error that echoes the statement shows the marker twice, the last one counts', () => {
+  const message = `ERROR: statement: raise exception 'CONTENT_SYNC_REPORT:%', rep::text; (SQLSTATE P0001) CONTENT_SYNC_REPORT:${reportText}`;
+  assert.deepEqual(parseReport(message), REAL_REPORT);
+});
+
+test('report: a marker inside the echoed SQL after the report does not hide the report', () => {
+  const message = `ERROR: CONTENT_SYNC_REPORT:${reportText} statement: raise exception 'CONTENT_SYNC_REPORT:%', rep::text;`;
+  assert.deepEqual(parseReport(message), REAL_REPORT);
+  assert.equal(parseReport("raise exception 'CONTENT_SYNC_REPORT:%'"), null);
 });

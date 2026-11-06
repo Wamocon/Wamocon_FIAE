@@ -670,15 +670,21 @@ function ownerNeeded(config) {
  * the target is an error, and a missing owner is a loud warning.
  * @returns {{ errors: string[], warnings: string[] }}
  */
-export function ownerCheck({ config, ownerEmail, ownerFound, to }) {
+export function ownerCheck({
+  config,
+  ownerEmail,
+  ownerFound,
+  to,
+  apply = false,
+}) {
   if (!ownerNeeded(config)) return { errors: [], warnings: [] };
   if (!ownerEmail) {
-    return {
-      errors: [],
-      warnings: [
-        'CONTENT_SYNC_OWNER_EMAIL is not set: rows whose creator cannot be matched by e-mail are skipped, and with them the enablers, quizzes and documents below them. Set the variable before an apply.',
-      ],
-    };
+    const missing =
+      'CONTENT_SYNC_OWNER_EMAIL is not set: rows whose creator cannot be matched by e-mail are skipped, and with them the enablers, quizzes and documents below them. Set the variable before an apply.';
+    // A dry run only warns. An apply (the release) refuses: it would commit partial content.
+    return apply
+      ? { errors: [`Refusing to apply. ${missing}`], warnings: [] }
+      : { errors: [], warnings: [missing] };
   }
   if (!ownerFound) {
     return {
@@ -693,7 +699,17 @@ export function ownerCheck({ config, ownerEmail, ownerFound, to }) {
 
 /** Reads the JSON report out of the error message of a rolled back dry run. */
 export function parseReport(message) {
-  const at = message.indexOf(REPORT_MARKER);
+  // The real report is the last marker that is directly followed by "{". An error that
+  // echoes the statement shows the marker inside the SQL too ('CONTENT_SYNC_REPORT:%'),
+  // before or after the report.
+  let at = -1;
+  for (
+    let i = message.indexOf(REPORT_MARKER);
+    i >= 0;
+    i = message.indexOf(REPORT_MARKER, i + 1)
+  ) {
+    if (message[i + REPORT_MARKER.length] === '{') at = i;
+  }
   if (at < 0) return null;
   const start = message.indexOf('{', at);
   if (start < 0) return null;
@@ -737,14 +753,41 @@ export function summarize(report) {
   const lines = [];
   let inserted = 0;
   let updated = 0;
+  let unmatched = 0;
   for (const [table, r] of Object.entries(report)) {
     inserted += r.inserted;
     updated += r.updated;
+    unmatched += Number(r.unmatched) || 0;
     lines.push(
       `  ${table.padEnd(36)} +${r.inserted} inserted, ~${r.updated} updated, ${r.unmatched} not present in target afterwards`
     );
   }
-  return { lines, inserted, updated };
+  return { lines, inserted, updated, unmatched };
+}
+
+/**
+ * Problems that must stop an apply. Rows "not present in the target afterwards" are rows
+ * that were skipped (unknown creator or parent): they never converge, so the second dry
+ * run alone would report success with partial content.
+ * @param {{ inserted: number, updated: number, unmatched: number }} summary
+ * @param {'before'|'after'} phase before: the planned apply, after: the second dry run
+ * @returns {string[]}
+ */
+export function applyProblems(summary, phase) {
+  const problems = [];
+  if (summary.unmatched > 0) {
+    problems.push(
+      phase === 'before'
+        ? `Refusing to apply: ${summary.unmatched} source row(s) would not be present in the target afterwards (unknown creator or parent). Check the report above.`
+        : `Content sync is incomplete: ${summary.unmatched} source row(s) are not present in the target (unknown creator or parent).`
+    );
+  }
+  if (phase === 'after' && (summary.inserted > 0 || summary.updated > 0)) {
+    problems.push(
+      `Content sync did not converge: a second dry run still finds ${summary.inserted} inserts and ${summary.updated} updates.`
+    );
+  }
+  return problems;
 }
 
 function loadMeta(target, config, from, to) {
@@ -791,7 +834,8 @@ function loadMeta(target, config, from, to) {
       udtName: r.udt_name,
       generated: Boolean(r.generated),
       // a missing or unreadable value counts as nullable: the old behaviour
-      notNull: r.not_null === true || r.not_null === 't' || r.not_null === 'true',
+      notNull:
+        r.not_null === true || r.not_null === 't' || r.not_null === 'true',
     });
   }
   return { meta, fks };
@@ -857,7 +901,7 @@ function main() {
             )[0]?.n
           ) > 0
         : false;
-    const owner = ownerCheck({ config, ownerEmail, ownerFound, to });
+    const owner = ownerCheck({ config, ownerEmail, ownerFound, to, apply });
     if (owner.errors.length > 0) throw new Error(owner.errors.join('\n'));
     const only = argValue(args, '--only')?.split(',') ?? null;
     const catalog = args.includes('--catalog')
@@ -887,6 +931,11 @@ function main() {
     const report = dryRun(target, dry);
     const first = summarize(report);
     for (const l of first.lines) say(l);
+    if (apply) {
+      // Before anything is committed: skipped rows would stay missing for good
+      const before = applyProblems(first, 'before');
+      if (before.length > 0) throw new Error(before.join('\n'));
+    }
     if (!apply) {
       say('');
       say(
@@ -905,13 +954,20 @@ function main() {
         fks,
         catalog,
       });
-      query(target, real.sql, { emptyAllowed: true });
-      const after = summarize(dryRun(target, dry));
-      if (after.inserted > 0 || after.updated > 0) {
-        throw new Error(
-          `Content sync did not converge: a second dry run still finds ${after.inserted} inserts and ${after.updated} updates.`
+      try {
+        query(target, real.sql, { emptyAllowed: true });
+      } catch (e) {
+        // The CLI answer of a DO block was never seen with --linked. If it is only
+        // unreadable, the statement ran: the second dry run below is the real proof
+        // (it fails if anything is still open). Every other error stops here.
+        if (!/Answer of the Supabase CLI not readable/.test(e.message)) throw e;
+        say(
+          'Note: the CLI answer of the apply was not readable. The second dry run decides.'
         );
       }
+      const after = summarize(dryRun(target, dry));
+      const problems = applyProblems(after, 'after');
+      if (problems.length > 0) throw new Error(problems.join('\n'));
       say('');
       say(
         `Content sync applied (${first.inserted} inserted, ${first.updated} updated); a second dry run finds nothing left.`
