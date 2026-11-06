@@ -11,7 +11,10 @@ const config: Config = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   transform: {
-    '^.+\\.(t|j)sx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
+    '^.+\\.(t|j)sx?$': [
+      'ts-jest',
+      { tsconfig: '<rootDir>/tsconfig.jest.json' },
+    ],
   },
   transformIgnorePatterns: [
     'node_modules/(?!(lucide-react|react-markdown|rehype-highlight|remark-gfm|d3-|d3|redent|strip-indent|indent-string)/)',
