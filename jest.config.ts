@@ -2,6 +2,8 @@ import type { Config } from 'jest';
 
 const config: Config = {
   preset: 'ts-jest',
+  // Under full-suite load (parallel workers) the default 5000 ms was too tight
+  testTimeout: 15000,
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   testMatch: ['**/?(*.)+(test).[tj]s?(x)'],

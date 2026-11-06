@@ -1,5 +1,9 @@
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
-import { getDaysInMonth, getFirstDayOfMonth, isDateInBlock } from '@/lib/school/calendar';
+import {
+  getDaysInMonth,
+  getFirstDayOfMonth,
+  isDateInBlock,
+} from '@/lib/school/calendar';
 import {
   calculateAusbildungsjahr,
   getCurrentSchuljahr,
@@ -24,7 +28,9 @@ describe('school helpers', () => {
   it('calculateAusbildungsjahr delegates to getTrainingPhase', () => {
     const start = new Date(2024, 7, 1);
     const at = new Date(2026, 1, 15);
-    expect(calculateAusbildungsjahr(start, 3, at)).toBe(getTrainingPhase(start, 3, at));
+    expect(calculateAusbildungsjahr(start, 3, at)).toBe(
+      getTrainingPhase(start, 3, at)
+    );
   });
 
   it('getISOWeek handles the turn of the year', () => {
