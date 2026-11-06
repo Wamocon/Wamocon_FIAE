@@ -130,6 +130,49 @@ test('a push or pull request never reaches Production: workflows with Production
   assert.ok(withProduction.includes('deploy-production.yml'));
 });
 
+test('the release rehearsal is read only, manual and bound to master', () => {
+  const text = code(read('.github/workflows/release-rehearsal.yml'));
+  // manual only: workflow_dispatch and no other trigger
+  assert.ok(/^on:\s*\n\s{2}workflow_dispatch:/m.test(text));
+  assert.ok(
+    !/^\s{2}(push|pull_request\w*|release|schedule|workflow_run):/m.test(text)
+  );
+  assert.ok(/permissions:\s*\n\s+contents: read/.test(text));
+  // bound to master, red (not skipped) when started from another branch
+  assert.ok(/\$GITHUB_REF" != "refs\/heads\/master"/.test(text));
+  assert.ok(text.includes('./.github/actions/require-master'));
+  // the only database calls are "migration list" and "db push --dry-run"
+  const calls = text.split('\n').filter(l => /supabase-retry\.mjs/.test(l));
+  assert.ok(calls.length >= 2, 'database calls found');
+  for (const line of calls) {
+    assert.ok(
+      /migration list|db push .*--dry-run/.test(line),
+      `not read only: ${line.trim()}`
+    );
+  }
+  assert.ok(calls.some(l => /db push .*--dry-run/.test(l)));
+  // nothing deploys, nothing syncs, nothing applies
+  assert.ok(!/content-sync\.mjs|vercel-deploy|--apply|db reset/.test(text));
+  // the ancestry check is inline (the composite action comes from the tag itself)
+  assert.ok(text.includes('merge-base --is-ancestor HEAD FETCH_HEAD'));
+  // the Production token is not set for the whole job, only on single steps
+  const jobEnv = text.split(/^\s{4}env:/m)[1]?.split(/^\s{4}steps:/m)[0] ?? '';
+  assert.ok(jobEnv.length > 0 && !jobEnv.includes('SUPABASE_ACCESS_TOKEN'));
+  assert.ok(text.includes('SUPABASE_ACCESS_TOKEN: ${{ secrets.'));
+  // parity with the job "migrate" of the release: same checks, same commands
+  const release = code(read('.github/workflows/release-production.yml'));
+  for (const same of [
+    'node scripts/db/migration-check.mjs --base "refs/tags/$prev"',
+    'node scripts/db/supabase-retry.mjs migration list --linked',
+    'node scripts/db/supabase-retry.mjs db push --linked --dry-run | tee dry-run.txt',
+    'node scripts/db/baseline-guard.mjs --plan dry-run.txt',
+    'node scripts/db/rollout-gate.mjs --plan dry-run.txt',
+  ]) {
+    assert.ok(text.includes(same), `rehearsal lacks: ${same}`);
+    assert.ok(release.includes(same), `release lacks: ${same}`);
+  }
+});
+
 test('the daily drift run is Preview only, the Production comparison is manual', () => {
   const text = code(read('.github/workflows/db-drift.yml'));
   const production = job('.github/workflows/db-drift.yml', 'production-drift');

@@ -1,0 +1,157 @@
+# =============================================================================
+# Release rehearsal (manual, READ ONLY): what would the release of a tag do?
+# =============================================================================
+# Trigger : manually only: Actions -> "Release Rehearsal" -> Run workflow, with
+#           the tag of the planned release (for example v2.0.0). The tag must
+#           already exist and its commit must be part of master.
+#
+# Purpose : the release workflow runs without a pause (no required reviewers), so
+#           this is the checkpoint BEFORE publishing. It runs the same checks as
+#           the job "migrate" of release-production.yml on the commit of the tag,
+#           against Production, and applies NOTHING:
+#             - migration files against the previous release (migration-check)
+#             - ledger against files (migration list)
+#             - supabase db push --dry-run: the exact list of open migrations
+#             - baseline guard and rollout gate (KFBM_ROLLOUT_APPROVED)
+#
+# Not covered: the content sync. It needs the new structure in Production, which
+#           only exists after the real migration, so a rehearsal cannot run it.
+#
+# Order   : merge to master -> create the tag on master -> run this workflow ->
+#           if it is green, publish the release for the SAME tag.
+#
+# Safety  : no apply step, no deploy, no write to Production. Runs only from the
+#           workflow file of master and only for a commit that is part of master.
+#           Same Production secret as the release (environment Production).
+# =============================================================================
+
+name: Release Rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag of the planned release, for example v2.0.0 (must exist and be part of master)'
+        required: true
+        type: string
+
+# Own group: the rehearsal is read only and must never displace a pending real
+# release run (GitHub keeps one running and one pending run per group)
+concurrency:
+  group: release-rehearsal
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rehearsal:
+    name: Rehearse the migration of the tag (no changes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: Production
+    # The Production token is NOT set for the whole job: code of the tag (the
+    # migration check) must not see it. It is set on the steps that need it.
+    env:
+      INPUT_TAG: ${{ inputs.tag }}
+    steps:
+      # Fails (red) instead of being skipped when started from another branch
+      - name: Only the workflow file of master may run this
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/master" ]; then
+            echo "::error::Start this workflow from master (it was started from $GITHUB_REF)."
+            exit 1
+          fi
+
+      # [[ =~ ]] matches the whole value, also with line breaks in it
+      - name: Tag name is valid
+        id: tag
+        run: |
+          if ! [[ "$INPUT_TAG" =~ ^v[0-9][A-Za-z0-9._-]{0,60}$ ]]; then
+            echo "::error::The tag must look like v2.0.0."
+            exit 1
+          fi
+          echo "name=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Ancestry check INLINE: this step comes from the workflow file of master and
+      # runs before any code of the tag. The composite action below is loaded from
+      # the tag itself, so a tag could change it.
+      - name: Commit of the tag must be part of master (inline)
+        run: |
+          git fetch --no-tags origin master
+          if ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
+            echo "::error::The tag points to a commit that is not part of master."
+            exit 1
+          fi
+
+      # The same check as in the release (defence in depth)
+      - uses: ./.github/actions/require-master
+
+      - name: Check migration files against the previous release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          prev=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 10 --json tagName --jq '.[].tagName' | grep -vxF "$RELEASE_TAG" | head -n 1 || true)
+          if [ -n "$prev" ] && printf '%s' "$prev" | grep -Eq '^[A-Za-z0-9._/-]{1,200}$'; then
+            git fetch --no-tags origin "refs/tags/$prev:refs/tags/$prev"
+            echo "Previous release: $prev"
+            node scripts/db/migration-check.mjs --base "refs/tags/$prev"
+          else
+            echo "::warning::No previous release found, checking names and the Preview rewrite only."
+            node scripts/db/migration-check.mjs
+          fi
+
+      - uses: ./.github/actions/db-setup
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        with:
+          project-ref: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+
+      - name: Compare ledger and files
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/db/supabase-retry.mjs migration list --linked
+
+      # pipefail: if the CLI fails (also after the retries), the step fails.
+      - name: Dry run (lists the open migrations, applies nothing)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -o pipefail
+          node scripts/db/supabase-retry.mjs db push --linked --dry-run | tee dry-run.txt
+
+      - name: Baseline guard
+        run: node scripts/db/baseline-guard.mjs --plan dry-run.txt
+
+      - name: Rollout gate
+        env:
+          KFBM_ROLLOUT_APPROVED: ${{ vars.KFBM_ROLLOUT_APPROVED }}
+        run: node scripts/db/rollout-gate.mjs --plan dry-run.txt
+
+      - name: Summary
+        if: always()
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.name }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          commit=$(git rev-parse HEAD 2>/dev/null || echo unknown)
+          {
+            echo "### Rehearsal of release $RELEASE_TAG (nothing was changed)"
+            echo "Commit of the tag: \`$commit\` (the release must show the same commit)"
+            echo '```'
+            cat dry-run.txt 2>/dev/null || echo "no plan (an earlier step failed)"
+            echo '```'
+            if [ "$JOB_STATUS" = "success" ]; then
+              echo "Green: publish the release for exactly this tag. If the tag is moved, run the rehearsal again. The content sync is not part of the rehearsal."
+            else
+              echo "FAILED: do not publish the release. Fix the cause first."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
