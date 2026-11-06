@@ -17,6 +17,8 @@ Bezug: `docs/release-prozess.md` (Ablauf), `docs/kfbm-production-rollout.md` (Ru
 | 7 | Lokale Prüfungen scheiterten | Lokale Supabase CLI 2.70.5 statt der in der CI gepinnten 2.118.0. Direkter Datenbank-Host nur über IPv6, aus Docker nicht erreichbar. | Stunden für Backup und Trockenlauf | CLI 2.118.0 aus dem GitHub-Release geladen, Session Pooler (IPv4) benutzt | Lokal dieselbe CLI-Version wie die CI. Für Docker und `pg_dump` den Session Pooler nehmen |
 | 8 | Testkonten ohne `preview_only` | Das Kennzeichen liegt in `auth.users.raw_app_meta_data`, und `auth.users` ist zwischen Preview und Production geteilt. Zwei Gmail-Testkonten hatten es nicht. | Ein Testkonto hätte sich in Production anmelden können | Kennzeichen gesetzt | Vor jedem Release die Testkonten in `auth.users` prüfen (Abschnitt 2, Schritt 4) |
 | 9 | Unbenutzte GitHub-Environments | Sechs Environments mit Namenszusatz, die kein Workflow nutzt | Verwirrung, ein Secret am falschen Ort | gelöscht, es gibt nur `Preview` und `Production` | Nur diese zwei Environments. Secrets nur dort |
+| 10 | Der Abgleich lief korrekt durch und scheiterte trotzdem | `parseReport` las den Trockenlauf-Bericht nur im einfachen Format. Die CLI verpackt den Datenbankfehler in JSON-Strings (einmal bei `--db-url`, zweimal bei `--linked`), der Parser nahm bis zur letzten `}` und scheiterte. Der Test kannte nur das einfache Format, das Skript war nie gegen die echte CLI-Ausgabe gelaufen. | Release `v2.0.1` rot nach 40 Sekunden, obwohl die Zahlen stimmten | Parser zählt Klammern und entpackt die JSON-Ebenen, Tests mit allen drei Formaten, `v2.0.2` | Ein Skript, das CLI-Ausgabe liest, braucht Tests mit der echten, verschachtelten Ausgabe. Vor dem Release einen Trockenlauf von der Kommandozeile ansehen: Endet er mit "Dry run: nothing was changed" statt mit `ERROR`? |
+| 11 | Zwei Release-Versionen wegen Fehlern im Skript | Der Workflow checkt den Tag des Releases aus, ein Fix im Skript wirkt erst im nächsten Release | `v2.0.1` und `v2.0.2` nach `v2.0.0` | Patch-Releases | Den Abgleich vor dem Release gegen eine Kopie von Production ausprobieren, nicht erst im Release (siehe Folgearbeiten) |
 
 ## 2. Checkliste vor jedem Release mit Migrationen
 
@@ -27,11 +29,12 @@ Bezug: `docs/release-prozess.md` (Ablauf), `docs/kfbm-production-rollout.md` (Ru
 5. **Backup.** Logischer Dump (`public`, `supabase_migrations`, `auth.users`) über den Session Pooler, verschlüsselt, Passphrase im Passwort-Manager, Klartext nach der Prüfung löschen. Zusätzlich die tägliche Sicherung von Supabase prüfen.
 6. **Größen und Voraussetzungen messen.** Zeilenzahl und Größe der Tabellen, die gesperrt oder umgeschrieben werden (zum Beispiel `hai_embeddings`: bis 50.000 Zeilen und 1 GB), und die Vorbedingungen der Migrationen als lesende Abfragen gegen Production (Duplikate, fehlende Tabellen, Katalogabweichungen).
 7. **Release-Notes gegen die Pipeline lesen.** Zahl der Migrationen aus dem Probelauf. Nur Inhalte nennen, die der Release-Lauf wirklich synchronisiert.
-8. **Nach der Migration.** Trockenlauf des Inhaltsabgleichs (er braucht die neue Struktur). Erst bei sauberem Trockenlauf anwenden.
+8. **Nach der Migration.** Trockenlauf des Inhaltsabgleichs (er braucht die neue Struktur). Erst bei sauberem Trockenlauf anwenden. Sauber heißt: Die Ausgabe endet mit "Dry run: nothing was changed (N rows would be inserted ...)". Eine Zeile `ERROR: ...CONTENT_SYNC_REPORT...` ist kein gutes Zeichen, auch wenn die Zahlen stimmen.
 
 ## 3. Folgearbeiten
 
 - Der Generator des Abgleichs (`scripts/db/content-sync.mjs`) nutzt für NOT NULL-Schlüssel `=` und legt auf den Mapping-Tabellen Index und Statistik an. Tests in `tests/scripts/db/content-sync.test.mjs`.
+- **Probelauf auf einer Kopie von Production.** Dump zurückspielen (Runbook, Abschnitt 8 und 8b), Migrationen und Abgleich dort vollständig laufen lassen, einschließlich `--apply` und zweitem Trockenlauf. Das hätte die Fehler 3 und 10 vor dem Release gezeigt.
 - Das Skript sollte im Release **abbrechen**, wenn `CONTENT_SYNC_OWNER_EMAIL` fehlt und Zeilen übersprungen würden, statt nur zu warnen.
 - Das Rollout-Gate könnte die manuellen Tore selbst melden ("Tor in Datei X, Freigabe fehlt"), statt erst mitten im Lauf anzuhalten.
 - Der Inhaltsabgleich für FIAE (ohne `--catalog`) ist separat zu entscheiden, siehe `docs/release-prozess.md`, Abschnitt 8.
