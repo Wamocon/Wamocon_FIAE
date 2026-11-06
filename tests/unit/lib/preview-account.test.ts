@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import {
+  ACCOUNT_EXISTS_DETAIL_MESSAGE,
   ACCOUNT_EXISTS_MESSAGE,
   PREVIEW_ONLY_KEY,
   PREVIEW_ACCOUNT_REJECTED_MESSAGE,
@@ -221,11 +222,25 @@ describe('lib/preview-account createUserFailureMessage', () => {
     log.mockRestore();
   });
 
-  it('Production explains in German that the address is taken without a profile here', () => {
+  it('Production tells every administrator in German that the address is taken, without the architecture', () => {
     const text = createUserFailureMessage(refused, false);
     expect(text).toBe(ACCOUNT_EXISTS_MESSAGE);
-    expect(text).toMatch(/Preview/);
+    expect(text).not.toMatch(/Preview|Production|registered/);
+  });
+
+  it('Production adds the cause for a platform administrator', () => {
+    const text = createUserFailureMessage(refused, false, true);
+    expect(text).toBe(ACCOUNT_EXISTS_DETAIL_MESSAGE);
+    expect(text).toMatch(/Testkonto aus der Preview/);
     expect(text).not.toMatch(/registered/);
+  });
+
+  it('Preview stays generic for a platform administrator as well', () => {
+    const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+    expect(createUserFailureMessage(refused, true, true)).toBe(
+      PREVIEW_CREATE_FAILED_MESSAGE
+    );
+    log.mockRestore();
   });
 
   it('Production recognises the taken address by code or by text', () => {
@@ -233,13 +248,31 @@ describe('lib/preview-account createUserFailureMessage', () => {
       { code: 'email_exists', message: 'x' },
       { code: 'user_already_exists', message: 'x' },
       { message: 'User already registered' },
-      { message: 'A user with this email address already exists' },
+      { message: 'A user with this email address has already been registered' },
     ]) {
       expect(isEmailTakenError(error)).toBe(true);
       expect(createUserFailureMessage(error, false)).toBe(
         ACCOUNT_EXISTS_MESSAGE
       );
     }
+  });
+
+  it('the code decides: other "already exists" errors are not reported as a taken address', () => {
+    expect(
+      isEmailTakenError({
+        code: 'phone_exists',
+        message: 'Phone already registered',
+      })
+    ).toBe(false);
+    expect(isEmailTakenError({ message: 'relation "x" already exists' })).toBe(
+      false
+    );
+    expect(
+      isEmailTakenError({
+        code: 'weak_password',
+        message: 'user already exists',
+      })
+    ).toBe(false);
   });
 
   it('Production keeps the text of the auth server for every other error', () => {
