@@ -220,7 +220,7 @@ describe('POST /api/admin/users in Preview', () => {
 describe('POST /api/admin/users outside of Preview (unchanged)', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('still answers the text of the auth server when the account cannot be created', async () => {
+  it('explains in German that the address is taken without a profile here', async () => {
     const { create } = await load({
       preview: false,
       createUserError:
@@ -228,7 +228,19 @@ describe('POST /api/admin/users outside of Preview (unchanged)', () => {
     });
     const res = await create.POST(post(body()));
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/already been registered/);
+    const json: any = await res.json();
+    expect(json.error).toMatch(/Testkonto aus der Preview/);
+    expect(json.error).not.toMatch(/registered/);
+  });
+
+  it('still answers the text of the auth server for any other failure', async () => {
+    const { create } = await load({
+      preview: false,
+      createUserError: 'Password should be at least 6 characters',
+    });
+    const res = await create.POST(post(body()));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/at least 6 characters/);
   });
 
   it('sets no app_metadata and no other new field', async () => {
@@ -354,7 +366,9 @@ describe('DELETE /api/admin/users/[userId] in Preview', () => {
 
   it('keeps the rule that nobody deletes themselves', async () => {
     const ctx = await loadDelete({ preview: true, lookup: { user: flagged } });
-    const res = await ctx.remove.DELETE(...del('77777777-7777-4777-8777-777777777777'));
+    const res = await ctx.remove.DELETE(
+      ...del('77777777-7777-4777-8777-777777777777')
+    );
     expect(res.status).toBe(400);
     expect(ctx.getUserById).not.toHaveBeenCalled();
     expect(ctx.deleteUser).not.toHaveBeenCalled();

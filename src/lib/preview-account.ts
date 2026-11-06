@@ -138,11 +138,34 @@ export const PREVIEW_CREATE_FAILED_MESSAGE =
   'The account could not be created. The address may already be in use.';
 
 /**
+ * Production: the address is taken in the shared auth, but this environment has
+ * no profile for it (the administrator already got "exists" for a profile). The
+ * usual cause is a test account created in Preview, which uses the same auth.
+ */
+export const ACCOUNT_EXISTS_MESSAGE =
+  'Für diese E-Mail-Adresse gibt es bereits ein Anmeldekonto, aber noch kein Profil in dieser Umgebung. Das ist meist ein Testkonto aus der Preview, denn Preview und Production teilen sich die Anmeldung. Bitte eine andere E-Mail-Adresse verwenden oder das Konto von der Entwicklung übernehmen lassen.';
+
+/** The auth server refuses a new account because the address is already in use. */
+export function isEmailTakenError(error: unknown): boolean {
+  const { code, message } = (error ?? {}) as {
+    code?: string;
+    message?: string;
+  };
+  return (
+    code === 'email_exists' ||
+    code === 'user_already_exists' ||
+    /already.*(registered|exists)/i.test(message || '')
+  );
+}
+
+/**
  * Error text for a failed auth.admin.createUser. The auth server tells "already
  * registered" for every address of the shared auth, which includes all
  * Production users. Preview therefore answers one generic text and only logs
  * the real one, so a Preview administrator cannot probe for Production
- * addresses. Production keeps the text of the auth server (as before).
+ * addresses. Production tells an administrator in German that the address is
+ * taken without a profile here (the profile check before already tells them
+ * when a profile exists), every other error keeps the text of the auth server.
  */
 export function createUserFailureMessage(
   error: unknown,
@@ -152,6 +175,7 @@ export function createUserFailureMessage(
     console.error('Preview create user: auth server refused', error);
     return PREVIEW_CREATE_FAILED_MESSAGE;
   }
+  if (isEmailTakenError(error)) return ACCOUNT_EXISTS_MESSAGE;
   return (
     (error as { message?: string } | null)?.message ||
     'Failed to create auth user'

@@ -3,11 +3,13 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import {
+  ACCOUNT_EXISTS_MESSAGE,
   PREVIEW_ONLY_KEY,
   PREVIEW_ACCOUNT_REJECTED_MESSAGE,
   PREVIEW_CREATE_FAILED_MESSAGE,
   createUserFailureMessage,
   deleteAuthAccountIfPreviewOnly,
+  isEmailTakenError,
   isPreviewOnlyUser,
   isRejectedInProduction,
   previewAccountAppMetadata,
@@ -219,17 +221,42 @@ describe('lib/preview-account createUserFailureMessage', () => {
     log.mockRestore();
   });
 
-  it('Production keeps the text of the auth server (as before)', () => {
-    expect(createUserFailureMessage(refused, false)).toBe(refused.message);
+  it('Production explains in German that the address is taken without a profile here', () => {
+    const text = createUserFailureMessage(refused, false);
+    expect(text).toBe(ACCOUNT_EXISTS_MESSAGE);
+    expect(text).toMatch(/Preview/);
+    expect(text).not.toMatch(/registered/);
+  });
+
+  it('Production recognises the taken address by code or by text', () => {
+    for (const error of [
+      { code: 'email_exists', message: 'x' },
+      { code: 'user_already_exists', message: 'x' },
+      { message: 'User already registered' },
+      { message: 'A user with this email address already exists' },
+    ]) {
+      expect(isEmailTakenError(error)).toBe(true);
+      expect(createUserFailureMessage(error, false)).toBe(
+        ACCOUNT_EXISTS_MESSAGE
+      );
+    }
+  });
+
+  it('Production keeps the text of the auth server for every other error', () => {
+    const weak = { code: 'weak_password', message: 'Password is too weak' };
+    expect(isEmailTakenError(weak)).toBe(false);
+    expect(createUserFailureMessage(weak, false)).toBe(weak.message);
     expect(createUserFailureMessage({}, false)).toBe(
       'Failed to create auth user'
     );
     expect(createUserFailureMessage(null, false)).toBe(
       'Failed to create auth user'
     );
+    expect(isEmailTakenError(null)).toBe(false);
+    expect(isEmailTakenError(undefined)).toBe(false);
   });
 
   it('is the Production behavior by default in the test environment', () => {
-    expect(createUserFailureMessage(refused)).toBe(refused.message);
+    expect(createUserFailureMessage(refused)).toBe(ACCOUNT_EXISTS_MESSAGE);
   });
 });
