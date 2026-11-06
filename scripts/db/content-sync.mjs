@@ -696,13 +696,41 @@ export function parseReport(message) {
   const at = message.indexOf(REPORT_MARKER);
   if (at < 0) return null;
   const start = message.indexOf('{', at);
-  const end = message.lastIndexOf('}');
-  if (start < 0 || end < start) return null;
-  try {
-    return JSON.parse(message.slice(start, end + 1));
-  } catch {
-    return null;
+  if (start < 0) return null;
+  // The report is one flat object of objects of numbers (no braces in strings), so
+  // counting braces finds its end. Text after it (the outer "}" of a wrapper, the
+  // CONTEXT lines) must not be part of it: the old "last }" took that along.
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < message.length; i += 1) {
+    if (message[i] === '{') depth += 1;
+    else if (message[i] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
   }
+  if (end < 0) return null;
+  let text = message.slice(start, end + 1);
+  // The CLI wraps the database error in JSON strings: once with "--db-url", twice
+  // with "--linked" (management API). Each level escapes the quotes of the report.
+  // Undo one level at a time until the text parses.
+  for (let level = 0; level < 4; level += 1) {
+    try {
+      const value = JSON.parse(text);
+      if (value !== null && typeof value === 'object') return value;
+    } catch {
+      // still escaped
+    }
+    try {
+      text = JSON.parse(`"${text}"`);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export function summarize(report) {

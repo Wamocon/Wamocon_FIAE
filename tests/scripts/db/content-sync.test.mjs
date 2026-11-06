@@ -846,3 +846,55 @@ test('the mapping temp tables get a unique index and statistics', () => {
     /create unique index on _map_profiles \(src_id\); analyze _map_profiles;/
   );
 });
+
+// --- The dry run report in the real CLI output ---------------------------------
+// The report travels in the error of the database. The CLI wraps that error in JSON
+// strings: once with --db-url, twice with --linked (management API, the release).
+// The old parser took everything up to the last "}" and failed on both: the release
+// stopped after a correct dry run ("CONTENT_SYNC_REPORT" shown as an error).
+
+const REAL_REPORT = {
+  courses: { updated: 0, inserted: 27, unmatched: 0 },
+  options: { updated: 0, inserted: 29136, unmatched: 0 },
+};
+const reportText = JSON.stringify(REAL_REPORT).replace(/":\{/g, '": {');
+
+test('report: plain error text (as before)', () => {
+  assert.deepEqual(
+    parseReport(`ERROR: CONTENT_SYNC_REPORT:${reportText} (SQLSTATE P0001)`),
+    REAL_REPORT
+  );
+});
+
+test('report: wrapped once, as printed by --db-url', () => {
+  const out = JSON.stringify({
+    _tag: 'Error',
+    error: {
+      code: 'DbQueryExecError',
+      message: `failed to execute query: error: CONTENT_SYNC_REPORT:${reportText}`,
+    },
+  });
+  assert.deepEqual(parseReport(out), REAL_REPORT);
+});
+
+test('report: wrapped twice with text after it, as printed by --linked (release run)', () => {
+  const inner = JSON.stringify({
+    message: `Failed to run sql query: ERROR:  P0001: CONTENT_SYNC_REPORT:${reportText}\nCONTEXT:  PL/pgSQL function inline_code_block line 146 at RAISE\n`,
+  });
+  const out = JSON.stringify({
+    _tag: 'Error',
+    error: {
+      code: 'DbQueryUnexpectedStatusError',
+      message: `unexpected status 400: ${inner}`,
+    },
+  });
+  assert.deepEqual(parseReport(out), REAL_REPORT);
+  assert.equal(summarize(parseReport(out)).inserted, 27 + 29136);
+});
+
+test('report: a message without a report or with a broken one gives null', () => {
+  assert.equal(parseReport('CONTENT_SYNC_REPORT:'), null);
+  assert.equal(parseReport('CONTENT_SYNC_REPORT:{"a": '), null);
+  assert.equal(parseReport('CONTENT_SYNC_REPORT:{not json}'), null);
+  assert.equal(parseReport('{"courses": {}} no marker'), null);
+});
