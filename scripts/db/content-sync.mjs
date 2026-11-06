@@ -699,8 +699,17 @@ export function ownerCheck({
 
 /** Reads the JSON report out of the error message of a rolled back dry run. */
 export function parseReport(message) {
-  // The LAST marker: an error that echoes the statement shows the marker inside the SQL first
-  const at = message.lastIndexOf(REPORT_MARKER);
+  // The real report is the last marker that is directly followed by "{". An error that
+  // echoes the statement shows the marker inside the SQL too ('CONTENT_SYNC_REPORT:%'),
+  // before or after the report.
+  let at = -1;
+  for (
+    let i = message.indexOf(REPORT_MARKER);
+    i >= 0;
+    i = message.indexOf(REPORT_MARKER, i + 1)
+  ) {
+    if (message[i + REPORT_MARKER.length] === '{') at = i;
+  }
   if (at < 0) return null;
   const start = message.indexOf('{', at);
   if (start < 0) return null;

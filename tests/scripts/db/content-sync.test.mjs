@@ -960,3 +960,9 @@ test('report: an error that echoes the statement shows the marker twice, the las
   const message = `ERROR: statement: raise exception 'CONTENT_SYNC_REPORT:%', rep::text; (SQLSTATE P0001) CONTENT_SYNC_REPORT:${reportText}`;
   assert.deepEqual(parseReport(message), REAL_REPORT);
 });
+
+test('report: a marker inside the echoed SQL after the report does not hide the report', () => {
+  const message = `ERROR: CONTENT_SYNC_REPORT:${reportText} statement: raise exception 'CONTENT_SYNC_REPORT:%', rep::text;`;
+  assert.deepEqual(parseReport(message), REAL_REPORT);
+  assert.equal(parseReport("raise exception 'CONTENT_SYNC_REPORT:%'"), null);
+});
