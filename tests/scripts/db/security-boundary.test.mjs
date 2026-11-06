@@ -164,13 +164,32 @@ test('the release rehearsal is read only, manual and bound to master', () => {
   for (const same of [
     'node scripts/db/migration-check.mjs --base "refs/tags/$prev"',
     'node scripts/db/supabase-retry.mjs migration list --linked',
-    'node scripts/db/supabase-retry.mjs db push --linked --dry-run | tee dry-run.txt',
+    'node scripts/db/supabase-retry.mjs db push --linked --dry-run 2>&1 | tee dry-run.txt',
     'node scripts/db/baseline-guard.mjs --plan dry-run.txt',
     'node scripts/db/rollout-gate.mjs --plan dry-run.txt',
   ]) {
     assert.ok(text.includes(same), `rehearsal lacks: ${same}`);
     assert.ok(release.includes(same), `release lacks: ${same}`);
   }
+});
+
+// The Supabase CLI prints the list of open migrations ("Would push these
+// migrations:") and "Remote database is up to date" to STDERR. A plain
+// "| tee" captured only stdout, so baseline guard and rollout gate saw an empty
+// plan and the "up to date" check never matched (found by the rehearsal).
+test('every capture of "db push --dry-run" for a check includes stderr', () => {
+  const dir = '.github/workflows';
+  let found = 0;
+  for (const file of readdirSync(dir).filter(f => f.endsWith('.yml'))) {
+    const text = code(read(`${dir}/${file}`));
+    for (const line of text.split('\n')) {
+      if (!/db push .*--dry-run/.test(line)) continue;
+      if (!/tee |> *\S+/.test(line)) continue;
+      found += 1;
+      assert.ok(/2>&1/.test(line), `${file}: stderr is not captured: ${line.trim()}`);
+    }
+  }
+  assert.ok(found >= 4, `captures found: ${found}`);
 });
 
 test('the daily drift run is Preview only, the Production comparison is manual', () => {

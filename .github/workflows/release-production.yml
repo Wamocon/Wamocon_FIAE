@@ -125,7 +125,7 @@ jobs:
         id: dry
         run: |
           set -o pipefail
-          node scripts/db/supabase-retry.mjs db push --linked --dry-run | tee dry-run.txt
+          node scripts/db/supabase-retry.mjs db push --linked --dry-run 2>&1 | tee dry-run.txt
           if grep -q "up to date" dry-run.txt; then echo "pending=no" >> "$GITHUB_OUTPUT"; else echo "pending=yes" >> "$GITHUB_OUTPUT"; fi
 
       - name: Baseline guard
@@ -148,7 +148,7 @@ jobs:
         if: steps.dry.outputs.pending == 'yes'
         run: |
           set -o pipefail
-          node scripts/db/supabase-retry.mjs db push --linked --dry-run | tee after.txt
+          node scripts/db/supabase-retry.mjs db push --linked --dry-run 2>&1 | tee after.txt
           grep -q "up to date" after.txt || { echo "::error::Something is still open after applying."; exit 1; }
 
       - name: Reload the PostgREST schema cache
