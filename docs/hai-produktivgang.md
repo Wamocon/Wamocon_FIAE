@@ -75,3 +75,18 @@ Persönliche Lernfortschritts-Dokumente: Das Dokument "Lernfortschritt" eines Az
 | Golden Set, 98 Fälle, `gemma4:31b` | Antworten 93,1 %, Fremdberuf 100 %, Lösungen verweigern 100 %, themenfremd 100 %, keine Lecks |
 | Suche mit Vektorindex | 0,9 s im Mittel gegen 26 s ohne Index |
 | Sprachweg (85 Fälle) | keine Lecks, Antworten 88,5 % (Schwelle 90 %) |
+
+## 7. Ergebnis des Produktivgangs (06. bis 09.11.2026)
+
+| Schritt | Ergebnis |
+|---|---|
+| H1 Sicherung | verschlüsselter Dump der Tabelle `hai_embeddings` in `hai-2026-11-06` (lokal, nicht im Repo) |
+| H2 Suchindex | HNSW-Index über `embedding::halfvec(3072)` in 12,7 Minuten gebaut, gültig. Die Suche braucht im Mittel 0,3 s (Preview 0,7 s) |
+| H3 Neuindexierung | `qwen3-embedding:8b@3072` über Sokrates. Erster Lauf 16:23 bis 20:35 Uhr (4 h 11 min), 4.538 Quellen, 2 fehlgeschlagen. Der dritte Lauf holte sie nach, 0 fehlgeschlagen. Ergebnis 48.825 Zeilen, alle mit der Marke des Qwen-Modells: Quizze 27.556, Dokumente 20.041 (darunter 104 Lernfelder und Komponenten), Enabler 827, Use Cases 350, Kurse 51 |
+| H4 Reste entfernen | 214 Gemini-Zeilen im Katalog FIAE entfernt (fünf Dokumente und vier Enabler, die es nicht mehr gibt). `select metadata->>'embeddingModel'` zeigt nur noch Qwen |
+| H5 Lernkarten | 12 Zeilen `learning_technique`, ohne Beruf, Sichtbarkeit `all`, Marke `ollama` wie in der Preview |
+| H6 Kontrolle | 48.825 Zeilen gegen 49.318 in der Preview. Der Unterschied: 12 Lernkarten fehlten zu dem Zeitpunkt noch, die Preview hat 2 Enabler, 3 Use Cases und 43 Quizze mehr, Production 26 Dokumente mehr (die nachgetragenen). Dieselben 20 Enabler-Titel als Frage ergeben in beiden Schemas dasselbe Muster (4 von 20 in den Top 5, 0 von 20 auf Rang 1). Gleichstand, aber nicht die Rang-1-Quote des 31.10.2026, siehe `docs/release-lessons-2026-11.md`, Fehler 21 |
+| H7 Variablen | `HAI_EMBEDDING_PROVIDER` und `HAI_CHAT_PROVIDER` auf `openai-compatible`, `HAI_HALFVEC_SEARCH`, `HAI_MEMORY` und `HAI_UI_ACTIONS` auf `on`, Ziel Production. Deployment über "Production Deploy" am 09.11.2026 um 07:50 Uhr |
+| Lösungsschutz im Index | 311 Lösungsdokumente (`TRAINER_SOLUTION`), davon 308 bewusst nicht indexiert (private Ablage). Drei haben 25 Zeilen, alle mit Sichtbarkeit `trainer`, wie in der Preview. Keine Zeile trägt die Marke `trainerSolution` |
+
+Lehren aus den Abbrüchen und aus der Planung der Zeitfenster: `docs/release-lessons-2026-11.md`, Fehler 18 bis 21.
