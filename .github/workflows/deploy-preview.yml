@@ -138,4 +138,4 @@ jobs:
           alias: >-
             ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/preview') ||
             (github.event_name == 'workflow_dispatch' && inputs.branch == 'preview'))
-            && 'preview.fiae-learn.com' || '' }}
+            && 'preview.lfa.wamocon.com' || '' }}
