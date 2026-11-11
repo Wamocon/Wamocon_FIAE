@@ -70,8 +70,3 @@ export function detectUiIntent(message: unknown): UiIntent {
     open: OPEN_PATTERNS.some(pattern => pattern.test(folded)),
   };
 }
-
-/** Whether the message asks for anything the tools can do. */
-export function hasUiIntent(intent: UiIntent): boolean {
-  return intent.fill || intent.open;
-}

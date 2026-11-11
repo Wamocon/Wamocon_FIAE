@@ -16,10 +16,13 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
-import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { resolveSchoolWriteCatalog } from '@/lib/school/catalog-access';
+import {
+  getCurrentSchuljahr,
+  calculateAusbildungsjahr,
+} from '@/lib/school/schuljahr';
 
 // Helper to parse German date format "10.08." or "10.08. - 14.08."
 function parseGermanDateRange(
@@ -90,35 +93,6 @@ function parseGermanDate(ddmm: string, year: number): Date | null {
   }
 
   return new Date(year, month - 1, day);
-}
-
-// Helper to get ISO week number
-function getISOWeek(date: Date): number {
-  const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
-
-// Helper to get current Schuljahr
-function getCurrentSchuljahr(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  return month >= 8 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
-}
-
-// Helper to calculate the module phase for a block date.
-function calculateAusbildungsjahr(
-  startDate: Date,
-  durationYears?: number | null,
-  atDate: Date = new Date(),
-  phaseOneMonths?: number | null
-): number {
-  return getTrainingPhase(startDate, durationYears, atDate, phaseOneMonths);
 }
 
 // Determine block type from block number or notes

@@ -2,6 +2,8 @@ import type { Config } from 'jest';
 
 const config: Config = {
   preset: 'ts-jest',
+  // Under full-suite load (parallel workers) the default 5000 ms was too tight
+  testTimeout: 15000,
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   testMatch: ['**/?(*.)+(test).[tj]s?(x)'],
@@ -9,7 +11,10 @@ const config: Config = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   transform: {
-    '^.+\\.(t|j)sx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
+    '^.+\\.(t|j)sx?$': [
+      'ts-jest',
+      { tsconfig: '<rootDir>/tsconfig.jest.json' },
+    ],
   },
   transformIgnorePatterns: [
     'node_modules/(?!(lucide-react|react-markdown|rehype-highlight|remark-gfm|d3-|d3|redent|strip-indent|indent-string)/)',

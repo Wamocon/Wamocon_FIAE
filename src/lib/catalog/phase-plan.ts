@@ -24,6 +24,7 @@ import {
   DEFAULT_CATALOG_SETTINGS,
   catalogSettingsSchema,
 } from '@/lib/catalog/settings';
+import { isRecord } from '@/lib/type-guards';
 
 export interface PhasePlan {
   durationYears: AusbildungDurationYears;
@@ -35,10 +36,6 @@ export interface PhasePlan {
 
 const STANDARD_YEARS = 3;
 const SHORTENED_YEARS = 2;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 /** A valid pair of phase months that adds up to `totalMonths`, or null. */
 function parsePhaseMonths(

@@ -7,6 +7,7 @@ import {
   buildScript,
   castExpression,
   ownerCheck,
+  applyProblems,
   parseReport,
   summarize,
   validateConfig,
@@ -782,4 +783,186 @@ test('report is read out of the error message and summarised', () => {
   assert.equal(s.inserted, 2);
   assert.equal(s.updated, 1);
   assert.equal(parseReport('ERROR: something else'), null);
+});
+
+// --- Key match: "=" for NOT NULL target keys (index and hash join friendly) ---
+// "is not distinct from" cannot use an index or a hash join. On the big table
+// questions it ran as a nested loop and hit the 2 minute limit of the release run.
+
+const withNotNull = (cols, names) =>
+  cols.map(c => (names.includes(c.name) ? { ...c, notNull: true } : c));
+const metaWith = (target, source = meta.public_preview) => ({
+  public_preview: source,
+  public: target,
+});
+
+test('key match: a NOT NULL key column of the target uses "=", a nullable one keeps "is not distinct from"', () => {
+  const m = metaWith({
+    ...meta.public,
+    enablers: withNotNull(enablerCols('public'), ['course_id']),
+  });
+  const { sql } = build({ meta: m });
+  assert.match(sql, /d\.course_id = \(select m\.dst_id from _map_courses m/);
+  assert.match(sql, /d\.title is not distinct from s\.title/);
+  assert.ok(!/d\.course_id is not distinct from/.test(sql));
+});
+
+test('key match: without nullability information nothing changes (is not distinct from)', () => {
+  const { sql } = build();
+  assert.match(sql, /d\.course_id is not distinct from/);
+  assert.ok(!/d\.course_id = /.test(sql));
+});
+
+test('key match: only the nullability of the TARGET counts, not that of the source', () => {
+  const source = {
+    ...meta.public_preview,
+    enablers: withNotNull(enablerCols('public_preview'), ['course_id']),
+  };
+  const { sql } = build({ meta: metaWith(meta.public, source) });
+  assert.match(sql, /d\.course_id is not distinct from/);
+  assert.ok(!/d\.course_id = /.test(sql));
+});
+
+test('key match: the dry run and the apply script use the same operator', () => {
+  const m = metaWith({
+    ...meta.public,
+    enablers: withNotNull(enablerCols('public'), ['course_id']),
+  });
+  const keys = sql =>
+    sql.match(/d\.(course_id|title) (=|is not distinct from) /g);
+  const dry = build({ meta: m, rollback: true }).sql;
+  const apply = build({ meta: m, rollback: false }).sql;
+  assert.ok(keys(dry).length > 0);
+  assert.deepEqual(keys(dry), keys(apply));
+});
+
+test('the mapping temp tables get a unique index and statistics', () => {
+  const { sql } = build();
+  assert.match(
+    sql,
+    /create unique index on _map_courses \(src_id\); analyze _map_courses;/
+  );
+  assert.match(
+    sql,
+    /create unique index on _map_profiles \(src_id\); analyze _map_profiles;/
+  );
+});
+
+// --- The dry run report in the real CLI output ---------------------------------
+// The report travels in the error of the database. The CLI wraps that error in JSON
+// strings: once with --db-url, twice with --linked (management API, the release).
+// The old parser took everything up to the last "}" and failed on both: the release
+// stopped after a correct dry run ("CONTENT_SYNC_REPORT" shown as an error).
+
+const REAL_REPORT = {
+  courses: { updated: 0, inserted: 27, unmatched: 0 },
+  options: { updated: 0, inserted: 29136, unmatched: 0 },
+};
+const reportText = JSON.stringify(REAL_REPORT).replace(/":\{/g, '": {');
+
+test('report: plain error text (as before)', () => {
+  assert.deepEqual(
+    parseReport(`ERROR: CONTENT_SYNC_REPORT:${reportText} (SQLSTATE P0001)`),
+    REAL_REPORT
+  );
+});
+
+test('report: wrapped once, as printed by --db-url', () => {
+  const out = JSON.stringify({
+    _tag: 'Error',
+    error: {
+      code: 'DbQueryExecError',
+      message: `failed to execute query: error: CONTENT_SYNC_REPORT:${reportText}`,
+    },
+  });
+  assert.deepEqual(parseReport(out), REAL_REPORT);
+});
+
+test('report: wrapped twice with text after it, as printed by --linked (release run)', () => {
+  const inner = JSON.stringify({
+    message: `Failed to run sql query: ERROR:  P0001: CONTENT_SYNC_REPORT:${reportText}\nCONTEXT:  PL/pgSQL function inline_code_block line 146 at RAISE\n`,
+  });
+  const out = JSON.stringify({
+    _tag: 'Error',
+    error: {
+      code: 'DbQueryUnexpectedStatusError',
+      message: `unexpected status 400: ${inner}`,
+    },
+  });
+  assert.deepEqual(parseReport(out), REAL_REPORT);
+  assert.equal(summarize(parseReport(out)).inserted, 27 + 29136);
+});
+
+test('report: a message without a report or with a broken one gives null', () => {
+  assert.equal(parseReport('CONTENT_SYNC_REPORT:'), null);
+  assert.equal(parseReport('CONTENT_SYNC_REPORT:{"a": '), null);
+  assert.equal(parseReport('CONTENT_SYNC_REPORT:{not json}'), null);
+  assert.equal(parseReport('{"courses": {}} no marker'), null);
+});
+
+// --- Hardening after the production release (see docs/release-lessons-2026-11.md) ---
+
+test('owner: without CONTENT_SYNC_OWNER_EMAIL a dry run warns, an apply refuses', () => {
+  const dry = ownerCheck({
+    config,
+    ownerEmail: null,
+    ownerFound: false,
+    to: 'public',
+  });
+  assert.equal(dry.errors.length, 0);
+  assert.equal(dry.warnings.length, 1);
+  const apply = ownerCheck({
+    config,
+    ownerEmail: null,
+    ownerFound: false,
+    to: 'public',
+    apply: true,
+  });
+  assert.equal(apply.warnings.length, 0);
+  assert.match(apply.errors[0], /^Refusing to apply\./);
+  assert.match(apply.errors[0], /CONTENT_SYNC_OWNER_EMAIL is not set/);
+});
+
+test('summarize adds up the rows that stay missing in the target', () => {
+  const s = summarize({
+    a: { inserted: 1, updated: 0, unmatched: 2 },
+    b: { inserted: 3, updated: 1, unmatched: 0 },
+  });
+  assert.deepEqual(
+    { i: s.inserted, u: s.updated, m: s.unmatched },
+    { i: 4, u: 1, m: 2 }
+  );
+});
+
+test('apply problems: skipped rows stop the apply before and after, a second dry run must be empty', () => {
+  const clean = { inserted: 0, updated: 0, unmatched: 0 };
+  assert.deepEqual(applyProblems({ ...clean, inserted: 5 }, 'before'), []);
+  assert.deepEqual(applyProblems(clean, 'after'), []);
+  assert.match(
+    applyProblems({ ...clean, unmatched: 3 }, 'before')[0],
+    /^Refusing to apply: 3 source row/
+  );
+  assert.match(
+    applyProblems({ ...clean, unmatched: 3 }, 'after')[0],
+    /incomplete: 3 source row/
+  );
+  assert.match(
+    applyProblems({ ...clean, inserted: 2, updated: 1 }, 'after')[0],
+    /did not converge.*2 inserts and 1 updates/
+  );
+  assert.equal(
+    applyProblems({ inserted: 2, updated: 0, unmatched: 1 }, 'after').length,
+    2
+  );
+});
+
+test('report: an error that echoes the statement shows the marker twice, the last one counts', () => {
+  const message = `ERROR: statement: raise exception 'CONTENT_SYNC_REPORT:%', rep::text; (SQLSTATE P0001) CONTENT_SYNC_REPORT:${reportText}`;
+  assert.deepEqual(parseReport(message), REAL_REPORT);
+});
+
+test('report: a marker inside the echoed SQL after the report does not hide the report', () => {
+  const message = `ERROR: CONTENT_SYNC_REPORT:${reportText} statement: raise exception 'CONTENT_SYNC_REPORT:%', rep::text;`;
+  assert.deepEqual(parseReport(message), REAL_REPORT);
+  assert.equal(parseReport("raise exception 'CONTENT_SYNC_REPORT:%'"), null);
 });

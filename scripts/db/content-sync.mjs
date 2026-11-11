@@ -337,7 +337,7 @@ export function castExpression(alias, srcCol, dstCol) {
  * Builds the sync script (pure).
  * @param {{
  *   config: object,
- *   meta: Record<string, Record<string, { name: string, dataType: string, udtSchema: string, udtName: string, generated: boolean }[]>>,
+ *   meta: Record<string, Record<string, { name: string, dataType: string, udtSchema: string, udtName: string, generated: boolean, notNull?: boolean }[]>>,
  *   from: string, to: string, ownerEmail?: string|null, rollback: boolean, only?: string[]|null,
  *   updateMode?: 'never'|'configured', fks?: Record<string, Record<string, { column: string, refSchema: string, refTable: string }[]>>,
  *   catalog?: string|null   limit the run to the rows of this training catalog (code)
@@ -511,8 +511,15 @@ export function buildScript({
         : sub;
     };
     const exprByName = new Map(common.map(c => [c.name, exprOf(c)]));
+    // NOT NULL in the target: "= X" is the same as "is not distinct from X" in every
+    // filter and join (a NULL X matches nothing either way), but it allows hash joins
+    // and btree indexes. "is not distinct from" on a big table was a nested loop over
+    // source x target and ran into the 2 minute limit of the release (questions).
+    // Nullable key columns keep "is not distinct from", the NULL rule does not change.
+    const eqOp = k =>
+      dstByName.get(k)?.notNull === true ? '=' : 'is not distinct from';
     const keyMatch = key
-      .map(k => `d.${ident(k)} is not distinct from ${exprByName.get(k)}`)
+      .map(k => `d.${ident(k)} ${eqOp(k)} ${exprByName.get(k)}`)
       .join(' and ');
     const skipFilters = remaps
       .filter(([, spec]) => (spec.onMissing ?? 'skip') !== 'null')
@@ -607,7 +614,9 @@ export function buildScript({
         continue;
       }
       body.push(
-        `  create temp table _map_${T} on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from ${from}.${T} s join ${to}.${T} d on ${keyMatch}${scopeS ? ` where ${scopeS}` : ''} order by s.id, d.id;`
+        `  create temp table _map_${T} on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from ${from}.${T} s join ${to}.${T} d on ${keyMatch}${scopeS ? ` where ${scopeS}` : ''} order by s.id, d.id;`,
+        // src_id is unique (distinct on): index and statistics for the lookups below
+        `  create unique index on _map_${T} (src_id); analyze _map_${T};`
       );
     }
     planned.set(t.name, { key: key });
@@ -621,7 +630,8 @@ export function buildScript({
       .map(c => `lower(sp.${ident(c)}::text) = lower(d.${ident(c)}::text)`)
       .join(' and ');
     head.push(
-      `  create temp table _map_${ident(name)} on commit drop as select distinct on (sp.id) sp.id as src_id, d.id as dst_id from ${from}.${ident(name)} sp join ${to}.${ident(name)} d on ${match} order by sp.id, d.id;`
+      `  create temp table _map_${ident(name)} on commit drop as select distinct on (sp.id) sp.id as src_id, d.id as dst_id from ${from}.${ident(name)} sp join ${to}.${ident(name)} d on ${match} order by sp.id, d.id;`,
+      `  create unique index on _map_${ident(name)} (src_id); analyze _map_${ident(name)};`
     );
   }
   const catalogChecks = catalog
@@ -660,15 +670,21 @@ function ownerNeeded(config) {
  * the target is an error, and a missing owner is a loud warning.
  * @returns {{ errors: string[], warnings: string[] }}
  */
-export function ownerCheck({ config, ownerEmail, ownerFound, to }) {
+export function ownerCheck({
+  config,
+  ownerEmail,
+  ownerFound,
+  to,
+  apply = false,
+}) {
   if (!ownerNeeded(config)) return { errors: [], warnings: [] };
   if (!ownerEmail) {
-    return {
-      errors: [],
-      warnings: [
-        'CONTENT_SYNC_OWNER_EMAIL is not set: rows whose creator cannot be matched by e-mail are skipped, and with them the enablers, quizzes and documents below them. Set the variable before an apply.',
-      ],
-    };
+    const missing =
+      'CONTENT_SYNC_OWNER_EMAIL is not set: rows whose creator cannot be matched by e-mail are skipped, and with them the enablers, quizzes and documents below them. Set the variable before an apply.';
+    // A dry run only warns. An apply (the release) refuses: it would commit partial content.
+    return apply
+      ? { errors: [`Refusing to apply. ${missing}`], warnings: [] }
+      : { errors: [], warnings: [missing] };
   }
   if (!ownerFound) {
     return {
@@ -683,30 +699,95 @@ export function ownerCheck({ config, ownerEmail, ownerFound, to }) {
 
 /** Reads the JSON report out of the error message of a rolled back dry run. */
 export function parseReport(message) {
-  const at = message.indexOf(REPORT_MARKER);
+  // The real report is the last marker that is directly followed by "{". An error that
+  // echoes the statement shows the marker inside the SQL too ('CONTENT_SYNC_REPORT:%'),
+  // before or after the report.
+  let at = -1;
+  for (
+    let i = message.indexOf(REPORT_MARKER);
+    i >= 0;
+    i = message.indexOf(REPORT_MARKER, i + 1)
+  ) {
+    if (message[i + REPORT_MARKER.length] === '{') at = i;
+  }
   if (at < 0) return null;
   const start = message.indexOf('{', at);
-  const end = message.lastIndexOf('}');
-  if (start < 0 || end < start) return null;
-  try {
-    return JSON.parse(message.slice(start, end + 1));
-  } catch {
-    return null;
+  if (start < 0) return null;
+  // The report is one flat object of objects of numbers (no braces in strings), so
+  // counting braces finds its end. Text after it (the outer "}" of a wrapper, the
+  // CONTEXT lines) must not be part of it: the old "last }" took that along.
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < message.length; i += 1) {
+    if (message[i] === '{') depth += 1;
+    else if (message[i] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
   }
+  if (end < 0) return null;
+  let text = message.slice(start, end + 1);
+  // The CLI wraps the database error in JSON strings: once with "--db-url", twice
+  // with "--linked" (management API). Each level escapes the quotes of the report.
+  // Undo one level at a time until the text parses.
+  for (let level = 0; level < 4; level += 1) {
+    try {
+      const value = JSON.parse(text);
+      if (value !== null && typeof value === 'object') return value;
+    } catch {
+      // still escaped
+    }
+    try {
+      text = JSON.parse(`"${text}"`);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export function summarize(report) {
   const lines = [];
   let inserted = 0;
   let updated = 0;
+  let unmatched = 0;
   for (const [table, r] of Object.entries(report)) {
     inserted += r.inserted;
     updated += r.updated;
+    unmatched += Number(r.unmatched) || 0;
     lines.push(
       `  ${table.padEnd(36)} +${r.inserted} inserted, ~${r.updated} updated, ${r.unmatched} not present in target afterwards`
     );
   }
-  return { lines, inserted, updated };
+  return { lines, inserted, updated, unmatched };
+}
+
+/**
+ * Problems that must stop an apply. Rows "not present in the target afterwards" are rows
+ * that were skipped (unknown creator or parent): they never converge, so the second dry
+ * run alone would report success with partial content.
+ * @param {{ inserted: number, updated: number, unmatched: number }} summary
+ * @param {'before'|'after'} phase before: the planned apply, after: the second dry run
+ * @returns {string[]}
+ */
+export function applyProblems(summary, phase) {
+  const problems = [];
+  if (summary.unmatched > 0) {
+    problems.push(
+      phase === 'before'
+        ? `Refusing to apply: ${summary.unmatched} source row(s) would not be present in the target afterwards (unknown creator or parent). Check the report above.`
+        : `Content sync is incomplete: ${summary.unmatched} source row(s) are not present in the target (unknown creator or parent).`
+    );
+  }
+  if (phase === 'after' && (summary.inserted > 0 || summary.updated > 0)) {
+    problems.push(
+      `Content sync did not converge: a second dry run still finds ${summary.inserted} inserts and ${summary.updated} updates.`
+    );
+  }
+  return problems;
 }
 
 function loadMeta(target, config, from, to) {
@@ -717,7 +798,8 @@ function loadMeta(target, config, from, to) {
   const rows = query(
     target,
     `select table_schema, table_name, column_name, data_type, udt_schema, udt_name,
-            (is_generated = 'ALWAYS' or generation_expression is not null) as generated
+            (is_generated = 'ALWAYS' or generation_expression is not null) as generated,
+            (is_nullable = 'NO') as not_null
        from information_schema.columns
       where table_schema in (${q(from)}, ${q(to)}) and table_name in (${names.map(q).join(', ')})
       order by table_schema, table_name, ordinal_position`
@@ -751,6 +833,9 @@ function loadMeta(target, config, from, to) {
       udtSchema: r.udt_schema,
       udtName: r.udt_name,
       generated: Boolean(r.generated),
+      // a missing or unreadable value counts as nullable: the old behaviour
+      notNull:
+        r.not_null === true || r.not_null === 't' || r.not_null === 'true',
     });
   }
   return { meta, fks };
@@ -816,7 +901,7 @@ function main() {
             )[0]?.n
           ) > 0
         : false;
-    const owner = ownerCheck({ config, ownerEmail, ownerFound, to });
+    const owner = ownerCheck({ config, ownerEmail, ownerFound, to, apply });
     if (owner.errors.length > 0) throw new Error(owner.errors.join('\n'));
     const only = argValue(args, '--only')?.split(',') ?? null;
     const catalog = args.includes('--catalog')
@@ -846,6 +931,11 @@ function main() {
     const report = dryRun(target, dry);
     const first = summarize(report);
     for (const l of first.lines) say(l);
+    if (apply) {
+      // Before anything is committed: skipped rows would stay missing for good
+      const before = applyProblems(first, 'before');
+      if (before.length > 0) throw new Error(before.join('\n'));
+    }
     if (!apply) {
       say('');
       say(
@@ -864,13 +954,20 @@ function main() {
         fks,
         catalog,
       });
-      query(target, real.sql, { emptyAllowed: true });
-      const after = summarize(dryRun(target, dry));
-      if (after.inserted > 0 || after.updated > 0) {
-        throw new Error(
-          `Content sync did not converge: a second dry run still finds ${after.inserted} inserts and ${after.updated} updates.`
+      try {
+        query(target, real.sql, { emptyAllowed: true });
+      } catch (e) {
+        // The CLI answer of a DO block was never seen with --linked. If it is only
+        // unreadable, the statement ran: the second dry run below is the real proof
+        // (it fails if anything is still open). Every other error stops here.
+        if (!/Answer of the Supabase CLI not readable/.test(e.message)) throw e;
+        say(
+          'Note: the CLI answer of the apply was not readable. The second dry run decides.'
         );
       }
+      const after = summarize(dryRun(target, dry));
+      const problems = applyProblems(after, 'after');
+      if (problems.length > 0) throw new Error(problems.join('\n'));
       say('');
       say(
         `Content sync applied (${first.inserted} inserted, ${first.updated} updated); a second dry run finds nothing left.`

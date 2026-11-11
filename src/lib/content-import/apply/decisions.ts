@@ -10,13 +10,11 @@ import type {
   Decisions,
   ReviewedSolutionWord,
 } from './types';
+import { isRecord } from '@/lib/type-guards';
 
 export type DecisionsResult =
   | { ok: true; decisions: Decisions }
   | { ok: false; errors: string[] };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 function numberList(value: unknown, name: string, errors: string[]): number[] {
   if (

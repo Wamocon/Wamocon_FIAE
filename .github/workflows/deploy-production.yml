@@ -93,7 +93,7 @@ jobs:
       - name: Migrations of the release are applied to public?
         run: |
           set -o pipefail
-          node scripts/db/supabase-retry.mjs db push --linked --dry-run | tee dry-run.txt
+          node scripts/db/supabase-retry.mjs db push --linked --dry-run 2>&1 | tee dry-run.txt
           if ! grep -q "up to date" dry-run.txt; then
             echo "::error::The migrations of this release are not applied to public yet (see the release run). Deployment refused."
             exit 1

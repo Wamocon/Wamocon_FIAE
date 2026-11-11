@@ -18,6 +18,7 @@ import {
   type DenialCategory,
 } from './denial';
 import { isChatUnavailableError } from './providers/errors';
+import { isRecord } from '@/lib/type-guards';
 
 export type GoldenRole = 'TRAINEE' | 'TRAINER';
 
@@ -139,10 +140,6 @@ export const MIN_GOLDEN_CASES = 60;
 // ============================================================================
 // Validation
 // ============================================================================
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 const CATALOGS: readonly GoldenCatalogCode[] = ['FIAE', 'KFBM'];
 

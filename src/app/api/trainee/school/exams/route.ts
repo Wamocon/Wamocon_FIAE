@@ -15,7 +15,6 @@ import {
   ausbildungBlocks,
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
-import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { daysFromToday, startOfToday } from '@/lib/school/day';
@@ -24,24 +23,10 @@ import {
   requireSchoolCatalogFilter,
   resolveSchoolWriteCatalog,
 } from '@/lib/school/catalog-access';
-
-// Helper to get current Schuljahr
-function getCurrentSchuljahr(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  return month >= 8 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
-}
-
-// Helper to calculate the module phase for an exam date.
-function calculateAusbildungsjahr(
-  startDate: Date,
-  durationYears?: number | null,
-  atDate: Date = new Date(),
-  phaseOneMonths?: number | null
-): number {
-  return getTrainingPhase(startDate, durationYears, atDate, phaseOneMonths);
-}
+import {
+  getCurrentSchuljahr,
+  calculateAusbildungsjahr,
+} from '@/lib/school/schuljahr';
 
 // GET /api/trainee/school/exams?upcoming=true&schuljahr=...
 // upcoming=true: from the start of today on, upcoming=false: before today (the

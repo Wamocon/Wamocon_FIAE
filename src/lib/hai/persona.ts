@@ -33,6 +33,7 @@ import {
   resolveHaiSettings,
   type HaiSettings,
 } from '@/lib/catalog/hai-settings';
+import { escapeRegExp } from '@/lib/regex-escape';
 
 export type HaiPersonaRole = 'TRAINER' | 'TRAINEE';
 export type HaiPersonaPhase = 1 | 2;
@@ -590,10 +591,6 @@ function normalizeForMatch(value: string): string {
     .normalize('NFKC')
     .toLowerCase()
     .replace(/[\p{M}\p{Cf}]/gu, '');
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

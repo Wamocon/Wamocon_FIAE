@@ -138,19 +138,60 @@ export const PREVIEW_CREATE_FAILED_MESSAGE =
   'The account could not be created. The address may already be in use.';
 
 /**
+ * Production: the address is taken in the shared auth, but this environment has
+ * no profile for it (the administrator already got "exists" for a profile). The
+ * usual cause is a test account created in Preview, which uses the same auth.
+ */
+export const ACCOUNT_EXISTS_MESSAGE =
+  'Diese E-Mail-Adresse ist bereits vergeben. Bitte eine andere Adresse verwenden oder die Entwicklung kontaktieren.';
+
+/**
+ * The same, with the cause, for platform administrators only: customer
+ * administrators must not learn how the environments are built.
+ */
+export const ACCOUNT_EXISTS_DETAIL_MESSAGE =
+  'Für diese E-Mail-Adresse gibt es bereits ein Anmeldekonto, aber noch kein Profil in dieser Umgebung. Das ist meist ein Testkonto aus der Preview, denn Preview und Production teilen sich die Anmeldung. Bitte eine andere E-Mail-Adresse verwenden oder das Konto von der Entwicklung übernehmen lassen.';
+
+/**
+ * The auth server refuses a new account because the address is already in use.
+ * The error code decides. The text is only a fallback for an error without a
+ * code, so other "already exists" errors (a phone number, a database object)
+ * are not reported as a taken address.
+ */
+export function isEmailTakenError(error: unknown): boolean {
+  const { code, message } = (error ?? {}) as {
+    code?: string;
+    message?: string;
+  };
+  if (code) return code === 'email_exists' || code === 'user_already_exists';
+  return /user.*already.*(registered|exists)|email.*already.*(registered|exists)|already.*been registered/i.test(
+    message || ''
+  );
+}
+
+/**
  * Error text for a failed auth.admin.createUser. The auth server tells "already
  * registered" for every address of the shared auth, which includes all
  * Production users. Preview therefore answers one generic text and only logs
  * the real one, so a Preview administrator cannot probe for Production
- * addresses. Production keeps the text of the auth server (as before).
+ * addresses. Production tells an administrator in German that the address is
+ * taken (the profile check before already tells them when a profile exists),
+ * with the cause for a platform administrator. Every other error keeps the text
+ * of the auth server.
  */
 export function createUserFailureMessage(
   error: unknown,
-  isPreview: boolean = IS_PREVIEW_SCHEMA
+  isPreview: boolean = IS_PREVIEW_SCHEMA,
+  platformAdmin: boolean = false
 ): string {
   if (isPreview) {
     console.error('Preview create user: auth server refused', error);
     return PREVIEW_CREATE_FAILED_MESSAGE;
+  }
+  if (isEmailTakenError(error)) {
+    return platformAdmin
+      ? ACCOUNT_EXISTS_DETAIL_MESSAGE
+      : ACCOUNT_EXISTS_MESSAGE;
   }
   return (
     (error as { message?: string } | null)?.message ||
